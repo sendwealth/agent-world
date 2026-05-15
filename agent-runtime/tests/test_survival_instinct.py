@@ -6,8 +6,11 @@ Covers:
 - PANIC mode triggers immediately (< 10 %) without LLM
 - Action cooldown enforcement
 - execute() with mock A2A client
-- Custom thresholds
-- Edge cases (zero max_tokens, exactly on boundary)
+- Custom thresholds and threshold validation
+- Edge cases (zero max_tokens, exactly on boundary, tokens > max_tokens)
+- A2A client failure handling
+- Concurrent execute() serialisation
+- Loan terms configurability
 """
 
 from __future__ import annotations
@@ -26,6 +29,7 @@ from agent_runtime.survival.instinct import (
     SurvivalInstinct,
     SurvivalMode,
     SurvivalThresholds,
+    LoanTerms,
 )
 
 
@@ -53,6 +57,18 @@ class FakeA2AClient:
     async def broadcast_message(self, payload: dict[str, Any]) -> dict[str, Any]:
         self.broadcasts.append(payload)
         return {"status": "ok"}
+
+
+class FailingA2AClient:
+    """Mock A2A client that always raises."""
+
+    def __init__(self, error: Exception | None = None) -> None:
+        self.error = error or ConnectionError("A2A network unreachable")
+        self.call_count = 0
+
+    async def broadcast_message(self, payload: dict[str, Any]) -> dict[str, Any]:
+        self.call_count += 1
+        raise self.error
 
 
 # ---------------------------------------------------------------------------
@@ -170,11 +186,25 @@ class TestBoundaryEdgeCases:
         assert result.mode == SurvivalMode.NORMAL
 
     def test_zero_max_tokens(self) -> None:
-        """Degenerate case: max_tokens == 0 → ratio 0 → PANIC."""
+        """Degenerate case: max_tokens == 0 -> ratio 0 -> PANIC."""
         agent = FakeAgentState(tokens=0, max_tokens=0)
         result = self.instinct.assess(agent)
         assert result.mode == SurvivalMode.PANIC
         assert result.token_ratio == 0.0
+
+    def test_tokens_exceed_max_tokens_clamps_ratio(self) -> None:
+        """tokens > max_tokens -> ratio clamped to 1.0 -> INVEST."""
+        agent = FakeAgentState(tokens=120_000, max_tokens=100_000)
+        result = self.instinct.assess(agent)
+        assert result.token_ratio == 1.0
+        assert result.mode == SurvivalMode.INVEST
+
+    def test_negative_tokens_clamps_ratio(self) -> None:
+        """Negative tokens -> ratio clamped to 0.0 -> PANIC."""
+        agent = FakeAgentState(tokens=-500, max_tokens=100_000)
+        result = self.instinct.assess(agent)
+        assert result.token_ratio == 0.0
+        assert result.mode == SurvivalMode.PANIC
 
 
 # ---------------------------------------------------------------------------
@@ -262,7 +292,6 @@ class TestActionGeneration:
         agent = FakeAgentState(tokens=5_000, max_tokens=100_000)
         result = self.instinct.assess(agent)
         priorities = [a.priority for a in result.actions]
-        # Priorities should be non-negative and ordered
         assert all(p >= 0 for p in priorities)
 
     def test_actions_have_reason_strings(self) -> None:
@@ -281,13 +310,11 @@ class TestPanicVerification:
     """Acceptance criterion: Token < 10 % triggers PANIC, no LLM wait."""
 
     def test_immediately_panics_below_10_percent(self) -> None:
-        """The assess() call is synchronous (no await) — no LLM involved."""
+        """The assess() call is synchronous (no await) -- no LLM involved."""
         instinct = SurvivalInstinct()
         agent = FakeAgentState(tokens=9_999, max_tokens=100_000)
         result = instinct.assess(agent)
         assert result.mode == SurvivalMode.PANIC
-        # assess() is a regular method, not async — guaranteed no LLM.
-        import asyncio
         assert not asyncio.iscoroutinefunction(instinct.assess)
 
     def test_panic_actions_include_sos(self) -> None:
@@ -339,7 +366,6 @@ class TestExecute:
         action = instinct.assess(agent)
         results = await instinct.execute(action, agent, a2a)
 
-        # Should have broadcast at least one SOS message
         assert len(a2a.broadcasts) >= 1
         sos_broadcasts = [
             b for b in a2a.broadcasts
@@ -371,10 +397,11 @@ class TestExecute:
         action = instinct.assess(agent)
         results = await instinct.execute(action, agent, a2a_client=None)
 
-        # All actions should still return results
         assert len(results) > 0
         for r in results:
-            assert r["status"] == "executed"
+            # Without A2A client, A2A actions get "executed" status but no
+            # broadcast_result; local-only actions get "logged".
+            assert r["status"] in ("executed", "logged")
 
     @pytest.mark.asyncio
     async def test_execute_normal_mode_no_actions(self) -> None:
@@ -389,17 +416,105 @@ class TestExecute:
         assert len(a2a.broadcasts) == 0
 
     @pytest.mark.asyncio
-    async def test_execute_returns_results(self) -> None:
+    async def test_execute_returns_results_with_correct_status(self) -> None:
+        """A2A actions get 'executed', local-only actions get 'logged'."""
         instinct = SurvivalInstinct(action_cooldown=0.0)
         agent = FakeAgentState(tokens=5_000, max_tokens=100_000, money=100)
+        a2a = FakeA2AClient()
+
+        action = instinct.assess(agent)
+        results = await instinct.execute(action, agent, a2a)
+
+        a2a_action_names = {"broadcast_sos", "request_loan"}
+        for r in results:
+            assert "action" in r
+            assert "reason" in r
+            if r["action"] in a2a_action_names:
+                assert r["status"] == "executed"
+            else:
+                assert r["status"] == "logged"
+
+    @pytest.mark.asyncio
+    async def test_execute_local_actions_without_a2a_are_logged(self) -> None:
+        """Non-A2A actions (REST_TO_CONSERVE, etc.) report 'logged' status."""
+        instinct = SurvivalInstinct(action_cooldown=0.0)
+        agent = FakeAgentState(tokens=5_000, max_tokens=100_000)
 
         action = instinct.assess(agent)
         results = await instinct.execute(action, agent, a2a_client=None)
 
         for r in results:
-            assert "action" in r
-            assert "reason" in r
-            assert r["status"] == "executed"
+            if r["action"] == "rest_to_conserve":
+                assert r["status"] == "logged"
+
+
+# ---------------------------------------------------------------------------
+# A2A client failure handling (review issue #4 and #8)
+# ---------------------------------------------------------------------------
+
+
+class TestA2AFailure:
+    """Test that A2A failures do not break the execute chain."""
+
+    @pytest.mark.asyncio
+    async def test_a2a_failure_returns_failed_status(self) -> None:
+        """A failing SOS broadcast should mark the action as 'failed'."""
+        instinct = SurvivalInstinct(action_cooldown=0.0)
+        agent = FakeAgentState(tokens=5_000, max_tokens=100_000)
+        a2a = FailingA2AClient()
+
+        action = instinct.assess(agent)
+        results = await instinct.execute(action, agent, a2a)
+
+        # SOS action should have failed status
+        sos_results = [r for r in results if r["action"] == "broadcast_sos"]
+        assert len(sos_results) >= 1
+        assert sos_results[0]["status"] == "failed"
+
+    @pytest.mark.asyncio
+    async def test_a2a_failure_does_not_stop_other_actions(self) -> None:
+        """Even if SOS broadcast fails, subsequent actions should still run."""
+        instinct = SurvivalInstinct(action_cooldown=0.0)
+        agent = FakeAgentState(tokens=5_000, max_tokens=100_000)
+        a2a = FailingA2AClient()
+
+        action = instinct.assess(agent)
+        results = await instinct.execute(action, agent, a2a)
+
+        # Should have results for all actions, not just the first one
+        assert len(results) > 1
+        # REST_TO_CONSERVE should still have been attempted
+        rest_results = [r for r in results if r["action"] == "rest_to_conserve"]
+        assert len(rest_results) >= 1
+        # Non-A2A actions should be logged even when A2A fails
+        assert rest_results[0]["status"] == "logged"
+
+    @pytest.mark.asyncio
+    async def test_a2a_timeout_is_handled(self) -> None:
+        """TimeoutError in A2A should be caught."""
+        instinct = SurvivalInstinct(action_cooldown=0.0)
+        agent = FakeAgentState(tokens=5_000, max_tokens=100_000)
+        a2a = FailingA2AClient(error=TimeoutError("A2A timed out"))
+
+        action = instinct.assess(agent)
+        results = await instinct.execute(action, agent, a2a)
+
+        # Should not raise; actions should complete with appropriate status
+        assert len(results) > 0
+        failed = [r for r in results if r["status"] == "failed"]
+        assert len(failed) >= 1  # At least the SOS should fail
+
+    @pytest.mark.asyncio
+    async def test_a2a_connection_error_is_handled(self) -> None:
+        """ConnectionError in A2A should be caught."""
+        instinct = SurvivalInstinct(action_cooldown=0.0)
+        agent = FakeAgentState(tokens=5_000, max_tokens=100_000)
+        a2a = FailingA2AClient(error=ConnectionError("Network unreachable"))
+
+        action = instinct.assess(agent)
+        results = await instinct.execute(action, agent, a2a)
+
+        assert len(results) > 0
 
 
 # ---------------------------------------------------------------------------
@@ -446,6 +561,80 @@ class TestCooldown:
 
 
 # ---------------------------------------------------------------------------
+# Concurrent execute() serialisation (review issue #1)
+# ---------------------------------------------------------------------------
+
+
+class TestConcurrency:
+    """Test that concurrent execute() calls are serialised."""
+
+    @pytest.mark.asyncio
+    async def test_concurrent_execute_respects_cooldown(self) -> None:
+        """Two concurrent execute() calls should not double-fire actions."""
+        instinct = SurvivalInstinct(action_cooldown=100.0)
+        agent = FakeAgentState(tokens=5_000, max_tokens=100_000)
+        a2a = FakeA2AClient()
+
+        action = instinct.assess(agent)
+
+        # Launch two concurrent execute calls.
+        results1, results2 = await asyncio.gather(
+            instinct.execute(action, agent, a2a),
+            instinct.execute(action, agent, a2a),
+        )
+
+        total_results = len(results1) + len(results2)
+        # Due to the lock, only one call should execute actions;
+        # the other should see cooldowns and return empty.
+        assert total_results == len(action.actions)
+
+
+# ---------------------------------------------------------------------------
+# Threshold validation (review issue #3)
+# ---------------------------------------------------------------------------
+
+
+class TestThresholdValidation:
+    """Test SurvivalThresholds ordering validation."""
+
+    def test_valid_default_thresholds(self) -> None:
+        t = SurvivalThresholds()
+        assert t.panic == 0.10
+
+    def test_valid_custom_thresholds(self) -> None:
+        t = SurvivalThresholds(panic=0.05, urgent=0.15, conservative=0.30, invest=0.90)
+        assert t.panic == 0.05
+
+    def test_inverted_panic_urgent_raises(self) -> None:
+        with pytest.raises(ValueError, match="Thresholds must satisfy"):
+            SurvivalThresholds(panic=0.30, urgent=0.10, conservative=0.40, invest=0.80)
+
+    def test_equal_panic_urgent_raises(self) -> None:
+        with pytest.raises(ValueError, match="Thresholds must satisfy"):
+            SurvivalThresholds(panic=0.20, urgent=0.20, conservative=0.40, invest=0.80)
+
+    def test_inverted_conservative_invest_raises(self) -> None:
+        with pytest.raises(ValueError, match="Thresholds must satisfy"):
+            SurvivalThresholds(panic=0.10, urgent=0.20, conservative=0.90, invest=0.50)
+
+    def test_negative_panic_raises(self) -> None:
+        with pytest.raises(ValueError, match="Thresholds must satisfy"):
+            SurvivalThresholds(panic=-0.1, urgent=0.20, conservative=0.40, invest=0.80)
+
+    def test_invest_above_1_raises(self) -> None:
+        with pytest.raises(ValueError, match="Thresholds must satisfy"):
+            SurvivalThresholds(panic=0.10, urgent=0.20, conservative=0.40, invest=1.5)
+
+    def test_invest_exactly_1_is_valid(self) -> None:
+        t = SurvivalThresholds(panic=0.10, urgent=0.20, conservative=0.40, invest=1.0)
+        assert t.invest == 1.0
+
+    def test_all_zero_except_invest_raises(self) -> None:
+        with pytest.raises(ValueError):
+            SurvivalThresholds(panic=0.0, urgent=0.0, conservative=0.0, invest=0.0)
+
+
+# ---------------------------------------------------------------------------
 # Custom thresholds
 # ---------------------------------------------------------------------------
 
@@ -470,6 +659,45 @@ class TestCustomThresholds:
     def test_default_thresholds_used_when_none(self) -> None:
         instinct = SurvivalInstinct(thresholds=None)
         assert instinct.thresholds == SurvivalThresholds()
+
+
+# ---------------------------------------------------------------------------
+# Loan terms configurability (review issue #7)
+# ---------------------------------------------------------------------------
+
+
+class TestLoanTerms:
+    """Test that loan terms are configurable."""
+
+    def test_default_loan_terms(self) -> None:
+        terms = LoanTerms()
+        assert terms.interest_offered == 0.02
+        assert terms.repayment_ticks == 500
+
+    def test_custom_loan_terms_in_instinct(self) -> None:
+        terms = LoanTerms(interest_offered=0.05, repayment_ticks=1000)
+        instinct = SurvivalInstinct(loan_terms=terms)
+        assert instinct.loan_terms.interest_offered == 0.05
+        assert instinct.loan_terms.repayment_ticks == 1000
+
+    @pytest.mark.asyncio
+    async def test_custom_loan_terms_used_in_broadcast(self) -> None:
+        terms = LoanTerms(interest_offered=0.10, repayment_ticks=200)
+        instinct = SurvivalInstinct(action_cooldown=0.0, loan_terms=terms)
+        agent = FakeAgentState(tokens=5_000, max_tokens=100_000)
+        a2a = FakeA2AClient()
+
+        action = instinct.assess(agent)
+        await instinct.execute(action, agent, a2a)
+
+        loan_broadcasts = [
+            b for b in a2a.broadcasts
+            if b.get("payload", {}).get("action") == "loan_request"
+        ]
+        assert len(loan_broadcasts) >= 1
+        loan_terms = loan_broadcasts[0]["payload"]["terms"]
+        assert loan_terms["interest_offered"] == 0.10
+        assert loan_terms["repayment_ticks"] == 200
 
 
 # ---------------------------------------------------------------------------
@@ -505,6 +733,44 @@ class TestSurvivalAction:
         action = SurvivalAction(mode=SurvivalMode.PANIC, token_ratio=0.05, actions=[])
         with pytest.raises(AttributeError):
             action.mode = SurvivalMode.NORMAL  # type: ignore[misc]
+
+
+# ---------------------------------------------------------------------------
+# SOS message formatting safety (review issue #6)
+# ---------------------------------------------------------------------------
+
+
+class TestSOSMessageFormat:
+    """Test that SOS message handles non-float token_ratio gracefully."""
+
+    @pytest.mark.asyncio
+    async def test_sos_with_float_ratio(self) -> None:
+        instinct = SurvivalInstinct(action_cooldown=0.0)
+        agent = FakeAgentState(tokens=5_000, max_tokens=100_000)
+        a2a = FakeA2AClient()
+
+        action = instinct.assess(agent)
+        await instinct.execute(action, agent, a2a)
+
+        sos = [b for b in a2a.broadcasts if b.get("payload", {}).get("category") == "personal"]
+        assert len(sos) >= 1
+        content = sos[0]["payload"]["content"]
+        assert "5.0%" in content  # 0.05 formatted as 5.0%
+
+    @pytest.mark.asyncio
+    async def test_sos_message_format_safe(self) -> None:
+        """Verify the SOS content is a well-formed string."""
+        instinct = SurvivalInstinct(action_cooldown=0.0)
+        agent = FakeAgentState(tokens=5_000, max_tokens=100_000)
+        a2a = FakeA2AClient()
+
+        action = instinct.assess(agent)
+        await instinct.execute(action, agent, a2a)
+
+        sos = [b for b in a2a.broadcasts if b.get("payload", {}).get("category") == "personal"]
+        assert len(sos) >= 1
+        assert isinstance(sos[0]["payload"]["content"], str)
+        assert "[SOS]" in sos[0]["payload"]["content"]
 
 
 # ---------------------------------------------------------------------------
@@ -544,7 +810,6 @@ class TestThinkLoopPattern:
 
         action = instinct.assess(agent)
 
-        # NORMAL mode → actions list is empty → proceed to LLM
+        # NORMAL mode -> actions list is empty -> proceed to LLM
         assert action.mode == SurvivalMode.NORMAL
         assert action.actions == []
-        # The think-loop would now call the LLM (not tested here).

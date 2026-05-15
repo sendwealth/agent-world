@@ -3,6 +3,7 @@
 from agent_runtime.survival.instinct import (
     EmergencyAction,
     EmergencyActionType,
+    LoanTerms,
     SurvivalAction,
     SurvivalInstinct,
     SurvivalMode,
@@ -12,6 +13,7 @@ from agent_runtime.survival.instinct import (
 __all__ = [
     "EmergencyAction",
     "EmergencyActionType",
+    "LoanTerms",
     "SurvivalAction",
     "SurvivalInstinct",
     "SurvivalMode",

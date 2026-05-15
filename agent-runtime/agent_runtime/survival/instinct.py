@@ -16,6 +16,7 @@ Thresholds (from DESIGN.md s4.4 + issue spec):
 
 from __future__ import annotations
 
+import asyncio
 import logging
 import time
 from dataclasses import dataclass, field
@@ -83,12 +84,32 @@ class SurvivalThresholds:
     """Configurable token-ratio thresholds for each survival mode.
 
     Ratios are expressed as fractions of ``max_tokens`` (0.0 - 1.0).
+
+    Raises:
+        ValueError: If thresholds are not in strictly increasing order
+            (panic < urgent < conservative < invest).
     """
 
     panic: float = 0.10       # < 10 %
     urgent: float = 0.20      # < 20 %
     conservative: float = 0.40  # < 40 %
     invest: float = 0.80      # > 80 %
+
+    def __post_init__(self) -> None:
+        if not (0.0 <= self.panic < self.urgent < self.conservative < self.invest <= 1.0):
+            raise ValueError(
+                f"Thresholds must satisfy "
+                f"0.0 <= panic({self.panic}) < urgent({self.urgent}) "
+                f"< conservative({self.conservative}) < invest({self.invest}) <= 1.0"
+            )
+
+
+@dataclass(frozen=True)
+class LoanTerms:
+    """Configurable terms for emergency loan requests."""
+
+    interest_offered: float = 0.02
+    repayment_ticks: int = 500
 
 
 # ---------------------------------------------------------------------------
@@ -117,6 +138,17 @@ class AgentStateProtocol(Protocol):
 
 
 # ---------------------------------------------------------------------------
+# A2A actions that require network communication
+# ---------------------------------------------------------------------------
+
+# Actions that have real A2A side-effects.
+_A2A_ACTIONS: frozenset[EmergencyActionType] = frozenset({
+    EmergencyActionType.BROADCAST_SOS,
+    EmergencyActionType.REQUEST_LOAN,
+})
+
+
+# ---------------------------------------------------------------------------
 # SurvivalInstinct
 # ---------------------------------------------------------------------------
 
@@ -142,10 +174,13 @@ class SurvivalInstinct:
         thresholds: SurvivalThresholds | None = None,
         *,
         action_cooldown: float = _ACTION_COOLDOWN,
+        loan_terms: LoanTerms | None = None,
     ) -> None:
         self.thresholds = thresholds or SurvivalThresholds()
         self._last_action_time: dict[EmergencyActionType, float | None] = {}
         self._action_cooldown = action_cooldown
+        self.loan_terms = loan_terms or LoanTerms()
+        self._lock = asyncio.Lock()
 
     # ------------------------------------------------------------------
     # Core assessment (synchronous — no LLM, no I/O)
@@ -167,6 +202,21 @@ class SurvivalInstinct:
             ratio = 0.0
         else:
             ratio = agent.tokens / agent.max_tokens
+
+        if ratio > 1.0:
+            logger.warning(
+                "Token ratio exceeds 1.0 (%.2f): tokens=%d max_tokens=%d. "
+                "Clamping to 1.0.",
+                ratio, agent.tokens, agent.max_tokens,
+            )
+            ratio = 1.0
+        elif ratio < 0.0:
+            logger.warning(
+                "Negative token ratio (%.2f): tokens=%d max_tokens=%d. "
+                "Clamping to 0.0.",
+                ratio, agent.tokens, agent.max_tokens,
+            )
+            ratio = 0.0
 
         mode = self._classify_mode(ratio)
         actions = self._generate_actions(mode, ratio, agent)
@@ -194,22 +244,26 @@ class SurvivalInstinct:
 
         Returns a list of result dicts, one per executed action, so the
         think-loop can log outcomes.
+
+        This method is serialised with an ``asyncio.Lock`` so that
+        concurrent calls do not bypass the cooldown check.
         """
-        results: list[dict[str, object]] = []
-        now = time.monotonic()
+        async with self._lock:
+            results: list[dict[str, object]] = []
+            now = time.monotonic()
 
-        for ema in action.actions:
-            # Enforce cooldown to prevent flooding.
-            last = self._last_action_time.get(ema.action_type)
-            if last is not None and now - last < self._action_cooldown:
-                logger.debug("Skipping %s (cooldown)", ema.action_type.value)
-                continue
+            for ema in action.actions:
+                # Enforce cooldown to prevent flooding.
+                last = self._last_action_time.get(ema.action_type)
+                if last is not None and now - last < self._action_cooldown:
+                    logger.debug("Skipping %s (cooldown)", ema.action_type.value)
+                    continue
 
-            result = await self._execute_single(ema, agent, a2a_client)
-            self._last_action_time[ema.action_type] = now
-            results.append(result)
+                result = await self._execute_single(ema, agent, a2a_client)
+                self._last_action_time[ema.action_type] = now
+                results.append(result)
 
-        return results
+            return results
 
     # ------------------------------------------------------------------
     # Internal helpers
@@ -342,6 +396,9 @@ class SurvivalInstinct:
         For now this logs the action and, if an A2A client is available,
         sends appropriate messages.  The action is performed *without*
         consulting the LLM.
+
+        Non-A2A actions are logged but have no side-effect yet; their
+        status is set to ``"logged"`` rather than ``"executed"``.
         """
         logger.info(
             "Survival action: %s — %s",
@@ -349,46 +406,61 @@ class SurvivalInstinct:
             ema.reason,
         )
 
+        # Determine status based on whether this is a real A2A action.
+        status = "logged" if ema.action_type not in _A2A_ACTIONS else "executed"
         result: dict[str, object] = {
             "action": ema.action_type.value,
             "reason": ema.reason,
-            "status": "executed",
+            "status": status,
         }
 
         # Actions that require A2A communication.
         if a2a_client is not None:
-            if ema.action_type == EmergencyActionType.BROADCAST_SOS:
-                msg_result = await a2a_client.broadcast_message({
-                    "type": "INFORM",
-                    "payload": {
-                        "category": "personal",
-                        "content": (
-                            f"[SOS] I am critically low on tokens "
-                            f"({ema.parameters.get('token_ratio', 0):.1%}). "
-                            f"Please help!"
-                        ),
-                        "confidence": 1.0,
-                        "source": "direct",
-                    },
-                })
-                result["broadcast_result"] = msg_result
+            try:
+                if ema.action_type == EmergencyActionType.BROADCAST_SOS:
+                    token_ratio = ema.parameters.get("token_ratio", 0)
+                    # Safely format the ratio — handle non-float values.
+                    try:
+                        ratio_str = f"{float(token_ratio):.1%}"
+                    except (TypeError, ValueError):
+                        ratio_str = "unknown"
 
-            elif ema.action_type == EmergencyActionType.REQUEST_LOAN:
-                amount_needed = ema.parameters.get("amount_needed", 0)
-                msg_result = await a2a_client.broadcast_message({
-                    "type": "PROPOSE",
-                    "payload": {
-                        "action": "loan_request",
-                        "terms": {
-                            "amount_needed": amount_needed,
-                            "interest_offered": 0.02,
-                            "repayment_ticks": 500,
+                    msg_result = await a2a_client.broadcast_message({
+                        "type": "INFORM",
+                        "payload": {
+                            "category": "personal",
+                            "content": (
+                                f"[SOS] I am critically low on tokens "
+                                f"({ratio_str}). Please help!"
+                            ),
+                            "confidence": 1.0,
+                            "source": "direct",
                         },
-                    },
-                })
-                result["loan_request_result"] = msg_result
+                    })
+                    result["broadcast_result"] = msg_result
 
-        # Non-A2A actions are purely local decisions recorded in result.
+                elif ema.action_type == EmergencyActionType.REQUEST_LOAN:
+                    amount_needed = ema.parameters.get("amount_needed", 0)
+                    msg_result = await a2a_client.broadcast_message({
+                        "type": "PROPOSE",
+                        "payload": {
+                            "action": "loan_request",
+                            "terms": {
+                                "amount_needed": amount_needed,
+                                "interest_offered": self.loan_terms.interest_offered,
+                                "repayment_ticks": self.loan_terms.repayment_ticks,
+                            },
+                        },
+                    })
+                    result["loan_request_result"] = msg_result
+
+            except Exception:
+                logger.exception(
+                    "Failed to execute A2A action %s",
+                    ema.action_type.value,
+                )
+                result["status"] = "failed"
+
         return result
 
     # ------------------------------------------------------------------

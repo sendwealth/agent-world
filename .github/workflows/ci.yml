@@ -91,6 +91,7 @@ jobs:
   dashboard:
     name: Dashboard – lint + type-check + build
     runs-on: ubuntu-latest
+    if: hashFiles('dashboard/tsconfig.json') != ''
     defaults:
       run:
         working-directory: dashboard
@@ -102,17 +103,16 @@ jobs:
         with:
           node-version: "20"
           cache: npm
-          cache-dependency-path: dashboard/package.json
+          cache-dependency-path: dashboard/package-lock.json
 
       - name: Install dependencies
-        run: npm install
+        run: npm ci
 
       - name: Lint (ESLint)
         run: npm run lint
 
       - name: Type-check (tsc)
         run: npx tsc --noEmit
-        continue-on-error: true
 
       - name: Build
         run: npm run build

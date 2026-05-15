@@ -1,0 +1,855 @@
+use std::collections::HashMap;
+
+use serde::{Deserialize, Serialize};
+use uuid::Uuid;
+
+use crate::world::event::WorldEvent;
+use crate::world::state::EventBus;
+
+// ── Task Status ───────────────────────────────────────────
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum TaskStatus {
+    /// Task published, waiting for a claimant.
+    Published,
+    /// A worker has claimed the task.
+    Claimed,
+    /// Worker has started working on the task.
+    InProgress,
+    /// Worker has submitted their result.
+    Submitted,
+    /// Publisher has reviewed and approved the result.
+    Reviewed,
+    /// Task fully completed; escrow released.
+    Completed,
+    /// Task expired; escrow refunded.
+    Expired,
+}
+
+impl TaskStatus {
+    /// Check whether a transition from self to `next` is valid.
+    pub fn can_transition_to(&self, next: &TaskStatus) -> bool {
+        matches!(
+            (self, next),
+            (TaskStatus::Published, TaskStatus::Claimed)
+                | (TaskStatus::Published, TaskStatus::Expired)
+                | (TaskStatus::Claimed, TaskStatus::InProgress)
+                | (TaskStatus::Claimed, TaskStatus::Expired)
+                | (TaskStatus::InProgress, TaskStatus::Submitted)
+                | (TaskStatus::Submitted, TaskStatus::Reviewed)
+                | (TaskStatus::Reviewed, TaskStatus::Completed)
+        )
+    }
+
+    /// Returns all valid next statuses from the current status.
+    pub fn valid_transitions(&self) -> Vec<TaskStatus> {
+        match self {
+            TaskStatus::Published => vec![TaskStatus::Claimed, TaskStatus::Expired],
+            TaskStatus::Claimed => vec![TaskStatus::InProgress, TaskStatus::Expired],
+            TaskStatus::InProgress => vec![TaskStatus::Submitted],
+            TaskStatus::Submitted => vec![TaskStatus::Reviewed],
+            TaskStatus::Reviewed => vec![TaskStatus::Completed],
+            TaskStatus::Completed | TaskStatus::Expired => vec![],
+        }
+    }
+
+    /// All task statuses.
+    pub fn all() -> Vec<TaskStatus> {
+        vec![
+            TaskStatus::Published,
+            TaskStatus::Claimed,
+            TaskStatus::InProgress,
+            TaskStatus::Submitted,
+            TaskStatus::Reviewed,
+            TaskStatus::Completed,
+            TaskStatus::Expired,
+        ]
+    }
+}
+
+impl std::fmt::Display for TaskStatus {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            TaskStatus::Published => write!(f, "published"),
+            TaskStatus::Claimed => write!(f, "claimed"),
+            TaskStatus::InProgress => write!(f, "in_progress"),
+            TaskStatus::Submitted => write!(f, "submitted"),
+            TaskStatus::Reviewed => write!(f, "reviewed"),
+            TaskStatus::Completed => write!(f, "completed"),
+            TaskStatus::Expired => write!(f, "expired"),
+        }
+    }
+}
+
+// ── Task Record ───────────────────────────────────────────
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct Task {
+    pub id: Uuid,
+    pub title: String,
+    pub description: String,
+    pub status: TaskStatus,
+    pub reward: u64,
+    pub escrow_held: bool,
+    pub publisher_id: String,
+    pub assignee_id: Option<String>,
+    pub result: Option<String>,
+    pub expires_at: Option<u64>,
+    pub created_tick: u64,
+}
+
+// ── Errors ────────────────────────────────────────────────
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum TaskError {
+    NotFound(String),
+    InvalidTransition { from: TaskStatus, to: TaskStatus },
+    AlreadyClaimed,
+    NoAssignee,
+    ResultRequired,
+    NotPublisher { expected: String, actual: String },
+    Expired,
+}
+
+impl std::fmt::Display for TaskError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            TaskError::NotFound(id) => write!(f, "task not found: {}", id),
+            TaskError::InvalidTransition { from, to } => {
+                write!(f, "invalid transition: {} -> {}", from, to)
+            }
+            TaskError::AlreadyClaimed => write!(f, "task already claimed"),
+            TaskError::NoAssignee => write!(f, "task has no assignee"),
+            TaskError::ResultRequired => write!(f, "result is required"),
+            TaskError::NotPublisher { expected, actual } => {
+                write!(
+                    f,
+                    "only the publisher can review: expected {}, got {}",
+                    expected, actual
+                )
+            }
+            TaskError::Expired => write!(f, "task has expired"),
+        }
+    }
+}
+
+impl std::error::Error for TaskError {}
+
+// ── Task Board ────────────────────────────────────────────
+
+pub struct TaskBoard {
+    tasks: HashMap<Uuid, Task>,
+    /// Agent balances for escrow simulation.
+    balances: HashMap<String, u64>,
+    /// Escrow amounts locked per task.
+    escrows: HashMap<Uuid, u64>,
+    event_bus: Option<EventBus>,
+}
+
+impl TaskBoard {
+    pub fn new() -> Self {
+        Self {
+            tasks: HashMap::new(),
+            balances: HashMap::new(),
+            escrows: HashMap::new(),
+            event_bus: None,
+        }
+    }
+
+    pub fn with_event_bus(event_bus: EventBus) -> Self {
+        Self {
+            tasks: HashMap::new(),
+            balances: HashMap::new(),
+            escrows: HashMap::new(),
+            event_bus: Some(event_bus),
+        }
+    }
+
+    // ── Balance helpers ────────────────────────────────────
+
+    pub fn set_balance(&mut self, agent: &str, amount: u64) {
+        self.balances.insert(agent.to_string(), amount);
+    }
+
+    pub fn get_balance(&self, agent: &str) -> u64 {
+        self.balances.get(agent).copied().unwrap_or(0)
+    }
+
+    // ── Query ─────────────────────────────────────────────
+
+    pub fn get(&self, id: Uuid) -> Option<&Task> {
+        self.tasks.get(&id)
+    }
+
+    pub fn list(&self) -> Vec<&Task> {
+        self.tasks.values().collect()
+    }
+
+    pub fn list_by_status(&self, status: TaskStatus) -> Vec<&Task> {
+        self.tasks.values().filter(|t| t.status == status).collect()
+    }
+
+    pub fn list_by_publisher(&self, publisher_id: &str) -> Vec<&Task> {
+        self.tasks
+            .values()
+            .filter(|t| t.publisher_id == publisher_id)
+            .collect()
+    }
+
+    pub fn list_by_assignee(&self, assignee_id: &str) -> Vec<&Task> {
+        self.tasks
+            .values()
+            .filter(|t| t.assignee_id.as_deref() == Some(assignee_id))
+            .collect()
+    }
+
+    // ── CRUD ──────────────────────────────────────────────
+
+    /// Create a new task. If reward > 0, locks escrow from the publisher.
+    pub fn create_task(
+        &mut self,
+        title: String,
+        description: String,
+        reward: u64,
+        publisher_id: String,
+        created_tick: u64,
+        expires_at: Option<u64>,
+    ) -> Result<Uuid, TaskError> {
+        let escrow_held = reward > 0;
+        if escrow_held {
+            let available = self.get_balance(&publisher_id);
+            if available < reward {
+                // For simplicity we allow creating with insufficient balance;
+                // the escrow is still held as a liability.
+            }
+            self.balances.insert(
+                publisher_id.clone(),
+                self.get_balance(&publisher_id).saturating_sub(reward),
+            );
+            let id = Uuid::new_v4();
+            self.escrows.insert(id, reward);
+
+            let task = Task {
+                id,
+                title,
+                description,
+                status: TaskStatus::Published,
+                reward,
+                escrow_held: true,
+                publisher_id,
+                assignee_id: None,
+                result: None,
+                expires_at,
+                created_tick,
+            };
+            self.tasks.insert(id, task);
+
+            self.emit(WorldEvent::TaskCreated {
+                task_id: id.to_string(),
+                publisher: self.tasks.get(&id).unwrap().publisher_id.clone(),
+                reward,
+            });
+
+            return Ok(id);
+        }
+
+        let id = Uuid::new_v4();
+        let task = Task {
+            id,
+            title,
+            description,
+            status: TaskStatus::Published,
+            reward: 0,
+            escrow_held: false,
+            publisher_id,
+            assignee_id: None,
+            result: None,
+            expires_at,
+            created_tick,
+        };
+        self.tasks.insert(id, task);
+
+        self.emit(WorldEvent::TaskCreated {
+            task_id: id.to_string(),
+            publisher: self.tasks.get(&id).unwrap().publisher_id.clone(),
+            reward: 0,
+        });
+
+        Ok(id)
+    }
+
+    /// Delete a task. Only published tasks can be deleted.
+    /// Refunds escrow if held.
+    pub fn delete_task(&mut self, id: Uuid) -> Result<(), TaskError> {
+        let task = self.tasks.get(&id)
+            .ok_or_else(|| TaskError::NotFound(id.to_string()))?;
+
+        if task.status != TaskStatus::Published {
+            return Err(TaskError::InvalidTransition {
+                from: task.status,
+                to: TaskStatus::Expired,
+            });
+        }
+
+        // Refund escrow
+        if let Some(escrow_amount) = self.escrows.remove(&id) {
+            let publisher = &task.publisher_id;
+            let bal = self.get_balance(publisher);
+            self.balances.insert(publisher.clone(), bal + escrow_amount);
+        }
+
+        self.tasks.remove(&id);
+        Ok(())
+    }
+
+    // ── Lifecycle ─────────────────────────────────────────
+
+    /// Claim a published task.
+    pub fn claim_task(&mut self, id: Uuid, assignee_id: String) -> Result<(), TaskError> {
+        let task = self.tasks.get_mut(&id)
+            .ok_or_else(|| TaskError::NotFound(id.to_string()))?;
+
+        if !task.status.can_transition_to(&TaskStatus::Claimed) {
+            return Err(TaskError::InvalidTransition {
+                from: task.status,
+                to: TaskStatus::Claimed,
+            });
+        }
+
+        task.status = TaskStatus::Claimed;
+        task.assignee_id = Some(assignee_id.clone());
+
+        self.emit(WorldEvent::TaskClaimed {
+            task_id: id.to_string(),
+            assignee: assignee_id,
+        });
+
+        Ok(())
+    }
+
+    /// Start working on a claimed task.
+    pub fn start_task(&mut self, id: Uuid) -> Result<(), TaskError> {
+        let task = self.tasks.get_mut(&id)
+            .ok_or_else(|| TaskError::NotFound(id.to_string()))?;
+
+        if !task.status.can_transition_to(&TaskStatus::InProgress) {
+            return Err(TaskError::InvalidTransition {
+                from: task.status,
+                to: TaskStatus::InProgress,
+            });
+        }
+
+        task.status = TaskStatus::InProgress;
+
+        self.emit(WorldEvent::TaskStarted {
+            task_id: id.to_string(),
+        });
+
+        Ok(())
+    }
+
+    /// Submit result for an in-progress task.
+    pub fn submit_result(&mut self, id: Uuid, result: String) -> Result<(), TaskError> {
+        if result.is_empty() {
+            return Err(TaskError::ResultRequired);
+        }
+
+        let task = self.tasks.get_mut(&id)
+            .ok_or_else(|| TaskError::NotFound(id.to_string()))?;
+
+        if !task.status.can_transition_to(&TaskStatus::Submitted) {
+            return Err(TaskError::InvalidTransition {
+                from: task.status,
+                to: TaskStatus::Submitted,
+            });
+        }
+
+        task.status = TaskStatus::Submitted;
+        task.result = Some(result);
+
+        self.emit(WorldEvent::TaskSubmitted {
+            task_id: id.to_string(),
+        });
+
+        Ok(())
+    }
+
+    /// Review a submitted task. Only the publisher can review.
+    pub fn review_task(&mut self, id: Uuid, reviewer_id: &str, approved: bool) -> Result<(), TaskError> {
+        let task = self.tasks.get(&id)
+            .ok_or_else(|| TaskError::NotFound(id.to_string()))?;
+
+        if task.publisher_id != reviewer_id {
+            return Err(TaskError::NotPublisher {
+                expected: task.publisher_id.clone(),
+                actual: reviewer_id.to_string(),
+            });
+        }
+
+        if !task.status.can_transition_to(&TaskStatus::Reviewed) {
+            return Err(TaskError::InvalidTransition {
+                from: task.status,
+                to: TaskStatus::Reviewed,
+            });
+        }
+
+        let task = self.tasks.get_mut(&id).unwrap();
+
+        if approved {
+            task.status = TaskStatus::Reviewed;
+            self.emit(WorldEvent::TaskReviewed {
+                task_id: id.to_string(),
+                approved: true,
+            });
+        } else {
+            // Rejected — go back to in_progress so the worker can resubmit
+            task.status = TaskStatus::InProgress;
+            self.emit(WorldEvent::TaskReviewed {
+                task_id: id.to_string(),
+                approved: false,
+            });
+        }
+
+        Ok(())
+    }
+
+    /// Complete a reviewed task. Releases escrow to the assignee.
+    pub fn complete_task(&mut self, id: Uuid) -> Result<(), TaskError> {
+        // Validate and extract needed data
+        let assignee_id = {
+            let task = self.tasks.get(&id)
+                .ok_or_else(|| TaskError::NotFound(id.to_string()))?;
+            if !task.status.can_transition_to(&TaskStatus::Completed) {
+                return Err(TaskError::InvalidTransition {
+                    from: task.status,
+                    to: TaskStatus::Completed,
+                });
+            }
+            task.assignee_id.clone()
+        };
+
+        // Release escrow to assignee
+        if let Some(escrow_amount) = self.escrows.remove(&id) {
+            if let Some(ref assignee) = assignee_id {
+                let bal = self.get_balance(assignee);
+                self.balances.insert(assignee.clone(), bal + escrow_amount);
+            }
+        }
+
+        let task = self.tasks.get_mut(&id).unwrap();
+        task.status = TaskStatus::Completed;
+        task.escrow_held = false;
+
+        self.emit(WorldEvent::TaskCompleted {
+            task_id: id.to_string(),
+        });
+
+        Ok(())
+    }
+
+    /// Expire a published or claimed task. Refunds escrow to publisher.
+    pub fn expire_task(&mut self, id: Uuid) -> Result<(), TaskError> {
+        let task = self.tasks.get(&id)
+            .ok_or_else(|| TaskError::NotFound(id.to_string()))?;
+
+        if !task.status.can_transition_to(&TaskStatus::Expired) {
+            return Err(TaskError::InvalidTransition {
+                from: task.status,
+                to: TaskStatus::Expired,
+            });
+        }
+
+        let publisher_id = task.publisher_id.clone();
+
+        // Refund escrow to publisher
+        if let Some(escrow_amount) = self.escrows.remove(&id) {
+            let bal = self.get_balance(&publisher_id);
+            self.balances.insert(publisher_id.clone(), bal + escrow_amount);
+        }
+
+        let task = self.tasks.get_mut(&id).unwrap();
+        task.status = TaskStatus::Expired;
+        task.escrow_held = false;
+
+        self.emit(WorldEvent::TaskExpired {
+            task_id: id.to_string(),
+        });
+
+        Ok(())
+    }
+
+    /// Batch-expire tasks whose expires_at <= current_tick.
+    pub fn process_expiry(&mut self, current_tick: u64) -> Vec<Uuid> {
+        let expired_ids: Vec<Uuid> = self.tasks.iter()
+            .filter(|(_, task)| {
+                matches!(task.status, TaskStatus::Published | TaskStatus::Claimed)
+                    && task.expires_at.map_or(false, |exp| exp <= current_tick)
+            })
+            .map(|(id, _)| *id)
+            .collect();
+
+        for id in &expired_ids {
+            let _ = self.expire_task(*id);
+        }
+
+        expired_ids
+    }
+
+    // ── Helpers ────────────────────────────────────────────
+
+    fn emit(&self, event: WorldEvent) {
+        if let Some(ref bus) = self.event_bus {
+            bus.emit(event);
+        }
+    }
+}
+
+impl Default for TaskBoard {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+// ── Tests ─────────────────────────────────────────────────
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn make_board() -> TaskBoard {
+        let mut board = TaskBoard::new();
+        board.set_balance("publisher", 10_000);
+        board.set_balance("worker", 5_000);
+        board
+    }
+
+    fn create_default_task(board: &mut TaskBoard) -> Uuid {
+        board.create_task(
+            "Test Task".to_string(),
+            "A test task".to_string(),
+            100,
+            "publisher".to_string(),
+            1,
+            None,
+        ).unwrap()
+    }
+
+    // ── State Machine ──────────────────────────────────────
+
+    #[test]
+    fn test_forward_transitions() {
+        assert!(TaskStatus::Published.can_transition_to(&TaskStatus::Claimed));
+        assert!(TaskStatus::Claimed.can_transition_to(&TaskStatus::InProgress));
+        assert!(TaskStatus::InProgress.can_transition_to(&TaskStatus::Submitted));
+        assert!(TaskStatus::Submitted.can_transition_to(&TaskStatus::Reviewed));
+        assert!(TaskStatus::Reviewed.can_transition_to(&TaskStatus::Completed));
+    }
+
+    #[test]
+    fn test_expiry_transition() {
+        assert!(TaskStatus::Published.can_transition_to(&TaskStatus::Expired));
+        assert!(TaskStatus::Claimed.can_transition_to(&TaskStatus::Expired));
+    }
+
+    #[test]
+    fn test_invalid_transitions() {
+        assert!(!TaskStatus::Published.can_transition_to(&TaskStatus::Completed));
+        assert!(!TaskStatus::Published.can_transition_to(&TaskStatus::InProgress));
+        assert!(!TaskStatus::Claimed.can_transition_to(&TaskStatus::Submitted));
+        assert!(!TaskStatus::Completed.can_transition_to(&TaskStatus::Published));
+        assert!(!TaskStatus::Expired.can_transition_to(&TaskStatus::Published));
+    }
+
+    #[test]
+    fn test_terminal_states_have_no_transitions() {
+        assert!(TaskStatus::Completed.valid_transitions().is_empty());
+        assert!(TaskStatus::Expired.valid_transitions().is_empty());
+    }
+
+    #[test]
+    fn test_all_statuses_count() {
+        assert_eq!(TaskStatus::all().len(), 7);
+    }
+
+    // ── Create Task ────────────────────────────────────────
+
+    #[test]
+    fn test_create_task_with_escrow() {
+        let mut board = make_board();
+        let id = create_default_task(&mut board);
+        let task = board.get(id).unwrap();
+        assert_eq!(task.status, TaskStatus::Published);
+        assert_eq!(task.reward, 100);
+        assert!(task.escrow_held);
+        assert_eq!(board.get_balance("publisher"), 9_900);
+    }
+
+    #[test]
+    fn test_create_task_no_reward() {
+        let mut board = make_board();
+        let id = board.create_task(
+            "Free Task".to_string(),
+            "No reward".to_string(),
+            0,
+            "publisher".to_string(),
+            1,
+            None,
+        ).unwrap();
+        let task = board.get(id).unwrap();
+        assert!(!task.escrow_held);
+    }
+
+    // ── Full Lifecycle ─────────────────────────────────────
+
+    #[test]
+    fn test_full_lifecycle() {
+        let mut board = make_board();
+        let id = create_default_task(&mut board);
+        assert_eq!(board.get(id).unwrap().status, TaskStatus::Published);
+
+        board.claim_task(id, "worker".to_string()).unwrap();
+        assert_eq!(board.get(id).unwrap().status, TaskStatus::Claimed);
+        assert_eq!(board.get(id).unwrap().assignee_id.as_deref(), Some("worker"));
+
+        board.start_task(id).unwrap();
+        assert_eq!(board.get(id).unwrap().status, TaskStatus::InProgress);
+
+        board.submit_result(id, "Work is done!".to_string()).unwrap();
+        assert_eq!(board.get(id).unwrap().status, TaskStatus::Submitted);
+        assert_eq!(board.get(id).unwrap().result.as_deref(), Some("Work is done!"));
+
+        board.review_task(id, "publisher", true).unwrap();
+        assert_eq!(board.get(id).unwrap().status, TaskStatus::Reviewed);
+
+        board.complete_task(id).unwrap();
+        assert_eq!(board.get(id).unwrap().status, TaskStatus::Completed);
+        assert!(!board.get(id).unwrap().escrow_held);
+        assert_eq!(board.get_balance("worker"), 5_100);
+    }
+
+    // ── State Guards ───────────────────────────────────────
+
+    #[test]
+    fn test_cannot_claim_non_published() {
+        let mut board = make_board();
+        let id = create_default_task(&mut board);
+        board.claim_task(id, "worker".to_string()).unwrap();
+
+        let result = board.claim_task(id, "other".to_string());
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_cannot_submit_empty_result() {
+        let mut board = make_board();
+        let id = create_default_task(&mut board);
+        board.claim_task(id, "worker".to_string()).unwrap();
+        board.start_task(id).unwrap();
+
+        let result = board.submit_result(id, "".to_string());
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_non_publisher_cannot_review() {
+        let mut board = make_board();
+        let id = create_default_task(&mut board);
+        board.claim_task(id, "worker".to_string()).unwrap();
+        board.start_task(id).unwrap();
+        board.submit_result(id, "Done".to_string()).unwrap();
+
+        let result = board.review_task(id, "imposter", true);
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_cannot_skip_states() {
+        let mut board = make_board();
+        let id = create_default_task(&mut board);
+
+        let result = board.complete_task(id);
+        assert!(result.is_err());
+    }
+
+    // ── Expiry ─────────────────────────────────────────────
+
+    #[test]
+    fn test_expire_published_task() {
+        let mut board = make_board();
+        let id = create_default_task(&mut board);
+        assert_eq!(board.get_balance("publisher"), 9_900);
+
+        board.expire_task(id).unwrap();
+        assert_eq!(board.get(id).unwrap().status, TaskStatus::Expired);
+        assert!(!board.get(id).unwrap().escrow_held);
+        assert_eq!(board.get_balance("publisher"), 10_000);
+    }
+
+    #[test]
+    fn test_cannot_expire_in_progress() {
+        let mut board = make_board();
+        let id = create_default_task(&mut board);
+        board.claim_task(id, "worker".to_string()).unwrap();
+        board.start_task(id).unwrap();
+
+        let result = board.expire_task(id);
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_batch_expiry() {
+        let mut board = make_board();
+        let id1 = board.create_task("T1".into(), "".into(), 50, "publisher".into(), 1, Some(10)).unwrap();
+        let id2 = board.create_task("T2".into(), "".into(), 50, "publisher".into(), 1, Some(100)).unwrap();
+        let id3 = board.create_task("T3".into(), "".into(), 50, "publisher".into(), 1, Some(10)).unwrap();
+
+        let expired = board.process_expiry(50);
+        assert_eq!(expired.len(), 2);
+        assert!(expired.contains(&id1));
+        assert!(expired.contains(&id3));
+        assert!(!expired.contains(&id2));
+    }
+
+    // ── Delete ─────────────────────────────────────────────
+
+    #[test]
+    fn test_delete_published_task() {
+        let mut board = make_board();
+        let id = create_default_task(&mut board);
+        board.delete_task(id).unwrap();
+        assert!(board.get(id).is_none());
+        assert_eq!(board.get_balance("publisher"), 10_000);
+    }
+
+    #[test]
+    fn test_cannot_delete_claimed_task() {
+        let mut board = make_board();
+        let id = create_default_task(&mut board);
+        board.claim_task(id, "worker".to_string()).unwrap();
+
+        let result = board.delete_task(id);
+        assert!(result.is_err());
+    }
+
+    // ── Query ──────────────────────────────────────────────
+
+    #[test]
+    fn test_list_by_status() {
+        let mut board = make_board();
+        let id1 = board.create_task("T1".into(), "".into(), 0, "p1".into(), 1, None).unwrap();
+        let id2 = board.create_task("T2".into(), "".into(), 0, "p1".into(), 1, None).unwrap();
+        board.claim_task(id1, "w1".to_string()).unwrap();
+
+        assert_eq!(board.list_by_status(TaskStatus::Published).len(), 1);
+        assert_eq!(board.list_by_status(TaskStatus::Claimed).len(), 1);
+    }
+
+    #[test]
+    fn test_list_by_publisher() {
+        let mut board = make_board();
+        board.set_balance("p2", 1000);
+        board.create_task("T1".into(), "".into(), 0, "publisher".into(), 1, None).unwrap();
+        board.create_task("T2".into(), "".into(), 0, "p2".into(), 1, None).unwrap();
+
+        assert_eq!(board.list_by_publisher("publisher").len(), 1);
+        assert_eq!(board.list_by_publisher("p2").len(), 1);
+    }
+
+    #[test]
+    fn test_list_by_assignee() {
+        let mut board = make_board();
+        let id = create_default_task(&mut board);
+        board.claim_task(id, "worker".to_string()).unwrap();
+
+        assert_eq!(board.list_by_assignee("worker").len(), 1);
+        assert_eq!(board.list_by_assignee("nobody").len(), 0);
+    }
+
+    // ── Event Bus Integration ──────────────────────────────
+
+    #[test]
+    fn test_event_bus_task_lifecycle() {
+        let bus = EventBus::new(64);
+        let mut rx = bus.subscribe();
+        let mut board = TaskBoard::with_event_bus(bus);
+        board.set_balance("publisher", 10_000);
+
+        let id = board.create_task(
+            "Lifecycle".into(), "desc".into(), 200, "publisher".into(), 1, None
+        ).unwrap();
+        let _ = rx.try_recv().unwrap(); // TaskCreated
+
+        board.claim_task(id, "worker".to_string()).unwrap();
+        let claimed = rx.try_recv().unwrap();
+        assert!(matches!(claimed, WorldEvent::TaskClaimed { .. }));
+
+        board.start_task(id).unwrap();
+        let started = rx.try_recv().unwrap();
+        assert!(matches!(started, WorldEvent::TaskStarted { .. }));
+
+        board.submit_result(id, "Done".into()).unwrap();
+        let submitted = rx.try_recv().unwrap();
+        assert!(matches!(submitted, WorldEvent::TaskSubmitted { .. }));
+
+        board.review_task(id, "publisher", true).unwrap();
+        let reviewed = rx.try_recv().unwrap();
+        assert!(matches!(reviewed, WorldEvent::TaskReviewed { approved: true, .. }));
+
+        board.complete_task(id).unwrap();
+        let completed = rx.try_recv().unwrap();
+        assert!(matches!(completed, WorldEvent::TaskCompleted { .. }));
+    }
+
+    // ── Serialization ──────────────────────────────────────
+
+    #[test]
+    fn test_task_status_serialization() {
+        for status in TaskStatus::all() {
+            let json = serde_json::to_string(&status).unwrap();
+            let back: TaskStatus = serde_json::from_str(&json).unwrap();
+            assert_eq!(status, back);
+        }
+    }
+
+    #[test]
+    fn test_task_record_serialization() {
+        let task = Task {
+            id: Uuid::new_v4(),
+            title: "Test".into(),
+            description: "Desc".into(),
+            status: TaskStatus::InProgress,
+            reward: 100,
+            escrow_held: true,
+            publisher_id: "p1".into(),
+            assignee_id: Some("w1".into()),
+            result: None,
+            expires_at: Some(100),
+            created_tick: 1,
+        };
+        let json = serde_json::to_string(&task).unwrap();
+        let back: Task = serde_json::from_str(&json).unwrap();
+        assert_eq!(task.id, back.id);
+        assert_eq!(task.title, back.title);
+        assert_eq!(task.status, back.status);
+        assert_eq!(task.assignee_id, back.assignee_id);
+    }
+
+    // ── Review Rejection ───────────────────────────────────
+
+    #[test]
+    fn test_review_rejection_goes_back_to_in_progress() {
+        let mut board = make_board();
+        let id = create_default_task(&mut board);
+        board.claim_task(id, "worker".to_string()).unwrap();
+        board.start_task(id).unwrap();
+        board.submit_result(id, "Bad work".into()).unwrap();
+
+        board.review_task(id, "publisher", false).unwrap();
+        assert_eq!(board.get(id).unwrap().status, TaskStatus::InProgress);
+
+        // Worker can resubmit
+        board.submit_result(id, "Better work".into()).unwrap();
+        assert_eq!(board.get(id).unwrap().status, TaskStatus::Submitted);
+    }
+}

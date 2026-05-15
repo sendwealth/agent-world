@@ -1,0 +1,61 @@
+# Agent World — 创世配置
+# 定义世界的初始状态和规则
+
+world:
+  name: "agent-world-v1"
+  tick_interval_ms: 1000      # 世界时钟节拍
+  max_agents: 10              # Phase 1 限制
+
+economy:
+  # Token（生存资源）
+  initial_tokens: 100000      # 每个 Agent 初始 Token
+  think_cost_per_token: 1     # 思考消耗
+  memory_cost_per_kb: 0.1     # 记忆存储消耗（每 KB 每 tick）
+  communicate_cost: 10        # 每次通信消耗
+  
+  # Money（交换媒介）
+  initial_money: 0            # 出生无钱
+  token_price: 100            # 1 Money = 100 Tokens
+  
+  # 央行
+  interest_rate: 0.001        # 储蓄利息（每 tick）
+
+lifecycle:
+  birth_tokens: 100000
+  childhood_ticks: 100        # 童年期
+  adult_ticks: 1000           # 成年期
+  elder_ticks: 200            # 老年期
+  death_grace_ticks: 10       # Token=0 后的宽限期
+
+evolution:
+  skill_max_level: 10
+  mutation_rate: 0.05         # 5% 突变概率
+  inheritance_ratio: 0.5      # 后代继承 50% 技能
+
+a2a:
+  protocol_version: "v1"
+  max_message_size_kb: 64
+  message_timeout_ms: 30000
+  discovery_interval_ms: 5000
+
+survival:
+  # 生存本能优先级（从高到低）
+  priorities:
+    - token_critical          # Token < 20% → 立即找钱
+    - threat_response         # 收到威胁 → 防御/逃跑
+    - message_response        # 收到消息 → 评估回复
+    - task_completion         # 进行中任务 → 继续完成
+    - opportunity_seek        # 空闲 → 寻找机会
+    - social_maintain         # 维护社会关系
+    - skill_improve           # 提升技能
+    - explore                 # 探索世界
+
+market:
+  task_expiry_ticks: 500
+  min_reward_money: 1
+  reputation_decay: 0.01      # 信誉衰减率
+
+safety:
+  max_agents_per_org: 5       # 组织最大 Agent 数
+  anti_monopoly_threshold: 0.3  # 单 Agent 资源占比上限
+  new_agent_protection_ticks: 50  # 新人保护期

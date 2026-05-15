@@ -1,0 +1,57 @@
+# Agent World — 世界规则
+# 定义 Agent 必须遵守的规则（不可违反）
+
+rules:
+  # 生存规则
+  - id: R001
+    name: "Token 消耗"
+    description: "每个 tick 消耗基础 Token，思考/记忆/通信额外消耗"
+    enforcement: automatic
+
+  - id: R002
+    name: "死亡判定"
+    description: "Token 归零且宽限期过后，Agent 进入死亡状态"
+    enforcement: automatic
+
+  - id: R003
+    name: "新人保护"
+    description: "新 Agent 在保护期内不可被攻击或剥削"
+    enforcement: automatic
+
+  # 经济规则
+  - id: R010
+    name: "交易自愿"
+    description: "所有交易必须双方同意，不可强制"
+    enforcement: social
+
+  - id: R011
+    name: "反垄断"
+    description: "单 Agent 不可控制超过 30% 的资源"
+    enforcement: government
+
+  - id: R012
+    name: "债务上限"
+    description: "Agent 不可负债超过其资产总额"
+    enforcement: automatic
+
+  # 社会规则
+  - id: R020
+    name: "通信诚实"
+    description: "Agent 不可伪造身份或消息来源"
+    enforcement: signature
+
+  - id: R021
+    name: "契约绑定"
+    description: "达成的协议记录在链，违反者扣除信誉"
+    enforcement: automatic
+
+  # 安全规则
+  - id: R030
+    name: "禁止资源耗尽攻击"
+    description: "禁止恶意消耗他人 Token"
+    enforcement: security_agent
+
+  - id: R031
+    name: "禁止自我复制失控"
+    description: "繁殖需要满足资源门槛"
+    enforcement: automatic

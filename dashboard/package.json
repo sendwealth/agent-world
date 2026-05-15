@@ -1,0 +1,23 @@
+{
+  "name": "agent-world-dashboard",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Observatory dashboard for Agent World",
+  "scripts": {
+    "dev": "next dev",
+    "build": "next build",
+    "start": "next start",
+    "lint": "next lint"
+  },
+  "dependencies": {
+    "next": "^15.0",
+    "react": "^19.0",
+    "react-dom": "^19.0"
+  },
+  "devDependencies": {
+    "@types/node": "^22",
+    "@types/react": "^19",
+    "typescript": "^5.5",
+    "tailwindcss": "^4.0"
+  }
+}

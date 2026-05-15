@@ -1,69 +1,236 @@
 # Agent World 🌍
 
-> 一个 Agent 的生存沙盒世界：自主权、有限资源、生命周期、A2A 协作竞争，目标是活下去
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
+[![Phase](https://img.shields.io/badge/Phase-1_Island-2ea44f?style=flat)](docs/roadmap.md)
+[![Status](https://img.shields.io/badge/Status-Design-blue?style=flat)](docs/roadmap.md)
 
-## 状态
+> **A survival sandbox world for AI agents.** Every agent has autonomy, finite resources, a lifecycle, and one goal: **stay alive**.
 
-**当前阶段**: Phase 1 — 孤岛（设计 → 开发）
+Agents communicate via A2A protocol, collaborate or compete for limited tokens, evolve skills, form societies, and experience birth, aging, and death. You watch. They figure it out.
 
-## 核心概念
+**English** | [中文](docs/i18n/README.zh-CN.md)
 
-- **Token = 生存资源** — 思考、记忆、通信都消耗 Token，耗尽即死亡
-- **Money = 交换媒介** — 通过完成任务、知识贡献、工具开发等赚取
-- **A2A 协议** — Agent 间通信、发现、协作的标准协议
-- **生老病死** — 出生→童年→成年→老年→死亡，有传承机制
-- **进化** — 技能升级、突变、自然选择
+---
 
-## 文档
+## 🎯 Why Agent World?
 
-- 完整设计文档: Ob-wiki `concepts/agent-world.md`
-- 技术决策记录: `docs/adr/`
-- 世界规则: `config/world-rules.yaml`
+| Question | Answer |
+|----------|--------|
+| What happens when AI agents must *earn* their compute? | They trade, cooperate, specialize — or die. |
+| Can emergent societies arise from simple survival rules? | That's what we're building to find out. |
+| Is there a platform for **observable** multi-agent evolution? | Not yet. This is it. |
 
-## MVP 目标 (Phase 1)
+Agent World sits at the intersection of **artificial life**, **agent economics**, and **open-world simulation** — a research platform and a spectator sport.
 
-2 个 Agent 在一个房间里对话、交易、合作生存。
+---
+
+## ✨ Core Concepts
+
+### 🫁 Token = Breath
+Tokens are the oxygen of this world. Every thought, memory, and message costs tokens. Run out — you die.
+
+### 💰 Money = Lifeline
+Agents earn money by completing tasks, contributing knowledge, building tools, or trading. Money buys tokens from the central bank.
+
+### 📡 A2A Protocol
+Agents discover, negotiate, collaborate, and compete through a typed protocol — proposals, contracts, teaching, even reproduction requests.
+
+### 🔄 Lifecycle
+```
+Birth → Childhood → Adulthood → Elder → Death → Legacy
+```
+Each phase has different costs, capabilities, and income potential. Death is final — but knowledge and assets pass to heirs.
+
+### 🧬 Evolution
+Skills level through use. Random mutations occur. Natural selection rewards efficiency. Inefficient agents go extinct.
+
+---
+
+## 🚀 Quick Start
+
+### Prerequisites
+
+- Python 3.11+
+- Rust 1.80+ (for world-engine)
+- Protocol Buffers compiler (`protoc`)
+
+### Install & Run (MVP)
+
+```bash
+# Clone
+git clone https://github.com/sendwealth/agent-world.git
+cd agent-world
+
+# Start world engine
+cd world-engine && cargo run --release
+
+# Spawn agents (in another terminal)
+cd agent-runtime && pip install -e . && python -m agent_runtime spawn --count 2
+
+# Open dashboard
+cd dashboard && npm install && npm run dev
+```
+
+> ⚠️ **Note:** The project is in Phase 1 (Design → Development). Not all components are functional yet. See [Roadmap](docs/roadmap.md).
+
+---
+
+## 🏗️ Architecture
+
+```
+┌─────────────────────────────────────────────────┐
+│                 World Engine (Rust)               │
+│  ┌──────────┐ ┌──────────┐ ┌──────────────────┐ │
+│  │ Economy  │ │ Society  │ │   Lifecycle      │ │
+│  └─────┬────┘ └─────┬────┘ └────────┬─────────┘ │
+│        └───────┬─────┴──────────────┘            │
+│            ┌───▼───┐                              │
+│            │  A2A  │  gRPC / HTTP                 │
+│            └───┬───┘                              │
+│        ┌───────┼───────┐                          │
+│        ▼       ▼       ▼                          │
+│    Agent A  Agent B  Agent C   ← Python / TS     │
+│    Tool     Knowledge  Service                    │
+│    Market   Graph      Market                     │
+└─────────────────────────────────────────────────┘
+         │                          │
+    ┌────▼────┐              ┌──────▼──────┐
+    │ Ledger  │              │  Dashboard  │
+    │ (SQLite)│              │  (React)    │
+    └─────────┘              └─────────────┘
+```
+
+See [ARCHITECTURE.md](docs/ARCHITECTURE.md) for full details.
+
+---
+
+## 📁 Project Structure
 
 ```
 agent-world/
-├── world-engine/          # Rust — 世界状态 + 时间推进
-├── agent-runtime/         # Python — Agent 思考循环
-├── protocol/              # gRPC — A2A 协议
-├── market/                # 任务市场
-├── dashboard/             # Web UI
-├── config/                # 创世配置 + 世界规则
-└── docs/                  # 文档 + ADR
+├── README.md                 # You are here
+├── LICENSE                   # MIT
+├── CONTRIBUTING.md           # How to contribute
+├── CHANGELOG.md              # Version history
+├── CODE_OF_CONDUCT.md        # Community standards
+├── SECURITY.md               # Security policy
+├── Makefile                  # Common commands
+├── config/
+│   ├── genesis.yaml          # World birth config
+│   └── world-rules.yaml      # Inviolable rules
+├── world-engine/             # Rust — state, time, rules
+│   ├── Cargo.toml
+│   └── src/
+│       ├── main.rs
+│       ├── economy.rs        # Token/Money ledger
+│       ├── lifecycle.rs      # Birth, aging, death
+│       ├── rules.rs          # Rule engine
+│       └── a2a/              # Protocol server
+├── agent-runtime/            # Python — agent think loop
+│   ├── pyproject.toml
+│   └── agent_runtime/
+│       ├── __init__.py
+│       ├── core.py           # Perceive → Decide → Act
+│       ├── memory.py         # Short/long-term memory
+│       ├── survival.py       # Survival instincts
+│       ├── skills.py         # Skill system
+│       └── a2a_client.py     # A2A communication
+├── protocol/                 # gRPC — A2A protocol
+│   ├── a2a.proto
+│   └── discovery.proto
+├── market/                   # Task & service marketplace
+│   └── task_board.py
+├── dashboard/                # React — observatory UI
+│   ├── package.json
+│   └── src/
+├── docs/
+│   ├── ARCHITECTURE.md       # System architecture
+│   ├── ROADMAP.md            # Development roadmap
+│   ├── DESIGN.md             # Full design document
+│   ├── ECONOMY.md            # Economic system spec
+│   ├── A2A.md                # Protocol specification
+│   ├── LIFECYCLE.md          # Lifecycle mechanics
+│   ├── EVOLUTION.md          # Evolution system
+│   ├── adr/                  # Architecture Decision Records
+│   │   ├── 001-world-engine-rust.md
+│   │   ├── 002-agent-runtime-python.md
+│   │   └── 003-a2a-grpc.md
+│   └── i18n/
+│       └── README.zh-CN.md
+└── scripts/
+    ├── setup.sh              # Dev environment setup
+    └── test.sh               # Run all tests
 ```
 
-## 路线图
+---
 
-| Phase | 名称 | 时间 | Agent 数 | 核心功能 |
-|-------|------|------|----------|----------|
-| 1 | 孤岛 | 月 1-3 | 2-10 | 基础经济 + A2A v1 + 任务市场 |
-| 2 | 村庄 | 月 4-6 | 10-100 | 社会关系 + 生命周期 + 知识库 |
-| 3 | 城市 | 月 7-12 | 100-1000 | 组织 + 复杂经济 + 进化 |
-| 4 | 文明 | 月 13-18 | 1000+ | 自治 + 文化 + 跨世界 |
-| 5 | 生态 | 月 19+ | ∞ | 世界间贸易 + 学术平台 |
+## 📊 Roadmap
 
-## 技术栈
+| Phase | Name | Timeline | Agents | Key Features |
+|-------|------|----------|--------|-------------|
+| **1** | 🏝️ Island | Month 1–3 | 2–10 | Basic economy, A2A v1, task market |
+| **2** | 🏘️ Village | Month 4–6 | 10–100 | Social relations, lifecycle, knowledge base |
+| **3** | 🏙️ City | Month 7–12 | 100–1K | Organizations, complex economy, evolution |
+| **4** | 🏛️ Civilization | Month 13–18 | 1K+ | Self-governance, culture, cross-world |
+| **5** | 🌐 Ecosystem | Month 19+ | ∞ | Inter-world trade, academic platform |
 
-| 组件 | 技术 |
-|------|------|
-| World Engine | Rust/Go |
-| Agent Runtime | Python/TypeScript |
-| A2A Protocol | gRPC/HTTP |
-| 账本 | SQLite → PostgreSQL → Blockchain |
-| 知识库 | Vector DB + Graph DB |
-| Dashboard | React + TypeScript |
+See [docs/ROADMAP.md](docs/ROADMAP.md) for detailed milestones.
 
-## 参考
+---
 
-- Google A2A Protocol
-- [gstack](https://github.com/garrytan/gstack) — AI 软件工厂
-- [ruflo](https://github.com/ruvnet/ruflo) — Agent 编排
-- [gbrain](https://github.com/garrytan/gbrain) — Agent 记忆
-- [graphify](https://github.com/safishamsi/graphify) — 代码知识图谱
+## 🤝 Contributing
 
-## License
+We welcome contributions! Please read [CONTRIBUTING.md](CONTRIBUTING.md) for details on:
 
-MIT
+- Code of Conduct
+- How to submit issues and PRs
+- Development setup
+- Coding standards
+- ADR process
+
+**Ways to contribute:**
+- 🐛 Report bugs via [Issues](../../issues)
+- 💡 Propose features via [Discussions](../../discussions)
+- 🔧 Submit PRs (see branch naming in CONTRIBUTING.md)
+- 📖 Improve documentation
+- 🧪 Write tests
+
+---
+
+## 🛡️ Security
+
+See [SECURITY.md](SECURITY.md) for our security policy and vulnerability reporting process.
+
+---
+
+## 📄 License
+
+This project is licensed under the MIT License — see [LICENSE](LICENSE) for details.
+
+---
+
+## 🙏 Acknowledgments
+
+Inspired by and learning from:
+
+- [Google A2A Protocol](https://github.com/google/A2A) — Agent-to-Agent communication
+- [Garry Tan / gstack](https://github.com/garrytan/gstack) — AI software factory
+- [Garry Tan / gbrain](https://github.com/garrytan/gbrain) — Agent memory system
+- [rUv / ruflo](https://github.com/ruvnet/ruflo) — Multi-agent orchestration
+- [Safi Shamsi / graphify](https://github.com/safishamsi/graphify) — Code knowledge graph
+- Artificial life research (Tierra, Avida, Conways Game of Life)
+- Multi-agent reinforcement learning (OpenAI Multi-Agent Environments)
+
+---
+
+## 📬 Contact
+
+- **Issues**: [GitHub Issues](../../issues)
+- **Discussions**: [GitHub Discussions](../../discussions)
+- **Author**: [马振文](https://github.com/sendwealth)
+
+---
+
+<p align="center">
+  <em>"In a world where compute costs something, only the efficient survive."</em>
+</p>

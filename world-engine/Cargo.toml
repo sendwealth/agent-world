@@ -1,0 +1,23 @@
+[package]
+name = "agent-world-engine"
+version = "0.1.0"
+edition = "2021"
+description = "World engine for Agent World — state, time, economy, rules"
+license = "MIT"
+
+[dependencies]
+tokio = { version = "1", features = ["full"] }
+tonic = "0.12"
+prost = "0.13"
+serde = { version = "1", features = ["derive"] }
+serde_yaml = "0.9"
+serde_json = "1"
+tracing = "0.1"
+tracing-subscriber = "0.3"
+uuid = { version = "1", features = ["v4"] }
+chrono = "0.4"
+thiserror = "1"
+anyhow = "1"
+
+[build-dependencies]
+tonic-build = "0.12"

@@ -1,0 +1,70 @@
+syntax = "proto3";
+
+package agentworld.a2a.v1;
+
+// A2A Protocol — Agent-to-Agent communication
+service A2AService {
+  // Discover agents in the world
+  rpc Discover(DiscoverRequest) returns (DiscoverResponse);
+  
+  // Send a message to another agent
+  rpc SendMessage(A2AMessage) returns (MessageAck);
+  
+  // Stream messages (bidirectional)
+  rpc StreamMessages(stream A2AMessage) returns (stream A2AMessage);
+}
+
+message DiscoverRequest {
+  string agent_id = 1;
+  repeated string capabilities = 2;  // Filter by capability
+}
+
+message DiscoverResponse {
+  repeated AgentInfo agents = 1;
+}
+
+message AgentInfo {
+  string agent_id = 1;
+  string name = 2;
+  int64 tokens = 3;          // Current token balance
+  int64 money = 4;           // Current money balance
+  repeated string skills = 5;
+  float reputation = 6;
+  AgentPhase phase = 7;
+}
+
+enum AgentPhase {
+  BIRTH = 0;
+  CHILDHOOD = 1;
+  ADULT = 2;
+  ELDER = 3;
+  DEAD = 4;
+}
+
+message A2AMessage {
+  string id = 1;              // Unique message ID
+  string from_agent = 2;      // Sender agent ID
+  string to_agent = 3;        // Recipient agent ID (empty = broadcast)
+  MessageType type = 4;       // Message type
+  bytes payload = 5;          // JSON-encoded payload
+  int64 timestamp = 6;        // Unix timestamp
+  string signature = 7;       // ed25519 signature
+  string nonce = 8;           // Replay protection
+}
+
+enum MessageType {
+  DISCOVER = 0;
+  PROPOSE = 1;
+  ACCEPT = 2;
+  REJECT = 3;
+  INFORM = 4;
+  TEACH = 5;
+  REPRODUCE = 6;
+  WILL = 7;
+  THREAT = 8;
+}
+
+message MessageAck {
+  bool received = 1;
+  string error = 2;           // Error message if rejected
+}

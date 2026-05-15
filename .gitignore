@@ -1,0 +1,46 @@
+# Dependencies
+node_modules/
+__pycache__/
+*.pyc
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+target/
+
+# Build
+dist/
+build/
+*.egg-info/
+.next/
+out/
+
+# Generated
+protocol/gen/
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Environment
+.env
+.env.local
+*.log
+
+# Data (local only)
+data/
+*.db
+*.sqlite
+
+# Dashboard
+dashboard/node_modules/
+dashboard/.next/
+
+# World engine
+world-engine/target/

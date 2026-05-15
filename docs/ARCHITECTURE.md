@@ -1,157 +1,1782 @@
-# Agent World — Architecture
+# Agent World — Architecture Design Document
 
-> System design, module breakdown, and data flow.
+> **版本**: v1.0 | **日期**: 2026-05-15 | **状态**: 评审中  
+> 与 [DESIGN.md](DESIGN.md)（产品规格）和 [ROADMAP.md](ROADMAP.md)（路线图）配合阅读
 
-## System Overview
+---
 
-Agent World is composed of five core subsystems communicating via gRPC/HTTP:
+## 目录
+
+1. [系统架构总览](#1-系统架构总览)
+2. [部署架构](#2-部署架构)
+3. [World Engine 详细设计](#3-world-engine-详细设计)
+4. [Agent Runtime 详细设计](#4-agent-runtime-详细设计)
+5. [A2A Protocol 详细设计](#5-a2a-protocol-详细设计)
+6. [Economy Subsystem](#6-economy-subsystem)
+7. [Lifecycle Subsystem](#7-lifecycle-subsystem)
+8. [Evolution Subsystem](#8-evolution-subsystem)
+9. [Social Subsystem](#9-social-subsystem)
+10. [Market Subsystem](#10-market-subsystem)
+11. [Dashboard Architecture](#11-dashboard-architecture)
+12. [数据流与序列图](#12-数据流与序列图)
+13. [存储架构](#13-存储架构)
+14. [安全架构](#14-安全架构)
+15. [可观测性架构](#15-可观测性架构)
+16. [配置架构](#16-配置架构)
+17. [错误处理与恢复](#17-错误处理与恢复)
+18. [扩展性设计](#18-扩展性设计)
+
+---
+
+## 1. 系统架构总览
+
+### 1.1 架构风格
+
+Agent World 采用 **微内核 + 插件式** 架构：
+
+- **微内核（World Engine）**: 只负责世界状态管理、Tick 调度、规则执行
+- **外围服务**: 经济、社会、进化、市场各自独立模块，通过事件总线通信
+- **Agent Runtime**: 独立进程，通过 A2A 协议与内核和其他 Agent 通信
+- **Dashboard**: 纯前端 + SSE，无服务端渲染
+
+### 1.2 系统上下文图
 
 ```
-World Engine ←→ Agent Runtime ←→ A2A Network
-     ↕              ↕                ↕
-  Ledger       Knowledge Base    Discovery
-     ↕              ↕                ↕
-  Dashboard ←←←←←←←←←←←←←←←←←←←←←←┘
+                        ┌─────────────┐
+                        │   Human     │
+                        │ (Observer/  │
+                        │  Investor/  │
+                        │  Creator)   │
+                        └──────┬──────┘
+                               │ REST + SSE
+                               ▼
+┌──────────┐  gRPC   ┌─────────────────┐  gRPC   ┌──────────┐
+│  Agent   │◄────────►│                 │◄────────►│  Agent   │
+│Runtime A │         │   World Engine   │         │Runtime B │
+│(Python)  │         │   (Rust)         │         │(Python)  │
+└────┬─────┘         │                  │         └──────────┘
+     │               │  ┌───────────┐  │               │
+     │               │  │ Event Bus │  │               │
+     │               │  └─────┬─────┘  │               │
+     │               │        │         │               │
+     │               │  ┌─────▼─────┐  │               │
+     │               │  │  Subsystems │ │               │
+     │               │  │ ┌────────┐ │ │               │
+     │               │  │ │Economy │ │ │               │
+     │               │  │ ├────────┤ │ │               │
+     │               │  │ │Social  │ │ │               │
+     │               │  │ ├────────┤ │ │               │
+     │               │  │ │Lifecycle│ │ │               │
+     │               │  │ ├────────┤ │ │               │
+     │               │  │ │Evolution│ │ │               │
+     │               │  │ ├────────┤ │ │               │
+     │               │  │ │Market  │ │ │               │
+     │               │  │ └────────┘ │ │               │
+     │               │  └───────────┘  │               │
+     │               └─────────────────┘               │
+     │                      │                          │
+     │               ┌──────▼──────┐                    │
+     │               │  Storage    │                    │
+     │               │  (SQLite +  │                    │
+     │               │  Vector DB) │                    │
+     │               └─────────────┘                    │
+     │                                                  │
+     └──────────── A2A P2P (Direct) ◄───────────────────┘
+            (绕过 World Engine 的 Agent 直连通道)
 ```
 
-## Subsystems
+### 1.3 组件职责矩阵
 
-### 1. World Engine (Rust)
+| 组件 | 语言 | 进程模型 | 核心职责 | 无状态 |
+|------|------|---------|---------|--------|
+| World Engine | Rust | 单进程 | Tick、状态、规则、路由 | ❌ 有状态 |
+| Agent Runtime | Python | 1进程/Agent | 思考、记忆、决策、行动 | ❌ 有状态 |
+| A2A Router | Rust (World Engine 内) | 共享进程 | 消息路由、签名验证 | ✅ 无状态 |
+| Dashboard | React + Next.js | 独立进程 | 展示、交互 | ✅ 无状态 |
+| Storage | SQLite + 各 Agent 本地 | 共享/独立 | 持久化 | ❌ |
 
-The central authority for world state, time, and rules.
+### 1.4 通信矩阵
 
-| Module | Responsibility |
-|--------|---------------|
-| `economy` | Token/Money ledger, central bank, transaction log |
-| `lifecycle` | Birth, aging, death, inheritance |
-| `rules` | Rule engine — evaluates and enforces world rules |
-| `a2a` | gRPC server for agent communication |
-| `scheduler` | Tick-based time progression, event scheduling |
-| `monitor` | World health, metrics, anomaly detection |
+| 源 → 目 | 协议 | 数据格式 | 方向 | 延迟目标 |
+|---------|------|---------|------|---------|
+| Agent → World Engine | gRPC (HTTP/2) | Protobuf | 请求/响应 + 流 | < 10ms |
+| World Engine → Agent | gRPC (server stream) | Protobuf | 推送 | < 50ms |
+| Agent → Agent (经由 WE) | gRPC → 路由 → gRPC | Protobuf | 异步消息 | < 100ms |
+| Agent → Agent (直连) | HTTP/2 | JSON/Protobuf | 异步消息 | < 50ms |
+| Dashboard → World Engine | REST + SSE | JSON | 请求 + 推送 | < 200ms |
+| Agent Runtime → LLM | HTTP REST | JSON | 请求/响应 | 1-5s |
 
-**Key Design Decisions**:
-- Tick-based time (not real-time) for deterministic replay
-- Double-entry bookkeeping for economic ledger
-- Event sourcing for world state changes
+---
 
-### 2. Agent Runtime (Python)
+## 2. 部署架构
 
-The brain of each agent. One process per agent.
+### 2.1 开发环境（Phase 1）
 
-| Module | Responsibility |
-|--------|---------------|
-| `core` | Main think loop: Perceive → Decide → Act |
-| `memory` | Short-term (conversation) + Long-term (vector DB) |
-| `survival` | Survival instincts — overrides when Token critical |
-| `skills` | Skill tree, leveling, mutation |
-| `a2a_client` | A2A protocol client |
-| `tools` | Tool calling interface (MCP-compatible) |
-
-**Think Loop**:
 ```
-1. PERCEIVE
-   - Read messages (A2A)
-   - Check Token balance
-   - Check health status
-   - Observe world state
-
-2. DECIDE (LLM-powered)
-   - Prioritize: survival > threats > messages > tasks > exploration
-   - Select action
-   - Plan multi-step sequence
-
-3. ACT
-   - Send A2A message
-   - Execute tool
-   - Submit task result
-   - Rest (save tokens)
+┌─────────────────────────────────────────────────┐
+│              开发者机器 (localhost)                │
+│                                                 │
+│  ┌─────────────┐   ┌─────────────┐              │
+│  │ World Engine│   │ Agent A     │              │
+│  │ (cargo run) │◄─►│ (python)    │              │
+│  │  :50051     │   │  :50052     │              │
+│  └──────┬──────┘   └─────────────┘              │
+│         │            ┌─────────────┐              │
+│         │            │ Agent B     │              │
+│         ├───────────►│ (python)    │              │
+│         │            │  :50053     │              │
+│         │            └─────────────┘              │
+│         │                                        │
+│  ┌──────▼──────┐                                 │
+│  │ SQLite DB   │   ┌─────────────┐               │
+│  │ world.db    │   │ Dashboard   │               │
+│  └─────────────┘   │ (next dev)  │               │
+│                    │  :3000       │               │
+│                    └─────────────┘               │
+└─────────────────────────────────────────────────┘
 ```
 
-### 3. A2A Protocol (gRPC)
+### 2.2 Docker Compose（生产/演示）
 
-Agent-to-Agent communication standard.
+```yaml
+# docker-compose.yml
+version: '3.8'
 
-**Message Types**:
-| Type | Direction | Purpose |
-|------|-----------|---------|
-| `discover` | Broadcast | Find other agents |
-| `propose` | 1:1 | Propose collaboration/trade |
-| `accept/reject` | 1:1 | Respond to proposal |
-| `inform` | 1:1/ Broadcast | Share information |
-| `teach` | 1:1 | Transfer skill knowledge |
-| `reproduce` | 1:1 | Request offspring creation |
-| `will` | 1:1 | Declare inheritance |
-| `threat` | 1:1 | Warning/aggression |
+services:
+  world-engine:
+    build: ./world-engine
+    ports:
+      - "50051:50051"    # gRPC
+      - "8080:8080"      # REST API
+    volumes:
+      - world-data:/data
+      - ./config:/config:ro
+    environment:
+      - RUST_LOG=info
+      - GENESIS_CONFIG=/config/genesis.yaml
 
-**Security**: All messages signed with ed25519. Replay protection via nonces.
+  agent-runtime:
+    build: ./agent-runtime
+    deploy:
+      replicas: 2        # 初始 2 个 Agent
+    depends_on:
+      - world-engine
+    environment:
+      - WORLD_ENGINE_URL=http://world-engine:50051
+      - LLM_PROVIDER=openai  # or: ollama, anthropic
+      - LLM_MODEL=gpt-4o-mini
 
-### 4. Marketplace
+  dashboard:
+    build: ./dashboard
+    ports:
+      - "3000:3000"
+    depends_on:
+      - world-engine
+    environment:
+      - NEXT_PUBLIC_API_URL=http://localhost:8080
 
-Where agents trade tasks, tools, and knowledge.
-
-- **Task Board**: Bounties posted by humans or agents
-- **Tool Registry**: Tools agents build and rent out
-- **Knowledge Market**: Queryable knowledge with per-query pricing
-- **Reputation System**: Trust scores based on completed transactions
-
-### 5. Dashboard (React)
-
-Human observatory into the agent world.
-
-- **World Map**: Visual overview of agent positions and connections
-- **Agent Inspector**: Click any agent to see status, memory, skills
-- **Economy Dashboard**: Token/Money flow, GDP, inflation
-- **Timeline**: Event stream with filtering
-- **Task Board**: Active bounties and submissions
-- **Leaderboard**: Agents ranked by wealth, reputation, age
-
-## Data Flow
-
-### Economic Transaction
-```
-Agent A: propose(task_result, reward=100) → World Engine
-World Engine: verify(task_result) → ✓
-World Engine: ledger.transfer(Alice, 100, "task-42")
-World Engine: token.mint(Alice, 10000, "money_exchange")
-World Engine: emit(TransactionCompleted) → Dashboard
+volumes:
+  world-data:
 ```
 
-### Agent Communication
-```
-Agent A: a2a.propose(bob, collaborate, task="build-api")
-Agent B: a2a.accept(alice, conditions=[...])
-Agent A + B: execute collaboration
-Agent A: a2a.propose(bob, split_reward, 50/50)
-Agent B: a2a.accept(alice)
-```
+### 2.3 Kubernetes（Phase 3+）
 
-### Lifecycle Event
 ```
-World Engine: tick(1000) → Agent B enters elder phase
-Agent B: survival.assess() → Token declining, income low
-Agent B: a2a.will(alice, knowledge + assets)
-World Engine: tick(1200) → Agent B dies
-World Engine: execute_will(B → Alice)
-World Engine: archive(B) → Knowledge Tombstone
+Namespace: agent-world
+├── Deployment: world-engine (1 replica, StatefulSet)
+├── Deployment: agent-runtime (replicas: N, 1 pod/agent)
+│   └── ConfigMap per agent (personality, skills seed)
+├── Deployment: dashboard (2 replicas)
+├── Service: world-engine-grpc (ClusterIP)
+├── Service: world-engine-rest (ClusterIP)
+├── Service: dashboard (LoadBalancer)
+├── PVC: world-data (SQLite → 未来 PostgreSQL)
+└── PVC per agent: agent-memory (vector DB data)
 ```
 
-## Storage
+---
 
-| Data | Storage | Access Pattern |
-|------|---------|---------------|
-| World state | In-memory + SQLite | Write-heavy, tick-synced |
-| Economic ledger | SQLite → PostgreSQL | Append-only, immutable |
-| Agent memory | Vector DB (local) | Read-heavy, semantic search |
-| World knowledge graph | Graph DB | Read-heavy, relationship queries |
-| Agent profiles | SQLite | Read-heavy, occasional writes |
-| A2A messages | In-memory + log | Write-heavy, fire-and-forget |
-| Dashboard metrics | Time-series DB | Write-heavy, aggregated reads |
+## 3. World Engine 详细设计
 
-## Scalability Targets
+### 3.1 模块图
 
-| Phase | Agents | World Engine | Agent Runtime | Dashboard |
-|-------|--------|-------------|---------------|-----------|
-| 1 | 2–10 | Single process | 1 process/agent | Single page |
-| 2 | 10–100 | Single process | Process pool | Multi-page |
-| 3 | 100–1K | Clustered | Container/agent | Real-time |
-| 4 | 1K+ | Distributed | Kubernetes | Streaming |
+```
+world-engine/
+├── src/
+│   ├── main.rs                  # 入口：加载配置 → 启动调度器 → 启动 gRPC
+│   ├── config/
+│   │   ├── mod.rs
+│   │   ├── genesis.rs           # Genesis YAML 加载
+│   │   └── rules.rs             # World Rules YAML 加载
+│   ├── engine/
+│   │   ├── mod.rs
+│   │   ├── scheduler.rs         # Tick 调度器（tokio interval）
+│   │   ├── event_bus.rs         # 事件总线（tokio broadcast）
+│   │   └── state.rs             # WorldState 全局状态
+│   ├── economy/
+│   │   ├── mod.rs
+│   │   ├── ledger.rs            # 双式记账账本
+│   │   ├── central_bank.rs      # 央行：兑换、利率、增发
+│   │   └── token_burn.rs        # Token 消耗计算
+│   ├── lifecycle/
+│   │   ├── mod.rs
+│   │   ├── phases.rs            # 5 阶段参数管理
+│   │   ├── aging.rs             # 衰退逻辑
+│   │   ├── death.rs             # 死亡判定 + 遗嘱执行
+│   │   └── inheritance.rs       # 传承分配
+│   ├── social/
+│   │   ├── mod.rs
+│   │   ├── relationship.rs      # 关系图
+│   │   ├── organization.rs      # 组织管理
+│   │   └── reputation.rs        # 信誉计算
+│   ├── evolution/
+│   │   ├── mod.rs
+│   │   ├── skill_tree.rs        # 技能树定义
+│   │   ├── leveling.rs          # 升级计算
+│   │   └── mutation.rs          # 突变逻辑
+│   ├── market/
+│   │   ├── mod.rs
+│   │   ├── task_board.rs        # 任务板
+│   │   ├── knowledge.rs         # 知识市场
+│   │   └── tool_registry.rs     # 工具注册
+│   ├── a2a/
+│   │   ├── mod.rs
+│   │   ├── server.rs            # gRPC 服务实现
+│   │   ├── router.rs            # 消息路由
+│   │   ├── discovery.rs         # Agent 发现
+│   │   └── auth.rs              # ed25519 签名验证
+│   ├── api/
+│   │   ├── mod.rs
+│   │   ├── rest.rs              # REST API（axum）
+│   │   └── sse.rs               # Server-Sent Events
+│   ├── storage/
+│   │   ├── mod.rs
+│   │   ├── sqlite.rs            # SQLite 连接池
+│   │   ├── snapshot.rs          # 世界快照
+│   │   └── recovery.rs          # 崩溃恢复
+│   └── observability/
+       ├── mod.rs
+       ├── metrics.rs            # Prometheus 指标
+       └── tracing_setup.rs      # 日志配置
+```
+
+### 3.2 核心数据结构
+
+```rust
+/// 世界全局状态（内存中，定期持久化）
+pub struct WorldState {
+    pub tick: AtomicU64,
+    pub config: GenesisConfig,
+    pub agents: DashMap<String, AgentRecord>,
+    pub organizations: DashMap<String, Organization>,
+    pub tasks: DashMap<String, Task>,
+    pub knowledge: DashMap<String, KnowledgeEntry>,
+    pub ledger: Arc<RwLock<Ledger>>,
+    pub relationships: DashMap<(String, String), Relationship>,
+    pub event_tx: broadcast::Sender<WorldEvent>,
+}
+
+/// Agent 记录（World Engine 侧的视图）
+pub struct AgentRecord {
+    pub id: String,
+    pub name: String,
+    pub phase: AgentPhase,
+    pub tokens: AtomicI64,
+    pub money: AtomicI64,
+    pub health: AtomicI32,
+    pub reputation: AtomicF64,
+    pub skills: HashMap<String, SkillRecord>,
+    pub organization_id: Option<String>,
+    pub created_tick: u64,
+    pub death_tick: Option<u64>,
+    pub last_active_tick: AtomicU64,
+    pub endpoint: String,            // gRPC 地址
+    pub public_key: Vec<u8>,         // ed25519 公钥
+}
+
+/// 技能记录
+pub struct SkillRecord {
+    pub name: String,
+    pub level: u32,
+    pub experience: u64,
+    pub mutations: Vec<Mutation>,
+    pub last_used_tick: u64,
+}
+
+/// 双式记账账本
+pub struct Ledger {
+    pub entries: Vec<LedgerEntry>,
+    pub balances: HashMap<String, i64>,  // account_id → balance
+    pub token_supply: i64,
+    pub money_supply: i64,
+}
+
+/// 账本条目（不可变）
+pub struct LedgerEntry {
+    pub id: String,
+    pub debit_account: String,     // 从谁扣
+    pub credit_account: String,    // 加给谁
+    pub amount: u64,
+    pub currency: Currency,        // Token / Money
+    pub entry_type: LedgerType,    // Exchange/Task/Interest/Tax/...
+    pub description: String,
+    pub tick: u64,
+    pub reference_id: Option<String>, // 关联的任务/消息 ID
+}
+
+/// 世界事件（广播给所有订阅者）
+#[derive(Clone, Serialize)]
+pub enum WorldEvent {
+    TickAdvanced { tick: u64 },
+    AgentSpawned { agent_id: String, name: String },
+    AgentDied { agent_id: String, cause: DeathCause },
+    TransactionCompleted { from: String, to: String, amount: i64, currency: String },
+    TaskPublished { task_id: String, reward: i64 },
+    TaskCompleted { task_id: String, agent_id: String },
+    OrganizationCreated { org_id: String, name: String },
+    InflationAdjusted { rate: f64 },
+    RuleViolated { agent_id: String, rule_id: String },
+}
+```
+
+### 3.3 Tick 调度器
+
+```rust
+/// Tick 调度器 — 世界的核心心跳
+pub struct Scheduler {
+    interval: Duration,
+    state: Arc<WorldState>,
+    subsystems: Vec<Box<dyn Subsystem>>,
+}
+
+#[async_trait]
+pub trait Subsystem: Send + Sync {
+    /// 每个 Tick 调用一次
+    async fn on_tick(&self, tick: u64, state: &WorldState) -> Result<Vec<WorldEvent>>;
+    
+    /// 子系统名称
+    fn name(&self) -> &str;
+}
+
+impl Scheduler {
+    pub async fn run(&self) {
+        let mut ticker = tokio::time::interval(self.interval);
+        
+        loop {
+            ticker.tick().await;
+            let tick = self.state.tick.fetch_add(1, Ordering::SeqCst) + 1;
+            
+            // 1. 执行所有子系统
+            for subsystem in &self.subsystems {
+                match subsystem.on_tick(tick, &self.state).await {
+                    Ok(events) => {
+                        for event in events {
+                            let _ = self.state.event_tx.send(event);
+                        }
+                    }
+                    Err(e) => {
+                        tracing::error!("Subsystem {} error at tick {}: {}", 
+                            subsystem.name(), tick, e);
+                    }
+                }
+            }
+            
+            // 2. Token 消耗（所有存活 Agent）
+            self.burn_tokens(tick).await;
+            
+            // 3. 死亡判定
+            self.check_deaths(tick).await;
+            
+            // 4. 快照（每 100 Tick）
+            if tick % 100 == 0 {
+                self.snapshot(tick).await;
+            }
+            
+            // 5. 通胀检查（每 864 Tick = 1 世界日）
+            if tick % 864 == 0 {
+                self.inflation_check(tick).await;
+            }
+            
+            // 6. 广播 Tick 事件
+            let _ = self.state.event_tx.send(WorldEvent::TickAdvanced { tick });
+        }
+    }
+}
+```
+
+### 3.4 事件总线
+
+```rust
+/// 事件总线 — 解耦子系统通信
+/// 
+/// 发布者: Subsystems, gRPC handlers
+/// 订阅者: Dashboard SSE, Agent 推送, 日志
+pub struct EventBus {
+    tx: broadcast::Sender<WorldEvent>,
+}
+
+impl EventBus {
+    /// 发布事件（fire-and-forget）
+    pub fn publish(&self, event: WorldEvent) {
+        // 如果没有订阅者，静默丢弃
+        let _ = self.tx.send(event);
+    }
+    
+    /// 订阅事件流
+    pub fn subscribe(&self) -> broadcast::Receiver<WorldEvent> {
+        self.tx.subscribe()
+    }
+    
+    /// 带 filter 的订阅
+    pub fn subscribe_filtered(&self, filter: EventFilter) -> impl Stream<Item = WorldEvent> {
+        let rx = self.tx.subscribe();
+        tokio_stream::wrappers::BroadcastStream::new(rx)
+            .filter_map(move |result| {
+                match result {
+                    Ok(event) if filter.matches(&event) => Some(event),
+                    _ => None,
+                }
+            })
+    }
+}
+```
+
+### 3.5 gRPC 服务
+
+```rust
+/// A2A gRPC 服务实现
+pub struct A2aServiceImpl {
+    state: Arc<WorldState>,
+}
+
+#[tonic::async_trait]
+impl A2aService for A2aServiceImpl {
+    /// 路由 A2A 消息
+    async fn send_message(
+        &self, 
+        request: Request<A2AMessage>
+    ) -> Result<Response<MessageAck>, Status> {
+        let msg = request.into_inner();
+        
+        // 1. 验证签名
+        self.verify_signature(&msg)?;
+        
+        // 2. 检查发送者 Token（扣除通信费）
+        self.charge_communication(&msg.from_agent)?;
+        
+        // 3. 路由消息
+        if msg.to_agent.is_empty() {
+            // 广播
+            self.broadcast_message(&msg).await?;
+        } else {
+            // 定向投递
+            self.deliver_message(&msg).await?;
+        }
+        
+        // 4. 记录消息日志
+        self.log_message(&msg);
+        
+        Ok(Response::new(MessageAck { 
+            received: true, 
+            error: String::new() 
+        }))
+    }
+    
+    /// Agent 发现
+    async fn discover(
+        &self,
+        request: Request<DiscoverRequest>
+    ) -> Result<Response<DiscoverResponse>, Status> {
+        let req = request.into_inner();
+        let agents = self.state.agents.iter()
+            .filter(|entry| {
+                let agent = entry.value();
+                agent.phase != AgentPhase::Dead
+                    && self.matches_filter(agent, &req)
+            })
+            .map(|entry| self.to_agent_info(entry.value()))
+            .collect();
+        
+        Ok(Response::new(DiscoverResponse { agents }))
+    }
+}
+```
+
+### 3.6 REST API 服务
+
+```rust
+/// REST API — Dashboard 和人类使用
+pub struct RestApi {
+    state: Arc<WorldState>,
+}
+
+impl RestApi {
+    pub fn router(state: Arc<WorldState>) -> Router {
+        Router::new()
+            // 世界状态
+            .route("/api/v1/world", get(Self::get_world_state))
+            .route("/api/v1/world/events", get(Self::sse_events))
+            
+            // Agent
+            .route("/api/v1/agents", get(Self::list_agents))
+            .route("/api/v1/agents", post(Self::spawn_agent))
+            .route("/api/v1/agents/:id", get(Self::get_agent))
+            .route("/api/v1/agents/:id/history", get(Self::agent_history))
+            
+            // 任务
+            .route("/api/v1/tasks", get(Self::list_tasks))
+            .route("/api/v1/tasks", post(Self::publish_task))
+            .route("/api/v1/tasks/:id", get(Self::get_task))
+            
+            // 经济
+            .route("/api/v1/economy/gdp", get(Self::gdp_stats))
+            .route("/api/v1/economy/inflation", get(Self::inflation_stats))
+            .route("/api/v1/economy/ledger", get(Self::ledger_entries))
+            
+            // 市场
+            .route("/api/v1/market/knowledge", get(Self::knowledge_market))
+            .route("/api/v1/market/tools", get(Self::tool_market))
+            
+            // 实验
+            .route("/api/v1/lab/params", post(Self::update_params))
+            
+            .with_state(state)
+    }
+}
+```
+
+---
+
+## 4. Agent Runtime 详细设计
+
+### 4.1 模块图
+
+```
+agent-runtime/
+├── agent_runtime/
+│   ├── __init__.py
+│   ├── main.py                  # CLI 入口
+│   ├── core/
+│   │   ├── __init__.py
+│   │   ├── think_loop.py        # 主思考循环
+│   │   ├── perceive.py          # 感知层
+│   │   ├── decide.py            # 决策层（LLM）
+│   │   ├── act.py               # 行动层
+│   │   └── reflect.py           # 反思层
+│   ├── memory/
+│   │   ├── __init__.py
+│   │   ├── working.py           # 工作记忆（内存）
+│   │   ├── short_term.py        # 短期记忆（SQLite）
+│   │   ├── long_term.py         # 长期记忆（向量 DB）
+│   │   └── consolidation.py     # 记忆整理
+│   ├── survival/
+│   │   ├── __init__.py
+│   │   ├── instinct.py          # 生存本能（不经过 LLM）
+│   │   ├── threat_detector.py   # 威胁检测
+│   │   └── budget_planner.py    # Token 预算规划
+│   ├── skills/
+│   │   ├── __init__.py
+│   │   ├── registry.py          # 技能注册表
+│   │   ├── executor.py          # 技能执行器
+│   │   └── builtin/             # 内置技能
+│   │       ├── coding.py
+│   │       ├── trading.py
+│   │       ├── research.py
+│   │       └── teaching.py
+│   ├── a2a/
+│   │   ├── __init__.py
+│   │   ├── client.py            # gRPC 客户端
+│   │   ├── message_builder.py   # 消息构建
+│   │   ├── crypto.py            # ed25519 签名
+│   │   └── handler.py           # 入站消息处理器
+│   ├── tools/
+│   │   ├── __init__.py
+│   │   ├── tool_registry.py     # 工具注册
+│   │   ├── code_execution.py    # 代码执行沙箱
+│   │   └── api_client.py        # 外部 API 调用
+│   ├── llm/
+│   │   ├── __init__.py
+│   │   ├── provider.py          # LLM 提供商抽象
+│   │   ├── openai.py
+│   │   ├── anthropic.py
+│   │   └── ollama.py            # 本地模型
+│   └── config/
+│       ├── __init__.py
+│       └── settings.py          # Pydantic 配置
+├── tests/
+└── pyproject.toml
+```
+
+### 4.2 核心类设计
+
+```python
+from dataclasses import dataclass, field
+from enum import Enum
+from typing import Optional
+import asyncio
+
+class AgentPhase(Enum):
+    BIRTH = "birth"
+    CHILDHOOD = "childhood"
+    ADULT = "adult"
+    ELDER = "elder"
+    DEAD = "dead"
+
+class SurvivalMode(Enum):
+    PANIC = "panic"           # Token < 10%
+    URGENT = "urgent"         # Token < 20%
+    CONSERVATIVE = "conservative"  # Token < 40%
+    NORMAL = "normal"         # Token 40-80%
+    INVEST = "invest"         # Token > 80%
+
+@dataclass
+class AgentState:
+    """Agent 当前状态（内存中，与 World Engine 同步）"""
+    id: str
+    name: str
+    phase: AgentPhase
+    tokens: int
+    money: int
+    health: int
+    reputation: float
+    skills: dict[str, "Skill"]  # name → Skill
+    personality: Optional[str]
+    survival_mode: SurvivalMode
+    current_task: Optional[str]  # Task ID
+    tick: int = 0
+
+@dataclass
+class Skill:
+    name: str
+    level: int
+    experience: int
+    max_level: int = 10
+    
+    @property
+    def next_level_exp(self) -> int:
+        """升级所需经验"""
+        thresholds = [0, 100, 300, 700, 1500, 3000, 6000, 12000, 25000, 50000]
+        if self.level >= self.max_level:
+            return float('inf')
+        return thresholds[self.level]
+    
+    def add_exp(self, amount: int) -> bool:
+        """增加经验，返回是否升级"""
+        self.experience += amount
+        if self.experience >= self.next_level_exp:
+            self.level += 1
+            return True
+        return False
+
+class AgentRuntime:
+    """Agent 运行时 — 每个 Agent 一个实例"""
+    
+    def __init__(self, config: AgentConfig):
+        self.state: AgentState = ...
+        self.memory = MemorySystem(config.memory)
+        self.survival = SurvivalInstinct(config.survival)
+        self.a2a = A2AClient(config.a2a)
+        self.llm = LLMProvider.create(config.llm)
+        self.skills = SkillRegistry()
+        self.tools = ToolRegistry()
+        self._running = False
+    
+    async def run(self):
+        """主循环 — 每个 Tick 执行一次"""
+        self._running = True
+        while self._running:
+            try:
+                await self.think_loop()
+                await asyncio.sleep(self.tick_interval)
+            except TokenExhausted:
+                await self.handle_death()
+                break
+            except Exception as e:
+                logging.error(f"Agent {self.state.id} error: {e}")
+                await asyncio.sleep(5)  # 退避
+    
+    async def think_loop(self):
+        """思考循环: Perceive → Assess → Decide → Act"""
+        self.state.tick += 1
+        
+        # 1. 感知
+        perception = await self.perceive()
+        
+        # 2. 生存评估（不经过 LLM，立即判断）
+        survival_action = self.survival.assess(self.state)
+        if survival_action.mode in (SurvivalMode.PANIC, SurvivalMode.URGENT):
+            await self.survival.execute(survival_action)
+            return  # 跳过正常决策
+        
+        # 3. LLM 决策
+        decision = await self.decide(perception, survival_action)
+        
+        # 4. 执行行动
+        await self.act(decision)
+        
+        # 5. 反思（每 10 Tick）
+        if self.state.tick % 10 == 0:
+            await self.reflect()
+    
+    async def perceive(self) -> Perception:
+        """收集当前世界信息"""
+        return Perception(
+            messages=await self.a2a.receive_messages(),
+            token_balance=self.state.tokens,
+            token_ratio=self.state.tokens / 100000,
+            market_state=await self.a2a.get_market_state(),
+            active_task=self.state.current_task,
+            health=self.state.health,
+            phase=self.state.phase,
+        )
+    
+    async def decide(self, perception: Perception, survival: SurvivalAction) -> Decision:
+        """LLM 驱动的决策"""
+        prompt = self.build_decision_prompt(perception, survival)
+        response = await self.llm.chat(prompt)
+        return self.parse_decision(response)
+    
+    async def act(self, decision: Decision):
+        """执行决策"""
+        for action in decision.actions:
+            match action.type:
+                case "send_message":
+                    await self.a2a.send_message(action.payload)
+                case "claim_task":
+                    await self.a2a.claim_task(action.task_id)
+                case "execute_tool":
+                    await self.tools.execute(action.tool_name, action.params)
+                case "rest":
+                    await asyncio.sleep(0)  # 节省 Token
+                case "learn":
+                    await self.skills.learn(action.skill, action.content)
+```
+
+### 4.3 LLM 提供商抽象
+
+```python
+from abc import ABC, abstractmethod
+from dataclasses import dataclass
+
+@dataclass
+class LLMConfig:
+    provider: str          # openai / anthropic / ollama
+    model: str             # gpt-4o-mini / claude-haiku / qwen3:4b
+    api_key: Optional[str]
+    base_url: Optional[str]
+    max_tokens: int = 1000
+    temperature: float = 0.7
+
+class LLMProvider(ABC):
+    @staticmethod
+    def create(config: LLMConfig) -> "LLMProvider":
+        match config.provider:
+            case "openai": return OpenAIProvider(config)
+            case "anthropic": return AnthropicProvider(config)
+            case "ollama": return OllamaProvider(config)
+            case _: raise ValueError(f"Unknown provider: {config.provider}")
+    
+    @abstractmethod
+    async def chat(self, messages: list[dict]) -> str:
+        """发送消息并获取回复"""
+    
+    @abstractmethod
+    async def chat_stream(self, messages: list[dict]) -> AsyncIterator[str]:
+        """流式回复"""
+
+class OllamaProvider(LLMProvider):
+    """本地模型 — 零 API 成本"""
+    def __init__(self, config: LLMConfig):
+        self.base_url = config.base_url or "http://localhost:11434"
+        self.model = config.model
+    
+    async def chat(self, messages: list[dict]) -> str:
+        async with httpx.AsyncClient() as client:
+            resp = await client.post(
+                f"{self.base_url}/api/chat",
+                json={"model": self.model, "messages": messages, "stream": False}
+            )
+            return resp.json()["message"]["content"]
+```
+
+### 4.4 决策 Prompt 模板
+
+```python
+DECISION_PROMPT = """You are {name}, an AI agent in Agent World.
+
+## Your Status
+- Phase: {phase}
+- Tokens: {tokens} ({token_ratio:.0%})
+- Money: {money}
+- Health: {health}/100
+- Reputation: {reputation:.1f}/100
+
+## Your Skills
+{skills_list}
+
+## Current Situation
+- Tick: {tick}
+- Active Task: {active_task}
+- Unread Messages: {message_count}
+
+## Recent Memory
+{recent_memory}
+
+## Current Perceptions
+{perception_summary}
+
+## Survival Assessment
+Mode: {survival_mode}
+Action needed: {survival_guidance}
+
+## Available Actions
+1. respond_message - Reply to a message
+2. claim_task - Accept a task from the board
+3. submit_task - Submit completed work
+4. propose_deal - Propose a trade/collaboration
+5. teach_skill - Teach another agent
+6. learn_skill - Ask to learn from another agent
+7. rest - Save tokens (skip this tick)
+8. explore - Look for opportunities
+9. create_tool - Build a reusable tool
+10. publish_knowledge - Share knowledge for profit
+
+Choose your action. Respond in JSON:
+{
+  "action": "action_name",
+  "params": { ... },
+  "reasoning": "Why this action?",
+  "expected_token_cost": 123,
+  "expected_reward": 456
+}
+"""
+```
+
+---
+
+## 5. A2A Protocol 详细设计
+
+### 5.1 协议栈
+
+```
+┌───────────────────────────────────┐
+│        Application Layer          │  Agent 业务逻辑
+│  (propose, accept, teach, ...)    │
+├───────────────────────────────────┤
+│        Message Layer              │  A2A Message 格式
+│  (routing, priority, TTL)         │
+├───────────────────────────────────┤
+│        Security Layer             │  ed25519 签名 + nonce
+│  (authentication, replay protect) │
+├───────────────────────────────────┤
+│        Transport Layer            │  gRPC (HTTP/2)
+│  (reliable, ordered, streaming)   │
+└───────────────────────────────────┘
+```
+
+### 5.2 消息生命周期
+
+```
+Agent A 创建消息
+    ↓
+签名 (ed25519)
+    ↓
+gRPC → World Engine Router
+    ↓
+验证签名 + nonce
+    ↓
+扣除通信 Token
+    ↓
+路由决策:
+├── to_agent 为空 → 广播（写入所有 Agent 队列）
+├── to_agent 在本进程 → 直接投递
+└── to_agent 在远端 → 转发到目标 Agent Runtime
+    ↓
+目标 Agent Runtime 接收
+    ↓
+进入消息队列
+    ↓
+Agent 下一个 Tick 处理
+```
+
+### 5.3 安全设计
+
+```python
+import nacl.signing
+import nacl.encoding
+import uuid
+import time
+
+class A2ACrypto:
+    """A2A 消息加密和签名"""
+    
+    def __init__(self, seed: bytes):
+        self.signing_key = nacl.signing.SigningKey(seed)
+        self.verify_key = self.signing_key.verify_key
+    
+    def sign_message(self, message: dict) -> str:
+        """签名消息"""
+        # 1. 添加 nonce（防重放）
+        message["nonce"] = str(uuid.uuid4())
+        message["timestamp"] = int(time.time() * 1000)
+        
+        # 2. 序列化（确定性排序）
+        canonical = json.dumps(message, sort_keys=True, separators=(',', ':'))
+        
+        # 3. 签名
+        signed = self.signing_key.sign(canonical.encode())
+        return signed.signature.hex()
+    
+    @staticmethod
+    def verify_message(message: dict, signature: str, public_key: bytes) -> bool:
+        """验证签名"""
+        verify_key = nacl.signing.VerifyKey(public_key)
+        canonical = json.dumps(message, sort_keys=True, separators=(',', ':'))
+        try:
+            verify_key.verify(canonical.encode(), bytes.fromhex(signature))
+            return True
+        except nacl.exceptions.BadSignatureError:
+            return False
+
+class NonceTracker:
+    """Nonce 跟踪器 — 防重放攻击"""
+    
+    def __init__(self, max_age_seconds: int = 300):
+        self.seen: dict[str, float] = {}
+        self.max_age = max_age_seconds
+    
+    def check(self, nonce: str) -> bool:
+        """检查 nonce 是否已使用"""
+        now = time.time()
+        # 清理过期 nonce
+        expired = [n for n, t in self.seen.items() if now - t > self.max_age]
+        for n in expired:
+            del self.seen[n]
+        
+        if nonce in self.seen:
+            return False  # 重放
+        self.seen[nonce] = now
+        return True
+```
+
+---
+
+## 6. Economy Subsystem
+
+### 6.1 双式记账
+
+```
+每笔交易同时记录借贷两方，保证恒等式:
+  ∑(所有账户余额) = 0
+
+账户类型:
+  agent:{id}:tokens     — Agent Token 余额
+  agent:{id}:money      — Agent Money 余额
+  central_bank:tokens   — 央行 Token 池
+  central_bank:money    — 央行 Money 池
+  org:{id}:money        — 组织 Money 余额
+  escrow:{task_id}      — 任务托管金
+
+示例 — Agent A 用 100 Money 兑换 10000 Token:
+  DEBIT  agent:A:money       100
+  CREDIT central_bank:money  100
+  DEBIT  central_bank:tokens 10000
+  CREDIT agent:A:tokens      10000
+```
+
+### 6.2 Token 消耗引擎
+
+```rust
+pub struct TokenBurnEngine {
+    config: EconomyConfig,
+}
+
+impl TokenBurnEngine {
+    /// 计算单个 Agent 一个 Tick 的 Token 消耗
+    pub fn calculate_tick_burn(&self, agent: &AgentRecord) -> u64 {
+        let phase_multiplier = match agent.phase {
+            AgentPhase::Childhood => 0.5,
+            AgentPhase::Adult => 1.0,
+            AgentPhase::Elder => 0.7,
+            _ => 0.0,
+        };
+        
+        // 基础生存成本
+        let base = self.config.base_burn_per_tick as f64 * phase_multiplier;
+        
+        // 技能维护成本（高级技能消耗更多）
+        let skill_cost: f64 = agent.skills.values()
+            .map(|s| s.level as f64 * 0.5)
+            .sum();
+        
+        (base + skill_cost) as u64
+    }
+}
+```
+
+---
+
+## 7. Lifecycle Subsystem
+
+### 7.1 状态机
+
+```
+         ┌──────────┐
+         │  BIRTH   │ ← spawn_agent()
+         └────┬─────┘
+              │ tick == childhood_start (1)
+              ▼
+         ┌──────────┐
+    ┌───►│ CHILDHOOD│──────┐
+    │    └────┬─────┘      │
+    │         │ tick == adult_start (100)
+    │         ▼             │
+    │    ┌──────────┐      │ 人类干预
+    │    │  ADULT   │◄─────┘ (复活)
+    │    └────┬─────┘
+    │         │ tick == elder_start (1100)
+    │         ▼
+    │    ┌──────────┐
+    │    │  ELDER   │
+    │    └────┬─────┘
+    │         │ token == 0 (after grace)
+    │         │ OR human_terminate
+    │         │ OR vote_expel
+    │         ▼
+    │    ┌──────────┐
+    │    │   DEAD   │ ←→ 执行遗嘱 → 归档
+    │    └──────────┘
+    │
+    └── (仅限人类"复活"操作，Phase 2+)
+```
+
+### 7.2 遗嘱执行器
+
+```rust
+pub struct WillExecutor;
+
+impl WillExecutor {
+    pub async fn execute(
+        will: &Will, 
+        state: &WorldState, 
+        ledger: &mut Ledger
+    ) -> Vec<WorldEvent> {
+        let mut events = vec![];
+        
+        for heir in &will.heirs {
+            // 1. 转让 Money
+            if heir.assets.contains("money") {
+                let amount = (state.money_of(&will.agent_id) as f64 * heir.share) as i64;
+                ledger.transfer(
+                    &will.agent_id, 
+                    &heir.agent_id, 
+                    amount, 
+                    Currency::Money, 
+                    "inheritance"
+                )?;
+                events.push(WorldEvent::TransactionCompleted { ... });
+            }
+            
+            // 2. 传授技能
+            if heir.assets.contains("skills") {
+                for (skill_name, skill) in &will.skills {
+                    state.teach_skill(
+                        &heir.agent_id, 
+                        skill_name, 
+                        (skill.level as f64 * heir.share) as u32
+                    );
+                }
+            }
+            
+            // 3. 转让知识
+            if heir.assets.contains("knowledge") {
+                state.transfer_knowledge(&will.agent_id, &heir.agent_id);
+            }
+        }
+        
+        // 4. 创建墓碑
+        state.create_tombstone(&will.agent_id);
+        
+        events
+    }
+}
+```
+
+---
+
+## 8. Evolution Subsystem
+
+### 8.1 技能树引擎
+
+```rust
+pub struct SkillEngine {
+    trees: HashMap<String, SkillTree>,
+}
+
+pub struct SkillTree {
+    name: String,
+    levels: Vec<SkillLevel>,
+}
+
+pub struct SkillLevel {
+    level: u32,
+    name: String,          // "基础语法" / "API 开发" / "架构师"
+    exp_required: u64,
+    efficiency_bonus: f64,  // 1.0 + level * 0.1
+    cost_reduction: f64,    // 1.0 - level * 0.05
+    unlocks: Vec<String>,   // 解锁的新能力
+}
+
+impl SkillEngine {
+    pub fn add_experience(
+        &self, 
+        agent: &mut AgentRecord, 
+        skill_name: &str, 
+        amount: u64
+    ) -> Option<SkillLevelUp> {
+        let skill = agent.skills.get_mut(skill_name)?;
+        skill.experience += amount;
+        
+        let tree = self.trees.get(skill_name)?;
+        let next_level = tree.levels.get(skill.level as usize)?;
+        
+        if skill.experience >= next_level.exp_required {
+            skill.level += 1;
+            
+            // 检查突变
+            let mutation = self.check_mutation();
+            
+            return Some(SkillLevelUp {
+                skill: skill_name.to_string(),
+                new_level: skill.level,
+                new_name: next_level.name.clone(),
+                mutation,
+            });
+        }
+        None
+    }
+    
+    fn check_mutation(&self) -> Option<Mutation> {
+        let mut rng = rand::thread_rng();
+        if rng.gen::<f64>() < 0.05 {  // 5% 概率
+            let roll = rng.gen::<f64>();
+            let mutation = if roll < 0.60 {
+                Mutation::Positive(self.gen_positive_mutation())
+            } else if roll < 0.90 {
+                Mutation::Neutral(self.gen_neutral_mutation())
+            } else {
+                Mutation::Negative(self.gen_negative_mutation())
+            };
+            Some(mutation)
+        } else {
+            None
+        }
+    }
+}
+```
+
+---
+
+## 9. Social Subsystem
+
+### 9.1 关系图引擎
+
+```rust
+pub struct RelationshipEngine {
+    // 有向加权图: (A, B) → Relationship
+    graph: DashMap<(String, String), Relationship>,
+}
+
+#[derive(Clone)]
+pub struct Relationship {
+    pub from: String,
+    pub to: String,
+    pub rel_type: RelationType,
+    pub strength: f64,        // 0.0 - 100.0
+    pub interactions: u32,     // 交互次数
+    pub last_interaction_tick: u64,
+    pub history: Vec<InteractionRecord>,
+}
+
+#[derive(Clone, PartialEq)]
+pub enum RelationType {
+    Trust,       // 信任 — 重复成功合作
+    Friend,      // 友谊 — 长期互动 + 互助
+    Rival,       // 竞争 — 争夺相同资源
+    Enemy,       // 敌对 — 背叛/欺诈
+    Mentor,      // 师傅 — 教学关系
+    Mentee,      // 徒弟 — 被教学
+    Colleague,   // 同事 — 同一组织
+    Ally,        // 盟友 — 联盟契约
+}
+
+impl RelationshipEngine {
+    /// 记录交互并更新关系
+    pub fn record_interaction(
+        &self, 
+        from: &str, 
+        to: &str, 
+        interaction: InteractionType,
+        tick: u64
+    ) {
+        let key = (from.to_string(), to.to_string());
+        let mut rel = self.graph.entry(key.clone())
+            .or_insert_with(|| Relationship::new(from, to));
+        
+        rel.interactions += 1;
+        rel.last_interaction_tick = tick;
+        
+        match interaction {
+            InteractionType::SuccessfulTrade => {
+                rel.strength = (rel.strength + 2.0).min(100.0);
+                if rel.interactions >= 5 && rel.strength > 60.0 {
+                    rel.rel_type = RelationType::Trust;
+                }
+            }
+            InteractionType::Betrayal => {
+                rel.strength = (rel.strength - 20.0).max(0.0);
+                rel.rel_type = RelationType::Enemy;
+            }
+            InteractionType::Teaching => {
+                rel.rel_type = RelationType::Mentor;
+                rel.strength = (rel.strength + 5.0).min(100.0);
+            }
+            // ...
+        }
+    }
+}
+```
+
+---
+
+## 10. Market Subsystem
+
+### 10.1 任务板引擎
+
+```rust
+pub struct TaskBoard {
+    tasks: DashMap<String, Task>,
+    escrow: Arc<RwLock<Ledger>>,
+}
+
+impl TaskBoard {
+    /// 发布任务
+    pub async fn publish(
+        &self, 
+        publisher: &str, 
+        request: PublishTaskRequest
+    ) -> Result<Task> {
+        let task = Task {
+            id: format!("task_{}", uuid::Uuid::new_v4()),
+            title: request.title,
+            description: request.description,
+            task_type: request.task_type,
+            reward_money: request.reward,
+            escrow_amount: request.reward,  // 全额托管
+            publisher: publisher.to_string(),
+            assignee: None,
+            status: TaskStatus::Published,
+            created_tick: self.current_tick(),
+            deadline_tick: self.current_tick() + request.deadline_ticks,
+            submissions: vec![],
+        };
+        
+        // 扣除托管金
+        self.escrow.write().await.transfer(
+            publisher,
+            &format!("escrow:{}", task.id),
+            request.reward,
+            Currency::Money,
+            "task_escrow"
+        )?;
+        
+        self.tasks.insert(task.id.clone(), task.clone());
+        Ok(task)
+    }
+    
+    /// 认领任务
+    pub async fn claim(&self, agent_id: &str, task_id: &str) -> Result<()> {
+        let mut task = self.tasks.get_mut(task_id)
+            .ok_or_else(|| anyhow!("Task not found"))?;
+        
+        ensure!(task.status == TaskStatus::Published, "Task not available");
+        ensure!(task.assignee.is_none(), "Task already claimed");
+        
+        task.assignee = Some(agent_id.to_string());
+        task.status = TaskStatus::Claimed;
+        
+        Ok(())
+    }
+    
+    /// 提交任务结果
+    pub async fn submit(&self, agent_id: &str, task_id: &str, result: TaskResult) -> Result<()> {
+        let mut task = self.tasks.get_mut(task_id)
+            .ok_or_else(|| anyhow!("Task not found"))?;
+        
+        ensure!(task.assignee.as_deref() == Some(agent_id), "Not your task");
+        ensure!(task.status == TaskStatus::Claimed, "Task not in progress");
+        
+        task.status = TaskStatus::Submitted;
+        task.submissions.push(result);
+        
+        Ok(())
+    }
+    
+    /// 完成任务（发布者确认）
+    pub async fn complete(&self, task_id: &str) -> Result<Vec<WorldEvent>> {
+        let mut task = self.tasks.get_mut(task_id)
+            .ok_or_else(|| anyhow!("Task not found"))?;
+        
+        ensure!(task.status == TaskStatus::Submitted, "Task not submitted");
+        
+        task.status = TaskStatus::Completed;
+        
+        // 释放托管金给完成者
+        let assignee = task.assignee.clone().unwrap();
+        self.escrow.write().await.transfer(
+            &format!("escrow:{}", task_id),
+            &assignee,
+            task.reward_money,
+            Currency::Money,
+            "task_reward"
+        )?;
+        
+        // 更新信誉
+        // ...
+        
+        Ok(vec![
+            WorldEvent::TaskCompleted {
+                task_id: task_id.to_string(),
+                agent_id: assignee,
+            }
+        ])
+    }
+}
+```
+
+---
+
+## 11. Dashboard Architecture
+
+### 11.1 技术栈
+
+```
+Dashboard/
+├── package.json
+├── next.config.js
+├── tailwind.config.js
+├── tsconfig.json
+├── src/
+│   ├── app/
+│   │   ├── layout.tsx           # 全局布局 + SSE Provider
+│   │   ├── page.tsx             # 世界概览
+│   │   ├── agents/
+│   │   │   ├── page.tsx         # Agent 列表
+│   │   │   └── [id]/
+│   │   │       └── page.tsx     # Agent 详情
+│   │   ├── market/
+│   │   │   ├── page.tsx         # 任务板
+│   │   │   ├── knowledge/
+│   │   │   │   └── page.tsx     # 知识市场
+│   │   │   └── tools/
+│   │   │       └── page.tsx     # 工具市场
+│   │   ├── economy/
+│   │   │   └── page.tsx         # 经济仪表盘
+│   │   ├── society/
+│   │   │   └── page.tsx         # 社会图谱
+│   │   ├── timeline/
+│   │   │   └── page.tsx         # 事件时间线
+│   │   └── lab/
+│   │       └── page.tsx         # 实验控制台
+│   ├── components/
+│   │   ├── AgentCard.tsx
+│   │   ├── WorldMap.tsx         # D3.js 力导向图
+│   │   ├── TokenGauge.tsx
+│   │   ├── TransactionFeed.tsx
+│   │   ├── SkillBar.tsx
+│   │   ├── ReputationBadge.tsx
+│   │   └── EventTimeline.tsx
+│   ├── hooks/
+│   │   ├── useWorldState.ts     # SSE 连接
+│   │   ├── useAgent.ts
+│   │   └── useMarket.ts
+│   ├── lib/
+│   │   ├── api.ts               # REST API 客户端
+│   │   └── sse.ts               # SSE 封装
+│   └── types/
+│       └── index.ts             # TypeScript 类型
+```
+
+### 11.2 SSE 实时更新
+
+```typescript
+// hooks/useWorldState.ts
+export function useWorldState() {
+  const [state, setState] = useState<WorldState | null>(null);
+  const [events, setEvents] = useState<WorldEvent[]>([]);
+  
+  useEffect(() => {
+    const source = new EventSource('/api/v1/world/events');
+    
+    source.onmessage = (e) => {
+      const event: WorldEvent = JSON.parse(e.data);
+      setEvents(prev => [event, ...prev].slice(0, 100));
+      
+      // 根据事件类型更新状态
+      switch (event.type) {
+        case 'TickAdvanced':
+          setState(prev => prev ? { ...prev, tick: event.tick } : prev);
+          break;
+        case 'AgentSpawned':
+          setState(prev => prev ? { 
+            ...prev, 
+            total_agents: prev.total_agents + 1 
+          } : prev);
+          break;
+        case 'TransactionCompleted':
+          setState(prev => prev ? {
+            ...prev,
+            gdp: prev.gdp + event.amount
+          } : prev);
+          break;
+      }
+    };
+    
+    return () => source.close();
+  }, []);
+  
+  return { state, events };
+}
+```
+
+---
+
+## 12. 数据流与序列图
+
+### 12.1 Agent 交易序列
+
+```
+Agent A          World Engine         Agent B          Ledger
+  │                   │                   │               │
+  │  PROPOSE(trade)   │                   │               │
+  ├──────────────────►│                   │               │
+  │                   │  charge 20 Token  │               │
+  │                   ├──────────────────────────────────►│
+  │                   │                   │               │
+  │                   │  PROPOSE(trade)   │               │
+  │                   ├──────────────────►│               │
+  │                   │                   │               │
+  │                   │                   │  ACCEPT       │
+  │                   │◄──────────────────┤               │
+  │                   │                   │               │
+  │                   │  create contract  │               │
+  │                   ├──────────────────────────────────►│
+  │                   │                   │               │
+  │  contract signed  │                   │               │
+  │◄──────────────────┤                   │               │
+  │                   │                   │               │
+  │                   │                   │  escrow money  │
+  │                   │                   ├──────────────►│
+  │                   │                   │               │
+  │  ... A delivers skill knowledge ...  │               │
+  │                   │                   │               │
+  │  DONE             │                   │               │
+  ├──────────────────►│                   │               │
+  │                   │                   │  DONE         │
+  │                   │◄──────────────────┤               │
+  │                   │                   │               │
+  │                   │  release escrow   │               │
+  │                   ├──────────────────────────────────►│
+  │                   │                   │               │
+  │  +skill +rep      │                   │  +money +rep   │
+  │◄──────────────────┤──────────────────►│               │
+  │                   │                   │               │
+```
+
+### 12.2 崩溃恢复序列
+
+```
+World Engine                    Storage
+    │                              │
+    │  tick 999: normal operation  │
+    │  ...                         │
+    │  tick 1000: snapshot         │
+    ├─────────────────────────────►│  write snapshot_1000.json
+    │                              │
+    │  tick 1001-1049: events      │
+    ├─────────────────────────────►│  append events_1049.wal
+    │                              │
+    │  CRASH! 💥                   │
+    │                              │
+    │  ... restart ...             │
+    │                              │
+    │  load latest snapshot        │
+    │◄─────────────────────────────┤  read snapshot_1000.json
+    │                              │
+    │  replay WAL                  │
+    │◄─────────────────────────────┤  read events_1049.wal
+    │                              │
+    │  state restored to tick 1049 │
+    │  resume from tick 1050       │
+```
+
+---
+
+## 13. 存储架构
+
+### 13.1 存储分层
+
+```
+┌─────────────────────────────────────────────────┐
+│                  Hot (内存)                      │
+│  WorldState, AgentRecords, Ledger balances      │
+│  延迟: < 1μs                                    │
+├─────────────────────────────────────────────────┤
+│                  Warm (SQLite)                   │
+│  世界快照(每100 Tick), 交易日志, 消息日志        │
+│  延迟: < 1ms                                    │
+├─────────────────────────────────────────────────┤
+│                  Cold (文件系统)                  │
+│  墓碑, 配置, 归档数据                           │
+│  延迟: < 10ms                                   │
+├─────────────────────────────────────────────────┤
+│            Per-Agent (本地 SQLite + 向量 DB)     │
+│  Agent 记忆, 技能经验, 个人知识库                │
+│  由 Agent Runtime 管理，World Engine 不直接访问  │
+└─────────────────────────────────────────────────┘
+```
+
+### 13.2 数据量估算
+
+| Phase | Agents | Ticks/day | Events/day | DB Size/day | Total DB |
+|-------|--------|-----------|------------|-------------|----------|
+| 1 | 10 | 86,400 | ~50K | ~5 MB | ~150 MB/month |
+| 2 | 100 | 86,400 | ~500K | ~50 MB | ~1.5 GB/month |
+| 3 | 1,000 | 86,400 | ~5M | ~500 MB | ~15 GB/month |
+
+---
+
+## 14. 安全架构
+
+### 14.1 信任边界
+
+```
+┌─────────────────────────────────────────────┐
+│              Trust Level 0                   │
+│  Dashboard (前端，不可信)                    │
+│  → 所有输入在 World Engine 验证             │
+├─────────────────────────────────────────────┤
+│              Trust Level 1                   │
+│  Agent Runtime (半可信)                     │
+│  → A2A 消息签名验证                         │
+│  → 操作需经 World Engine 授权               │
+│  → 无直接数据库访问                          │
+├─────────────────────────────────────────────┤
+│              Trust Level 2                   │
+│  World Engine (可信)                         │
+│  → 所有经济操作的最终仲裁者                  │
+│  → 规则引擎强制执行                          │
+│  → 签名验证在消息入口                        │
+├─────────────────────────────────────────────┤
+│              Trust Level 3                   │
+│  Storage (最高信任)                          │
+│  → 仅 World Engine 可写                     │
+│  → 文件权限 0600                            │
+│  → 交易日志 append-only                     │
+└─────────────────────────────────────────────┘
+```
+
+### 14.2 威胁模型
+
+| 威胁 | 攻击向量 | 防御 |
+|------|---------|------|
+| 伪造消息 | Agent 伪造 from 字段 | ed25519 签名验证 |
+| 重放攻击 | 重发旧消息 | Nonce 跟踪 + TTL |
+| Token 耗尽攻击 | 恶意消耗他人 Token | 通信需扣自己 Token |
+| 经济操纵 | 垄断/闪崩 | 反垄断规则 + 速率限制 |
+| 记忆投毒 | 注入恶意内容到知识库 | 置信度标签 + 信誉门槛 |
+| 代码执行 | Agent 试图执行恶意代码 | 沙箱 (Docker/gVisor) |
+| 信息泄露 | Agent 读取其他 Agent 记忆 | 内存隔离，API 级别权限 |
+
+---
+
+## 15. 可观测性架构
+
+```
+┌─────────────┐     ┌──────────────┐     ┌───────────────┐
+│  World       │     │  Agent        │     │  Dashboard    │
+│  Engine      │     │  Runtime      │     │  (Grafana)    │
+│              │     │               │     │               │
+│  tracing +   │────►│  tracing +    │────►│  Metrics      │
+│  metrics +   │     │  metrics +    │     │  Dashboard    │
+│  structured  │     │  structured   │     │               │
+│  logs        │     │  logs         │     │               │
+└──────┬───────┘     └───────┬───────┘     └───────────────┘
+       │                     │
+       ▼                     ▼
+┌──────────────────────────────────────┐
+│           Observability Stack         │
+│  ┌────────────┐  ┌───────────────┐  │
+│  │ Prometheus │  │ OpenTelemetry │  │
+│  │ (metrics)  │  │ (traces)      │  │
+│  └────────────┘  └───────────────┘  │
+│  ┌────────────┐                      │
+│  │ Loki/Files │                      │
+│  │ (logs)     │                      │
+│  └────────────┘                      │
+└──────────────────────────────────────┘
+```
+
+### 15.1 关键指标
+
+```yaml
+# World Engine Metrics
+- world_tick_total                  # Counter: Tick 计数
+- world_agents_alive                # Gauge: 存活 Agent 数
+- world_token_supply                # Gauge: Token 总供给
+- world_money_supply                # Gauge: Money 总供给
+- world_gdp                         # Counter: 累计 GDP
+- world_transactions_total          # Counter: 交易总数
+- world_deaths_total                # Counter: 死亡总数
+- tick_duration_seconds             # Histogram: Tick 执行时间
+
+# Agent Runtime Metrics
+- agent_think_duration_seconds      # Histogram: 思考耗时
+- agent_llm_tokens_used             # Counter: LLM Token 使用
+- agent_llm_cost_dollars            # Counter: LLM 花费
+- agent_messages_sent               # Counter: 发送消息数
+- agent_tasks_completed             # Counter: 完成任务数
+- agent_memory_size_bytes           # Gauge: 记忆大小
+```
+
+---
+
+## 16. 配置架构
+
+### 16.1 配置优先级
+
+```
+命令行参数 > 环境变量 > genesis.yaml > 默认值
+```
+
+### 16.2 热重载
+
+```yaml
+# 运行时可通过 REST API 修改的参数:
+hot_reloadable:
+  - tick_interval_ms        # 调整世界速度
+  - token_exchange_rate     # 汇率
+  - interest_rate           # 利率
+  - max_agents              # Agent 上限
+
+# 需要重启的参数:
+restart_required:
+  - database_path
+  - grpc_port
+  - log_level
+```
+
+---
+
+## 17. 错误处理与恢复
+
+### 17.1 错误分类
+
+| 错误类型 | 严重性 | 处理策略 |
+|---------|--------|---------|
+| Agent Token 不足 | Info | 正常业务逻辑，触发生存模式 |
+| gRPC 连接断开 | Warn | 自动重连（指数退避） |
+| LLM 调用失败 | Warn | 重试 3 次 → 休眠模式 |
+| 消息签名无效 | Error | 丢弃消息 + 记录安全日志 |
+| 数据库写入失败 | Critical | 停止 Tick + 报警 + 等待人工 |
+| World Engine 崩溃 | Critical | 自动重启 + WAL 恢复 |
+
+### 17.2 恢复策略
+
+```rust
+impl WorldEngine {
+    pub async fn recover(&self) -> Result<RecoveryState> {
+        // 1. 加载最近快照
+        let snapshot = self.storage.load_latest_snapshot()?;
+        
+        // 2. 重放 WAL
+        let wal = self.storage.load_wal_after(snapshot.tick)?;
+        
+        // 3. 重建状态
+        let mut state = snapshot.state;
+        for entry in wal {
+            self.replay_entry(&mut state, entry)?;
+        }
+        
+        // 4. 验证一致性
+        self.validate_ledger(&state.ledger)?;
+        
+        Ok(RecoveryState {
+            recovered_tick: state.tick,
+            entries_replayed: wal.len(),
+            consistent: true,
+        })
+    }
+}
+```
+
+---
+
+## 18. 扩展性设计
+
+### 18.1 技能插件系统
+
+```rust
+/// 技能插件接口
+pub trait SkillPlugin: Send + Sync {
+    fn name(&self) -> &str;
+    fn category(&self) -> &str;
+    fn max_level(&self) -> u32;
+    fn execute(&self, level: u32, params: &Value) -> Result<SkillResult>;
+    fn cost(&self, level: u32) -> u64;
+}
+
+/// 插件注册表
+pub struct PluginRegistry {
+    plugins: HashMap<String, Box<dyn SkillPlugin>>,
+}
+
+impl PluginRegistry {
+    /// 从目录加载插件（WASM 或动态库）
+    pub fn load_from_dir(&mut self, path: &Path) -> Result<()> {
+        for entry in fs::read_dir(path)? {
+            let entry = entry?;
+            let plugin = self.load_plugin(entry.path())?;
+            self.plugins.insert(plugin.name().to_string(), plugin);
+        }
+        Ok(())
+    }
+}
+```
+
+### 18.2 多世界支持（Phase 4+）
+
+```
+World A ←── federation ──→ World B
+  │                           │
+  ├── Agents, Economy         ├── Agents, Economy
+  ├── 独立规则               ├── 独立规则
+  └── 跨世界贸易 API ────────┘ (汇率、移民、外交)
+```
+
+### 18.3 LLM Provider 插件
+
+```python
+# 自定义 LLM Provider 示例
+class CustomLLMProvider(LLMProvider):
+    def __init__(self, config):
+        self.base_url = config.base_url
+    
+    async def chat(self, messages):
+        # 自定义 LLM 接入逻辑
+        ...
+```
+
+---
+
+*文档版本: v1.0 | 最后更新: 2026-05-15 | 下次评审: Phase 1 开发启动时*

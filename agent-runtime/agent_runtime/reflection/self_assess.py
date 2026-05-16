@@ -29,11 +29,13 @@ Usage::
 
 from __future__ import annotations
 
+import json
 import logging
-import time
+import re
+from collections import deque
 from dataclasses import dataclass, field
 from enum import Enum
-from typing import Any, Protocol
+from typing import Protocol
 
 from agent_runtime.core.act import ActionResult, ActionStatus
 from agent_runtime.llm.base import LLMMessage, LLMProvider
@@ -41,6 +43,16 @@ from agent_runtime.memory.short_term import ShortTermMemoryProtocol
 from agent_runtime.models.agent_state import AgentState
 
 logger = logging.getLogger(__name__)
+
+# ---------------------------------------------------------------------------
+# Constants
+# ---------------------------------------------------------------------------
+
+#: Maximum number of adjustment history entries retained.
+_MAX_ADJUSTMENT_HISTORY = 1000
+
+#: Maximum length for sanitised agent names in prompts.
+_MAX_NAME_LENGTH = 64
 
 
 # ---------------------------------------------------------------------------
@@ -168,12 +180,43 @@ class ReflectionEngineConfig:
         analysis_window: Number of recent actions to analyse.
         default_strategy: Starting strategy for new agents.
         memory_importance: Importance score for reflection memories (0.0-1.0).
+        max_history: Maximum number of strategy adjustments to retain.
+        dominance_threshold: Fraction of actions that must be one type to
+            trigger a strategy switch (0.0-1.0).
+        low_success_threshold: Success rate below which the agent switches
+            to conservative (0.0-1.0).
+        high_success_threshold: Success rate above which the agent may
+            switch to aggressive (0.0-1.0).
+        spending_threshold: Token spending delta below which the agent is
+            considered to be actively spending (negative value).
+        rule_based_confidence: Default confidence for rule-based adjustments.
     """
 
     token_cost: int = 20
     analysis_window: int = 50
     default_strategy: BehaviorStrategy = BehaviorStrategy.BALANCED
     memory_importance: float = 0.8
+    max_history: int = _MAX_ADJUSTMENT_HISTORY
+    dominance_threshold: float = 0.4
+    low_success_threshold: float = 0.3
+    high_success_threshold: float = 0.8
+    spending_threshold: int = -50
+    rule_based_confidence: int = 70
+
+
+# ---------------------------------------------------------------------------
+# Metrics dataclass (module-level for reusability)
+# ---------------------------------------------------------------------------
+
+
+@dataclass(frozen=True)
+class _Metrics:
+    """Computed metrics from recent actions."""
+
+    action_count: int = 0
+    success_rate: float = 0.0
+    resource_delta: int = 0
+    action_counts: dict[str, int] = field(default_factory=dict)
 
 
 # ---------------------------------------------------------------------------
@@ -230,6 +273,25 @@ Respond with ONLY a JSON object:
 
 
 # ---------------------------------------------------------------------------
+# Helpers
+# ---------------------------------------------------------------------------
+
+
+def _sanitise_name(name: str) -> str:
+    """Sanitise an agent name for safe interpolation into LLM prompts.
+
+    Strips newlines and other control characters and truncates to a
+    reasonable length to mitigate prompt injection.
+    """
+    # Replace newlines and common control chars with spaces
+    safe = re.sub(r"[\r\n\t]", " ", name)
+    # Remove any remaining control characters
+    safe = re.sub(r"[\x00-\x1f\x7f]", "", safe)
+    # Truncate
+    return safe[:_MAX_NAME_LENGTH]
+
+
+# ---------------------------------------------------------------------------
 # ReflectionEngine
 # ---------------------------------------------------------------------------
 
@@ -264,7 +326,9 @@ class ReflectionEngine:
         self._llm = llm_provider
         self._action_history = action_history_provider
         self._current_strategy: BehaviorStrategy = self._config.default_strategy
-        self._adjustment_history: list[StrategyAdjustment] = []
+        self._adjustment_history: deque[StrategyAdjustment] = deque(
+            maxlen=self._config.max_history,
+        )
 
     # ------------------------------------------------------------------
     # Properties
@@ -307,13 +371,21 @@ class ReflectionEngine:
             state: Current agent state.
             tick: Current tick number.
         """
-        # Check if agent can afford reflection
-        if state.tokens < self._config.token_cost:
-            logger.debug(
-                "Skipping reflection at tick %d: insufficient tokens (%d < %d)",
-                tick, state.tokens, self._config.token_cost,
-            )
-            return
+        # Deduct tokens upfront to avoid race conditions
+        if self._config.token_cost > 0:
+            if state.tokens < self._config.token_cost:
+                logger.debug(
+                    "Skipping reflection at tick %d: insufficient tokens (%d < %d)",
+                    tick, state.tokens, self._config.token_cost,
+                )
+                return
+            try:
+                state.adjust_tokens(-self._config.token_cost)
+            except ValueError:
+                logger.warning(
+                    "Reflection token deduction failed at tick %d", tick,
+                )
+                return
 
         # Gather action history
         recent_actions = self._get_recent_actions()
@@ -327,16 +399,6 @@ class ReflectionEngine:
         else:
             result = self._reflect_rule_based(state, tick, metrics)
 
-        # Deduct token cost
-        if result.token_cost > 0:
-            try:
-                state.adjust_tokens(-result.token_cost)
-            except ValueError:
-                logger.warning(
-                    "Reflection token deduction failed at tick %d", tick,
-                )
-                return
-
         # Update current strategy
         self._current_strategy = result.adjustment.new_strategy
         self._adjustment_history.append(result.adjustment)
@@ -344,15 +406,23 @@ class ReflectionEngine:
         # Store in memory system
         memory_stored = self._store_to_memory(result, tick)
 
-        logger.info(
-            "Reflection at tick %d: %s → %s (%s, confidence=%d, cost=%d tokens)",
-            tick,
-            result.adjustment.previous_strategy.value,
-            result.adjustment.new_strategy.value,
-            result.adjustment.reasoning[:80],
-            result.adjustment.confidence,
-            result.token_cost,
-        )
+        if memory_stored:
+            logger.info(
+                "Reflection at tick %d: %s → %s (%s, confidence=%d, cost=%d tokens, memory=saved)",
+                tick,
+                result.adjustment.previous_strategy.value,
+                result.adjustment.new_strategy.value,
+                result.adjustment.reasoning[:80],
+                result.adjustment.confidence,
+                self._config.token_cost,
+            )
+        else:
+            logger.warning(
+                "Reflection at tick %d: %s → %s (memory save FAILED)",
+                tick,
+                result.adjustment.previous_strategy.value,
+                result.adjustment.new_strategy.value,
+            )
 
     # ------------------------------------------------------------------
     # Metric computation
@@ -364,32 +434,23 @@ class ReflectionEngine:
             return []
         history = self._action_history.history
         window = self._config.analysis_window
-        return history[-window:] if len(history) > window else list(history)
-
-    @dataclass(frozen=True)
-    class _Metrics:
-        """Computed metrics from recent actions."""
-        action_count: int = 0
-        success_rate: float = 0.0
-        resource_delta: int = 0
-        action_counts: dict[str, int] = field(default_factory=dict)
+        return history[-window:] if len(history) > window else history
 
     def _compute_metrics(self, actions: list[ActionResult]) -> _Metrics:
         """Analyse recent action history and compute performance metrics."""
         if not actions:
-            return self._Metrics()
+            return _Metrics()
 
         success_count = sum(
             1 for a in actions if a.status == ActionStatus.SUCCESS
         )
         total_cost = sum(a.token_cost for a in actions)
-        # Resource delta is negative (tokens spent), but we track total spent
         action_counts: dict[str, int] = {}
         for a in actions:
             name = a.action_type.value
             action_counts[name] = action_counts.get(name, 0) + 1
 
-        return self._Metrics(
+        return _Metrics(
             action_count=len(actions),
             success_rate=success_count / len(actions) if actions else 0.0,
             resource_delta=-total_cost,
@@ -429,7 +490,7 @@ class ReflectionEngine:
             adjustment=adjustment,
             token_cost=self._config.token_cost,
             method=method,
-            memory_stored=False,  # Will be updated later
+            memory_stored=False,
         )
 
     def _build_prompt(
@@ -445,7 +506,7 @@ class ReflectionEngine:
         ) or "none"
 
         return _REFLECTION_PROMPT.format(
-            name=state.name,
+            name=_sanitise_name(state.name),
             tick=tick,
             health=state.health,
             tokens=state.tokens,
@@ -466,9 +527,6 @@ class ReflectionEngine:
         metrics: _Metrics,
     ) -> StrategyAdjustment:
         """Parse the LLM response into a StrategyAdjustment."""
-        import json
-        import re
-
         # Strip code fences
         text = raw.strip()
         if text.startswith("```"):
@@ -495,6 +553,8 @@ class ReflectionEngine:
         reasoning = data.get("reasoning", "LLM reflection")
         if not isinstance(reasoning, str):
             reasoning = str(reasoning)
+        # Truncate reasoning to prevent unbounded memory storage
+        reasoning = reasoning[:500]
 
         confidence = data.get("confidence", 50)
         try:
@@ -540,33 +600,33 @@ class ReflectionEngine:
         """Determine strategy using deterministic rules.
 
         Evaluation order (most specific first):
-        1. No actions → exploratory (gather data)
-        2. Dominant messaging (> 40%) → social
-        3. Dominant exploring (> 40%) → exploratory
-        4. Low success rate (< 0.3) → conservative
-        5. High success rate (> 0.8) + active spending → aggressive
+        1. No actions → keep current (nothing to analyse)
+        2. Dominant messaging (>{dominance_threshold}) → social
+        3. Dominant exploring (>{dominance_threshold}) → exploratory
+        4. Low success rate (<{low_success_threshold}) → conservative
+        5. High success rate (>{high_success_threshold}) + active spending → aggressive
         6. Otherwise → keep current
         """
+        cfg = self._config
         new_strategy = self._current_strategy
         reasoning = "No significant change detected."
 
         if metrics.action_count == 0:
-            # No actions to analyse — stay exploratory to gather data
-            new_strategy = BehaviorStrategy.EXPLORATORY
-            reasoning = "No recent actions — switching to exploratory to gather data."
-        elif metrics.action_counts.get("send_message", 0) > metrics.action_count * 0.4:
+            # No actions to analyse — keep current strategy, no forced switch
+            reasoning = "No recent actions to analyse — keeping current strategy."
+        elif metrics.action_counts.get("send_message", 0) > metrics.action_count * cfg.dominance_threshold:
             new_strategy = BehaviorStrategy.SOCIAL
             reasoning = "High messaging activity — switching to social strategy."
-        elif metrics.action_counts.get("explore", 0) > metrics.action_count * 0.4:
+        elif metrics.action_counts.get("explore", 0) > metrics.action_count * cfg.dominance_threshold:
             new_strategy = BehaviorStrategy.EXPLORATORY
             reasoning = "High exploration activity — switching to exploratory strategy."
-        elif metrics.success_rate < 0.3:
+        elif metrics.success_rate < cfg.low_success_threshold:
             new_strategy = BehaviorStrategy.CONSERVATIVE
             reasoning = (
                 f"Low success rate ({metrics.success_rate:.0%}) — "
                 f"switching to conservative to minimise losses."
             )
-        elif metrics.success_rate > 0.8 and metrics.resource_delta < -50:
+        elif metrics.success_rate > cfg.high_success_threshold and metrics.resource_delta < cfg.spending_threshold:
             # Successful but spending — push aggressive to capitalise
             new_strategy = BehaviorStrategy.AGGRESSIVE
             reasoning = (
@@ -585,7 +645,7 @@ class ReflectionEngine:
             previous_strategy=self._current_strategy,
             new_strategy=new_strategy,
             reasoning=reasoning,
-            confidence=70,
+            confidence=cfg.rule_based_confidence,
             resource_delta=metrics.resource_delta,
             success_rate=metrics.success_rate,
             action_counts=dict(metrics.action_counts),

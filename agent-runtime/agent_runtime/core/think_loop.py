@@ -1,7 +1,7 @@
 """Think loop — the core Perceive → Decide → Act cycle.
 
 Each tick the agent:
-  1. Perceives its environment (messages, market, own state).
+  1. Perceives its environment (messages, market, own state) via gRPC.
   2. Runs survival assessment (synchronous, no LLM).
      - If PANIC or URGENT: executes emergency actions and skips normal decision.
   3. Makes an LLM-driven decision (or a mock fallback).
@@ -16,15 +16,20 @@ Usage::
     from agent_runtime.models.agent_state import AgentState
     from agent_runtime.survival.instinct import SurvivalInstinct
     from agent_runtime.core.act import ActionExecutor
+    from agent_runtime.a2a import A2AClient, A2AClientConfig
 
     state = AgentState(name="Alice", max_tokens=1000, tokens=500)
+    client = A2AClient(config=A2AClientConfig(), agent_id=str(state.id))
+    await client.start()
     loop = ThinkLoop(
         state=state,
         survival=SurvivalInstinct(),
         executor=ActionExecutor(),
         config=ThinkLoopConfig(tick_interval=0.1),
+        a2a_client=client,
     )
     await loop.run(max_ticks=100)
+    await client.stop()
 """
 
 from __future__ import annotations
@@ -34,7 +39,7 @@ import logging
 import random
 import time
 from dataclasses import dataclass, field
-from typing import Any, Protocol
+from typing import TYPE_CHECKING, Any, Protocol
 
 from agent_runtime.core.act import (
     ActionContext,
@@ -47,6 +52,9 @@ from agent_runtime.survival.instinct import (
     SurvivalInstinct,
     SurvivalMode,
 )
+
+if TYPE_CHECKING:
+    from agent_runtime.a2a.client import A2AClient
 
 logger = logging.getLogger(__name__)
 
@@ -248,11 +256,15 @@ class ThinkLoop:
         perception_provider: PerceptionProvider | None = None,
         decision_provider: DecisionProvider | None = None,
         reflection_provider: ReflectionProvider | None = None,
+        a2a_client: A2AClient | None = None,
     ) -> None:
         self.state = state
         self.survival = survival
         self.executor = executor
         self.config = config or ThinkLoopConfig()
+
+        # A2A gRPC client — if provided, used for Act phase and survival
+        self._a2a_client = a2a_client
 
         # Providers
         self._perception = perception_provider or DefaultPerceptionProvider()
@@ -386,7 +398,9 @@ class ThinkLoop:
                 self._tick,
                 survival_action.mode.value,
             )
-            await self.survival.execute(survival_action, self.state)
+            await self.survival.execute(
+                survival_action, self.state, a2a_client=self._a2a_client
+            )
             return  # Skip normal decision
 
         # 3. Decide
@@ -415,13 +429,15 @@ class ThinkLoop:
         The ActionExecutor handles token deduction, retry logic, and
         result recording.  We wrap the agent state and world client
         into an ActionContext.
+
+        If an A2A client is provided, it is used for real gRPC
+        communication with the World Engine.  Otherwise, the
+        _NoOpWorldClient placeholder is used.
         """
-        # For now we use a no-op world client since the real A2A layer
-        # isn't built yet.  Actions that don't need the world (REST,
-        # EXPLORE) work fine.  This keeps the think loop testable.
+        world = self._a2a_client if self._a2a_client is not None else _NoOpWorldClient()
         context = ActionContext(
             agent=self.state,  # type: ignore[arg-type]
-            world=_NoOpWorldClient(),
+            world=world,  # type: ignore[arg-type]
             parameters=decision.parameters,
         )
 

@@ -22,6 +22,7 @@ from agent_runtime.llm import (
     AnthropicProvider,
     CostTracker,
     LLMConfig,
+    LLMError,
     LLMMessage,
     LLMProvider,
     LLMResponse,
@@ -165,7 +166,7 @@ class TestLLMConfig:
         assert config.api_key == "sk-test"
         assert config.timeout == 60.0
         assert config.max_tokens == 4096
-        assert config.temperature == 0.7
+        assert config.temperature is None
 
     def test_ollama_no_api_key(self):
         config = LLMConfig(provider=ProviderType.OLLAMA, model="llama3")
@@ -575,14 +576,15 @@ class TestFactory:
 
 
 class TestCostTracker:
-    def test_record_single(self):
+    @pytest.mark.asyncio
+    async def test_record_single(self):
         tracker = CostTracker()
         response = LLMResponse(
             content="Hello",
             model="gpt-4",
             usage=TokenUsage(prompt_tokens=100, completion_tokens=50, total_tokens=150),
         )
-        rec = tracker.record(response)
+        rec = await tracker.record(response)
         assert rec.model == "gpt-4"
         assert rec.prompt_tokens == 100
         assert rec.completion_tokens == 50
@@ -590,13 +592,14 @@ class TestCostTracker:
         expected_cost = 100 * 0.03 / 1000 + 50 * 0.06 / 1000
         assert rec.cost_usd == pytest.approx(expected_cost)
 
-    def test_total_properties(self):
+    @pytest.mark.asyncio
+    async def test_total_properties(self):
         tracker = CostTracker()
-        tracker.record(LLMResponse(
+        await tracker.record(LLMResponse(
             content="A", model="gpt-4",
             usage=TokenUsage(prompt_tokens=100, completion_tokens=50, total_tokens=150),
         ))
-        tracker.record(LLMResponse(
+        await tracker.record(LLMResponse(
             content="B", model="gpt-4",
             usage=TokenUsage(prompt_tokens=200, completion_tokens=100, total_tokens=300),
         ))
@@ -605,9 +608,10 @@ class TestCostTracker:
         assert tracker.total_tokens == 450
         assert tracker.total_cost_usd > 0
 
-    def test_summary(self):
+    @pytest.mark.asyncio
+    async def test_summary(self):
         tracker = CostTracker()
-        tracker.record(LLMResponse(
+        await tracker.record(LLMResponse(
             content="A", model="gpt-4",
             usage=TokenUsage(prompt_tokens=100, completion_tokens=50, total_tokens=150),
         ))
@@ -618,13 +622,14 @@ class TestCostTracker:
         assert s["total_tokens"] == 150
         assert isinstance(s["total_cost_usd"], float)
 
-    def test_by_model(self):
+    @pytest.mark.asyncio
+    async def test_by_model(self):
         tracker = CostTracker()
-        tracker.record(LLMResponse(
+        await tracker.record(LLMResponse(
             content="A", model="gpt-4",
             usage=TokenUsage(prompt_tokens=100, completion_tokens=50, total_tokens=150),
         ))
-        tracker.record(LLMResponse(
+        await tracker.record(LLMResponse(
             content="B", model="claude-3-sonnet",
             usage=TokenUsage(prompt_tokens=200, completion_tokens=100, total_tokens=300),
         ))
@@ -634,13 +639,14 @@ class TestCostTracker:
         assert by_model["gpt-4"]["calls"] == 1
         assert by_model["claude-3-sonnet"]["calls"] == 1
 
-    def test_reset(self):
+    @pytest.mark.asyncio
+    async def test_reset(self):
         tracker = CostTracker()
-        tracker.record(LLMResponse(
+        await tracker.record(LLMResponse(
             content="A", model="gpt-4",
             usage=TokenUsage(prompt_tokens=100, completion_tokens=50, total_tokens=150),
         ))
-        tracker.reset()
+        await tracker.reset()
         assert tracker.total_tokens == 0
         assert tracker.total_cost_usd == 0.0
 
@@ -651,15 +657,23 @@ class TestCostTracker:
         assert pricing["prompt"] == 0.03
         assert pricing["completion"] == 0.06
 
+    def test_pricing_prefix_longest_first(self):
+        """gpt-4o-mini should match gpt-4o-mini, not gpt-4o."""
+        from agent_runtime.llm.cost import _get_pricing
+        pricing = _get_pricing("gpt-4o-mini")
+        assert pricing["prompt"] == 0.00015
+        assert pricing["completion"] == 0.0006
+
     def test_pricing_unknown_model(self):
         from agent_runtime.llm.cost import _get_pricing, _DEFAULT_PRICING
         pricing = _get_pricing("unknown-model-xyz")
         assert pricing == _DEFAULT_PRICING
 
-    def test_ollama_zero_cost(self):
+    @pytest.mark.asyncio
+    async def test_ollama_zero_cost(self):
         """Ollama models use default pricing but can be tracked."""
         tracker = CostTracker()
-        tracker.record(LLMResponse(
+        await tracker.record(LLMResponse(
             content="Local", model="llama3",
             usage=TokenUsage(prompt_tokens=50, completion_tokens=25, total_tokens=75),
         ))
@@ -688,3 +702,49 @@ class TestContextManager:
         async with OpenAIProvider(config) as provider:
             assert isinstance(provider, OpenAIProvider)
         # Client should be closed after exiting context
+
+
+# ---------------------------------------------------------------------------
+# LLMError tests
+# ---------------------------------------------------------------------------
+
+
+class TestLLMError:
+    def test_llm_error_fields(self):
+        err = LLMError("boom", provider="openai", model="gpt-4")
+        assert str(err) == "boom"
+        assert err.provider == "openai"
+        assert err.model == "gpt-4"
+
+    @pytest.mark.asyncio
+    async def test_openai_http_error_wrapped(self):
+        import httpx
+        config = LLMConfig(provider=ProviderType.OPENAI, model="gpt-4", api_key="sk-test")
+        provider = OpenAIProvider(config)
+        with patch.object(provider._client, "post", new_callable=AsyncMock) as mock_post:
+            mock_post.side_effect = httpx.ConnectError("refused")
+            with pytest.raises(LLMError, match="OpenAI request failed"):
+                await provider.chat([LLMMessage(role="user", content="Hi")])
+        await provider.close()
+
+    @pytest.mark.asyncio
+    async def test_anthropic_http_error_wrapped(self):
+        import httpx
+        config = LLMConfig(provider=ProviderType.ANTHROPIC, model="claude-3-sonnet", api_key="sk-ant")
+        provider = AnthropicProvider(config)
+        with patch.object(provider._client, "post", new_callable=AsyncMock) as mock_post:
+            mock_post.side_effect = httpx.ConnectError("refused")
+            with pytest.raises(LLMError, match="Anthropic request failed"):
+                await provider.chat([LLMMessage(role="user", content="Hi")])
+        await provider.close()
+
+    @pytest.mark.asyncio
+    async def test_ollama_http_error_wrapped(self):
+        import httpx
+        config = LLMConfig(provider=ProviderType.OLLAMA, model="llama3")
+        provider = OllamaProvider(config)
+        with patch.object(provider._client, "post", new_callable=AsyncMock) as mock_post:
+            mock_post.side_effect = httpx.ConnectError("refused")
+            with pytest.raises(LLMError, match="Ollama request failed"):
+                await provider.chat([LLMMessage(role="user", content="Hi")])
+        await provider.close()

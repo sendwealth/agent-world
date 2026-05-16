@@ -3,8 +3,11 @@ use std::collections::HashMap;
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
+use crate::world::enums::Currency;
 use crate::world::event::WorldEvent;
 use crate::world::state::EventBus;
+
+use super::reward::{RewardConfig, RewardDistributor, RewardDistribution};
 
 // ── Task Status ───────────────────────────────────────────
 
@@ -91,6 +94,8 @@ pub struct Task {
     pub description: String,
     pub status: TaskStatus,
     pub reward: u64,
+    /// Currency of the task reward. Defaults to Money if not specified.
+    pub currency: Currency,
     pub escrow_held: bool,
     pub publisher_id: String,
     pub assignee_id: Option<String>,
@@ -145,6 +150,8 @@ pub struct TaskBoard {
     /// Escrow amounts locked per task.
     escrows: HashMap<Uuid, u64>,
     event_bus: Option<EventBus>,
+    /// Optional reward distributor for fee deduction, XP, reputation, and ledger.
+    reward_distributor: Option<RewardDistributor>,
 }
 
 impl TaskBoard {
@@ -154,6 +161,7 @@ impl TaskBoard {
             balances: HashMap::new(),
             escrows: HashMap::new(),
             event_bus: None,
+            reward_distributor: None,
         }
     }
 
@@ -163,7 +171,29 @@ impl TaskBoard {
             balances: HashMap::new(),
             escrows: HashMap::new(),
             event_bus: Some(event_bus),
+            reward_distributor: None,
         }
+    }
+
+    /// Create a TaskBoard with reward distribution enabled.
+    pub fn with_reward_distributor(config: RewardConfig) -> Self {
+        Self {
+            tasks: HashMap::new(),
+            balances: HashMap::new(),
+            escrows: HashMap::new(),
+            event_bus: None,
+            reward_distributor: Some(RewardDistributor::new(config)),
+        }
+    }
+
+    /// Get a reference to the reward distributor (if configured).
+    pub fn reward_distributor(&self) -> Option<&RewardDistributor> {
+        self.reward_distributor.as_ref()
+    }
+
+    /// Get a mutable reference to the reward distributor (if configured).
+    pub fn reward_distributor_mut(&mut self) -> Option<&mut RewardDistributor> {
+        self.reward_distributor.as_mut()
     }
 
     // ── Balance helpers ────────────────────────────────────
@@ -216,6 +246,23 @@ impl TaskBoard {
         created_tick: u64,
         expires_at: Option<u64>,
     ) -> Result<Uuid, TaskError> {
+        self.create_task_with_currency(
+            title, description, reward, publisher_id, created_tick, expires_at, Currency::Money,
+        )
+    }
+
+    /// Create a new task with an explicit currency.
+    /// If reward > 0, locks escrow from the publisher.
+    pub fn create_task_with_currency(
+        &mut self,
+        title: String,
+        description: String,
+        reward: u64,
+        publisher_id: String,
+        created_tick: u64,
+        expires_at: Option<u64>,
+        currency: Currency,
+    ) -> Result<Uuid, TaskError> {
         let escrow_held = reward > 0;
         if escrow_held {
             let available = self.get_balance(&publisher_id);
@@ -236,6 +283,7 @@ impl TaskBoard {
                 description,
                 status: TaskStatus::Published,
                 reward,
+                currency,
                 escrow_held: true,
                 publisher_id,
                 assignee_id: None,
@@ -261,6 +309,7 @@ impl TaskBoard {
             description,
             status: TaskStatus::Published,
             reward: 0,
+            currency,
             escrow_held: false,
             publisher_id,
             assignee_id: None,
@@ -415,9 +464,18 @@ impl TaskBoard {
     }
 
     /// Complete a reviewed task. Releases escrow to the assignee.
-    pub fn complete_task(&mut self, id: Uuid) -> Result<(), TaskError> {
+    ///
+    /// If a `RewardDistributor` is configured:
+    /// - Platform fee (2%) is deducted and sent to the central bank
+    /// - Net reward is paid to the assignee
+    /// - XP and reputation are awarded
+    /// - Transactions are recorded in the ledger
+    /// - A `RewardDistributed` event is emitted
+    ///
+    /// If no `RewardDistributor`, the full escrow is released directly (legacy behavior).
+    pub fn complete_task(&mut self, id: Uuid, tick: u64) -> Result<Option<RewardDistribution>, TaskError> {
         // Validate and extract needed data
-        let assignee_id = {
+        let (assignee_id, currency) = {
             let task = self.tasks.get(&id)
                 .ok_or_else(|| TaskError::NotFound(id.to_string()))?;
             if !task.status.can_transition_to(&TaskStatus::Completed) {
@@ -426,16 +484,50 @@ impl TaskBoard {
                     to: TaskStatus::Completed,
                 });
             }
-            task.assignee_id.clone()
+            (task.assignee_id.clone(), task.currency)
         };
 
-        // Release escrow to assignee
-        if let Some(escrow_amount) = self.escrows.remove(&id) {
-            if let Some(ref assignee) = assignee_id {
-                let bal = self.get_balance(assignee);
-                self.balances.insert(assignee.clone(), bal + escrow_amount);
+        let escrow_amount = self.escrows.remove(&id);
+
+        let distribution = if let (Some(ref assignee), Some(ref mut dist)) = (&assignee_id, self.reward_distributor.as_mut()) {
+            // Use reward distributor for fee + XP + reputation + ledger
+            let gross = escrow_amount.unwrap_or(0);
+            let result = dist.distribute_reward(
+                &id.to_string(),
+                assignee,
+                gross,
+                currency,
+                tick,
+            );
+
+            // Update TaskBoard balance to stay consistent with distributor
+            self.balances.insert(
+                assignee.clone(),
+                self.get_balance(assignee).saturating_add(result.net_reward),
+            );
+
+            // Emit RewardDistributed event
+            self.emit(WorldEvent::RewardDistributed {
+                task_id: id.to_string(),
+                assignee_id: assignee.clone(),
+                gross_reward: result.gross_reward,
+                net_reward: result.net_reward,
+                platform_fee: result.platform_fee,
+                xp_awarded: result.xp_awarded,
+                reputation_change: result.reputation_change,
+            });
+
+            Some(result)
+        } else {
+            // Legacy: release full escrow to assignee
+            if let Some(escrow_amount) = escrow_amount {
+                if let Some(ref assignee) = assignee_id {
+                    let bal = self.get_balance(assignee);
+                    self.balances.insert(assignee.clone(), bal.saturating_add(escrow_amount));
+                }
             }
-        }
+            None
+        };
 
         let task = self.tasks.get_mut(&id).unwrap();
         task.status = TaskStatus::Completed;
@@ -445,7 +537,7 @@ impl TaskBoard {
             task_id: id.to_string(),
         });
 
-        Ok(())
+        Ok(distribution)
     }
 
     /// Expire a published or claimed task. Refunds escrow to publisher.
@@ -622,7 +714,7 @@ mod tests {
         board.review_task(id, "publisher", true).unwrap();
         assert_eq!(board.get(id).unwrap().status, TaskStatus::Reviewed);
 
-        board.complete_task(id).unwrap();
+        board.complete_task(id, 10).unwrap();
         assert_eq!(board.get(id).unwrap().status, TaskStatus::Completed);
         assert!(!board.get(id).unwrap().escrow_held);
         assert_eq!(board.get_balance("worker"), 5_100);
@@ -668,7 +760,7 @@ mod tests {
         let mut board = make_board();
         let id = create_default_task(&mut board);
 
-        let result = board.complete_task(id);
+        let result = board.complete_task(id, 10);
         assert!(result.is_err());
     }
 
@@ -796,7 +888,7 @@ mod tests {
         let reviewed = rx.try_recv().unwrap();
         assert!(matches!(reviewed, WorldEvent::TaskReviewed { approved: true, .. }));
 
-        board.complete_task(id).unwrap();
+        board.complete_task(id, 10).unwrap();
         let completed = rx.try_recv().unwrap();
         assert!(matches!(completed, WorldEvent::TaskCompleted { .. }));
     }
@@ -820,6 +912,7 @@ mod tests {
             description: "Desc".into(),
             status: TaskStatus::InProgress,
             reward: 100,
+            currency: Currency::Money,
             escrow_held: true,
             publisher_id: "p1".into(),
             assignee_id: Some("w1".into()),
@@ -851,5 +944,133 @@ mod tests {
         // Worker can resubmit
         board.submit_result(id, "Better work".into()).unwrap();
         assert_eq!(board.get(id).unwrap().status, TaskStatus::Submitted);
+    }
+
+    // ── RewardDistributor Integration ──────────────────────────
+
+    #[test]
+    fn test_complete_task_with_reward_distributor() {
+        let mut board = TaskBoard::with_reward_distributor(RewardConfig::default());
+        board.set_balance("publisher", 10_000);
+        board.reward_distributor_mut().unwrap().set_balance("worker", 0);
+
+        let id = board.create_task(
+            "Reward Task".into(), "desc".into(), 1000, "publisher".into(), 1, None,
+        ).unwrap();
+        board.claim_task(id, "worker".to_string()).unwrap();
+        board.start_task(id).unwrap();
+        board.submit_result(id, "Done".into()).unwrap();
+        board.review_task(id, "publisher", true).unwrap();
+
+        let dist = board.complete_task(id, 42).unwrap().unwrap();
+        assert_eq!(dist.gross_reward, 1000);
+        assert_eq!(dist.platform_fee, 20);
+        assert_eq!(dist.net_reward, 980);
+
+        // TaskBoard balance is updated consistently
+        assert_eq!(board.get_balance("worker"), 980);
+
+        // RewardDistributor also tracks the balance
+        let rd = board.reward_distributor().unwrap();
+        assert_eq!(rd.get_balance("worker"), 980);
+        assert_eq!(rd.get_experience("worker"), 50);
+        assert_eq!(rd.get_reputation("worker"), 2.0);
+
+        // Ledger entries have the correct tick
+        let entries = rd.ledger().list();
+        assert_eq!(entries.len(), 2);
+        assert_eq!(entries[0].tick, 42);
+        assert_eq!(entries[1].tick, 42);
+    }
+
+    #[test]
+    fn test_complete_task_with_token_currency() {
+        let mut board = TaskBoard::with_reward_distributor(RewardConfig::default());
+        board.set_balance("publisher", 10_000);
+        board.reward_distributor_mut().unwrap().set_balance("worker", 0);
+
+        let id = board.create_task_with_currency(
+            "Token Task".into(), "desc".into(), 5000, "publisher".into(), 1, None, Currency::Token,
+        ).unwrap();
+        board.claim_task(id, "worker".to_string()).unwrap();
+        board.start_task(id).unwrap();
+        board.submit_result(id, "Done".into()).unwrap();
+        board.review_task(id, "publisher", true).unwrap();
+
+        let dist = board.complete_task(id, 5).unwrap().unwrap();
+        assert_eq!(dist.gross_reward, 5000);
+        assert_eq!(dist.platform_fee, 100);
+        assert_eq!(dist.net_reward, 4900);
+
+        // Ledger entries use Token currency
+        let rd = board.reward_distributor().unwrap();
+        let entries = rd.ledger().list();
+        assert_eq!(entries[0].currency, Currency::Token);
+        assert_eq!(entries[1].currency, Currency::Token);
+        assert_eq!(rd.central_bank().total_fees(Currency::Token), 100);
+    }
+
+    #[test]
+    fn test_complete_task_emits_reward_distributed_event() {
+        let bus = EventBus::new(64);
+        let mut rx = bus.subscribe();
+        let mut board = TaskBoard::with_event_bus(bus);
+        board.reward_distributor = Some(RewardDistributor::new(RewardConfig::default()));
+        board.set_balance("publisher", 10_000);
+        board.reward_distributor_mut().unwrap().set_balance("worker", 0);
+
+        let id = board.create_task(
+            "Event Task".into(), "desc".into(), 500, "publisher".into(), 1, None,
+        ).unwrap();
+        let _ = rx.try_recv().unwrap(); // TaskCreated
+
+        board.claim_task(id, "worker".to_string()).unwrap();
+        let _ = rx.try_recv().unwrap(); // TaskClaimed
+
+        board.start_task(id).unwrap();
+        let _ = rx.try_recv().unwrap(); // TaskStarted
+
+        board.submit_result(id, "Done".into()).unwrap();
+        let _ = rx.try_recv().unwrap(); // TaskSubmitted
+
+        board.review_task(id, "publisher", true).unwrap();
+        let _ = rx.try_recv().unwrap(); // TaskReviewed
+
+        board.complete_task(id, 10).unwrap();
+
+        // Should get RewardDistributed then TaskCompleted
+        let reward_evt = rx.try_recv().unwrap();
+        assert!(matches!(reward_evt, WorldEvent::RewardDistributed { .. }));
+        if let WorldEvent::RewardDistributed { task_id, assignee_id, gross_reward, net_reward, platform_fee, xp_awarded, reputation_change } = reward_evt {
+            assert_eq!(task_id, id.to_string());
+            assert_eq!(assignee_id, "worker");
+            assert_eq!(gross_reward, 500);
+            assert_eq!(platform_fee, 10);
+            assert_eq!(net_reward, 490);
+            assert_eq!(xp_awarded, 50);
+            assert_eq!(reputation_change, 2.0);
+        }
+
+        let completed_evt = rx.try_recv().unwrap();
+        assert!(matches!(completed_evt, WorldEvent::TaskCompleted { .. }));
+    }
+
+    #[test]
+    fn test_complete_task_no_distributor_legacy_path() {
+        let mut board = TaskBoard::new();
+        board.set_balance("publisher", 10_000);
+
+        let id = board.create_task(
+            "Legacy Task".into(), "desc".into(), 100, "publisher".into(), 1, None,
+        ).unwrap();
+        board.claim_task(id, "worker".to_string()).unwrap();
+        board.start_task(id).unwrap();
+        board.submit_result(id, "Done".into()).unwrap();
+        board.review_task(id, "publisher", true).unwrap();
+
+        let result = board.complete_task(id, 10).unwrap();
+        // No distributor → returns None, full escrow released
+        assert!(result.is_none());
+        assert_eq!(board.get_balance("worker"), 100);
     }
 }

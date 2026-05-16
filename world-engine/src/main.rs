@@ -1,17 +1,11 @@
 use std::sync::Arc;
 use tokio::sync::Mutex;
 
-mod api;
-mod economy;
-mod lifecycle;
-mod rules;
-pub mod world;
-
-use economy::task::TaskBoard;
+use agent_world_engine::economy::task::TaskBoard;
 
 #[tokio::main]
 async fn main() {
-    let event_bus = world::EventBus::new(256);
+    let event_bus = agent_world_engine::world::EventBus::new(256);
 
     println!("Agent World Engine v0.1.0");
     println!("   Status: initializing...");
@@ -21,7 +15,7 @@ async fn main() {
     let task_board = Arc::new(Mutex::new(TaskBoard::with_event_bus(event_bus)));
 
     // Build the HTTP API router
-    let app = api::create_router(task_board);
+    let app = agent_world_engine::api::create_router(task_board);
 
     // Start the HTTP server
     let addr = std::net::SocketAddr::from(([127, 0, 0, 1], 3000));

@@ -11,8 +11,11 @@ import json
 import logging
 from typing import AsyncIterator
 
+import httpx
+
 from .base import (
     LLMConfig,
+    LLMError,
     LLMMessage,
     LLMProvider,
     LLMResponse,
@@ -49,11 +52,18 @@ class OllamaProvider(LLMProvider):
         payload = self._build_payload(
             messages, stream=False, max_tokens=max_tokens, temperature=temperature,
         )
-        resp = await self._client.post(
-            f"{self._base_url}/api/chat",
-            json=payload,
-        )
-        resp.raise_for_status()
+        try:
+            resp = await self._client.post(
+                f"{self._base_url}/api/chat",
+                json=payload,
+            )
+            resp.raise_for_status()
+        except httpx.HTTPError as exc:
+            raise LLMError(
+                f"Ollama request failed: {exc}",
+                provider="ollama",
+                model=self._config.model,
+            ) from exc
         data = resp.json()
         return self._parse_response(data)
 
@@ -71,16 +81,23 @@ class OllamaProvider(LLMProvider):
         payload = self._build_payload(
             messages, stream=True, max_tokens=max_tokens, temperature=temperature,
         )
-        async with self._client.stream(
-            "POST",
-            f"{self._base_url}/api/chat",
-            json=payload,
-        ) as resp:
-            resp.raise_for_status()
-            async for line in resp.aiter_lines():
-                chunk = self._parse_stream_line(line)
-                if chunk is not None:
-                    yield chunk
+        try:
+            async with self._client.stream(
+                "POST",
+                f"{self._base_url}/api/chat",
+                json=payload,
+            ) as resp:
+                resp.raise_for_status()
+                async for line in resp.aiter_lines():
+                    chunk = self._parse_stream_line(line)
+                    if chunk is not None:
+                        yield chunk
+        except httpx.HTTPError as exc:
+            raise LLMError(
+                f"Ollama stream failed: {exc}",
+                provider="ollama",
+                model=self._config.model,
+            ) from exc
 
     # ------------------------------------------------------------------
     # Internal helpers
@@ -97,11 +114,11 @@ class OllamaProvider(LLMProvider):
         options: dict = {}
         if max_tokens is not None:
             options["num_predict"] = max_tokens
-        elif self._config.max_tokens != 4096:
+        else:
             options["num_predict"] = self._config.max_tokens
         if temperature is not None:
             options["temperature"] = temperature
-        elif self._config.temperature != 0.7:
+        elif self._config.temperature is not None:
             options["temperature"] = self._config.temperature
 
         payload: dict = {

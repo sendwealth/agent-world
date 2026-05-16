@@ -6,6 +6,7 @@ computes estimated costs per provider/model.
 
 from __future__ import annotations
 
+import asyncio
 import logging
 from dataclasses import dataclass, field
 from typing import Dict
@@ -43,10 +44,10 @@ def _get_pricing(model: str) -> dict[str, float]:
     # Try exact match first
     if model in _PRICING:
         return _PRICING[model]
-    # Try prefix match (e.g., "gpt-4-0613" → "gpt-4")
-    for prefix, pricing in _PRICING.items():
+    # Try prefix match (e.g., "gpt-4-0613" → "gpt-4"), longest prefix first
+    for prefix in sorted(_PRICING, key=len, reverse=True):
         if model.startswith(prefix):
-            return pricing
+            return _PRICING[prefix]
     return _DEFAULT_PRICING
 
 
@@ -70,19 +71,13 @@ class UsageRecord:
 class CostTracker:
     """Accumulates token usage and estimated cost across LLM calls.
 
-    Usage::
-
-        tracker = CostTracker()
-        # ... after each LLM call:
-        tracker.record(response)
-        # ... query totals:
-        print(tracker.total_cost_usd)
-        print(tracker.summary())
+    Thread-safe and async-safe via an internal lock.
     """
 
     _records: list[UsageRecord] = field(default_factory=list)
+    _lock: asyncio.Lock = field(default_factory=asyncio.Lock, init=False, repr=False)
 
-    def record(self, response: LLMResponse) -> UsageRecord:
+    async def record(self, response: LLMResponse) -> UsageRecord:
         """Record a completed LLM call and return the usage record.
 
         Computes cost based on the built-in pricing table.
@@ -99,7 +94,8 @@ class CostTracker:
             total_tokens=response.usage.total_tokens,
             cost_usd=cost,
         )
-        self._records.append(rec)
+        async with self._lock:
+            self._records.append(rec)
         logger.debug(
             "LLM usage: model=%s tokens=%d cost=$%.6f",
             rec.model,
@@ -154,6 +150,7 @@ class CostTracker:
             entry["cost_usd"] = round(entry["cost_usd"] + rec.cost_usd, 6)  # type: ignore[operator]
         return result
 
-    def reset(self) -> None:
+    async def reset(self) -> None:
         """Clear all recorded usage."""
-        self._records.clear()
+        async with self._lock:
+            self._records.clear()

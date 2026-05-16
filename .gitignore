@@ -44,3 +44,6 @@ dashboard/.next/
 
 # World engine
 world-engine/target/
+
+# Internal tooling
+scripts/create_multica_issues.sh

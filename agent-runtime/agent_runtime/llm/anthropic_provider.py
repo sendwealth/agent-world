@@ -9,8 +9,11 @@ import json
 import logging
 from typing import AsyncIterator
 
+import httpx
+
 from .base import (
     LLMConfig,
+    LLMError,
     LLMMessage,
     LLMProvider,
     LLMResponse,
@@ -53,12 +56,19 @@ class AnthropicProvider(LLMProvider):
             max_tokens=max_tokens,
             temperature=temperature,
         )
-        resp = await self._client.post(
-            f"{self._base_url}/messages",
-            headers=self._headers(),
-            json=payload,
-        )
-        resp.raise_for_status()
+        try:
+            resp = await self._client.post(
+                f"{self._base_url}/messages",
+                headers=self._headers(),
+                json=payload,
+            )
+            resp.raise_for_status()
+        except httpx.HTTPError as exc:
+            raise LLMError(
+                f"Anthropic request failed: {exc}",
+                provider="anthropic",
+                model=self._config.model,
+            ) from exc
         data = resp.json()
         return self._parse_response(data)
 
@@ -81,19 +91,31 @@ class AnthropicProvider(LLMProvider):
             max_tokens=max_tokens,
             temperature=temperature,
         )
-        async with self._client.stream(
-            "POST",
-            f"{self._base_url}/messages",
-            headers=self._headers(),
-            json=payload,
-        ) as resp:
-            resp.raise_for_status()
-            model = ""
-            async for line in resp.aiter_lines():
-                chunk = self._parse_sse_line(line)
-                if chunk is not None:
-                    model = chunk.model or model
-                    yield chunk
+        try:
+            async with self._client.stream(
+                "POST",
+                f"{self._base_url}/messages",
+                headers=self._headers(),
+                json=payload,
+            ) as resp:
+                resp.raise_for_status()
+                model = ""
+                async for line in resp.aiter_lines():
+                    chunk = self._parse_sse_line(line)
+                    if chunk is not None:
+                        model = chunk.model or model
+                        if chunk.content or chunk.finish_reason is not None:
+                            yield LLMStreamChunk(
+                                content=chunk.content,
+                                model=model,
+                                finish_reason=chunk.finish_reason,
+                            )
+        except httpx.HTTPError as exc:
+            raise LLMError(
+                f"Anthropic stream failed: {exc}",
+                provider="anthropic",
+                model=self._config.model,
+            ) from exc
 
     # ------------------------------------------------------------------
     # Internal helpers
@@ -120,12 +142,12 @@ class AnthropicProvider(LLMProvider):
         payload: dict = {
             "model": self._config.model,
             "messages": [{"role": m.role, "content": m.content} for m in messages],
-            "max_tokens": max_tokens or self._config.max_tokens,
+            "max_tokens": max_tokens if max_tokens is not None else self._config.max_tokens,
             "stream": stream,
         }
         if temperature is not None:
             payload["temperature"] = temperature
-        elif self._config.temperature != 0.7:
+        elif self._config.temperature is not None:
             payload["temperature"] = self._config.temperature
         if system:
             payload["system"] = system
@@ -183,8 +205,11 @@ class AnthropicProvider(LLMProvider):
         if event_type == "content_block_delta":
             delta = data.get("delta", {})
             if delta.get("type") == "text_delta":
+                text = delta.get("text", "")
+                if not text:
+                    return None
                 return LLMStreamChunk(
-                    content=delta.get("text", ""),
+                    content=text,
                     model="",  # Model is in the message_start event
                     finish_reason=None,
                 )

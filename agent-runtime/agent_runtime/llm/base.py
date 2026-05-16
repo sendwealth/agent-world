@@ -11,6 +11,23 @@ import httpx
 
 
 # ---------------------------------------------------------------------------
+# Domain exceptions
+# ---------------------------------------------------------------------------
+
+
+class LLMError(Exception):
+    """Domain-level exception for LLM provider failures.
+
+    Wraps underlying HTTP or transport errors with a stable public API.
+    """
+
+    def __init__(self, message: str, *, provider: str, model: str) -> None:
+        super().__init__(message)
+        self.provider = provider
+        self.model = model
+
+
+# ---------------------------------------------------------------------------
 # Data types
 # ---------------------------------------------------------------------------
 
@@ -72,7 +89,7 @@ class LLMConfig:
     base_url: str | None = None
     timeout: float = 60.0
     max_tokens: int = 4096
-    temperature: float = 0.7
+    temperature: float | None = None
 
 
 # ---------------------------------------------------------------------------
@@ -110,7 +127,7 @@ class LLMProvider(ABC):
         ...
 
     @abstractmethod
-    async def chat_stream(
+    def chat_stream(
         self,
         messages: list[LLMMessage],
         *,
@@ -119,9 +136,6 @@ class LLMProvider(ABC):
     ) -> AsyncIterator[LLMStreamChunk]:
         """Send messages and yield response chunks."""
         ...
-        # NB: The ``yield`` makes this an async generator in concrete
-        # subclasses.  The ``...`` above is only for type-checking.
-        # This trick satisfies mypy without requiring a body.
 
     async def close(self) -> None:
         """Close the underlying HTTP client."""

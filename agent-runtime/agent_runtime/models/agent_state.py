@@ -41,6 +41,13 @@ class AgentState(BaseModel):
     personality: Dict[str, Any] = Field(
         default_factory=dict, description="Flexible personality traits"
     )
+    max_tokens: int = Field(
+        default=1000, gt=0, description="Maximum token capacity"
+    )
+    current_task: Optional[str] = Field(
+        default=None, description="Currently claimed task ID"
+    )
+    tick: int = Field(default=0, ge=0, description="Current tick counter")
     world_sync_version: int = Field(
         default=0, description="Monotonic version counter for World Engine sync"
     )

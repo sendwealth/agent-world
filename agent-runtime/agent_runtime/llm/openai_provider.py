@@ -13,6 +13,7 @@ import httpx
 
 from .base import (
     LLMConfig,
+    LLMError,
     LLMMessage,
     LLMProvider,
     LLMResponse,
@@ -49,12 +50,19 @@ class OpenAIProvider(LLMProvider):
         payload = self._build_payload(
             messages, stream=False, max_tokens=max_tokens, temperature=temperature,
         )
-        resp = await self._client.post(
-            f"{self._base_url}/chat/completions",
-            headers=self._headers(),
-            json=payload,
-        )
-        resp.raise_for_status()
+        try:
+            resp = await self._client.post(
+                f"{self._base_url}/chat/completions",
+                headers=self._headers(),
+                json=payload,
+            )
+            resp.raise_for_status()
+        except httpx.HTTPError as exc:
+            raise LLMError(
+                f"OpenAI request failed: {exc}",
+                provider="openai",
+                model=self._config.model,
+            ) from exc
         data = resp.json()
         return self._parse_response(data)
 
@@ -72,17 +80,24 @@ class OpenAIProvider(LLMProvider):
         payload = self._build_payload(
             messages, stream=True, max_tokens=max_tokens, temperature=temperature,
         )
-        async with self._client.stream(
-            "POST",
-            f"{self._base_url}/chat/completions",
-            headers=self._headers(),
-            json=payload,
-        ) as resp:
-            resp.raise_for_status()
-            async for line in resp.aiter_lines():
-                chunk = self._parse_sse_line(line)
-                if chunk is not None:
-                    yield chunk
+        try:
+            async with self._client.stream(
+                "POST",
+                f"{self._base_url}/chat/completions",
+                headers=self._headers(),
+                json=payload,
+            ) as resp:
+                resp.raise_for_status()
+                async for line in resp.aiter_lines():
+                    chunk = self._parse_sse_line(line)
+                    if chunk is not None:
+                        yield chunk
+        except httpx.HTTPError as exc:
+            raise LLMError(
+                f"OpenAI stream failed: {exc}",
+                provider="openai",
+                model=self._config.model,
+            ) from exc
 
     # ------------------------------------------------------------------
     # Internal helpers
@@ -107,8 +122,8 @@ class OpenAIProvider(LLMProvider):
         return {
             "model": self._config.model,
             "messages": [{"role": m.role, "content": m.content} for m in messages],
-            "max_tokens": max_tokens or self._config.max_tokens,
-            "temperature": temperature if temperature is not None else self._config.temperature,
+            "max_tokens": max_tokens if max_tokens is not None else self._config.max_tokens,
+            "temperature": temperature if temperature is not None else (self._config.temperature if self._config.temperature is not None else 0.7),
             "stream": stream,
         }
 

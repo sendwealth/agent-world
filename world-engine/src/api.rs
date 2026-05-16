@@ -22,14 +22,14 @@ pub fn create_router(board: SharedTaskBoard) -> Router {
     Router::new()
         .route("/tasks", post(create_task))
         .route("/tasks", get(list_tasks))
-        .route("/tasks/{id}", get(get_task))
-        .route("/tasks/{id}/claim", post(claim_task))
-        .route("/tasks/{id}/start", post(start_task))
-        .route("/tasks/{id}/submit", post(submit_task))
-        .route("/tasks/{id}/review", post(review_task))
-        .route("/tasks/{id}/complete", post(complete_task))
-        .route("/tasks/{id}/expire", post(expire_task))
-        .route("/tasks/{id}", delete(delete_task))
+        .route("/tasks/:id", get(get_task))
+        .route("/tasks/:id/claim", post(claim_task))
+        .route("/tasks/:id/start", post(start_task))
+        .route("/tasks/:id/submit", post(submit_task))
+        .route("/tasks/:id/review", post(review_task))
+        .route("/tasks/:id/complete", post(complete_task))
+        .route("/tasks/:id/expire", post(expire_task))
+        .route("/tasks/:id", delete(delete_task))
         .with_state(board)
 }
 
@@ -289,8 +289,8 @@ async fn complete_task(
     };
 
     let mut board = board.lock().await;
-    match board.complete_task(uuid) {
-        Ok(()) => {
+    match board.complete_task(uuid, 0) {
+        Ok(_) => {
             let task = board.get(uuid).unwrap();
             Json(TaskResponse::from(task)).into_response()
         }

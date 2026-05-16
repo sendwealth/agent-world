@@ -1,0 +1,369 @@
+"""Action layer — translates decisions into concrete actions.
+
+The ``ActionExecutor`` is the "Act" step in the Perceive → Decide → Act loop.
+It validates that the agent can afford each action (token cost check), executes
+it, records the result, and handles failures with configurable retry logic.
+
+Supported action types:
+    - ``send_message``     — Send an A2A message to another agent
+    - ``claim_task``       — Claim an available task from the market
+    - ``submit_task``      — Submit completed work for a claimed task
+    - ``propose_deal``     — Propose a deal/contract to another agent
+    - ``teach_skill``      — Teach a skill to another agent (costs tokens)
+    - ``rest``             — Skip the tick to conserve tokens (no cost)
+    - ``explore``          — Explore the world for opportunities
+
+Usage::
+
+    executor = ActionExecutor()
+    result = await executor.execute(action, context)
+    if result.status == ActionStatus.SUCCESS:
+        ...
+"""
+
+from __future__ import annotations
+
+import logging
+import time
+from dataclasses import dataclass, field
+from enum import Enum
+from typing import Any, Protocol
+
+logger = logging.getLogger(__name__)
+
+
+# ---------------------------------------------------------------------------
+# Enums & data types
+# ---------------------------------------------------------------------------
+
+
+class ActionType(str, Enum):
+    """All supported action types."""
+
+    SEND_MESSAGE = "send_message"
+    CLAIM_TASK = "claim_task"
+    SUBMIT_TASK = "submit_task"
+    PROPOSE_DEAL = "propose_deal"
+    TEACH_SKILL = "teach_skill"
+    REST = "rest"
+    EXPLORE = "explore"
+
+
+class ActionStatus(str, Enum):
+    """Outcome status of an action execution."""
+
+    SUCCESS = "success"
+    FAILED = "failed"
+    INSUFFICIENT_TOKENS = "insufficient_tokens"
+    SKIPPED = "skipped"
+    RETRY_EXHAUSTED = "retry_exhausted"
+
+
+@dataclass(frozen=True)
+class ActionResult:
+    """Record of a single action execution attempt.
+
+    Attributes:
+        action_type: The type of action that was executed.
+        status: The outcome status.
+        token_cost: The number of tokens consumed (0 if not executed).
+        data: Arbitrary result payload from the action handler.
+        error: Error message if the action failed.
+        attempts: Number of attempts made (including retries).
+        elapsed_ms: Wall-clock time spent on the action in milliseconds.
+        timestamp: Monotonic timestamp when the action started.
+    """
+
+    action_type: ActionType
+    status: ActionStatus
+    token_cost: int = 0
+    data: dict[str, Any] = field(default_factory=dict)
+    error: str | None = None
+    attempts: int = 1
+    elapsed_ms: float = 0.0
+    timestamp: float = 0.0
+
+
+# ---------------------------------------------------------------------------
+# Token cost table
+# ---------------------------------------------------------------------------
+
+# Costs are aligned with genesis.yaml:
+#   think_cost_per_token: 1, communicate_cost: 10
+_DEFAULT_TOKEN_COSTS: dict[ActionType, int] = {
+    ActionType.SEND_MESSAGE: 10,
+    ActionType.CLAIM_TASK: 5,
+    ActionType.SUBMIT_TASK: 8,
+    ActionType.PROPOSE_DEAL: 10,
+    ActionType.TEACH_SKILL: 15,
+    ActionType.REST: 0,
+    ActionType.EXPLORE: 3,
+}
+
+
+# ---------------------------------------------------------------------------
+# Protocols (dependency injection)
+# ---------------------------------------------------------------------------
+
+
+class AgentStateProtocol(Protocol):
+    """Minimal interface ActionExecutor needs from agent state."""
+
+    @property
+    def tokens(self) -> int: ...
+
+    def adjust_tokens(self, delta: int) -> None: ...
+
+
+class WorldClientProtocol(Protocol):
+    """Interface for interacting with the world (A2A, market, etc.)."""
+
+    async def send_message(self, payload: dict[str, Any]) -> dict[str, Any]: ...
+
+    async def claim_task(self, task_id: str) -> dict[str, Any]: ...
+
+    async def submit_task(self, task_id: str, result: dict[str, Any]) -> dict[str, Any]: ...
+
+    async def propose_deal(self, proposal: dict[str, Any]) -> dict[str, Any]: ...
+
+    async def teach_skill(
+        self, target_agent_id: str, skill_name: str, level: int
+    ) -> dict[str, Any]: ...
+
+    async def explore(self, parameters: dict[str, Any]) -> dict[str, Any]: ...
+
+
+@dataclass
+class ActionContext:
+    """Bundles everything an action handler needs.
+
+    Attributes:
+        agent: The agent's state (for token checks and deduction).
+        world: Client for interacting with the outside world.
+        parameters: Action-specific parameters.
+    """
+
+    agent: AgentStateProtocol
+    world: WorldClientProtocol
+    parameters: dict[str, Any] = field(default_factory=dict)
+
+
+# ---------------------------------------------------------------------------
+# ActionExecutor
+# ---------------------------------------------------------------------------
+
+# Default retry settings
+_DEFAULT_MAX_RETRIES: int = 3
+_DEFAULT_RETRY_DELAY_S: float = 0.1
+
+
+class ActionExecutor:
+    """Translates decisions into concrete actions with token cost management.
+
+    For each action the executor:
+      1. Checks if the agent has enough tokens (pre-flight check).
+      2. Deducts the token cost.
+      3. Executes the action via the world client.
+      4. Records the result.
+      5. On failure, retries up to ``max_retries`` times (with the token
+         cost deducted only once for the whole sequence).
+
+    Usage::
+
+        executor = ActionExecutor()
+        ctx = ActionContext(agent=agent_state, world=world_client, parameters={...})
+        result = await executor.execute(ActionType.SEND_MESSAGE, ctx)
+    """
+
+    def __init__(
+        self,
+        *,
+        token_costs: dict[ActionType, int] | None = None,
+        max_retries: int = _DEFAULT_MAX_RETRIES,
+        retry_delay: float = _DEFAULT_RETRY_DELAY_S,
+    ) -> None:
+        self._token_costs = {**_DEFAULT_TOKEN_COSTS, **(token_costs or {})}
+        self._max_retries = max_retries
+        self._retry_delay = retry_delay
+        self._history: list[ActionResult] = []
+
+    # ------------------------------------------------------------------
+    # Public API
+    # ------------------------------------------------------------------
+
+    def get_cost(self, action_type: ActionType) -> int:
+        """Return the token cost for a given action type."""
+        return self._token_costs.get(action_type, 0)
+
+    def can_afford(self, action_type: ActionType, agent: AgentStateProtocol) -> bool:
+        """Check if the agent can afford an action without executing it."""
+        return agent.tokens >= self.get_cost(action_type)
+
+    async def execute(self, action_type: ActionType, context: ActionContext) -> ActionResult:
+        """Execute an action with token checking, retry, and result recording.
+
+        Returns an :class:`ActionResult` describing the outcome.
+        """
+        cost = self.get_cost(action_type)
+        start_time = time.monotonic()
+        start_ts = time.time()
+
+        # 1. Pre-flight token check
+        if not self.can_afford(action_type, context.agent):
+            result = ActionResult(
+                action_type=action_type,
+                status=ActionStatus.INSUFFICIENT_TOKENS,
+                token_cost=0,
+                error=f"Need {cost} tokens, have {context.agent.tokens}",
+                timestamp=start_ts,
+            )
+            self._record(result)
+            return result
+
+        # 2. Deduct tokens once for the entire attempt sequence
+        context.agent.adjust_tokens(-cost)
+
+        # 3. Execute with retry
+        last_error: str | None = None
+        attempts = 0
+        result: ActionResult | None = None
+
+        for attempt in range(1, self._max_retries + 1):
+            attempts = attempt
+            try:
+                data = await self._dispatch(action_type, context)
+                elapsed = (time.monotonic() - start_time) * 1000
+                result = ActionResult(
+                    action_type=action_type,
+                    status=ActionStatus.SUCCESS,
+                    token_cost=cost,
+                    data=data,
+                    attempts=attempts,
+                    elapsed_ms=elapsed,
+                    timestamp=start_ts,
+                )
+                self._record(result)
+                return result
+            except Exception as exc:
+                last_error = str(exc)
+                logger.warning(
+                    "Action %s attempt %d/%d failed: %s",
+                    action_type.value,
+                    attempt,
+                    self._max_retries,
+                    last_error,
+                )
+                if attempt < self._max_retries:
+                    import asyncio
+
+                    await asyncio.sleep(self._retry_delay)
+
+        # All retries exhausted
+        elapsed = (time.monotonic() - start_time) * 1000
+        result = ActionResult(
+            action_type=action_type,
+            status=ActionStatus.RETRY_EXHAUSTED,
+            token_cost=cost,
+            error=last_error,
+            attempts=attempts,
+            elapsed_ms=elapsed,
+            timestamp=start_ts,
+        )
+        self._record(result)
+        return result
+
+    @property
+    def history(self) -> list[ActionResult]:
+        """Read-only access to the action execution history."""
+        return list(self._history)
+
+    def clear_history(self) -> None:
+        """Clear the recorded action history."""
+        self._history.clear()
+
+    # ------------------------------------------------------------------
+    # Action dispatch
+    # ------------------------------------------------------------------
+
+    # Handler name lookup table
+    _HANDLER_NAMES: dict[ActionType, str] = {
+        ActionType.SEND_MESSAGE: "_handle_send_message",
+        ActionType.CLAIM_TASK: "_handle_claim_task",
+        ActionType.SUBMIT_TASK: "_handle_submit_task",
+        ActionType.PROPOSE_DEAL: "_handle_propose_deal",
+        ActionType.TEACH_SKILL: "_handle_teach_skill",
+        ActionType.REST: "_handle_rest",
+        ActionType.EXPLORE: "_handle_explore",
+    }
+
+    async def _dispatch(
+        self, action_type: ActionType, context: ActionContext
+    ) -> dict[str, Any]:
+        """Route an action type to its handler."""
+        handler_name = self._HANDLER_NAMES.get(action_type)
+        if handler_name is None:
+            raise ValueError(f"Unknown action type: {action_type}")
+        handler = getattr(self, handler_name)
+        return await handler(context)
+
+    # ------------------------------------------------------------------
+    # Individual action handlers (instance methods)
+    # ------------------------------------------------------------------
+
+    async def _handle_send_message(self, context: ActionContext) -> dict[str, Any]:
+        """Send a message to another agent via A2A."""
+        payload = context.parameters.get("payload", {})
+        return await context.world.send_message(payload)
+
+    async def _handle_claim_task(self, context: ActionContext) -> dict[str, Any]:
+        """Claim an available task from the market."""
+        task_id = context.parameters.get("task_id", "")
+        if not task_id:
+            raise ValueError("claim_task requires 'task_id' parameter")
+        return await context.world.claim_task(task_id)
+
+    async def _handle_submit_task(self, context: ActionContext) -> dict[str, Any]:
+        """Submit completed work for a claimed task."""
+        task_id = context.parameters.get("task_id", "")
+        task_result = context.parameters.get("result", {})
+        if not task_id:
+            raise ValueError("submit_task requires 'task_id' parameter")
+        return await context.world.submit_task(task_id, task_result)
+
+    async def _handle_propose_deal(self, context: ActionContext) -> dict[str, Any]:
+        """Propose a deal/contract to another agent."""
+        proposal = context.parameters.get("proposal", {})
+        return await context.world.propose_deal(proposal)
+
+    async def _handle_teach_skill(self, context: ActionContext) -> dict[str, Any]:
+        """Teach a skill to another agent."""
+        target_id = context.parameters.get("target_agent_id", "")
+        skill_name = context.parameters.get("skill_name", "")
+        level = context.parameters.get("level", 1)
+        if not target_id or not skill_name:
+            raise ValueError("teach_skill requires 'target_agent_id' and 'skill_name'")
+        return await context.world.teach_skill(target_id, skill_name, level)
+
+    async def _handle_rest(self, context: ActionContext) -> dict[str, Any]:
+        """Rest — skip the tick to conserve tokens. No world interaction."""
+        return {"action": "rest", "message": "Resting to conserve tokens."}
+
+    async def _handle_explore(self, context: ActionContext) -> dict[str, Any]:
+        """Explore the world for opportunities."""
+        params = context.parameters.get("explore_params", {})
+        return await context.world.explore(params)
+
+    # ------------------------------------------------------------------
+    # Internal helpers
+    # ------------------------------------------------------------------
+
+    def _record(self, result: ActionResult) -> None:
+        """Append an ActionResult to the history log."""
+        self._history.append(result)
+        logger.debug(
+            "Action recorded: type=%s status=%s cost=%d attempts=%d",
+            result.action_type.value,
+            result.status.value,
+            result.token_cost,
+            result.attempts,
+        )

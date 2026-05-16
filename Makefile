@@ -62,10 +62,10 @@ test-python: ## Run Python tests
 	cd agent-runtime && pytest -v
 
 test-integration: ## Run integration tests
-	@echo "🔗 Integration tests (TBD)"
+	cd world-engine && cargo test --test e2e_full_flow
 
 test-e2e: ## Run end-to-end tests
-	@echo "🌐 E2E tests (TBD)"
+	cd world-engine && cargo test --test e2e_full_flow
 
 # ── Code Quality ─────────────────────────────────────────
 

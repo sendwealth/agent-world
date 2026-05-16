@@ -16,6 +16,7 @@ Usage::
 
 from agent_runtime.llm.base import (
     LLMConfig,
+    LLMError,
     LLMMessage,
     LLMProvider,
     LLMResponse,
@@ -32,6 +33,7 @@ __all__ = [
     "AnthropicProvider",
     "CostTracker",
     "LLMConfig",
+    "LLMError",
     "LLMMessage",
     "LLMProvider",
     "LLMResponse",

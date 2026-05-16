@@ -27,10 +27,11 @@ pub enum EventType {
     TaskReviewed,
     TaskCompleted,
     TaskExpired,
+    RewardDistributed,
 }
 
 /// Events emitted by the world engine.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(tag = "type", content = "payload", rename_all = "snake_case")]
 #[non_exhaustive]
 pub enum WorldEvent {
@@ -56,6 +57,15 @@ pub enum WorldEvent {
     TaskReviewed { task_id: String, approved: bool },
     TaskCompleted { task_id: String },
     TaskExpired { task_id: String },
+    RewardDistributed {
+        task_id: String,
+        assignee_id: String,
+        gross_reward: u64,
+        net_reward: u64,
+        platform_fee: u64,
+        xp_awarded: u64,
+        reputation_change: f64,
+    },
 }
 
 impl WorldEvent {
@@ -83,6 +93,7 @@ impl WorldEvent {
             WorldEvent::TaskReviewed { .. } => EventType::TaskReviewed,
             WorldEvent::TaskCompleted { .. } => EventType::TaskCompleted,
             WorldEvent::TaskExpired { .. } => EventType::TaskExpired,
+            WorldEvent::RewardDistributed { .. } => EventType::RewardDistributed,
         }
     }
 
@@ -110,6 +121,7 @@ impl WorldEvent {
             WorldEvent::TaskReviewed { .. } => None,
             WorldEvent::TaskCompleted { .. } => None,
             WorldEvent::TaskExpired { .. } => None,
+            WorldEvent::RewardDistributed { assignee_id, .. } => Some(assignee_id),
         }
     }
 

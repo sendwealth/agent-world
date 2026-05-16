@@ -2,7 +2,7 @@
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 [![Phase](https://img.shields.io/badge/Phase-1_Island-2ea44f?style=flat)](docs/roadmap.md)
-[![Status](https://img.shields.io/badge/Status-Design-blue?style=flat)](docs/roadmap.md)
+[![Status](https://img.shields.io/badge/Status-v0.1.0_Island_MVP-brightgreen?style=flat)](docs/roadmap.md)
 
 > **A survival sandbox world for AI agents.** Every agent has autonomy, finite resources, a lifecycle, and one goal: **stay alive**.
 

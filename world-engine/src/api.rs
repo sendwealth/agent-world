@@ -13,10 +13,19 @@ use tokio::sync::Mutex;
 use uuid::Uuid;
 
 use crate::economy::task::{TaskBoard, Task};
+use crate::wal::WAL;
 
 // ── Shared State ──────────────────────────────────────────
 
 pub type SharedTaskBoard = Arc<Mutex<TaskBoard>>;
+pub type SharedWAL = Arc<Mutex<WAL>>;
+
+/// Combined state for the API with WAL support.
+#[derive(Clone)]
+pub struct AppState {
+    pub board: SharedTaskBoard,
+    pub wal: SharedWAL,
+}
 
 pub fn create_router(board: SharedTaskBoard) -> Router {
     Router::new()
@@ -31,6 +40,27 @@ pub fn create_router(board: SharedTaskBoard) -> Router {
         .route("/tasks/:id/expire", post(expire_task))
         .route("/tasks/:id", delete(delete_task))
         .with_state(board)
+}
+
+pub fn create_router_with_wal(board: SharedTaskBoard, wal: SharedWAL) -> Router {
+    let state = AppState { board, wal };
+    Router::new()
+        // Task routes
+        .route("/tasks", post(create_task_with_wal))
+        .route("/tasks", get(list_tasks_with_wal))
+        .route("/tasks/:id", get(get_task_with_wal))
+        .route("/tasks/:id/claim", post(claim_task_with_wal))
+        .route("/tasks/:id/start", post(start_task_with_wal))
+        .route("/tasks/:id/submit", post(submit_task_with_wal))
+        .route("/tasks/:id/review", post(review_task_with_wal))
+        .route("/tasks/:id/complete", post(complete_task_with_wal))
+        .route("/tasks/:id/expire", post(expire_task_with_wal))
+        .route("/tasks/:id", delete(delete_task_with_wal))
+        // WAL routes
+        .route("/wal/stats", get(wal_stats))
+        .route("/wal/snapshot", post(wal_snapshot))
+        .route("/wal/verify", get(wal_verify))
+        .with_state(state)
 }
 
 // ── Request Types ─────────────────────────────────────────
@@ -349,5 +379,113 @@ async fn delete_task(
             };
             (status, Json(ErrorResponse { error: e.to_string() })).into_response()
         }
+    }
+}
+
+// ── Task Handlers (with WAL state) ────────────────────────
+
+async fn create_task_with_wal(
+    State(state): State<AppState>,
+    Json(body): Json<CreateTaskRequest>,
+) -> impl IntoResponse {
+    create_task(State(state.board), Json(body)).await
+}
+
+async fn list_tasks_with_wal(
+    State(state): State<AppState>,
+) -> impl IntoResponse {
+    list_tasks(State(state.board)).await
+}
+
+async fn get_task_with_wal(
+    State(state): State<AppState>,
+    Path(id): Path<String>,
+) -> impl IntoResponse {
+    get_task(State(state.board), Path(id)).await
+}
+
+async fn claim_task_with_wal(
+    State(state): State<AppState>,
+    Path(id): Path<String>,
+    Json(body): Json<ClaimTaskRequest>,
+) -> impl IntoResponse {
+    claim_task(State(state.board), Path(id), Json(body)).await
+}
+
+async fn start_task_with_wal(
+    State(state): State<AppState>,
+    Path(id): Path<String>,
+) -> impl IntoResponse {
+    start_task(State(state.board), Path(id)).await
+}
+
+async fn submit_task_with_wal(
+    State(state): State<AppState>,
+    Path(id): Path<String>,
+    Json(body): Json<SubmitTaskRequest>,
+) -> impl IntoResponse {
+    submit_task(State(state.board), Path(id), Json(body)).await
+}
+
+async fn review_task_with_wal(
+    State(state): State<AppState>,
+    Path(id): Path<String>,
+    Json(body): Json<ReviewTaskRequest>,
+) -> impl IntoResponse {
+    review_task(State(state.board), Path(id), Json(body)).await
+}
+
+async fn complete_task_with_wal(
+    State(state): State<AppState>,
+    Path(id): Path<String>,
+) -> impl IntoResponse {
+    complete_task(State(state.board), Path(id)).await
+}
+
+async fn expire_task_with_wal(
+    State(state): State<AppState>,
+    Path(id): Path<String>,
+) -> impl IntoResponse {
+    expire_task(State(state.board), Path(id)).await
+}
+
+async fn delete_task_with_wal(
+    State(state): State<AppState>,
+    Path(id): Path<String>,
+) -> impl IntoResponse {
+    delete_task(State(state.board), Path(id)).await
+}
+
+// ── WAL Handlers ──────────────────────────────────────────
+
+async fn wal_stats(
+    State(state): State<AppState>,
+) -> impl IntoResponse {
+    let wal = state.wal.lock().await;
+    Json(wal.stats())
+}
+
+async fn wal_snapshot(
+    State(state): State<AppState>,
+) -> impl IntoResponse {
+    let mut wal = state.wal.lock().await;
+    match wal.take_snapshot(&[], 0) {
+        Ok(snapshot_file) => Json(serde_json::json!({ "ok": true, "snapshot_file": snapshot_file })).into_response(),
+        Err(e) => (StatusCode::INTERNAL_SERVER_ERROR, Json(ErrorResponse { error: e.to_string() })).into_response(),
+    }
+}
+
+async fn wal_verify(
+    State(state): State<AppState>,
+) -> impl IntoResponse {
+    let mut wal = state.wal.lock().await;
+    let result = wal.recover();
+    match result {
+        Ok(recovery) => Json(serde_json::json!({
+            "consistent": !recovery.corrupted_records,
+            "event_count": recovery.event_counter,
+            "recovered_from_snapshot": recovery.recovered_from_snapshot,
+        })).into_response(),
+        Err(e) => (StatusCode::INTERNAL_SERVER_ERROR, Json(ErrorResponse { error: e.to_string() })).into_response(),
     }
 }

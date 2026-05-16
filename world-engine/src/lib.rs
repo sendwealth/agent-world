@@ -2,6 +2,7 @@ pub mod api;
 pub mod economy;
 pub mod lifecycle;
 pub mod rules;
+pub mod wal;
 pub mod world;
 
 pub use rules::{

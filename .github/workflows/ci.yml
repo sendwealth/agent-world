@@ -129,3 +129,6 @@ jobs:
 
       - name: Build agent-runtime image
         run: docker build -t ci-check:agent-runtime ./agent-runtime
+
+      - name: Build dashboard image
+        run: docker build -t ci-check:dashboard ./dashboard

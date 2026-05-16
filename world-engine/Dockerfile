@@ -14,8 +14,13 @@ RUN touch src/main.rs && cargo build --release --locked
 # ── Runtime stage ────────────────────────────────────────────
 FROM debian:bookworm-slim
 
-RUN apt-get update && apt-get install -y ca-certificates && rm -rf /var/lib/apt/lists/*
+RUN apt-get update && apt-get install -y ca-certificates curl && rm -rf /var/lib/apt/lists/*
+
+RUN groupadd --system appuser && useradd --system --gid appuser appuser
 
 COPY --from=builder /app/target/release/agent-world-engine /usr/local/bin/
+
+EXPOSE 3000
+USER appuser
 
 ENTRYPOINT ["agent-world-engine"]

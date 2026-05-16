@@ -14,6 +14,7 @@ use uuid::Uuid;
 
 use crate::economy::task::{TaskBoard, Task};
 use crate::wal::WAL;
+use crate::config::SharedConfig;
 
 // ── Shared State ──────────────────────────────────────────
 
@@ -25,6 +26,7 @@ pub type SharedWAL = Arc<Mutex<WAL>>;
 pub struct AppState {
     pub board: SharedTaskBoard,
     pub wal: SharedWAL,
+    pub config: Option<SharedConfig>,
 }
 
 pub fn create_router(board: SharedTaskBoard) -> Router {
@@ -43,7 +45,7 @@ pub fn create_router(board: SharedTaskBoard) -> Router {
 }
 
 pub fn create_router_with_wal(board: SharedTaskBoard, wal: SharedWAL) -> Router {
-    let state = AppState { board, wal };
+    let state = AppState { board, wal, config: None };
     Router::new()
         // Task routes
         .route("/tasks", post(create_task_with_wal))
@@ -60,6 +62,30 @@ pub fn create_router_with_wal(board: SharedTaskBoard, wal: SharedWAL) -> Router 
         .route("/wal/stats", get(wal_stats))
         .route("/wal/snapshot", post(wal_snapshot))
         .route("/wal/verify", get(wal_verify))
+        .with_state(state)
+}
+
+pub fn create_router_with_wal_and_config(board: SharedTaskBoard, wal: SharedWAL, config: SharedConfig) -> Router {
+    let state = AppState { board, wal, config: Some(config) };
+    Router::new()
+        // Task routes
+        .route("/tasks", post(create_task_with_wal))
+        .route("/tasks", get(list_tasks_with_wal))
+        .route("/tasks/:id", get(get_task_with_wal))
+        .route("/tasks/:id/claim", post(claim_task_with_wal))
+        .route("/tasks/:id/start", post(start_task_with_wal))
+        .route("/tasks/:id/submit", post(submit_task_with_wal))
+        .route("/tasks/:id/review", post(review_task_with_wal))
+        .route("/tasks/:id/complete", post(complete_task_with_wal))
+        .route("/tasks/:id/expire", post(expire_task_with_wal))
+        .route("/tasks/:id", delete(delete_task_with_wal))
+        // WAL routes
+        .route("/wal/stats", get(wal_stats))
+        .route("/wal/snapshot", post(wal_snapshot))
+        .route("/wal/verify", get(wal_verify))
+        // Config routes
+        .route("/config", get(get_config))
+        .route("/config/reload", post(reload_config))
         .with_state(state)
 }
 
@@ -487,5 +513,36 @@ async fn wal_verify(
             "recovered_from_snapshot": recovery.recovered_from_snapshot,
         })).into_response(),
         Err(e) => (StatusCode::INTERNAL_SERVER_ERROR, Json(ErrorResponse { error: e.to_string() })).into_response(),
+    }
+}
+
+// ── Config Handlers ─────────────────────────────────────────
+
+async fn get_config(
+    State(state): State<AppState>,
+) -> impl IntoResponse {
+    match &state.config {
+        Some(cm) => {
+            let config = cm.get().await;
+            Json(serde_json::to_value(&*config).unwrap()).into_response()
+        }
+        None => (StatusCode::NOT_FOUND, Json(ErrorResponse { error: "config manager not available".into() })).into_response(),
+    }
+}
+
+async fn reload_config(
+    State(state): State<AppState>,
+) -> impl IntoResponse {
+    match &state.config {
+        Some(cm) => {
+            match cm.reload_from_disk().await {
+                Ok(()) => Json(serde_json::json!({
+                    "ok": true,
+                    "message": "config staged — will apply at next tick boundary"
+                })).into_response(),
+                Err(e) => (StatusCode::BAD_REQUEST, Json(ErrorResponse { error: e })).into_response(),
+            }
+        }
+        None => (StatusCode::NOT_FOUND, Json(ErrorResponse { error: "config manager not available".into() })).into_response(),
     }
 }

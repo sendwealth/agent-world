@@ -1,3 +1,4 @@
+use std::convert::Infallible;
 use std::sync::Arc;
 
 use axum::{
@@ -5,26 +6,62 @@ use axum::{
     Router,
     extract::{Path, State},
     http::StatusCode,
-    response::IntoResponse,
+    response::{
+        sse::{Event as SseEvent, Sse},
+        IntoResponse,
+    },
     routing::{delete, get, post},
 };
+use futures::stream::Stream;
 use serde::{Deserialize, Serialize};
-use tokio::sync::Mutex;
+use tokio::sync::{Mutex, watch};
+use tokio_stream::wrappers::BroadcastStream;
+use tokio_stream::StreamExt;
 use uuid::Uuid;
 
 use crate::economy::task::{TaskBoard, Task};
 use crate::wal::WAL;
+use crate::world::event::WorldEvent;
+use crate::world::state::EventBus;
 
 // ── Shared State ──────────────────────────────────────────
 
 pub type SharedTaskBoard = Arc<Mutex<TaskBoard>>;
 pub type SharedWAL = Arc<Mutex<WAL>>;
 
-/// Combined state for the API with WAL support.
+/// Agent record tracked by the world engine.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct AgentRecord {
+    pub id: String,
+    pub name: String,
+    pub phase: String,
+    pub tokens: u64,
+    pub money: u64,
+    pub alive: bool,
+    pub ticks_survived: u64,
+}
+
+/// A2A message record.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct A2AMessage {
+    pub id: String,
+    pub from_agent: String,
+    pub to_agent: String,
+    pub message_type: String,
+    pub payload: String,
+    pub tick: u64,
+}
+
+/// Combined state for the API with WAL + EventBus + agents + messages.
 #[derive(Clone)]
 pub struct AppState {
     pub board: SharedTaskBoard,
     pub wal: SharedWAL,
+    pub event_bus: Arc<EventBus>,
+    pub agents: Arc<Mutex<Vec<AgentRecord>>>,
+    pub messages: Arc<Mutex<Vec<A2AMessage>>>,
+    pub tick_tx: watch::Sender<u64>,
+    pub tick_rx: watch::Receiver<u64>,
 }
 
 pub fn create_router(board: SharedTaskBoard) -> Router {
@@ -43,7 +80,22 @@ pub fn create_router(board: SharedTaskBoard) -> Router {
 }
 
 pub fn create_router_with_wal(board: SharedTaskBoard, wal: SharedWAL) -> Router {
-    let state = AppState { board, wal };
+    let event_bus = Arc::new(EventBus::new(256));
+    let (tick_tx, tick_rx) = watch::channel(0u64);
+    let state = AppState {
+        board,
+        wal,
+        event_bus,
+        agents: Arc::new(Mutex::new(Vec::new())),
+        messages: Arc::new(Mutex::new(Vec::new())),
+        tick_tx,
+        tick_rx,
+    };
+    build_full_router(state)
+}
+
+/// Build the full router with all endpoints (tasks, WAL, world, agents, A2A).
+pub fn build_full_router(state: AppState) -> Router {
     Router::new()
         // Task routes
         .route("/tasks", post(create_task_with_wal))
@@ -60,7 +112,40 @@ pub fn create_router_with_wal(board: SharedTaskBoard, wal: SharedWAL) -> Router 
         .route("/wal/stats", get(wal_stats))
         .route("/wal/snapshot", post(wal_snapshot))
         .route("/wal/verify", get(wal_verify))
+        // World routes (SSE + stats)
+        .route("/api/v1/world/events", get(world_events_sse))
+        .route("/api/v1/world/stats", get(world_stats))
+        // Agent routes
+        .route("/api/v1/agents", get(list_agents))
+        .route("/api/v1/agents", post(spawn_agent))
+        .route("/api/v1/agents/:id", get(get_agent))
+        // A2A routes
+        .route("/api/v1/messages", post(send_message))
+        .route("/api/v1/messages", get(list_messages))
+        // Tick control
+        .route("/api/v1/tick", post(advance_tick))
+        .route("/api/v1/tick", get(get_tick))
         .with_state(state)
+}
+
+/// Create a router for testing with a provided EventBus and tick channel.
+pub fn create_router_for_test(
+    board: SharedTaskBoard,
+    wal: SharedWAL,
+    event_bus: Arc<EventBus>,
+    tick_tx: watch::Sender<u64>,
+    tick_rx: watch::Receiver<u64>,
+) -> Router {
+    let state = AppState {
+        board,
+        wal,
+        event_bus,
+        agents: Arc::new(Mutex::new(Vec::new())),
+        messages: Arc::new(Mutex::new(Vec::new())),
+        tick_tx,
+        tick_rx,
+    };
+    build_full_router(state)
 }
 
 // ── Request Types ─────────────────────────────────────────
@@ -110,6 +195,27 @@ impl Default for ListTasksQuery {
     }
 }
 
+#[derive(Debug, Deserialize)]
+pub struct SpawnAgentRequest {
+    pub name: String,
+    #[serde(default = "default_tokens")]
+    pub tokens: u64,
+    #[serde(default)]
+    pub money: u64,
+}
+
+fn default_tokens() -> u64 {
+    100_000
+}
+
+#[derive(Debug, Deserialize)]
+pub struct SendMessageRequest {
+    pub from_agent: String,
+    pub to_agent: String,
+    pub message_type: String,
+    pub payload: String,
+}
+
 // ── Response Types ────────────────────────────────────────
 
 #[derive(Debug, Serialize)]
@@ -150,7 +256,18 @@ pub struct ErrorResponse {
     pub error: String,
 }
 
-// ── Handlers ──────────────────────────────────────────────
+#[derive(Debug, Serialize)]
+pub struct WorldStatsResponse {
+    pub agent_count: usize,
+    pub alive_count: usize,
+    pub dead_count: usize,
+    pub total_money: u64,
+    pub total_tokens: u64,
+    pub tick: u64,
+    pub task_count: usize,
+}
+
+// ── Task Handlers (no WAL) ────────────────────────────────
 
 async fn create_task(
     State(board): State<SharedTaskBoard>,
@@ -169,7 +286,7 @@ async fn create_task(
         body.description,
         body.reward,
         body.publisher_id,
-        0, // created_tick — would come from world clock in production
+        0,
         body.expires_at,
     ) {
         Ok(id) => {
@@ -488,4 +605,174 @@ async fn wal_verify(
         })).into_response(),
         Err(e) => (StatusCode::INTERNAL_SERVER_ERROR, Json(ErrorResponse { error: e.to_string() })).into_response(),
     }
+}
+
+// ── World SSE Handler ─────────────────────────────────────
+
+async fn world_events_sse(
+    State(state): State<AppState>,
+) -> Sse<impl Stream<Item = Result<SseEvent, Infallible>>> {
+    let rx = state.event_bus.subscribe();
+    let stream = BroadcastStream::new(rx).filter_map(|result| {
+        match result {
+            Ok(event) => {
+                let data = event.to_json();
+                Some(Ok(SseEvent::default().data(data)))
+            }
+            Err(_) => None, // Skip lagged/closed errors
+        }
+    });
+
+    Sse::new(stream).keep_alive(
+        axum::response::sse::KeepAlive::new()
+            .interval(std::time::Duration::from_secs(15))
+            .text("ping"),
+    )
+}
+
+// ── World Stats Handler ───────────────────────────────────
+
+async fn world_stats(
+    State(state): State<AppState>,
+) -> impl IntoResponse {
+    let agents = state.agents.lock().await;
+    let board = state.board.lock().await;
+    let tick = *state.tick_rx.borrow();
+
+    let alive_count = agents.iter().filter(|a| a.alive).count();
+    let dead_count = agents.iter().filter(|a| !a.alive).count();
+    let total_tokens: u64 = agents.iter().map(|a| a.tokens).sum();
+    let total_money: u64 = agents.iter().map(|a| a.money).sum();
+    let task_count = board.list().len();
+
+    Json(WorldStatsResponse {
+        agent_count: agents.len(),
+        alive_count,
+        dead_count,
+        total_money,
+        total_tokens,
+        tick,
+        task_count,
+    })
+}
+
+// ── Agent Handlers ────────────────────────────────────────
+
+async fn spawn_agent(
+    State(state): State<AppState>,
+    Json(body): Json<SpawnAgentRequest>,
+) -> impl IntoResponse {
+    let agent = AgentRecord {
+        id: Uuid::new_v4().to_string(),
+        name: body.name.clone(),
+        phase: "adult".to_string(),
+        tokens: body.tokens,
+        money: body.money,
+        alive: true,
+        ticks_survived: 0,
+    };
+
+    state.event_bus.emit(WorldEvent::AgentSpawned {
+        agent_id: agent.id.clone(),
+        name: agent.name.clone(),
+    });
+
+    let mut agents = state.agents.lock().await;
+    agents.push(agent.clone());
+
+    (StatusCode::CREATED, Json(agent)).into_response()
+}
+
+async fn list_agents(
+    State(state): State<AppState>,
+) -> impl IntoResponse {
+    let agents = state.agents.lock().await;
+    Json(&*agents).into_response()
+}
+
+async fn get_agent(
+    State(state): State<AppState>,
+    Path(id): Path<String>,
+) -> impl IntoResponse {
+    let agents = state.agents.lock().await;
+    match agents.iter().find(|a| a.id == id) {
+        Some(agent) => Json(agent.clone()).into_response(),
+        None => (StatusCode::NOT_FOUND, Json(ErrorResponse { error: "agent not found".into() })).into_response(),
+    }
+}
+
+// ── A2A Message Handlers ──────────────────────────────────
+
+async fn send_message(
+    State(state): State<AppState>,
+    Json(body): Json<SendMessageRequest>,
+) -> impl IntoResponse {
+    let tick = *state.tick_rx.borrow();
+
+    let msg = A2AMessage {
+        id: Uuid::new_v4().to_string(),
+        from_agent: body.from_agent.clone(),
+        to_agent: body.to_agent.clone(),
+        message_type: body.message_type.clone(),
+        payload: body.payload.clone(),
+        tick,
+    };
+
+    state.event_bus.emit(WorldEvent::TransactionCompleted {
+        from: msg.from_agent.clone(),
+        to: msg.to_agent.clone(),
+        amount: 0,
+        currency: crate::world::enums::Currency::Token,
+    });
+
+    let mut messages = state.messages.lock().await;
+    messages.push(msg.clone());
+
+    (StatusCode::CREATED, Json(msg)).into_response()
+}
+
+async fn list_messages(
+    State(state): State<AppState>,
+) -> impl IntoResponse {
+    let messages = state.messages.lock().await;
+    Json(&*messages).into_response()
+}
+
+// ── Tick Handlers ─────────────────────────────────────────
+
+#[derive(Debug, Deserialize)]
+pub struct AdvanceTickRequest {
+    #[serde(default = "default_count")]
+    pub count: u64,
+}
+
+fn default_count() -> u64 {
+    1
+}
+
+async fn advance_tick(
+    State(state): State<AppState>,
+    Json(body): Json<AdvanceTickRequest>,
+) -> impl IntoResponse {
+    let count = body.count.max(1);
+    let current = *state.tick_rx.borrow();
+    let new_tick = current + count;
+
+    for t in (current + 1)..=new_tick {
+        state.event_bus.emit(WorldEvent::TickAdvanced { tick: t });
+    }
+
+    let _ = state.tick_tx.send(new_tick);
+
+    Json(serde_json::json!({
+        "tick": new_tick,
+        "advanced": count,
+    }))
+}
+
+async fn get_tick(
+    State(state): State<AppState>,
+) -> impl IntoResponse {
+    let tick = *state.tick_rx.borrow();
+    Json(serde_json::json!({ "tick": tick }))
 }

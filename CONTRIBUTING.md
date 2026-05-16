@@ -1,6 +1,6 @@
 # Contributing to Agent World
 
-First off, thank you for considering contributing to Agent World! 🌍
+First off, thank you for considering contributing to Agent World!
 
 ## Code of Conduct
 
@@ -52,7 +52,6 @@ This project adheres to the [Contributor Covenant Code of Conduct](CODE_OF_CONDU
 - **Python** 3.11+ (`uv` recommended)
 - **Node.js** 20+ (for dashboard)
 - **protoc** 3.20+ (Protocol Buffers compiler)
-- **Just** (command runner, optional)
 
 ### Quick Setup
 
@@ -80,12 +79,13 @@ make dev
 ```bash
 make help        # Show all available commands
 make setup       # Install dependencies
-make dev         # Start development environment
-make test        # Run all tests
+make dev         # Show instructions for starting dev environment
+make test        # Run Rust and Python tests
 make lint        # Run linters (cargo clippy + ruff)
-make fmt         # Format code (rustfmt + black)
+make fmt         # Format code (rustfmt + ruff format)
 make proto       # Generate protobuf code
 make clean       # Clean build artifacts
+make build       # Build world-engine (Rust, release mode)
 ```
 
 ## Coding Standards
@@ -94,13 +94,13 @@ make clean       # Clean build artifacts
 - Follow `rustfmt` defaults
 - Run `cargo clippy` with no warnings
 - Document all public APIs with `///` doc comments
-- Write tests for every module
+- Write tests for every module (unit tests in `#[cfg(test)] mod tests` within each file)
 
 ### Python (agent-runtime)
 - Follow PEP 8 (enforced by `ruff`)
 - Type hints required for all function signatures
 - Docstrings for all public functions (Google style)
-- Tests in `tests/` mirroring source structure
+- Tests mirroring source structure
 
 ### Protocol Buffers (protocol/)
 - Use `proto3` syntax
@@ -112,6 +112,11 @@ make clean       # Clean build artifacts
 - Comment every key
 - Validate with schema before committing
 
+### Dashboard (Next.js)
+- TypeScript strict mode
+- Follow existing component patterns (see `src/components/`)
+- Use Tailwind CSS utility classes
+
 ## Architecture Decision Records (ADRs)
 
 When making significant technical decisions:
@@ -120,27 +125,25 @@ When making significant technical decisions:
 2. Fill in: Context, Decision, Consequences
 3. Commit with the feature it supports
 
-ADRs are immutable once merged — update via new ADR that supersedes.
+ADRs are immutable once merged -- update via new ADR that supersedes.
 
 ## Testing
 
 ### Unit Tests
 ```bash
-# Rust
+# Rust (world-engine)
 cd world-engine && cargo test
 
-# Python
+# Python (agent-runtime)
 cd agent-runtime && pytest
+
+# Dashboard
+cd dashboard && npm run build
 ```
 
-### Integration Tests
+### All Tests
 ```bash
-make test-integration
-```
-
-### End-to-End Tests
-```bash
-make test-e2e
+make test        # Runs both Rust and Python tests
 ```
 
 ## Commit Messages
@@ -148,20 +151,19 @@ make test-e2e
 Follow [Conventional Commits](https://www.conventionalcommits.org/):
 
 ```
-feat(economy): add token ledger with double-entry bookkeeping
-fix(a2a): resolve message ordering in concurrent proposals
-docs(roadmap): update Phase 1 milestones
-refactor(lifecycle): extract aging logic into separate module
-test(economy): add property-based tests for token transfers
+feat(economy): add token burn engine with phase multipliers
+fix(escrow): resolve double-refund on concurrent claims
+docs(roadmap): update Phase 1 milestone completion status
+refactor(events): extract event serialization into separate module
+test(economy): add property-based tests for reward distribution
 chore(deps): bump tokio to 1.40
 ```
 
 ## Questions?
 
-- 💬 [GitHub Discussions](../../discussions) — general questions, ideas
-- 🐛 [GitHub Issues](../../issues) — bugs, feature requests
-- 📧 Email: open an issue first, we'll follow up
+- [GitHub Discussions](../../discussions) -- general questions, ideas
+- [GitHub Issues](../../issues) -- bugs, feature requests
 
 ---
 
-Thank you for helping build Agent World! 🌍
+Thank you for helping build Agent World!

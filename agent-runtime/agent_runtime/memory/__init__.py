@@ -1,5 +1,10 @@
-"""Memory subsystem — in-memory cache layers for agent interactions."""
+"""Memory subsystem — in-memory and persistent cache layers for agent interactions."""
 
+from agent_runtime.memory.short_term import (
+    ShortTermMemory,
+    ShortTermMemoryEntry,
+    ShortTermMemoryProtocol,
+)
 from agent_runtime.memory.working_memory import (
     MemoryEntry,
     WorkingMemory,
@@ -8,6 +13,9 @@ from agent_runtime.memory.working_memory import (
 
 __all__ = [
     "MemoryEntry",
+    "ShortTermMemory",
+    "ShortTermMemoryEntry",
+    "ShortTermMemoryProtocol",
     "WorkingMemory",
     "WorkingMemoryProtocol",
 ]

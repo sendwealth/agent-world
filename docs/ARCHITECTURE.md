@@ -1,7 +1,44 @@
 # Agent World — Architecture Design Document
 
-> **版本**: v1.0 | **日期**: 2026-05-15 | **状态**: 评审中  
+> **版本**: v1.1 | **日期**: 2026-05-16 | **状态**: 评审中
 > 与 [DESIGN.md](DESIGN.md)（产品规格）和 [ROADMAP.md](ROADMAP.md)（路线图）配合阅读
+
+---
+
+## 实现状态总览
+
+本文档描述 Agent World 的**目标架构**。下表标注各子系统的实现状态：
+
+| 子系统 | 模块 | 状态 | 说明 |
+|--------|------|------|------|
+| World Engine | economy/ | **已实现** | token_burn、escrow、reward、task 均有完整实现和测试 |
+| World Engine | world/ | **已实现** | EventBus（24 种事件类型）、enums、state |
+| World Engine | api.rs | **已实现** | Axum REST API，10 个任务板端点 |
+| World Engine | config/ | **部分** | genesis.yaml 加载已实现；config/ Rust 模块未创建 |
+| World Engine | engine/ | **未实现** | Tick 调度器未实现 |
+| World Engine | lifecycle/ | **占位** | 仅空结构体占位 |
+| World Engine | rules/ | **占位** | 仅空结构体占位 |
+| World Engine | social/ | **未实现** | |
+| World Engine | evolution/ | **未实现** | |
+| World Engine | market/ | **未实现** | Rust 侧 market 目录不存在（Python market/ 也为空） |
+| World Engine | a2a/ | **未实现** | gRPC 服务器未实现 |
+| World Engine | storage/ | **未实现** | |
+| World Engine | observability/ | **未实现** | |
+| Agent Runtime | core/ | **已实现** | think_loop、decide、act 均有完整实现和测试 |
+| Agent Runtime | survival/ | **已实现** | 5 模式生存本能，11 种紧急行动 |
+| Agent Runtime | memory/ | **部分** | WorkingMemory 已实现；short_term、long_term 未实现 |
+| Agent Runtime | models/ | **已实现** | AgentState Pydantic 模型、enums、skill |
+| Agent Runtime | llm/ | **已实现** | OpenAI、Anthropic、Ollama 三个 provider |
+| Agent Runtime | skills/ | **未实现** | |
+| Agent Runtime | a2a/ | **未实现** | gRPC 客户端未实现 |
+| Agent Runtime | tools/ | **未实现** | |
+| Agent Runtime | config/ | **未实现** | |
+| Agent Runtime | main.py | **未实现** | 无 CLI 入口 |
+| Dashboard | 全部 | **已实现** | 页面和组件已搭建，但依赖 world engine SSE 端点（未实现） |
+| Protocol | a2a.proto | **已实现** | 定义了 Discover、SendMessage、StreamMessages |
+| Protocol | discovery.proto | **未实现** | |
+
+> 标记为**已实现**的模块包含完整的功能代码和单元测试。标记为**部分**的模块有部分功能。标记为**占位**的模块仅有空结构体。标记为**未实现**的模块完全没有代码。
 
 ---
 
@@ -200,65 +237,57 @@ Namespace: agent-world
 
 ### 3.1 模块图
 
+**当前实际文件结构（v0.1.0）：**
+
 ```
 world-engine/
 ├── src/
-│   ├── main.rs                  # 入口：加载配置 → 启动调度器 → 启动 gRPC
-│   ├── config/
-│   │   ├── mod.rs
-│   │   ├── genesis.rs           # Genesis YAML 加载
-│   │   └── rules.rs             # World Rules YAML 加载
-│   ├── engine/
-│   │   ├── mod.rs
-│   │   ├── scheduler.rs         # Tick 调度器（tokio interval）
-│   │   ├── event_bus.rs         # 事件总线（tokio broadcast）
-│   │   └── state.rs             # WorldState 全局状态
+│   ├── main.rs                  # ✅ 入口：加载配置 → 启动 HTTP 服务器
+│   ├── lib.rs                   # ✅ 模块重导出
+│   ├── api.rs                   # ✅ Axum REST API（10 个任务板端点）
+│   ├── lifecycle.rs             # ⏳ 占位符（空结构体）
+│   ├── rules.rs                 # ⏳ 占位符（空结构体）
 │   ├── economy/
-│   │   ├── mod.rs
-│   │   ├── ledger.rs            # 双式记账账本
-│   │   ├── central_bank.rs      # 央行：兑换、利率、增发
-│   │   └── token_burn.rs        # Token 消耗计算
-│   ├── lifecycle/
-│   │   ├── mod.rs
-│   │   ├── phases.rs            # 5 阶段参数管理
-│   │   ├── aging.rs             # 衰退逻辑
-│   │   ├── death.rs             # 死亡判定 + 遗嘱执行
-│   │   └── inheritance.rs       # 传承分配
-│   ├── social/
-│   │   ├── mod.rs
-│   │   ├── relationship.rs      # 关系图
-│   │   ├── organization.rs      # 组织管理
-│   │   └── reputation.rs        # 信誉计算
-│   ├── evolution/
-│   │   ├── mod.rs
-│   │   ├── skill_tree.rs        # 技能树定义
-│   │   ├── leveling.rs          # 升级计算
-│   │   └── mutation.rs          # 突变逻辑
-│   ├── market/
-│   │   ├── mod.rs
-│   │   ├── task_board.rs        # 任务板
-│   │   ├── knowledge.rs         # 知识市场
-│   │   └── tool_registry.rs     # 工具注册
-│   ├── a2a/
-│   │   ├── mod.rs
-│   │   ├── server.rs            # gRPC 服务实现
-│   │   ├── router.rs            # 消息路由
-│   │   ├── discovery.rs         # Agent 发现
-│   │   └── auth.rs              # ed25519 签名验证
-│   ├── api/
-│   │   ├── mod.rs
-│   │   ├── rest.rs              # REST API（axum）
-│   │   └── sse.rs               # Server-Sent Events
-│   ├── storage/
-│   │   ├── mod.rs
-│   │   ├── sqlite.rs            # SQLite 连接池
-│   │   ├── snapshot.rs          # 世界快照
-│   │   └── recovery.rs          # 崩溃恢复
-│   └── observability/
-       ├── mod.rs
-       ├── metrics.rs            # Prometheus 指标
-       └── tracing_setup.rs      # 日志配置
+│   │   ├── mod.rs               # ✅ 模块重导出
+│   │   ├── token_burn.rs        # ✅ Token 消耗引擎（阶段乘数 + 技能成本）
+│   │   ├── escrow.rs            # ✅ 托管管理器（完整生命周期）
+│   │   ├── reward.rs            # ✅ 奖励分配（2% 平台费 + XP + 声望）
+│   │   └── task.rs              # ✅ 任务市场（状态机 + 托管集成）
+│   └── world/
+│       ├── mod.rs               # ✅ 模块重导出
+│       ├── enums.rs             # ✅ Currency, AgentPhase, DeathReason
+│       ├── event.rs             # ✅ 24 种 WorldEvent 变体
+│       └── state.rs             # ✅ EventBus（tokio broadcast）
 ```
+
+**规划中的模块（未实现）：**
+
+```
+│   ├── config/
+│   │   ├── mod.rs               # ❌ 配置模块
+│   │   ├── genesis.rs           # ❌ Genesis YAML 加载（main.rs 有基础加载）
+│   │   └── rules.rs             # ❌ World Rules YAML 加载
+│   ├── engine/
+│   │   ├── mod.rs               # ❌ 引擎模块
+│   │   ├── scheduler.rs         # ❌ Tick 调度器（tokio interval）
+│   │   └── state.rs             # ❌ WorldState 全局状态
+│   ├── lifecycle/               # ❌ 完整目录
+│   │   ├── phases.rs, aging.rs, death.rs, inheritance.rs
+│   ├── social/                  # ❌ 完整目录
+│   │   ├── relationship.rs, organization.rs, reputation.rs
+│   ├── evolution/               # ❌ 完整目录
+│   │   ├── skill_tree.rs, leveling.rs, mutation.rs
+│   ├── market/                  # ❌ 完整目录
+│   │   ├── task_board.rs, knowledge.rs, tool_registry.rs
+│   ├── a2a/                     # ❌ 完整目录
+│   │   ├── server.rs, router.rs, discovery.rs, auth.rs
+│   ├── storage/                 # ❌ 完整目录
+│   │   ├── sqlite.rs, snapshot.rs, recovery.rs
+│   └── observability/           # ❌ 完整目录
+│       ├── metrics.rs, tracing_setup.rs
+```
+
+> ✅ = 已实现（含测试） | ⏳ = 占位符 | ❌ = 未实现
 
 ### 3.2 核心数据结构
 
@@ -551,61 +580,65 @@ impl RestApi {
 
 ### 4.1 模块图
 
+**当前实际文件结构（v0.1.0）：**
+
 ```
 agent-runtime/
 ├── agent_runtime/
 │   ├── __init__.py
-│   ├── main.py                  # CLI 入口
 │   ├── core/
 │   │   ├── __init__.py
-│   │   ├── think_loop.py        # 主思考循环
-│   │   ├── perceive.py          # 感知层
-│   │   ├── decide.py            # 决策层（LLM）
-│   │   ├── act.py               # 行动层
-│   │   └── reflect.py           # 反思层
+│   │   ├── think_loop.py        # ✅ 主思考循环（可插拔 Provider）
+│   │   ├── decide.py            # ✅ LLM 决策引擎（10 种行动类型）
+│   │   └── act.py               # ✅ 行动执行器（7 种行动类型 + 重试）
 │   ├── memory/
 │   │   ├── __init__.py
-│   │   ├── working.py           # 工作记忆（内存）
-│   │   ├── short_term.py        # 短期记忆（SQLite）
-│   │   ├── long_term.py         # 长期记忆（向量 DB）
-│   │   └── consolidation.py     # 记忆整理
+│   │   └── working_memory.py    # ✅ FIFO 缓存（重要性感知淘汰）
 │   ├── survival/
 │   │   ├── __init__.py
-│   │   ├── instinct.py          # 生存本能（不经过 LLM）
-│   │   ├── threat_detector.py   # 威胁检测
-│   │   └── budget_planner.py    # Token 预算规划
-│   ├── skills/
+│   │   └── instinct.py          # ✅ 5 模式生存本能（11 种紧急行动）
+│   ├── models/
 │   │   ├── __init__.py
-│   │   ├── registry.py          # 技能注册表
-│   │   ├── executor.py          # 技能执行器
-│   │   └── builtin/             # 内置技能
-│   │       ├── coding.py
-│   │       ├── trading.py
-│   │       ├── research.py
-│   │       └── teaching.py
-│   ├── a2a/
-│   │   ├── __init__.py
-│   │   ├── client.py            # gRPC 客户端
-│   │   ├── message_builder.py   # 消息构建
-│   │   ├── crypto.py            # ed25519 签名
-│   │   └── handler.py           # 入站消息处理器
-│   ├── tools/
-│   │   ├── __init__.py
-│   │   ├── tool_registry.py     # 工具注册
-│   │   ├── code_execution.py    # 代码执行沙箱
-│   │   └── api_client.py        # 外部 API 调用
-│   ├── llm/
-│   │   ├── __init__.py
-│   │   ├── provider.py          # LLM 提供商抽象
-│   │   ├── openai.py
-│   │   ├── anthropic.py
-│   │   └── ollama.py            # 本地模型
-│   └── config/
+│   │   ├── agent_state.py       # ✅ Pydantic Agent 状态模型
+│   │   ├── enums.py             # ✅ AgentPhase, SurvivalMode
+│   │   └── skill.py             # ✅ Skill 数据类（XP 阈值 + 升级）
+│   └── llm/
 │       ├── __init__.py
-│       └── settings.py          # Pydantic 配置
+│       ├── base.py              # ✅ LLMProvider 抽象基类
+│       ├── factory.py           # ✅ Provider 工厂
+│       ├── openai_provider.py   # ✅ OpenAI 实现
+│       ├── anthropic_provider.py # ✅ Anthropic 实现
+│       ├── ollama_provider.py   # ✅ Ollama 实现
+│       └── cost.py              # ✅ 成本追踪
 ├── tests/
 └── pyproject.toml
 ```
+
+**规划中的模块（未实现）：**
+
+```
+│   ├── main.py                  # ❌ CLI 入口（无 spawn 命令）
+│   ├── core/
+│   │   ├── perceive.py          # ❌ 独立感知模块
+│   │   └── reflect.py           # ❌ 反思模块
+│   ├── memory/
+│   │   ├── short_term.py        # ❌ 短期记忆（SQLite）
+│   │   ├── long_term.py         # ❌ 长期记忆（向量 DB）
+│   │   └── consolidation.py     # ❌ 记忆整理
+│   ├── survival/
+│   │   ├── threat_detector.py   # ❌ 威胁检测
+│   │   └── budget_planner.py    # ❌ Token 预算规划
+│   ├── skills/                  # ❌ 完整目录
+│   │   ├── registry.py, executor.py, builtin/
+│   ├── a2a/                     # ❌ 完整目录
+│   │   ├── client.py, message_builder.py, crypto.py, handler.py
+│   ├── tools/                   # ❌ 完整目录
+│   │   ├── tool_registry.py, code_execution.py, api_client.py
+│   └── config/                  # ❌ 完整目录
+│       └── settings.py
+```
+
+> ✅ = 已实现（含测试） | ❌ = 未实现
 
 ### 4.2 核心类设计
 
@@ -1360,51 +1393,53 @@ impl TaskBoard {
 
 ### 11.1 技术栈
 
+**当前实现（v0.1.0）：**
+
 ```
-Dashboard/
-├── package.json
-├── next.config.js
-├── tailwind.config.js
+dashboard/
+├── package.json               # Next.js 15 + React 19 + Tailwind 4
+├── next.config.ts
+├── postcss.config.mjs
 ├── tsconfig.json
 ├── src/
 │   ├── app/
-│   │   ├── layout.tsx           # 全局布局 + SSE Provider
-│   │   ├── page.tsx             # 世界概览
+│   │   ├── layout.tsx         # ✅ 全局布局 + Sidebar
+│   │   ├── page.tsx           # ✅ 世界概览（StatCards + EventStream + Leaderboard）
+│   │   ├── globals.css        # ✅ 全局样式
 │   │   ├── agents/
-│   │   │   ├── page.tsx         # Agent 列表
+│   │   │   ├── page.tsx       # ✅ Agent 列表
 │   │   │   └── [id]/
-│   │   │       └── page.tsx     # Agent 详情
-│   │   ├── market/
-│   │   │   ├── page.tsx         # 任务板
-│   │   │   ├── knowledge/
-│   │   │   │   └── page.tsx     # 知识市场
-│   │   │   └── tools/
-│   │   │       └── page.tsx     # 工具市场
-│   │   ├── economy/
-│   │   │   └── page.tsx         # 经济仪表盘
-│   │   ├── society/
-│   │   │   └── page.tsx         # 社会图谱
-│   │   ├── timeline/
-│   │   │   └── page.tsx         # 事件时间线
-│   │   └── lab/
-│   │       └── page.tsx         # 实验控制台
+│   │   │       └── page.tsx   # ✅ Agent 详情
+│   │   └── tasks/
+│   │       └── page.tsx       # ✅ 任务列表
 │   ├── components/
-│   │   ├── AgentCard.tsx
-│   │   ├── WorldMap.tsx         # D3.js 力导向图
-│   │   ├── TokenGauge.tsx
-│   │   ├── TransactionFeed.tsx
-│   │   ├── SkillBar.tsx
-│   │   ├── ReputationBadge.tsx
-│   │   └── EventTimeline.tsx
+│   │   ├── EventStream.tsx    # ✅ 实时事件展示
+│   │   ├── Leaderboard.tsx    # ✅ Agent 排行榜
+│   │   ├── Sidebar.tsx        # ✅ 导航侧边栏
+│   │   ├── StatCard.tsx       # ✅ 统计卡片
+│   │   └── StatCards.tsx      # ✅ 统计卡片组
 │   ├── hooks/
-│   │   ├── useWorldState.ts     # SSE 连接
-│   │   ├── useAgent.ts
-│   │   └── useMarket.ts
-│   ├── lib/
-│   │   ├── api.ts               # REST API 客户端
-│   │   └── sse.ts               # SSE 封装
-│   └── types/
-│       └── index.ts             # TypeScript 类型
+│   │   └── useWorldState.ts   # ✅ SSE 连接 hook
+│   └── lib/
+│       ├── api.ts             # ✅ REST API 客户端
+│       └── world.ts           # ✅ TypeScript 类型定义
+```
+
+**规划中的页面和组件（未实现）：**
+
+```
+│   ├── app/
+│   │   ├── market/            # ❌ 任务板详情页
+│   │   ├── economy/           # ❌ 经济仪表盘
+│   │   ├── society/           # ❌ 社会图谱
+│   │   ├── timeline/          # ❌ 事件时间线
+│   │   └── lab/               # ❌ 实验控制台
+│   ├── components/
+│   │   ├── WorldMap.tsx       # ❌ D3.js 力导向图
+│   │   ├── TokenGauge.tsx     # ❌ Token 仪表
+│   │   ├── SkillBar.tsx       # ❌ 技能条
+│   │   ├── ReputationBadge.tsx # ❌ 声望徽章
+│   │   └── TransactionFeed.tsx # ❌ 交易流
 ```
 
 ### 11.2 SSE 实时更新
@@ -1779,4 +1814,4 @@ class CustomLLMProvider(LLMProvider):
 
 ---
 
-*文档版本: v1.0 | 最后更新: 2026-05-15 | 下次评审: Phase 1 开发启动时*
+*文档版本: v1.1 | 最后更新: 2026-05-16 | 下次评审: Phase 1 集成阶段*

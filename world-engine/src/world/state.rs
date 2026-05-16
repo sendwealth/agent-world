@@ -1,7 +1,11 @@
 use std::collections::HashSet;
 use std::sync::Arc;
 
+use uuid::Uuid;
+
+use crate::economy::token_burn::AgentRecord;
 use super::event::{EventType, WorldEvent};
+use super::subsystem::SubsystemRegistry;
 
 /// Broadcasts world events to all registered subscribers.
 ///
@@ -106,6 +110,98 @@ impl FilteredReceiver {
 
 /// Shared reference-counted event bus.
 pub type SharedEventBus = Arc<EventBus>;
+
+// ═══════════════════════════════════════════════════════════════════════════
+// World State
+// ═══════════════════════════════════════════════════════════════════════════
+
+/// Central world state that wires together the event bus, subsystem
+/// registry, and agent roster.
+///
+/// Each call to [`WorldState::tick`] runs every registered subsystem in
+/// order and broadcasts the collected events.
+pub struct WorldState {
+    /// Shared event bus for cross-component communication.
+    pub event_bus: SharedEventBus,
+    /// Ordered subsystem registry executed each tick.
+    pub subsystems: SubsystemRegistry,
+    /// Agent roster: `(agent_id, spawn_tick, record)`.
+    pub agents: Vec<(Uuid, u64, AgentRecord)>,
+    /// Monotonically increasing tick counter.
+    tick: u64,
+}
+
+impl WorldState {
+    /// Create a new world state with the given event bus, subsystem
+    /// registry, and initial agent roster.
+    pub fn new(
+        event_bus: SharedEventBus,
+        subsystems: SubsystemRegistry,
+        agents: Vec<(Uuid, u64, AgentRecord)>,
+    ) -> Self {
+        Self {
+            event_bus,
+            subsystems,
+            agents,
+            tick: 0,
+        }
+    }
+
+    /// Advance the world by one tick.
+    ///
+    /// 1. Increments the tick counter.
+    /// 2. Runs every registered subsystem against the agent roster.
+    /// 3. Broadcasts all generated events to the event bus.
+    ///
+    /// Returns the list of events generated during this tick.
+    pub fn tick(&mut self) -> Vec<WorldEvent> {
+        self.tick += 1;
+
+        // Run subsystems
+        let events = self.subsystems.run_tick(self.tick, &mut self.agents);
+
+        // Broadcast all generated events
+        for event in &events {
+            self.event_bus.emit(event.clone());
+        }
+
+        events
+    }
+
+    /// Current tick number (0 before the first tick).
+    pub fn current_tick(&self) -> u64 {
+        self.tick
+    }
+
+    /// Number of living agents.
+    pub fn living_agent_count(&self) -> usize {
+        self.agents
+            .iter()
+            .filter(|(_, _, a)| a.phase != crate::world::enums::AgentPhase::Dead)
+            .count()
+    }
+
+    /// Spawn a new agent with the given name, initial tokens, and spawn tick.
+    /// Returns the new agent's UUID.
+    pub fn spawn_agent(&mut self, name: &str, tokens: u64, spawn_tick: u64) -> Uuid {
+        let id = Uuid::new_v4();
+        let record = AgentRecord {
+            id,
+            name: name.to_string(),
+            phase: crate::world::enums::AgentPhase::Adult,
+            tokens,
+            skills: std::collections::HashMap::new(),
+        };
+
+        self.event_bus.emit(WorldEvent::AgentSpawned {
+            agent_id: id.to_string(),
+            name: name.to_string(),
+        });
+
+        self.agents.push((id, spawn_tick, record));
+        id
+    }
+}
 
 #[cfg(test)]
 mod tests {
@@ -416,5 +512,70 @@ mod tests {
 
         assert!(matches!(evt1, WorldEvent::TickAdvanced { .. }));
         assert!(matches!(evt2, WorldEvent::TickAdvanced { .. }));
+    }
+
+    // ── WorldState tests ──
+
+    use crate::world::subsystem::Subsystem;
+    use crate::economy::token_burn::TokenBurnEngine;
+    use std::collections::HashMap;
+
+    fn make_agent(phase: AgentPhase, tokens: u64) -> (Uuid, u64, AgentRecord) {
+        (
+            Uuid::new_v4(),
+            0,
+            AgentRecord {
+                id: Uuid::new_v4(),
+                name: "test".to_string(),
+                phase,
+                tokens,
+                skills: HashMap::new(),
+            },
+        )
+    }
+
+    #[test]
+    fn world_state_tick_increments_counter() {
+        let bus = Arc::new(EventBus::new(256));
+        let registry = SubsystemRegistry::new();
+        let agents = vec![make_agent(AgentPhase::Adult, 1000)];
+
+        let mut state = WorldState::new(bus, registry, agents);
+        assert_eq!(state.current_tick(), 0);
+
+        state.tick();
+        assert_eq!(state.current_tick(), 1);
+
+        state.tick();
+        assert_eq!(state.current_tick(), 2);
+    }
+
+    #[test]
+    fn world_state_spawn_agent() {
+        let bus = Arc::new(EventBus::new(256));
+        let registry = SubsystemRegistry::new();
+        let agents = vec![];
+
+        let mut state = WorldState::new(bus, registry, agents);
+        let id = state.spawn_agent("Alice", 500, 0);
+
+        assert_eq!(state.agents.len(), 1);
+        assert_eq!(state.agents[0].0, id);
+        assert_eq!(state.agents[0].2.name, "Alice");
+        assert_eq!(state.agents[0].2.tokens, 500);
+    }
+
+    #[test]
+    fn world_state_living_agent_count() {
+        let bus = Arc::new(EventBus::new(256));
+        let registry = SubsystemRegistry::new();
+        let agents = vec![
+            make_agent(AgentPhase::Adult, 100),
+            make_agent(AgentPhase::Dead, 0),
+            make_agent(AgentPhase::Adult, 200),
+        ];
+
+        let state = WorldState::new(bus, registry, agents);
+        assert_eq!(state.living_agent_count(), 2);
     }
 }

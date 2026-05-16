@@ -10,3 +10,12 @@ pub use rules::{
     TokenConsumptionRule, DeathJudgmentRule, NewbieProtectionRule,
     default_registry, custom_registry,
 };
+
+pub use world::{
+    EventBus, FilteredReceiver, SharedEventBus, WorldEvent, EventType,
+    WorldState, Subsystem, SubsystemRegistry,
+    Scheduler,
+    GenesisConfig,
+    TokenBurnSubsystem, DeathJudgmentSubsystem,
+    RuleCheckSubsystem, EventBroadcastSubsystem,
+};

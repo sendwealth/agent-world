@@ -71,14 +71,7 @@ class GRPCPerceptionProvider:
 
     async def _drain_messages(self) -> list[dict[str, Any]]:
         """Drain all available messages from the streaming queue."""
-        messages: list[dict[str, Any]] = []
-        try:
-            while True:
-                msg = self._client._incoming_queue.get_nowait()
-                messages.append(a2a_message_to_dict(msg))
-        except Exception:
-            pass  # queue empty or not streaming
-        return messages
+        return [a2a_message_to_dict(msg) for msg in self._client.drain_incoming()]
 
     async def _discover_market(self, state: AgentState) -> dict[str, Any]:
         """Call Discover to get world/market state."""

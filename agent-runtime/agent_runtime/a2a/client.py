@@ -175,6 +175,21 @@ class A2AClient:
             except asyncio.TimeoutError:
                 continue
 
+    def drain_incoming(self) -> list[a2a_pb2.A2AMessage]:
+        """Drain and return all currently queued incoming messages.
+
+        Returns a list of all messages that have been received via the
+        streaming connection since the last drain.  Returns an empty list
+        if no messages are available or streaming is not active.
+        """
+        messages: list[a2a_pb2.A2AMessage] = []
+        while True:
+            try:
+                messages.append(self._incoming_queue.get_nowait())
+            except asyncio.QueueEmpty:
+                break
+        return messages
+
     async def stream_send(self, msg: a2a_pb2.A2AMessage) -> None:
         """Queue a message for sending on the streaming connection.
 
@@ -206,7 +221,8 @@ class A2AClient:
 
     async def _run_stream(self) -> None:
         """One iteration of the bidirectional streaming connection."""
-        assert self._stub is not None  # ensured by connect()
+        if self._stub is None:
+            raise RuntimeError("Cannot stream — call connect() first")
 
         async def request_iter() -> AsyncIterator[a2a_pb2.A2AMessage]:
             while self._streaming:
@@ -268,4 +284,4 @@ class A2AClient:
             policy.max_delay,
         )
         jitter_amount = delay * policy.jitter * random.random()
-        return delay + jitter_amount
+        return min(delay + jitter_amount, policy.max_delay)

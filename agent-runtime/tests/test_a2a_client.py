@@ -380,6 +380,24 @@ class TestA2AClientStreaming:
         with pytest.raises(RuntimeError, match="Streaming is not active"):
             await client.stream_send(msg)
 
+    def test_drain_incoming_returns_empty_when_no_messages(self):
+        client = A2AClient(make_config())
+        assert client.drain_incoming() == []
+
+    def test_drain_incoming_returns_queued_messages(self):
+        client = A2AClient(make_config())
+        msg1 = build_a2a_message(from_agent="bob")
+        msg2 = build_a2a_message(from_agent="carol")
+        client._incoming_queue.put_nowait(msg1)
+        client._incoming_queue.put_nowait(msg2)
+
+        drained = client.drain_incoming()
+        assert len(drained) == 2
+        assert drained[0].from_agent == "bob"
+        assert drained[1].from_agent == "carol"
+        # Queue should be empty after drain
+        assert client.drain_incoming() == []
+
 
 # ---------------------------------------------------------------------------
 # GRPCWorldClient — all WorldClientProtocol methods
@@ -544,7 +562,7 @@ class TestGRPCPerceptionProvider:
     @pytest.mark.asyncio
     async def test_perceive_basic(self):
         a2a = MagicMock(spec=A2AClient)
-        a2a._incoming_queue = asyncio.Queue()
+        a2a.drain_incoming = MagicMock(return_value=[])
         a2a.discover = AsyncMock(
             return_value=a2a_pb2.DiscoverResponse(
                 agents=[
@@ -565,18 +583,15 @@ class TestGRPCPerceptionProvider:
 
     @pytest.mark.asyncio
     async def test_perceive_with_messages(self):
-        a2a = MagicMock(spec=A2AClient)
-        q: asyncio.Queue = asyncio.Queue()
-
-        # Put a message in the queue
         msg = build_a2a_message(
             from_agent="bob",
             to_agent="alice",
             message_type=a2a_pb2.INFORM,
             payload={"text": "hello"},
         )
-        await q.put(msg)
-        a2a._incoming_queue = q
+
+        a2a = MagicMock(spec=A2AClient)
+        a2a.drain_incoming = MagicMock(return_value=[msg])
         a2a.discover = AsyncMock(return_value=a2a_pb2.DiscoverResponse())
 
         provider = GRPCPerceptionProvider(a2a)
@@ -589,7 +604,7 @@ class TestGRPCPerceptionProvider:
     @pytest.mark.asyncio
     async def test_perceive_discover_failure_graceful(self):
         a2a = MagicMock(spec=A2AClient)
-        a2a._incoming_queue = asyncio.Queue()
+        a2a.drain_incoming = MagicMock(return_value=[])
         a2a.discover = AsyncMock(side_effect=ConnectionError("network down"))
 
         provider = GRPCPerceptionProvider(a2a)

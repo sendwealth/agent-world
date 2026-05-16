@@ -248,6 +248,7 @@ class ThinkLoop:
         perception_provider: PerceptionProvider | None = None,
         decision_provider: DecisionProvider | None = None,
         reflection_provider: ReflectionProvider | None = None,
+        world_client: Any | None = None,
     ) -> None:
         self.state = state
         self.survival = survival
@@ -258,6 +259,9 @@ class ThinkLoop:
         self._perception = perception_provider or DefaultPerceptionProvider()
         self._decision = decision_provider or MockDecisionProvider(executor)
         self._reflection = reflection_provider or DefaultReflectionProvider()
+
+        # World client for ACT phase — defaults to no-op for backward compat
+        self._world_client = world_client
 
         # Runtime state
         self._tick: int = 0
@@ -386,7 +390,9 @@ class ThinkLoop:
                 self._tick,
                 survival_action.mode.value,
             )
-            await self.survival.execute(survival_action, self.state)
+            # Pass the world_client as the A2A client for emergency broadcasts
+            a2a = self._world_client if self._world_client is not None else None
+            await self.survival.execute(survival_action, self.state, a2a_client=a2a)
             return  # Skip normal decision
 
         # 3. Decide
@@ -416,12 +422,10 @@ class ThinkLoop:
         result recording.  We wrap the agent state and world client
         into an ActionContext.
         """
-        # For now we use a no-op world client since the real A2A layer
-        # isn't built yet.  Actions that don't need the world (REST,
-        # EXPLORE) work fine.  This keeps the think loop testable.
+        world = self._world_client if self._world_client is not None else _NoOpWorldClient()
         context = ActionContext(
             agent=self.state,  # type: ignore[arg-type]
-            world=_NoOpWorldClient(),
+            world=world,  # type: ignore[arg-type]
             parameters=decision.parameters,
         )
 

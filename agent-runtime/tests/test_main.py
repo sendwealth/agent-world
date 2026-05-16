@@ -2,10 +2,6 @@
 
 from __future__ import annotations
 
-import asyncio
-import signal
-from unittest.mock import patch
-
 import pytest
 
 from agent_runtime.__main__ import (
@@ -15,7 +11,6 @@ from agent_runtime.__main__ import (
     load_config,
 )
 from agent_runtime.models.enums import AgentPhase
-
 
 # ---------------------------------------------------------------------------
 # Parser tests

@@ -92,11 +92,12 @@ World Engine (Rust)
     task.rs          -- Task marketplace with escrow integration
   world/
     enums.rs         -- Currency, AgentPhase, DeathReason
-    event.rs         -- 24 WorldEvent variants with serialization
+    event.rs         -- 23 WorldEvent variants with JSON serialization
     state.rs         -- EventBus (tokio broadcast) with filtered subscriptions
-  api.rs             -- Axum REST scaffold (health endpoint)
+  api.rs             -- Axum REST API (10 task endpoints + 3 WAL endpoints)
   lifecycle.rs       -- Placeholder
-  rules.rs           -- Placeholder
+  rules.rs           -- 3 rules implemented (TokenConsumption, DeathJudgment, NewbieProtection)
+  wal/               -- Write-Ahead Log with CRC32 checksums, crash recovery, snapshots
 
 Agent Runtime (Python)
   core/
@@ -107,6 +108,12 @@ Agent Runtime (Python)
     instinct.py      -- 5-mode survival system bypassing LLM
   memory/
     working_memory.py -- In-memory FIFO cache with decay
+    short_term.py    -- SQLite-backed persistent memory with keyword search
+  crypto/
+    keys.py          -- Ed25519 key generation
+    signing.py       -- Deterministic JSON signing and verification
+    nonce.py         -- TTL-based nonce cache for replay protection
+    registry.py      -- Agent public key registry
   models/
     agent_state.py   -- Full Pydantic agent state model
     enums.py         -- AgentPhase, SurvivalMode enums
@@ -115,12 +122,13 @@ Agent Runtime (Python)
     base.py          -- LLMProvider protocol
     factory.py       -- Provider factory
     openai_provider.py / anthropic_provider.py / ollama_provider.py
-    cost.py          -- Cost tracking
+    cost_tracker.py  -- Cost tracking per provider and model
 
 Dashboard (Next.js 15 + React 19 + Tailwind 4)
-  World overview, agent list, agent detail, task list
-  EventStream, Leaderboard, StatCards, Sidebar components
+  Pages: World overview, agent list, agent detail, task list, timeline
+  Components: EventStream, Leaderboard, StatCards, Sidebar
   SSE hook for live data (useWorldState)
+  Type definitions in types/world.ts
 ```
 
 ### Full Design Vision
@@ -142,20 +150,22 @@ agent-world/
   Makefile                  # Common commands
   config/
     genesis.yaml            # World birth config
-    world-rules.yaml        # Inviolable rules (31 rules)
+    world-rules.yaml        # 10 rules across 4 categories (survival, economic, social, safety)
   world-engine/             # Rust -- economy, events, state
     Cargo.toml
     Dockerfile
     src/
-      main.rs               # Entry point
+      main.rs               # Entry point, WAL writer, Axum server
       lib.rs                # Module re-exports
-      api.rs                # Axum REST API
+      api.rs                # Axum REST API (10 task + 3 WAL endpoints)
       lifecycle.rs          # Placeholder
-      rules.rs              # Placeholder
+      rules.rs              # 3 rules: TokenConsumption, DeathJudgment, NewbieProtection
       economy/
         mod.rs, task.rs, reward.rs, escrow.rs, token_burn.rs
       world/
         mod.rs, enums.rs, event.rs, state.rs
+      wal/
+        mod.rs, crc.rs      # Write-Ahead Log with CRC32, crash recovery, snapshots
   agent-runtime/            # Python -- agent think loop
     pyproject.toml
     Dockerfile
@@ -163,19 +173,22 @@ agent-world/
       __init__.py
       models/               # Agent state, enums, skill
       core/                 # Think loop, decide, act
-      survival/             # Survival instinct
-      memory/               # Working memory
+      survival/             # Survival instinct (5 modes, 11 emergency actions)
+      memory/               # Working memory + short-term memory (SQLite)
       llm/                  # LLM providers (OpenAI, Anthropic, Ollama)
+      crypto/               # Ed25519 signing, verification, nonce cache
+      skills/               # 4 built-in skills (coding, research, teaching, trading)
   protocol/                 # gRPC -- A2A protocol
     a2a.proto               # Discover, SendMessage, StreamMessages
   market/                   # (empty -- planned)
   dashboard/                # Next.js -- observatory UI
     package.json
     src/
-      app/                  # Pages: overview, agents, tasks
+      app/                  # Pages: overview, agents, tasks, timeline
       components/           # EventStream, Leaderboard, Sidebar, StatCards
       hooks/                # useWorldState (SSE)
-      lib/                  # API client, type definitions
+      lib/                  # API client
+      types/                # TypeScript type definitions (world.ts)
   docs/
     ARCHITECTURE.md         # Full system architecture (design + planned)
     ROADMAP.md              # Development roadmap

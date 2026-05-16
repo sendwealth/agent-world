@@ -11,16 +11,16 @@
 - [x] Reward distributor -- 2% platform fee, XP awards, reputation changes
 - [x] Task board -- task marketplace with escrow integration
 - [x] Genesis configuration loader
-- [x] Event system -- EventBus with 24 event types, filtered subscriptions
+- [x] Event system -- EventBus with 23 event types, filtered subscriptions
 - [x] Unit tests for economy module
 - [ ] Tick-based scheduler with configurable interval
 - [ ] Money ledger with central bank exchange
-- [ ] Basic rule engine (token consumption per tick)
+- [ ] Basic rule engine (token consumption per tick) -- [~] 3 rules implemented (R001-R003)
 - [ ] gRPC server scaffold (A2A protocol)
 
 ### Milestone 1.2: A2A Protocol (Week 3-5)
 - [x] Protobuf definitions (`a2a.proto`)
-- [ ] Message signing (ed25519)
+- [ ] Message signing (ed25519) -- [~] crypto module implemented
 - [ ] Discovery mechanism (agent registration)
 - [ ] Proposal/Accept/Reject flow
 - [ ] Python gRPC client
@@ -38,7 +38,7 @@
 - [x] Agent state model -- full Pydantic model with world sync
 - [x] Skill model -- dataclass with XP thresholds and level-up logic
 - [ ] Basic CLI entry point (no `main.py` yet)
-- [ ] Short-term and long-term memory (SQLite / vector DB)
+- [ ] Short-term and long-term memory (SQLite / vector DB) -- [~] short_term.py implemented
 - [ ] A2A client integration
 - [ ] Task execution (simple predefined tasks)
 

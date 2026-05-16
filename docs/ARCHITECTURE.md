@@ -12,24 +12,26 @@
 | 子系统 | 模块 | 状态 | 说明 |
 |--------|------|------|------|
 | World Engine | economy/ | **已实现** | token_burn、escrow、reward、task 均有完整实现和测试 |
-| World Engine | world/ | **已实现** | EventBus（24 种事件类型）、enums、state |
-| World Engine | api.rs | **已实现** | Axum REST API，10 个任务板端点 |
+| World Engine | world/ | **已实现** | EventBus（23 种事件类型）、enums、state |
+| World Engine | api.rs | **已实现** | Axum REST API，10 个任务板端点 + 3 个 WAL 端点 |
 | World Engine | config/ | **部分** | genesis.yaml 加载已实现；config/ Rust 模块未创建 |
 | World Engine | engine/ | **未实现** | Tick 调度器未实现 |
 | World Engine | lifecycle/ | **占位** | 仅空结构体占位 |
-| World Engine | rules/ | **占位** | 仅空结构体占位 |
+| World Engine | rules/ | **已实现** | 3 条规则：TokenConsumption（R001）、DeathJudgment（R002）、NewbieProtection（R003） |
 | World Engine | social/ | **未实现** | |
 | World Engine | evolution/ | **未实现** | |
 | World Engine | market/ | **未实现** | Rust 侧 market 目录不存在（Python market/ 也为空） |
 | World Engine | a2a/ | **未实现** | gRPC 服务器未实现 |
 | World Engine | storage/ | **未实现** | |
+| World Engine | wal/ | **已实现** | Write-Ahead Log：CRC32 校验、崩溃恢复、快照、1000 条自动轮转 |
 | World Engine | observability/ | **未实现** | |
 | Agent Runtime | core/ | **已实现** | think_loop、decide、act 均有完整实现和测试 |
 | Agent Runtime | survival/ | **已实现** | 5 模式生存本能，11 种紧急行动 |
-| Agent Runtime | memory/ | **部分** | WorkingMemory 已实现；short_term、long_term 未实现 |
+| Agent Runtime | memory/ | **部分** | WorkingMemory 已实现；ShortTermMemory（SQLite）已实现；long_term 未实现 |
 | Agent Runtime | models/ | **已实现** | AgentState Pydantic 模型、enums、skill |
 | Agent Runtime | llm/ | **已实现** | OpenAI、Anthropic、Ollama 三个 provider |
-| Agent Runtime | skills/ | **未实现** | |
+| Agent Runtime | crypto/ | **已实现** | Ed25519 密钥生成、签名、验证、Nonce 防重放、密钥注册表 |
+| Agent Runtime | skills/ | **已实现** | SkillRegistry + SkillExecutor + 4 个内置技能（coding, research, teaching, trading） |
 | Agent Runtime | a2a/ | **未实现** | gRPC 客户端未实现 |
 | Agent Runtime | tools/ | **未实现** | |
 | Agent Runtime | config/ | **未实现** | |
@@ -244,9 +246,9 @@ world-engine/
 ├── src/
 │   ├── main.rs                  # ✅ 入口：加载配置 → 启动 HTTP 服务器
 │   ├── lib.rs                   # ✅ 模块重导出
-│   ├── api.rs                   # ✅ Axum REST API（10 个任务板端点）
+│   ├── api.rs                   # ✅ Axum REST API（10 个任务板端点 + 3 个 WAL 端点）
 │   ├── lifecycle.rs             # ⏳ 占位符（空结构体）
-│   ├── rules.rs                 # ⏳ 占位符（空结构体）
+│   ├── rules.rs                 # ✅ 3 条规则（R001-R003），RuleRegistry + RuleContext
 │   ├── economy/
 │   │   ├── mod.rs               # ✅ 模块重导出
 │   │   ├── token_burn.rs        # ✅ Token 消耗引擎（阶段乘数 + 技能成本）
@@ -256,8 +258,11 @@ world-engine/
 │   └── world/
 │       ├── mod.rs               # ✅ 模块重导出
 │       ├── enums.rs             # ✅ Currency, AgentPhase, DeathReason
-│       ├── event.rs             # ✅ 24 种 WorldEvent 变体
+│       ├── event.rs             # ✅ 23 种 WorldEvent 变体
 │       └── state.rs             # ✅ EventBus（tokio broadcast）
+│   └── wal/
+│       ├── mod.rs               # ✅ WAL（CRC32、崩溃恢复、快照、1000 条轮转）
+│       └── crc.rs               # ✅ CRC32（ISO 3309 查表实现）
 ```
 
 **规划中的模块（未实现）：**
@@ -593,7 +598,8 @@ agent-runtime/
 │   │   └── act.py               # ✅ 行动执行器（7 种行动类型 + 重试）
 │   ├── memory/
 │   │   ├── __init__.py
-│   │   └── working_memory.py    # ✅ FIFO 缓存（重要性感知淘汰）
+│   │   ├── working_memory.py    # ✅ FIFO 缓存（重要性感知淘汰）
+│   │   └── short_term.py        # ✅ SQLite 持久化记忆（关键词搜索）
 │   ├── survival/
 │   │   ├── __init__.py
 │   │   └── instinct.py          # ✅ 5 模式生存本能（11 种紧急行动）
@@ -602,14 +608,28 @@ agent-runtime/
 │   │   ├── agent_state.py       # ✅ Pydantic Agent 状态模型
 │   │   ├── enums.py             # ✅ AgentPhase, SurvivalMode
 │   │   └── skill.py             # ✅ Skill 数据类（XP 阈值 + 升级）
-│   └── llm/
-│       ├── __init__.py
-│       ├── base.py              # ✅ LLMProvider 抽象基类
-│       ├── factory.py           # ✅ Provider 工厂
-│       ├── openai_provider.py   # ✅ OpenAI 实现
-│       ├── anthropic_provider.py # ✅ Anthropic 实现
-│       ├── ollama_provider.py   # ✅ Ollama 实现
-│       └── cost.py              # ✅ 成本追踪
+│   ├── llm/
+│   │   ├── __init__.py
+│   │   ├── base.py              # ✅ LLMProvider 抽象基类
+│   │   ├── factory.py           # ✅ Provider 工厂
+│   │   ├── openai_provider.py   # ✅ OpenAI 实现
+│   │   ├── anthropic_provider.py # ✅ Anthropic 实现
+│   │   ├── ollama_provider.py   # ✅ Ollama 实现
+│   │   └── cost_tracker.py      # ✅ 成本追踪
+│   ├── crypto/
+│   │   ├── __init__.py
+│   │   ├── keys.py              # ✅ Ed25519 密钥生成
+│   │   ├── signing.py           # ✅ 确定性 JSON 签名 + 验证
+│   │   ├── nonce.py             # ✅ TTL 防重放缓存
+│   │   └── registry.py          # ✅ 代理公钥注册表
+│   ├── skills/
+│   │   ├── __init__.py
+│   │   ├── registry.py          # ✅ SkillRegistry（冻结数据类）
+│   │   ├── executor.py          # ✅ SkillExecutor（XP 奖励）
+│   │   ├── coding.py            # ✅ 编程技能
+│   │   ├── research.py          # ✅ 研究技能
+│   │   ├── teaching.py          # ✅ 教学技能
+│   │   └── trading.py           # ✅ 交易技能
 ├── tests/
 └── pyproject.toml
 ```
@@ -622,14 +642,13 @@ agent-runtime/
 │   │   ├── perceive.py          # ❌ 独立感知模块
 │   │   └── reflect.py           # ❌ 反思模块
 │   ├── memory/
-│   │   ├── short_term.py        # ❌ 短期记忆（SQLite）
 │   │   ├── long_term.py         # ❌ 长期记忆（向量 DB）
 │   │   └── consolidation.py     # ❌ 记忆整理
 │   ├── survival/
 │   │   ├── threat_detector.py   # ❌ 威胁检测
 │   │   └── budget_planner.py    # ❌ Token 预算规划
-│   ├── skills/                  # ❌ 完整目录
-│   │   ├── registry.py, executor.py, builtin/
+│   ├── skills/
+│   │   ├── builtin/             # ❌ 更多内置技能（planned）
 │   ├── a2a/                     # ❌ 完整目录
 │   │   ├── client.py, message_builder.py, crypto.py, handler.py
 │   ├── tools/                   # ❌ 完整目录
@@ -1420,8 +1439,9 @@ dashboard/
 │   │   └── StatCards.tsx      # ✅ 统计卡片组
 │   ├── hooks/
 │   │   └── useWorldState.ts   # ✅ SSE 连接 hook
-│   └── lib/
-│       ├── api.ts             # ✅ REST API 客户端
+│   ├── lib/
+│   │   └── api.ts             # ✅ REST API 客户端
+│   └── types/
 │       └── world.ts           # ✅ TypeScript 类型定义
 ```
 
@@ -1432,7 +1452,7 @@ dashboard/
 │   │   ├── market/            # ❌ 任务板详情页
 │   │   ├── economy/           # ❌ 经济仪表盘
 │   │   ├── society/           # ❌ 社会图谱
-│   │   ├── timeline/          # ❌ 事件时间线
+│   │   ├── timeline/          # ✅ 事件时间线页面
 │   │   └── lab/               # ❌ 实验控制台
 │   ├── components/
 │   │   ├── WorldMap.tsx       # ❌ D3.js 力导向图

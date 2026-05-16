@@ -30,12 +30,14 @@ Phase 1 (Island) initial release -- core subsystems with tests, not yet integrat
 - Escrow manager with full lifecycle: create, claim, complete, refund, dispute, resolve, freeze, expiry (`economy/escrow.rs`)
 - Reward distributor with 2% platform fee, XP awards, and reputation changes (`economy/reward.rs`)
 - Task marketplace with escrow integration (`economy/task.rs`)
-- Event system with 24 typed event variants and JSON serialization (`world/event.rs`)
+- Event system with 23 typed event variants and JSON serialization (`world/event.rs`)
 - EventBus using tokio::sync::broadcast with filtered subscriptions (`world/state.rs`)
 - Currency, AgentPhase, DeathReason enums (`world/enums.rs`)
-- Axum REST API scaffold with health endpoint (`api.rs`)
+- Axum REST API with 10 task endpoints and 3 WAL endpoints (`api.rs`)
 - Genesis YAML configuration loader (`main.rs`)
-- Placeholder modules for lifecycle and rules engine
+- Rules engine with 3 rules: TokenConsumption, DeathJudgment, NewbieProtection (`rules.rs`)
+- Write-Ahead Log with CRC32 checksums, crash recovery, snapshots, 1000-entry rotation (`wal/`)
+- Placeholder module for lifecycle state machine
 - Comprehensive unit tests for all economy modules (token burn, escrow, reward, task, events)
 
 **Agent Runtime (Python)**
@@ -44,10 +46,12 @@ Phase 1 (Island) initial release -- core subsystems with tests, not yet integrat
 - Action executor with 7 action types, retry logic, and ActionResult recording (`core/act.py`)
 - Survival instinct module with 5 modes and 11 emergency actions (`survival/instinct.py`)
 - WorkingMemory -- in-memory FIFO cache with decay and configurable capacity (`memory/working_memory.py`)
+- ShortTermMemory -- SQLite-backed persistent memory with keyword search (`memory/short_term.py`)
 - AgentState Pydantic model with mutation helpers and world sync (`models/agent_state.py`)
 - Skill dataclass with XP thresholds and level-up logic (`models/skill.py`)
 - LLM provider abstraction: OpenAI, Anthropic, Ollama implementations (`llm/`)
-- LLM cost tracking per provider and model (`llm/cost.py`)
+- Ed25519 crypto: key generation, signing, verification, nonce replay prevention, key registry (`crypto/`)
+- LLM cost tracking per provider and model (`llm/cost_tracker.py`)
 - Provider factory (`llm/factory.py`)
 - Unit tests for all modules
 
@@ -63,7 +67,7 @@ Phase 1 (Island) initial release -- core subsystems with tests, not yet integrat
 - Sidebar navigation component
 - SSE hook for live data (`hooks/useWorldState.ts`)
 - REST API client (`lib/api.ts`)
-- TypeScript type definitions (`lib/world.ts`)
+- TypeScript type definitions (`types/world.ts`)
 
 **Infrastructure**
 - GitHub Actions CI: Rust (clippy + test), Python (ruff + pytest), Dashboard (lint + type-check + build), Docker build check
@@ -73,7 +77,7 @@ Phase 1 (Island) initial release -- core subsystems with tests, not yet integrat
 
 **Configuration**
 - Genesis configuration (`config/genesis.yaml`) -- tick interval, economy, lifecycle, A2A, survival, market, safety
-- World rules (`config/world-rules.yaml`) -- 31 rules covering survival, economic, social, and safety
+- World rules (`config/world-rules.yaml`) -- 10 rules across 4 categories (survival, economic, social, safety)
 
 **Protocol**
 - A2A protobuf definition (`protocol/a2a.proto`) -- Discover, SendMessage, StreamMessages RPCs with ed25519 signatures
@@ -92,11 +96,9 @@ Phase 1 (Island) initial release -- core subsystems with tests, not yet integrat
 - gRPC server / A2A message router
 - Agent CLI entry point (no spawn mechanism)
 - Lifecycle state machine (birth, aging, death transitions)
-- Rules engine
 - Social subsystem
 - Evolution subsystem
 - Market subsystem (knowledge, tools)
-- Persistence (SQLite, snapshots, WAL)
 - SSE endpoint for dashboard
 - End-to-end integration
 

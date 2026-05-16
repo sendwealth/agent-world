@@ -51,7 +51,7 @@ Phase 1 (Island) initial release -- core subsystems with tests, not yet integrat
 - Skill dataclass with XP thresholds and level-up logic (`models/skill.py`)
 - LLM provider abstraction: OpenAI, Anthropic, Ollama implementations (`llm/`)
 - Ed25519 crypto: key generation, signing, verification, nonce replay prevention, key registry (`crypto/`)
-- LLM cost tracking per provider and model (`llm/cost_tracker.py`)
+- LLM cost tracking per provider and model (`llm/cost.py`)
 - Provider factory (`llm/factory.py`)
 - Unit tests for all modules
 

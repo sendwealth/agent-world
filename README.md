@@ -122,7 +122,7 @@ Agent Runtime (Python)
     base.py          -- LLMProvider protocol
     factory.py       -- Provider factory
     openai_provider.py / anthropic_provider.py / ollama_provider.py
-    cost_tracker.py  -- Cost tracking per provider and model
+    cost.py          -- Cost tracking per provider and model
 
 Dashboard (Next.js 15 + React 19 + Tailwind 4)
   Pages: World overview, agent list, agent detail, task list, timeline

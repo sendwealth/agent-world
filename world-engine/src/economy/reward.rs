@@ -60,6 +60,7 @@ impl Ledger {
     }
 
     /// Record a new transaction in the ledger.
+    #[allow(clippy::too_many_arguments)]
     pub fn record(
         &mut self,
         from_agent: Option<String>,

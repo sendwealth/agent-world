@@ -383,7 +383,7 @@ impl EscrowManager {
         let expired_ids: Vec<Uuid> = self.escrows.iter()
             .filter(|(_, record)| {
                 matches!(record.status, EscrowStatus::Open | EscrowStatus::Claimed)
-                    && record.expires_at.map_or(false, |exp| exp <= current_tick)
+                    && record.expires_at.is_some_and(|exp| exp <= current_tick)
             })
             .map(|(id, _)| *id)
             .collect();

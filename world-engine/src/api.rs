@@ -92,22 +92,12 @@ pub struct ReviewTaskRequest {
     pub reviewer_id: String,
 }
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Default, Deserialize)]
 #[serde(default)]
 pub struct ListTasksQuery {
     pub status: Option<String>,
     pub publisher_id: Option<String>,
     pub assignee_id: Option<String>,
-}
-
-impl Default for ListTasksQuery {
-    fn default() -> Self {
-        Self {
-            status: None,
-            publisher_id: None,
-            assignee_id: None,
-        }
-    }
 }
 
 // ── Response Types ────────────────────────────────────────

@@ -253,6 +253,7 @@ impl TaskBoard {
 
     /// Create a new task with an explicit currency.
     /// If reward > 0, locks escrow from the publisher.
+    #[allow(clippy::too_many_arguments)]
     pub fn create_task_with_currency(
         &mut self,
         title: String,
@@ -576,7 +577,7 @@ impl TaskBoard {
         let expired_ids: Vec<Uuid> = self.tasks.iter()
             .filter(|(_, task)| {
                 matches!(task.status, TaskStatus::Published | TaskStatus::Claimed)
-                    && task.expires_at.map_or(false, |exp| exp <= current_tick)
+                    && task.expires_at.is_some_and(|exp| exp <= current_tick)
             })
             .map(|(id, _)| *id)
             .collect();

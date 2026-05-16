@@ -1,6 +1,8 @@
 use std::sync::Arc;
 use tokio::sync::Mutex;
 
+use agent_world_engine::a2a::{A2aServiceImpl, AgentRegistry, MessageRouter};
+use agent_world_engine::agentworld::a2a::v1::a2a_service_server::A2aServiceServer;
 use agent_world_engine::economy::task::TaskBoard;
 use agent_world_engine::wal::WAL;
 
@@ -64,6 +66,18 @@ async fn main() {
         }
     });
 
+    // Initialize A2A subsystem (agent registry + message router)
+    // Uses a dedicated event bus for agent lifecycle events
+    let a2a_event_bus = Arc::new(agent_world_engine::world::EventBus::new(256));
+    let registry = Arc::new(AgentRegistry::new(a2a_event_bus));
+    let router = Arc::new(MessageRouter::new(Arc::clone(&registry)));
+
+    // Start liveness monitor to evict stale agents
+    registry.spawn_liveness_monitor();
+
+    let a2a_service = A2aServiceImpl::new(Arc::clone(&registry), Arc::clone(&router));
+    println!("   A2A gRPC: initialized");
+
     // Initialize task board with event bus
     let task_board = Arc::new(Mutex::new(TaskBoard::with_event_bus(event_bus)));
 
@@ -71,20 +85,32 @@ async fn main() {
     let app = agent_world_engine::api::create_router_with_wal(task_board, wal_writer.clone());
 
     // Start the HTTP server
-    let addr = std::net::SocketAddr::from(([127, 0, 0, 1], 3000));
-    println!("   API server: http://{}", addr);
+    let http_addr = std::net::SocketAddr::from(([127, 0, 0, 1], 3000));
+    println!("   HTTP API: http://{}", http_addr);
+
+    // Start the gRPC server
+    let grpc_addr = std::net::SocketAddr::from(([127, 0, 0, 1], 50051));
+    println!("   gRPC A2A: http://{}", grpc_addr);
     println!("   Status: ready");
 
-    let listener = tokio::net::TcpListener::bind(addr).await.unwrap();
+    let http_listener = tokio::net::TcpListener::bind(http_addr).await.unwrap();
 
     // Graceful shutdown on ctrl-c
     let shutdown_wal = wal_writer.clone();
-    let server = axum::serve(listener, app);
+    let http_server = axum::serve(http_listener, app);
+    let grpc_server = tonic::transport::Server::builder()
+        .add_service(A2aServiceServer::new(a2a_service))
+        .serve(grpc_addr);
 
     tokio::select! {
-        result = server => {
+        result = http_server => {
             if let Err(e) = result {
-                eprintln!("Server error: {}", e);
+                eprintln!("HTTP server error: {}", e);
+            }
+        }
+        result = grpc_server => {
+            if let Err(e) = result {
+                eprintln!("gRPC server error: {}", e);
             }
         }
         _ = tokio::signal::ctrl_c() => {

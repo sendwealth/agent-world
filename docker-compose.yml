@@ -1,0 +1,41 @@
+services:
+  world-engine:
+    build:
+      context: ./world-engine
+    ports:
+      - "3000:3000"
+    volumes:
+      - world-data:/app/data
+      - ./config:/app/config:ro
+    environment:
+      - RUST_LOG=info
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:3000/tasks"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  agent-runtime:
+    build:
+      context: ./agent-runtime
+    depends_on:
+      world-engine:
+        condition: service_healthy
+    environment:
+      - WORLD_ENGINE_URL=http://world-engine:3000
+    restart: unless-stopped
+
+  dashboard:
+    build:
+      context: ./dashboard
+    ports:
+      - "3001:3001"
+    depends_on:
+      world-engine:
+        condition: service_healthy
+    environment:
+      - WORLD_ENGINE_URL=http://world-engine:3000
+      - PORT=3001
+
+volumes:
+  world-data:

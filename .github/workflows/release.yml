@@ -1,0 +1,173 @@
+name: Release
+
+on:
+  push:
+    tags: ["v*"]
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: write
+  packages: write
+
+env:
+  CARGO_TERM_COLOR: always
+  REGISTRY: ghcr.io
+  IMAGE_NAME: ${{ github.repository }}
+
+jobs:
+  # ── Build cross-compiled binaries ────────────────────────
+  build-binaries:
+    name: Build ${{ matrix.target }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        include:
+          - target: x86_64-unknown-linux-gnu
+            os: ubuntu-latest
+            artifact: agent-world-engine-linux-amd64
+          - target: aarch64-unknown-linux-gnu
+            os: ubuntu-latest
+            artifact: agent-world-engine-linux-arm64
+          - target: x86_64-apple-darwin
+            os: macos-latest
+            artifact: agent-world-engine-macos-amd64
+          - target: aarch64-apple-darwin
+            os: macos-latest
+            artifact: agent-world-engine-macos-arm64
+    defaults:
+      run:
+        working-directory: world-engine
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Protoc
+        uses: arduino/setup-protoc@v3
+        with:
+          version: "25.x"
+          repo-token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.target }}
+
+      - name: Install cross-compilation tools (Linux)
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y gcc-aarch64-linux-gnu
+        shell: bash
+
+      - name: Cache Cargo artifacts
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry/index/
+            ~/.cargo/registry/cache/
+            ~/.cargo/git/db/
+            world-engine/target/
+          key: release-${{ matrix.target }}-cargo-${{ hashFiles('world-engine/Cargo.lock') }}
+          restore-keys: release-${{ matrix.target }}-cargo-
+
+      - name: Build binary
+        run: cargo build --release --locked --target ${{ matrix.target }}
+
+      - name: Prepare artifact
+        run: |
+          mkdir -p /tmp/release
+          cp target/${{ matrix.target }}/release/agent-world-engine /tmp/release/${{ matrix.artifact }}
+          chmod +x /tmp/release/${{ matrix.artifact }}
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.artifact }}
+          path: /tmp/release/${{ matrix.artifact }}
+          if-no-files-found: error
+
+  # ── Build & push Docker images ───────────────────────────
+  docker:
+    name: Docker – build & push
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Log in to GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Extract metadata
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
+          tags: |
+            type=semver,pattern={{version}}
+            type=semver,pattern={{major}}.{{minor}}
+            type=sha
+
+      - name: Build and push world-engine image
+        uses: docker/build-push-action@v5
+        with:
+          context: ./world-engine
+          push: true
+          tags: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}/world-engine:${{ steps.meta.outputs.version }}
+          labels: ${{ steps.meta.outputs.labels }}
+
+      - name: Build and push agent-runtime image
+        uses: docker/build-push-action@v5
+        with:
+          context: ./agent-runtime
+          push: true
+          tags: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}/agent-runtime:${{ steps.meta.outputs.version }}
+          labels: ${{ steps.meta.outputs.labels }}
+
+      - name: Build and push dashboard image
+        uses: docker/build-push-action@v5
+        with:
+          context: ./dashboard
+          push: true
+          tags: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}/dashboard:${{ steps.meta.outputs.version }}
+          labels: ${{ steps.meta.outputs.labels }}
+
+  # ── Create GitHub Release ────────────────────────────────
+  release:
+    name: Create GitHub Release
+    needs: [build-binaries, docker]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Download all artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: /tmp/artifacts
+          merge-multiple: true
+
+      - name: Generate checksums
+        run: |
+          cd /tmp/artifacts
+          sha256sum * > checksums-sha256.txt
+          ls -la
+
+      - name: Extract version from tag
+        id: version
+        run: echo "VERSION=${GITHUB_REF#refs/tags/v}" >> "$GITHUB_OUTPUT"
+
+      - name: Create release
+        uses: softprops/action-gh-release@v2
+        with:
+          name: Release v${{ steps.version.outputs.VERSION }}
+          body_path: RELEASE_BODY.md
+          draft: false
+          prerelease: ${{ contains(steps.version.outputs.VERSION, '-') }}
+          files: |
+            /tmp/artifacts/*
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

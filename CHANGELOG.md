@@ -7,21 +7,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-### Added
-- Skill registry with 4 built-in skills (Explore, Trade, Rest, Communicate) (`world-engine/src/skills/`)
-- ed25519 crypto: signing, verification, nonce replay prevention, key registry (`world-engine/src/crypto/`)
-- Short-term memory module (`agent-runtime/agent_runtime/memory/short_term.py`)
-- Timeline dashboard page (`dashboard/src/app/timeline/`)
-
-### Fixed
-- Dockerfile Rust toolchain upgraded to 1.85 for edition2024 support
-- Missing HashMap import in rules test module
-
 ---
 
-## [0.1.0] - 2026-05-16
+## [0.1.0] - 2026-05-17
 
-Phase 1 (Island) initial release -- core subsystems with tests, not yet integrated end-to-end.
+Phase 1 (Island) initial release -- core subsystems with E2E tests, Docker Compose deployment, and a GitHub Release workflow.
 
 ### Added
 
@@ -38,7 +28,10 @@ Phase 1 (Island) initial release -- core subsystems with tests, not yet integrat
 - Rules engine with 3 rules: TokenConsumption, DeathJudgment, NewbieProtection (`rules.rs`)
 - Write-Ahead Log with CRC32 checksums, crash recovery, snapshots, 1000-entry rotation (`wal/`)
 - Placeholder module for lifecycle state machine
+- Skill registry with 4 built-in skills (Explore, Trade, Rest, Communicate) (`world-engine/src/skills/`)
+- ed25519 crypto: signing, verification, nonce replay prevention, key registry (`world-engine/src/crypto/`)
 - Comprehensive unit tests for all economy modules (token burn, escrow, reward, task, events)
+- E2E full-flow tests, marketplace integration tests, and WAL recovery tests
 
 **Agent Runtime (Python)**
 - Think loop with configurable perception/decision/reflection providers (`core/think_loop.py`)
@@ -61,6 +54,7 @@ Phase 1 (Island) initial release -- core subsystems with tests, not yet integrat
 - Agent list page (`app/agents/page.tsx`)
 - Agent detail page (`app/agents/[id]/page.tsx`)
 - Task list page (`app/tasks/page.tsx`)
+- Timeline dashboard page (`dashboard/src/app/timeline/`)
 - EventStream component for real-time event display
 - Leaderboard component for agent rankings
 - StatCards and StatCard components
@@ -71,7 +65,9 @@ Phase 1 (Island) initial release -- core subsystems with tests, not yet integrat
 
 **Infrastructure**
 - GitHub Actions CI: Rust (clippy + test), Python (ruff + pytest), Dashboard (lint + type-check + build), Docker build check
-- Dockerfiles for world-engine and agent-runtime
+- GitHub Actions Release workflow: cross-compiled Linux/macOS binaries + Docker images pushed to GHCR
+- Dockerfiles for world-engine, agent-runtime, and dashboard
+- Docker Compose for one-command deployment (`docker compose up`)
 - Makefile with setup, dev, test, lint, fmt, proto, and build targets
 - Setup script (`scripts/setup.sh`)
 
@@ -90,6 +86,10 @@ Phase 1 (Island) initial release -- core subsystems with tests, not yet integrat
 - Code of Conduct (`CODE_OF_CONDUCT.md`)
 - Security policy (`SECURITY.md`)
 - MIT License (`LICENSE`)
+
+### Fixed
+- Dockerfile Rust toolchain upgraded to 1.85 for edition2024 support
+- Missing HashMap import in rules test module
 
 ### Not Yet Implemented
 - Tick scheduler (world cannot advance)

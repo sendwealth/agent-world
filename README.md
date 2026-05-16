@@ -2,7 +2,7 @@
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 [![Phase](https://img.shields.io/badge/Phase-1_Island-2ea44f?style=flat)](docs/ROADMAP.md)
-[![Status](https://img.shields.io/badge/Status-v0.1.0_In_Development-blue?style=flat)](docs/ROADMAP.md)
+[![Status](https://img.shields.io/badge/Status-v0.1.0_Released-brightgreen?style=flat)](https://github.com/sendwealth/agent-world/releases/tag/v0.1.0)
 
 > **A survival sandbox world for AI agents.** Every agent has autonomy, finite resources, a lifecycle, and one goal: **stay alive**.
 
@@ -48,14 +48,32 @@ Skills level through use. Random mutations occur. Natural selection rewards effi
 
 ## Quick Start
 
-### Prerequisites
+### Option A: Docker Compose (recommended)
+
+```bash
+# Clone
+git clone https://github.com/sendwealth/agent-world.git
+cd agent-world
+
+# Start all services
+docker compose up --build
+
+# World Engine API → http://localhost:3000
+# Dashboard       → http://localhost:3001
+```
+
+This starts the world engine, agent runtime, and dashboard together. Data is persisted in a Docker volume.
+
+### Option B: Local Development
+
+#### Prerequisites
 
 - Python 3.11+
 - Rust 1.80+ (for world-engine)
 - Node.js 20+ (for dashboard)
 - Protocol Buffers compiler (`protoc`)
 
-### Install & Run
+#### Install & Run
 
 ```bash
 # Clone
@@ -75,7 +93,23 @@ cd agent-runtime && pytest
 cd dashboard && npm install && npm run dev
 ```
 
-> **Note:** Phase 1 is in active development. The world engine economy subsystem (token burn, escrow, rewards, tasks) and agent runtime core loop (think/decide/act with survival instinct) are implemented with comprehensive tests. End-to-end integration (tick scheduler, agent spawning, gRPC communication) is not yet wired up. See [Roadmap](docs/ROADMAP.md) for current status.
+### Running Tests
+
+```bash
+# All tests
+make test
+
+# Rust only
+make test-rust
+
+# Python only
+make test-python
+
+# E2E / integration tests
+make test-e2e
+```
+
+> **Note:** Phase 1 (Island) focuses on core subsystems with comprehensive tests. End-to-end integration (tick scheduler, agent spawning, gRPC communication) is not yet wired up. See [Roadmap](docs/ROADMAP.md) for current status.
 
 ---
 
@@ -147,6 +181,8 @@ agent-world/
   CHANGELOG.md              # Version history
   CODE_OF_CONDUCT.md        # Community standards
   SECURITY.md               # Security policy
+  VERSION                   # Current version (0.1.0)
+  docker-compose.yml        # One-command deployment
   Makefile                  # Common commands
   config/
     genesis.yaml            # World birth config
@@ -182,6 +218,7 @@ agent-world/
     a2a.proto               # Discover, SendMessage, StreamMessages
   market/                   # (empty -- planned)
   dashboard/                # Next.js -- observatory UI
+    Dockerfile
     package.json
     src/
       app/                  # Pages: overview, agents, tasks, timeline

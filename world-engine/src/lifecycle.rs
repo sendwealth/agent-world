@@ -1,8 +1,11 @@
-//! Lifecycle subsystem — agent phase state machine.
+//! Lifecycle subsystem — agent phase state machine and subsystem trait.
 //!
 //! Manages the agent lifecycle: Birth → Childhood → Adult → Elder → Dying → Dead.
 //! Each phase has token consumption rates and ability ranges.
 //! Phase transitions are tick-based and emit events via EventBus.
+//!
+//! Also defines the Subsystem trait used by the scheduler to dispatch
+//! world logic in sequence with error isolation.
 
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
@@ -406,6 +409,102 @@ pub fn perform_death_cleanup(agent: &mut AgentRecord) -> DeathCleanupResult {
         tokens_destroyed,
         skills_archived,
         events,
+    }
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// Subsystem Trait
+// ═══════════════════════════════════════════════════════════════════════════
+
+/// A world subsystem that executes logic each tick.
+///
+/// Subsystems are dispatched in priority order (lower = earlier) by the
+/// scheduler. Errors in one subsystem do not prevent others from running.
+pub trait Subsystem: Send + Sync {
+    /// Unique subsystem identifier (e.g. "token_burn", "death_judgment").
+    fn id(&self) -> &str;
+
+    /// Human-readable subsystem name.
+    fn name(&self) -> &str;
+
+    /// Execution priority (lower runs first).
+    fn priority(&self) -> u32;
+
+    /// Execute the subsystem for one tick.
+    ///
+    /// Receives the current tick number and mutable access to all agent records.
+    /// Returns a list of events generated during execution.
+    fn execute(&self, tick: u64, agents: &mut [(Uuid, u64, AgentRecord)]) -> Vec<WorldEvent>;
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// Subsystem Error Isolation
+// ═══════════════════════════════════════════════════════════════════════════
+
+/// Wraps a subsystem execution result, capturing any panic or error.
+#[derive(Debug)]
+pub struct SubsystemResult {
+    /// The subsystem ID that produced this result.
+    pub subsystem_id: String,
+    /// Events generated during execution (empty if failed).
+    pub events: Vec<WorldEvent>,
+    /// Whether execution completed successfully.
+    pub success: bool,
+    /// Error message if execution failed.
+    pub error: Option<String>,
+}
+
+impl SubsystemResult {
+    /// Create a successful result with events.
+    pub fn ok(subsystem_id: &str, events: Vec<WorldEvent>) -> Self {
+        Self {
+            subsystem_id: subsystem_id.to_string(),
+            events,
+            success: true,
+            error: None,
+        }
+    }
+
+    /// Create a failed result with an error message.
+    pub fn err(subsystem_id: &str, error: String) -> Self {
+        Self {
+            subsystem_id: subsystem_id.to_string(),
+            events: Vec::new(),
+            success: false,
+            error: Some(error),
+        }
+    }
+}
+
+/// Execute a subsystem with error isolation.
+///
+/// If the subsystem panics or returns an error, it is caught and returned
+/// as a failed `SubsystemResult`. Other subsystems continue executing.
+pub fn run_subsystem_isolated(
+    subsystem: &dyn Subsystem,
+    tick: u64,
+    agents: &mut [(Uuid, u64, AgentRecord)],
+) -> SubsystemResult {
+    let id = subsystem.id().to_string();
+
+    // Use std::panic::catch_unwind for panic isolation.
+    // Note: This requires the agents slice to be UnwindSafe. Since we're
+    // doing mutable borrowing, we use AssertUnwindSafe.
+    use std::panic::AssertUnwindSafe;
+    match std::panic::catch_unwind(AssertUnwindSafe(|| {
+        subsystem.execute(tick, agents)
+    })) {
+        Ok(events) => SubsystemResult::ok(&id, events),
+        Err(payload) => {
+            let msg = if let Some(s) = payload.downcast_ref::<&str>() {
+                s.to_string()
+            } else if let Some(s) = payload.downcast_ref::<String>() {
+                s.clone()
+            } else {
+                "unknown panic".to_string()
+            };
+            SubsystemResult::err(&id, msg)
+        }
     }
 }
 
@@ -885,5 +984,78 @@ some_other_section:
         assert_eq!(machine.evaluate_aging(650, 0, &mut agent), TransitionResult::NoTransition);
         let result = machine.evaluate_aging(651, 0, &mut agent);
         assert!(matches!(result, TransitionResult::Died { .. }));
+    }
+
+    // ── Subsystem tests ──
+
+    struct TestSubsystem;
+
+    impl Subsystem for TestSubsystem {
+        fn id(&self) -> &str { "test" }
+        fn name(&self) -> &str { "Test Subsystem" }
+        fn priority(&self) -> u32 { 100 }
+
+        fn execute(&self, _tick: u64, agents: &mut [(Uuid, u64, AgentRecord)]) -> Vec<WorldEvent> {
+            // Burn 1 token from each agent
+            for (_, _, agent) in agents.iter_mut() {
+                if agent.tokens > 0 {
+                    agent.tokens -= 1;
+                }
+            }
+            Vec::new()
+        }
+    }
+
+    struct PanickingSubsystem;
+
+    impl Subsystem for PanickingSubsystem {
+        fn id(&self) -> &str { "panic" }
+        fn name(&self) -> &str { "Panicking Subsystem" }
+        fn priority(&self) -> u32 { 200 }
+
+        fn execute(&self, _tick: u64, _agents: &mut [(Uuid, u64, AgentRecord)]) -> Vec<WorldEvent> {
+            panic!("intentional panic for testing");
+        }
+    }
+
+    #[test]
+    fn test_subsystem_execute() {
+        let sub = TestSubsystem;
+        let id = Uuid::new_v4();
+        let mut agents: Vec<(Uuid, u64, AgentRecord)> = vec![
+            (id, 0, make_agent(AgentPhase::Adult, 100)),
+        ];
+
+        let events = sub.execute(1, &mut agents);
+        assert!(events.is_empty());
+        assert_eq!(agents[0].2.tokens, 99);
+    }
+
+    #[test]
+    fn test_run_subsystem_isolated_success() {
+        let sub = TestSubsystem;
+        let id = Uuid::new_v4();
+        let mut agents: Vec<(Uuid, u64, AgentRecord)> = vec![
+            (id, 0, make_agent(AgentPhase::Adult, 100)),
+        ];
+
+        let result = run_subsystem_isolated(&sub, 1, &mut agents);
+        assert!(result.success);
+        assert!(result.error.is_none());
+        assert_eq!(agents[0].2.tokens, 99);
+    }
+
+    #[test]
+    fn test_run_subsystem_isolated_panic() {
+        let sub = PanickingSubsystem;
+        let id = Uuid::new_v4();
+        let mut agents: Vec<(Uuid, u64, AgentRecord)> = vec![
+            (id, 0, make_agent(AgentPhase::Adult, 100)),
+        ];
+
+        let result = run_subsystem_isolated(&sub, 1, &mut agents);
+        assert!(!result.success);
+        assert!(result.error.is_some());
+        assert!(result.error.as_ref().unwrap().contains("intentional panic"));
     }
 }

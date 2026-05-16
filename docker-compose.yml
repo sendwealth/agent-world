@@ -29,6 +29,8 @@ services:
   dashboard:
     build:
       context: ./dashboard
+      args:
+        WORLD_ENGINE_URL: http://world-engine:3000
     ports:
       - "3001:3001"
     depends_on:

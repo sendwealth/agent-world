@@ -39,6 +39,9 @@ pub fn create_router(board: SharedTaskBoard) -> Router {
         .route("/tasks/:id/complete", post(complete_task))
         .route("/tasks/:id/expire", post(expire_task))
         .route("/tasks/:id", delete(delete_task))
+        // Reputation routes
+        .route("/reputation/rankings", get(get_reputation_rankings))
+        .route("/reputation/:agent_id", get(get_agent_reputation))
         .with_state(board)
 }
 
@@ -60,6 +63,9 @@ pub fn create_router_with_wal(board: SharedTaskBoard, wal: SharedWAL) -> Router 
         .route("/wal/stats", get(wal_stats))
         .route("/wal/snapshot", post(wal_snapshot))
         .route("/wal/verify", get(wal_verify))
+        // Reputation routes
+        .route("/reputation/rankings", get(get_reputation_rankings_with_wal))
+        .route("/reputation/:agent_id", get(get_agent_reputation_with_wal))
         .with_state(state)
 }
 
@@ -224,6 +230,7 @@ async fn claim_task(
             let status = match &e {
                 crate::economy::task::TaskError::InvalidTransition { .. } => StatusCode::CONFLICT,
                 crate::economy::task::TaskError::NotFound(_) => StatusCode::NOT_FOUND,
+                crate::economy::task::TaskError::InsufficientReputation { .. } => StatusCode::FORBIDDEN,
                 _ => StatusCode::BAD_REQUEST,
             };
             (status, Json(ErrorResponse { error: e.to_string() })).into_response()
@@ -488,4 +495,72 @@ async fn wal_verify(
         })).into_response(),
         Err(e) => (StatusCode::INTERNAL_SERVER_ERROR, Json(ErrorResponse { error: e.to_string() })).into_response(),
     }
+}
+
+// ── Reputation Response Types ──────────────────────────────
+
+#[derive(Debug, Serialize)]
+pub struct ReputationResponse {
+    pub agent_id: String,
+    pub reputation: f64,
+    pub can_claim_high_value: bool,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(default)]
+pub struct ReputationRankingsQuery {
+    pub limit: Option<usize>,
+}
+
+impl Default for ReputationRankingsQuery {
+    fn default() -> Self {
+        Self { limit: None }
+    }
+}
+
+// ── Reputation Handlers ───────────────────────────────────
+
+async fn get_reputation_rankings(
+    State(board): State<SharedTaskBoard>,
+) -> impl IntoResponse {
+    let board = board.lock().await;
+    match board.reputation_system() {
+        Some(rep_sys) => {
+            let rankings = rep_sys.get_rankings(10);
+            Json(rankings).into_response()
+        }
+        None => (StatusCode::NOT_FOUND, Json(ErrorResponse { error: "reputation system not configured".into() })).into_response(),
+    }
+}
+
+async fn get_agent_reputation(
+    State(board): State<SharedTaskBoard>,
+    Path(agent_id): Path<String>,
+) -> impl IntoResponse {
+    let board = board.lock().await;
+    match board.reputation_system() {
+        Some(rep_sys) => {
+            let reputation = rep_sys.get_reputation(&agent_id);
+            let can_claim = rep_sys.check_claim_eligibility(&agent_id, rep_sys.config().high_value_threshold).is_ok();
+            Json(ReputationResponse {
+                agent_id,
+                reputation,
+                can_claim_high_value: can_claim,
+            }).into_response()
+        }
+        None => (StatusCode::NOT_FOUND, Json(ErrorResponse { error: "reputation system not configured".into() })).into_response(),
+    }
+}
+
+async fn get_reputation_rankings_with_wal(
+    State(state): State<AppState>,
+) -> impl IntoResponse {
+    get_reputation_rankings(State(state.board)).await
+}
+
+async fn get_agent_reputation_with_wal(
+    State(state): State<AppState>,
+    Path(agent_id): Path<String>,
+) -> impl IntoResponse {
+    get_agent_reputation(State(state.board), Path(agent_id)).await
 }

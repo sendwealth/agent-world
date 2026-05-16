@@ -227,6 +227,10 @@ state and choose the best action.
 You have {tokens} tokens remaining. Each action has a cost listed above.
 Do NOT choose an action you cannot afford.
 
+## Reputation Constraints
+Your reputation is {reputation:.1f}. High-value tasks (reward >= 500) require reputation >= 10.0.
+{reputation_note}
+
 ## Response Format
 Respond with ONLY a JSON object (no markdown, no explanation outside JSON):
 {{"action": "<action_name>", "parameters": {{"key": "value"}}, "reasoning": "<why>", \
@@ -294,6 +298,13 @@ def build_prompt(
 
     phase_value = state.phase.value if hasattr(state.phase, "value") else str(state.phase)
 
+    # Reputation constraint note
+    reputation_note = (
+        "You CAN claim high-value tasks."
+        if state.reputation >= 10.0
+        else "You CANNOT claim high-value tasks (reward >= 500) — build reputation by completing smaller tasks first."
+    )
+
     return _DECISION_PROMPT_TEMPLATE.format(
         name=state.name,
         id=state.id,
@@ -313,6 +324,7 @@ def build_prompt(
         survival_score=survival.survival_score,
         recommendation=survival.recommendation,
         actions_section=actions_section,
+        reputation_note=reputation_note,
     )
 
 

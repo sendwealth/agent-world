@@ -28,6 +28,7 @@ pub enum EventType {
     TaskCompleted,
     TaskExpired,
     RewardDistributed,
+    ReputationChanged,
 }
 
 /// Events emitted by the world engine.
@@ -66,6 +67,12 @@ pub enum WorldEvent {
         xp_awarded: u64,
         reputation_change: f64,
     },
+    ReputationChanged {
+        agent_id: String,
+        old_reputation: f64,
+        new_reputation: f64,
+        reason: String,
+    },
 }
 
 impl WorldEvent {
@@ -94,6 +101,7 @@ impl WorldEvent {
             WorldEvent::TaskCompleted { .. } => EventType::TaskCompleted,
             WorldEvent::TaskExpired { .. } => EventType::TaskExpired,
             WorldEvent::RewardDistributed { .. } => EventType::RewardDistributed,
+            WorldEvent::ReputationChanged { .. } => EventType::ReputationChanged,
         }
     }
 
@@ -122,6 +130,7 @@ impl WorldEvent {
             WorldEvent::TaskCompleted { .. } => None,
             WorldEvent::TaskExpired { .. } => None,
             WorldEvent::RewardDistributed { assignee_id, .. } => Some(assignee_id),
+            WorldEvent::ReputationChanged { agent_id, .. } => Some(agent_id),
         }
     }
 

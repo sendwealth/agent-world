@@ -1,9 +1,14 @@
 pub mod escrow;
+pub mod reputation;
 pub mod reward;
 pub mod task;
 pub mod token_burn;
 
 pub use escrow::{EscrowManager, EscrowRecord, EscrowStatus};
+pub use reputation::{
+    ReputationConfig, ReputationSystem, ReputationRankingEntry,
+    ReputationChangeReason,
+};
 pub use reward::{
     RewardConfig, RewardDistributor, RewardDistribution,
     CentralBank, Ledger, LedgerEntry, TransactionType,

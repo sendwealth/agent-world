@@ -4,8 +4,40 @@
 
 const API_BASE = process.env.NEXT_PUBLIC_API_URL ?? "";
 
+const MAX_RETRIES = 3;
+const RETRY_DELAY_MS = 1000;
+
+async function delay(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+// Retry logic only for GET requests — POST/PUT/DELETE are not retried
+// to avoid duplicate side effects.
+async function fetchWithRetry(
+  url: string,
+  retries: number = MAX_RETRIES,
+): Promise<Response> {
+  let lastError: Error | null = null;
+  for (let attempt = 0; attempt <= retries; attempt++) {
+    try {
+      const res = await fetch(url);
+      if (res.status >= 500 && attempt < retries) {
+        await delay(RETRY_DELAY_MS * (attempt + 1));
+        continue;
+      }
+      return res;
+    } catch (err) {
+      lastError = err instanceof Error ? err : new Error(String(err));
+      if (attempt < retries) {
+        await delay(RETRY_DELAY_MS * (attempt + 1));
+      }
+    }
+  }
+  throw lastError ?? new Error("Request failed after retries");
+}
+
 export async function fetchJSON<T>(path: string): Promise<T> {
-  const res = await fetch(`${API_BASE}${path}`);
+  const res = await fetchWithRetry(`${API_BASE}${path}`);
   if (!res.ok) {
     throw new Error(`API error: ${res.status} ${res.statusText}`);
   }
@@ -13,6 +45,7 @@ export async function fetchJSON<T>(path: string): Promise<T> {
 }
 
 export async function postJSON<T>(path: string, body: unknown): Promise<T> {
+  // No retry for POST — avoids duplicate resource creation
   const res = await fetch(`${API_BASE}${path}`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },

@@ -3,10 +3,12 @@ use tokio::sync::Mutex;
 
 use agent_world_engine::economy::task::TaskBoard;
 use agent_world_engine::wal::WAL;
+use agent_world_engine::world::AgentRegistry;
 
 #[tokio::main]
 async fn main() {
     let event_bus = agent_world_engine::world::EventBus::new(256);
+    let shared_event_bus = Arc::new(event_bus);
 
     println!("Agent World Engine v0.1.0");
     println!("   Status: initializing...");
@@ -42,7 +44,7 @@ async fn main() {
     // Subscribe WAL to all events (write-ahead logging)
     let wal_writer = Arc::new(Mutex::new(wal));
     let wal_subscriber = wal_writer.clone();
-    let mut wal_rx = event_bus.subscribe();
+    let mut wal_rx = shared_event_bus.subscribe();
 
     // Spawn background task to write events to WAL
     let wal_handle = tokio::spawn(async move {
@@ -64,15 +66,36 @@ async fn main() {
         }
     });
 
-    // Initialize task board with event bus
-    let task_board = Arc::new(Mutex::new(TaskBoard::with_event_bus(event_bus)));
+    // Initialize task board with shared event bus
+    let task_board = Arc::new(Mutex::new(TaskBoard::with_event_bus(
+        (*shared_event_bus).clone(),
+    )));
 
-    // Build the HTTP API router with WAL support
-    let app = agent_world_engine::api::create_router_with_wal(task_board, wal_writer.clone());
+    // Initialize agent registry with shared event bus
+    let agents = Arc::new(Mutex::new(AgentRegistry::with_event_bus(
+        (*shared_event_bus).clone(),
+    )));
+
+    // Build the HTTP API router with full state
+    let app = agent_world_engine::api::create_router_full(
+        task_board,
+        wal_writer.clone(),
+        agents,
+        shared_event_bus,
+    );
 
     // Start the HTTP server
     let addr = std::net::SocketAddr::from(([127, 0, 0, 1], 3000));
     println!("   API server: http://{}", addr);
+    println!("   Endpoints:");
+    println!("     GET  /agents           - List agents");
+    println!("     POST /agents           - Create agent");
+    println!("     GET  /agents/:id       - Get agent detail");
+    println!("     GET  /tasks            - List tasks");
+    println!("     POST /tasks            - Create task");
+    println!("     GET  /world/stats      - World statistics");
+    println!("     GET  /world/events     - SSE event stream");
+    println!("     GET  /world/leaderboard - Leaderboard");
     println!("   Status: ready");
 
     let listener = tokio::net::TcpListener::bind(addr).await.unwrap();

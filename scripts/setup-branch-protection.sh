@@ -7,6 +7,14 @@
 #
 # Requires all CI jobs to pass before merging.
 # Admin enforcement is disabled to allow hotfix pushes.
+#
+# WARNING: This script overwrites ALL existing branch protection rules.
+# If custom checks or restrictions have been added, they will be lost.
+#
+# NOTE: The Dashboard check requires the dashboard job to run (gated by
+# dashboard/tsconfig.json existing). Remove that check entry until the
+# dashboard module has committed source code, otherwise PRs may be blocked
+# by a missing check context.
 
 set -euo pipefail
 

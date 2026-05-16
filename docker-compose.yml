@@ -9,6 +9,7 @@ services:
       - ./config:/app/config:ro
     environment:
       - RUST_LOG=info
+    restart: unless-stopped
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:3000/tasks"]
       interval: 10s
@@ -36,6 +37,7 @@ services:
     environment:
       - WORLD_ENGINE_URL=http://world-engine:3000
       - PORT=3001
+    restart: unless-stopped
 
 volumes:
   world-data:

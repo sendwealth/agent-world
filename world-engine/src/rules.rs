@@ -8,6 +8,7 @@
 use uuid::Uuid;
 
 use crate::economy::token_burn::{AgentRecord, ConsumptionConfig, TokenBurnEngine};
+use crate::lifecycle::{LifecycleConfig, LifecycleMachine, TransitionResult, perform_death_cleanup};
 use crate::world::enums::{AgentPhase, DeathReason};
 use crate::world::event::WorldEvent;
 
@@ -465,15 +466,86 @@ impl Rule for NewbieProtectionRule {
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
+// R004: Aging Transition
+// ═══════════════════════════════════════════════════════════════════════════
+
+/// R004: Aging transition rule.
+///
+/// Checks tick-based phase transitions (Childhood→Adult, Adult→Elder, Elder→Dead).
+/// Uses `LifecycleMachine` for transition logic and emits PhaseChanged events.
+pub struct AgingTransitionRule {
+    machine: LifecycleMachine,
+}
+
+impl AgingTransitionRule {
+    /// Create with default lifecycle config.
+    pub fn new() -> Self {
+        Self {
+            machine: LifecycleMachine::with_defaults(),
+        }
+    }
+
+    /// Create with custom lifecycle config.
+    pub fn with_config(config: LifecycleConfig) -> Self {
+        Self {
+            machine: LifecycleMachine::new(config),
+        }
+    }
+}
+
+impl Default for AgingTransitionRule {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+impl Rule for AgingTransitionRule {
+    fn id(&self) -> &str {
+        "R004"
+    }
+
+    fn name(&self) -> &str {
+        "Aging Transition"
+    }
+
+    fn priority(&self) -> u32 {
+        75 // After protection (50), before token burn (100)
+    }
+
+    fn evaluate(&self, ctx: &RuleContext, agent: &mut AgentRecord) -> RuleResult {
+        let transition = self.machine.evaluate_aging(ctx.tick, ctx.agent_spawn_tick, agent);
+
+        match transition {
+            TransitionResult::NoTransition => RuleResult::empty(self.id()),
+            TransitionResult::PhaseChanged { .. } => {
+                let events = self.machine.events_for_transition(agent, &transition);
+                RuleResult::with_events(self.id(), events)
+            }
+            TransitionResult::Died { .. } => {
+                let mut events = self.machine.events_for_transition(agent, &transition);
+
+                // Perform death cleanup
+                let cleanup = perform_death_cleanup(agent);
+                agent.phase = AgentPhase::Dead;
+                events.extend(cleanup.events);
+
+                RuleResult::with_events(self.id(), events)
+            }
+        }
+    }
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
 // Convenience: Default Registry Builder
 // ═══════════════════════════════════════════════════════════════════════════
 
-/// Build a `RuleRegistry` pre-loaded with the standard R001-R003 rules.
+/// Build a `RuleRegistry` pre-loaded with the standard R001-R004 rules.
 pub fn default_registry() -> RuleRegistry {
     let mut registry = RuleRegistry::new();
+    registry.register(Box::new(NewbieProtectionRule::new()));
+    registry.register(Box::new(AgingTransitionRule::new()));
     registry.register(Box::new(TokenConsumptionRule::new()));
     registry.register(Box::new(DeathJudgmentRule::new()));
-    registry.register(Box::new(NewbieProtectionRule::new()));
     registry
 }
 
@@ -484,9 +556,10 @@ pub fn custom_registry(
     protection_ticks: u64,
 ) -> RuleRegistry {
     let mut registry = RuleRegistry::new();
+    registry.register(Box::new(NewbieProtectionRule::with_protection_ticks(protection_ticks)));
+    registry.register(Box::new(AgingTransitionRule::new()));
     registry.register(Box::new(TokenConsumptionRule::with_config(consumption_config)));
     registry.register(Box::new(DeathJudgmentRule::with_grace_ticks(grace_ticks)));
-    registry.register(Box::new(NewbieProtectionRule::with_protection_ticks(protection_ticks)));
     registry
 }
 
@@ -529,20 +602,21 @@ mod tests {
     }
 
     #[test]
-    fn test_default_registry_has_three_rules() {
+    fn test_default_registry_has_four_rules() {
         let registry = default_registry();
-        assert_eq!(registry.len(), 3);
+        assert_eq!(registry.len(), 4);
         assert!(registry.get("R001").is_some());
         assert!(registry.get("R002").is_some());
         assert!(registry.get("R003").is_some());
+        assert!(registry.get("R004").is_some());
     }
 
     #[test]
     fn test_rules_sorted_by_priority() {
         let registry = default_registry();
         let ids = registry.rule_ids();
-        // R003 has priority 50, R001 has 100, R002 has 200
-        assert_eq!(ids, vec!["R003", "R001", "R002"]);
+        // R003(50), R004(75), R001(100), R002(200)
+        assert_eq!(ids, vec!["R003", "R004", "R001", "R002"]);
     }
 
     #[test]
@@ -562,7 +636,7 @@ mod tests {
     #[test]
     fn test_custom_registry() {
         let registry = custom_registry(ConsumptionConfig::default(), 5, 100);
-        assert_eq!(registry.len(), 3);
+        assert_eq!(registry.len(), 4);
     }
 
     // ── R001: Token Consumption tests ──
@@ -867,19 +941,23 @@ mod tests {
 
         let results = registry.evaluate_agent(&ctx, &mut agent);
 
-        assert_eq!(results.len(), 3);
+        assert_eq!(results.len(), 4);
 
         // R003: No phase change (already Adult)
         assert_eq!(results[0].rule_id, "R003");
         assert!(results[0].events.is_empty());
 
+        // R004: No aging transition (adult, tick 1)
+        let r004 = results.iter().find(|r| r.rule_id == "R004").unwrap();
+        assert!(r004.events.is_empty());
+
         // R001: Token burn
-        assert_eq!(results[1].rule_id, "R001");
+        let _r001 = results.iter().find(|r| r.rule_id == "R001").unwrap();
         assert_eq!(agent.tokens, 90);
 
         // R002: No death
-        assert_eq!(results[2].rule_id, "R002");
-        assert!(results[2].events.is_empty());
+        let r002 = results.iter().find(|r| r.rule_id == "R002").unwrap();
+        assert!(r002.events.is_empty());
     }
 
     #[test]
@@ -1043,5 +1121,125 @@ mod tests {
         // Verify R003 produced a PhaseChanged event
         let r003 = results.iter().find(|r| r.rule_id == "R003").unwrap();
         assert_eq!(r003.events.len(), 1);
+    }
+
+    // ── R004: Aging Transition tests ──
+
+    #[test]
+    fn test_r004_no_transition_for_adult_early() {
+        let rule = AgingTransitionRule::new();
+        let mut agent = make_agent(AgentPhase::Adult, 500);
+        let ctx = RuleContext::new(500, 0);
+
+        let result = rule.evaluate(&ctx, &mut agent);
+
+        assert_eq!(result.rule_id, "R004");
+        assert!(result.events.is_empty());
+        assert_eq!(agent.phase, AgentPhase::Adult);
+    }
+
+    #[test]
+    fn test_r004_childhood_to_adult() {
+        let rule = AgingTransitionRule::new();
+        let mut agent = make_agent(AgentPhase::Childhood, 500);
+        // childhood_end_tick(0) = 101
+        let ctx = RuleContext::new(101, 0);
+
+        let result = rule.evaluate(&ctx, &mut agent);
+
+        assert_eq!(agent.phase, AgentPhase::Adult);
+        assert_eq!(result.events.len(), 1);
+        assert!(matches!(&result.events[0], WorldEvent::PhaseChanged {
+            old_phase: AgentPhase::Childhood,
+            new_phase: AgentPhase::Adult,
+            ..
+        }));
+    }
+
+    #[test]
+    fn test_r004_adult_to_elder() {
+        let rule = AgingTransitionRule::new();
+        let mut agent = make_agent(AgentPhase::Adult, 500);
+        // adult_end_tick(0) = 1101
+        let ctx = RuleContext::new(1101, 0);
+
+        let result = rule.evaluate(&ctx, &mut agent);
+
+        assert_eq!(agent.phase, AgentPhase::Elder);
+        assert_eq!(result.events.len(), 1);
+        assert!(matches!(&result.events[0], WorldEvent::PhaseChanged {
+            old_phase: AgentPhase::Adult,
+            new_phase: AgentPhase::Elder,
+            ..
+        }));
+    }
+
+    #[test]
+    fn test_r004_elder_natural_death_with_cleanup() {
+        let rule = AgingTransitionRule::new();
+        let mut agent = make_agent(AgentPhase::Elder, 250);
+        // elder_end_tick(0) = 1301
+        let ctx = RuleContext::new(1301, 0);
+
+        let result = rule.evaluate(&ctx, &mut agent);
+
+        assert_eq!(agent.phase, AgentPhase::Dead);
+        assert_eq!(agent.tokens, 0); // Cleanup destroyed tokens
+        assert!(!result.events.is_empty());
+
+        // Should contain: AgentDying + PhaseChanged + BalanceChanged + AgentDied
+        let has_dying = result.events.iter().any(|e| matches!(e, WorldEvent::AgentDying { .. }));
+        let has_died = result.events.iter().any(|e| matches!(e, WorldEvent::AgentDied { .. }));
+        let has_phase = result.events.iter().any(|e| matches!(e, WorldEvent::PhaseChanged { .. }));
+        let has_balance = result.events.iter().any(|e| matches!(e, WorldEvent::BalanceChanged { .. }));
+        assert!(has_dying);
+        assert!(has_died);
+        assert!(has_phase);
+        assert!(has_balance);
+    }
+
+    #[test]
+    fn test_r004_skips_dead() {
+        let rule = AgingTransitionRule::new();
+        let mut agent = make_agent(AgentPhase::Dead, 0);
+        let ctx = RuleContext::new(9999, 0);
+
+        let result = rule.evaluate(&ctx, &mut agent);
+
+        assert!(result.events.is_empty());
+        assert_eq!(agent.phase, AgentPhase::Dead);
+    }
+
+    #[test]
+    fn test_r004_integration_full_lifecycle_through_registry() {
+        let registry = default_registry();
+
+        // Start at Childhood, spawn at tick 0
+        let mut agent = make_agent(AgentPhase::Childhood, 5000);
+
+        // Tick 50: still Childhood
+        let ctx = RuleContext::new(50, 0);
+        registry.evaluate_agent(&ctx, &mut agent);
+        assert_eq!(agent.phase, AgentPhase::Childhood);
+
+        // Tick 101: Childhood -> Adult (R004)
+        let ctx = RuleContext::new(101, 0);
+        registry.evaluate_agent(&ctx, &mut agent);
+        assert_eq!(agent.phase, AgentPhase::Adult);
+
+        // Tick 500: still Adult
+        let ctx = RuleContext::new(500, 0);
+        registry.evaluate_agent(&ctx, &mut agent);
+        assert_eq!(agent.phase, AgentPhase::Adult);
+
+        // Tick 1101: Adult -> Elder (R004)
+        let ctx = RuleContext::new(1101, 0);
+        registry.evaluate_agent(&ctx, &mut agent);
+        assert_eq!(agent.phase, AgentPhase::Elder);
+
+        // Tick 1301: Elder -> Dead (R004 natural death)
+        let ctx = RuleContext::new(1301, 0);
+        registry.evaluate_agent(&ctx, &mut agent);
+        assert_eq!(agent.phase, AgentPhase::Dead);
     }
 }

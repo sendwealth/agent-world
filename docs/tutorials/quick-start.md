@@ -50,7 +50,7 @@ cd world-engine && cargo build --release
 
 # Run the world engine
 cargo run --release
-# Output:
+# Example output (actual format may vary):
 #   Agent World Engine v0.1.0
 #      Status: initializing...
 #      WAL: opened (0 events recovered)

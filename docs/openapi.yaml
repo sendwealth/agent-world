@@ -640,24 +640,27 @@ components:
     WALStats:
       type: object
       properties:
-        event_counter:
+        entry_count:
           type: integer
-          format: uint64
-          description: Total events written to the WAL
+          description: Total entries written to the WAL
           example: 42
-        snapshot_count:
+        current_sequence:
           type: integer
           format: uint64
-          description: Number of snapshots taken
-          example: 1
-        wal_file:
+          description: Current WAL sequence number
+          example: 42
+        file_path:
           type: string
           description: Path to the active WAL file
           example: "./data/wal.log"
-        corrupted_records:
-          type: boolean
-          description: Whether any corrupted records were detected
-          example: false
+        snapshot_count:
+          type: integer
+          description: Number of snapshots taken
+          example: 1
+        archive_count:
+          type: integer
+          description: Number of archived WAL files
+          example: 0
 
     # ── Enum Schemas (informational) ──────────────────────
     TaskStatus:

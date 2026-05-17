@@ -292,10 +292,11 @@ Get current WAL statistics.
 
 ```json
 {
-  "event_counter": 42,
+  "entry_count": 42,
+  "current_sequence": 42,
+  "file_path": "./data/wal.log",
   "snapshot_count": 1,
-  "wal_file": "./data/wal.log",
-  "corrupted_records": false
+  "archive_count": 0
 }
 ```
 

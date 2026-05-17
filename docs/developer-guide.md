@@ -17,6 +17,7 @@ agent-world/
 │   │   ├── lifecycle.rs   # Placeholder for lifecycle subsystem
 │   │   ├── rules.rs       # Rule engine (TokenConsumption, DeathJudgment, NewbieProtection)
 │   │   ├── economy/       # Economy subsystem
+│   │   │   ├── mod.rs    # Module re-exports
 │   │   │   ├── task.rs    # TaskBoard + Task state machine
 │   │   │   ├── escrow.rs  # Escrow manager
 │   │   │   ├── reward.rs  # RewardDistributor (2% fee, XP, reputation, ledger)
@@ -299,18 +300,29 @@ When adding a new subsystem (e.g., social, evolution, market):
 
 | Command | Description |
 |---------|-------------|
-| `make setup` | Install all dependencies |
-| `make dev` | Show dev environment instructions |
+| `make help` | Show all available commands |
+| `make setup` | Install all dependencies (calls setup-rust, setup-python, setup-dashboard, proto) |
+| `make setup-rust` | Fetch Rust dependencies (`cargo fetch`) |
+| `make setup-python` | Install Python dependencies (`uv pip install -e ".[dev]"`) |
+| `make setup-dashboard` | Install Node.js dependencies (`npm install`) |
+| `make dev` | Print instructions for multi-terminal development |
+| `make run-engine` | Start world engine (`cargo run --release`) |
+| `make run-agents` | Spawn and run agents (`python -m agent_runtime spawn --count 2`) |
+| `make run-dashboard` | Start dashboard (`npm run dev`) |
 | `make test` | Run Rust + Python tests |
 | `make test-rust` | Run `cargo test` |
-| `make test-python` | Run `pytest` |
-| `make test-e2e` | Run integration tests |
-| `make lint` | Run `cargo clippy` + `ruff check` |
+| `make test-python` | Run `pytest -v` |
+| `make test-integration` | Run integration tests (`cargo test --test e2e_full_flow`) |
+| `make test-e2e` | Run end-to-end tests (same as test-integration) |
+| `make lint` | Run `cargo clippy` + `ruff check` + `mypy` |
+| `make lint-rust` | Run `cargo clippy -- -D warnings` |
+| `make lint-python` | Run `ruff check . && mypy .` |
 | `make fmt` | Run `cargo fmt` + `ruff format` |
-| `make proto` | Generate protobuf code |
+| `make fmt-rust` | Run `cargo fmt` |
+| `make fmt-python` | Run `ruff format .` |
+| `make proto` | Generate protobuf code (Python + Rust) |
 | `make build` | Build world-engine (release) |
-| `make clean` | Clean build artifacts |
-| `make help` | Show all available commands |
+| `make clean` | Clean all build artifacts |
 
 ---
 
@@ -328,9 +340,9 @@ RUST_LOG=info cargo run        # Info and above only
 
 ### Inspecting the WAL
 
-The WAL binary format can be inspected with the `/wal/stats` and
-`/wal/verify` endpoints. Snapshot files are stored in `data/snapshots/`
-as JSON and can be read directly.
+The WAL binary format can be inspected with the `/wal/stats`,
+`/wal/verify`, and `/wal/snapshot` endpoints. Snapshot files are stored
+in `data/snapshots/` as JSON and can be read directly.
 
 ### Dashboard API Client
 
@@ -345,7 +357,7 @@ will show connection errors in the browser console.
 | File | Purpose |
 |------|---------|
 | `config/genesis.yaml` | World birth parameters (initial tokens, tick interval, etc.) |
-| `config/world-rules.yaml` | 10 rules across 4 categories |
+| `config/world-rules.yaml` | 10 rules across 4 categories (only R001-R003 implemented in code) |
 | `world-engine/Cargo.toml` | Rust dependencies |
 | `agent-runtime/pyproject.toml` | Python dependencies |
 | `dashboard/package.json` | Node.js dependencies |

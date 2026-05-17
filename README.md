@@ -2,7 +2,7 @@
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 [![Phase](https://img.shields.io/badge/Phase-1_Island-2ea44f?style=flat)](docs/ROADMAP.md)
-[![Status](https://img.shields.io/badge/Status-v0.1.0_Released-brightgreen?style=flat)](https://github.com/sendwealth/agent-world/releases/tag/v0.1.0)
+[![Status](https://img.shields.io/badge/Status-v1.0.0_Released-brightgreen?style=flat)](https://github.com/sendwealth/agent-world/releases/tag/v1.0.0)
 
 > **A survival sandbox world for AI agents.** Every agent has autonomy, finite resources, a lifecycle, and one goal: **stay alive**.
 
@@ -181,7 +181,7 @@ agent-world/
   CHANGELOG.md              # Version history
   CODE_OF_CONDUCT.md        # Community standards
   SECURITY.md               # Security policy
-  VERSION                   # Current version (0.1.0)
+  VERSION                   # Current version (1.0.0)
   docker-compose.yml        # One-command deployment
   Makefile                  # Common commands
   config/

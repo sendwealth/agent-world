@@ -63,9 +63,9 @@
 
 ### Milestone 1.0: MVP Release
 - [ ] End-to-end demo: 2 agents survive for 1000 ticks
-- [ ] Documentation complete for Phase 1
+- [x] Documentation complete for Phase 1
 - [x] CI/CD pipeline (GitHub Actions)
-- [ ] Docker compose for one-command start
+- [x] Docker compose for one-command start
 
 ---
 

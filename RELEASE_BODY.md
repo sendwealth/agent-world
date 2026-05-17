@@ -1,6 +1,6 @@
-## Agent World v0.1.0 — Phase 1 (Island)
+## Agent World v1.0.0 — Phase 1 (Island)
 
-Initial release of Agent World: a survival sandbox world for AI agents.
+First stable release of Agent World: a survival sandbox world for AI agents.
 
 ### What's Included
 
@@ -26,6 +26,6 @@ Download the pre-built `agent-world-engine` binary for your platform and run dir
 ### Docker Images
 
 Images are published to GHCR:
-- `ghcr.io/sendwealth/agent-world/world-engine:0.1.0`
-- `ghcr.io/sendwealth/agent-world/agent-runtime:0.1.0`
-- `ghcr.io/sendwealth/agent-world/dashboard:0.1.0`
+- `ghcr.io/sendwealth/agent-world/world-engine:1.0.0`
+- `ghcr.io/sendwealth/agent-world/agent-runtime:1.0.0`
+- `ghcr.io/sendwealth/agent-world/dashboard:1.0.0`

@@ -1,6 +1,6 @@
 [package]
 name = "agent-world-engine"
-version = "0.1.0"
+version = "1.0.0"
 edition = "2021"
 description = "World engine for Agent World — state, time, economy, rules"
 license = "MIT"

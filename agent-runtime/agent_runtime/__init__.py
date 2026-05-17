@@ -3,4 +3,4 @@
 The brain of each agent: perceive, decide, act.
 """
 
-__version__ = "0.1.0"
+__version__ = "1.0.0"

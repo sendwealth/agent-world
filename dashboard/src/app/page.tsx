@@ -9,9 +9,9 @@ export default function DashboardPage() {
   const { stats, events, connected, error } = useWorldState();
 
   return (
-    <div className="p-6 space-y-6">
+    <div className="p-4 md:p-6 space-y-6">
       {/* Header */}
-      <div className="flex items-center justify-between">
+      <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
         <div>
           <h1 className="text-2xl font-bold text-zinc-100">世界概览</h1>
           <p className="text-sm text-zinc-500">

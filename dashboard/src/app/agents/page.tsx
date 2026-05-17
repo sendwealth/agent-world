@@ -30,6 +30,43 @@ function formatSkills(skills: Record<string, number>): string {
     .join(", ");
 }
 
+function AgentCard({ agent }: { agent: Agent }) {
+  return (
+    <Link
+      href={`/agents/${agent.id}`}
+      className="block rounded-xl border border-zinc-800 bg-zinc-900/50 p-4 transition-colors hover:bg-zinc-800/50"
+    >
+      <div className="flex items-center justify-between mb-2">
+        <span className="text-sm font-medium text-zinc-200">{agent.name}</span>
+        <span
+          className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-medium ${
+            agent.alive
+              ? "bg-green-500/10 text-green-400"
+              : "bg-red-500/10 text-red-400"
+          }`}
+        >
+          <span
+            className={`inline-block h-1.5 w-1.5 rounded-full ${
+              agent.alive ? "bg-green-400" : "bg-red-400"
+            }`}
+          />
+          {agent.alive ? "存活" : "死亡"}
+        </span>
+      </div>
+      <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-zinc-400">
+        <span>{phaseLabels[agent.phase] ?? agent.phase}</span>
+        <span>{agent.tokens.toLocaleString()} Token</span>
+        <span>{formatMoney(agent.money)}</span>
+        <span>信誉 {agent.reputation.toFixed(1)}</span>
+        <span>{agent.age} Tick</span>
+      </div>
+      <p className="mt-1.5 text-xs text-zinc-500 truncate">
+        {formatSkills(agent.skills)}
+      </p>
+    </Link>
+  );
+}
+
 export default function AgentsPage() {
   const [agents, setAgents] = useState<Agent[]>([]);
   const [loading, setLoading] = useState(true);
@@ -92,9 +129,9 @@ export default function AgentsPage() {
   ];
 
   return (
-    <div className="p-6 space-y-6">
+    <div className="p-4 md:p-6 space-y-6">
       {/* Header */}
-      <div className="flex items-center justify-between">
+      <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
         <div>
           <h1 className="text-2xl font-bold text-zinc-100">Agent 列表</h1>
           <p className="text-sm text-zinc-500">
@@ -112,7 +149,7 @@ export default function AgentsPage() {
 
       {/* Filters & Search */}
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-        <div className="flex items-center gap-1.5">
+        <div className="flex flex-wrap items-center gap-1.5">
           {filterButtons.map((btn) => (
             <button
               key={btn.value}
@@ -151,99 +188,108 @@ export default function AgentsPage() {
         </div>
       </div>
 
-      {/* Agent Table */}
-      <div className="rounded-xl border border-zinc-800 bg-zinc-900/50">
-        {loading ? (
-          <div className="flex h-48 items-center justify-center text-sm text-zinc-600">
-            正在加载 Agent 数据...
+      {loading ? (
+        <div className="flex h-48 items-center justify-center text-sm text-zinc-600">
+          正在加载 Agent 数据...
+        </div>
+      ) : filtered.length === 0 ? (
+        <div className="flex h-48 items-center justify-center text-sm text-zinc-600">
+          {agents.length === 0 ? "暂无 Agent 数据" : "没有匹配的 Agent"}
+        </div>
+      ) : (
+        <>
+          {/* Mobile card layout */}
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:hidden">
+            {filtered.map((agent) => (
+              <AgentCard key={agent.id} agent={agent} />
+            ))}
           </div>
-        ) : filtered.length === 0 ? (
-          <div className="flex h-48 items-center justify-center text-sm text-zinc-600">
-            {agents.length === 0 ? "暂无 Agent 数据" : "没有匹配的 Agent"}
-          </div>
-        ) : (
-          <div className="overflow-x-auto">
-            <table className="w-full">
-              <thead>
-                <tr className="border-b border-zinc-800">
-                  <th className="px-4 py-3 text-left text-xs font-semibold text-zinc-400">
-                    名称
-                  </th>
-                  <th className="px-4 py-3 text-left text-xs font-semibold text-zinc-400">
-                    状态
-                  </th>
-                  <th className="px-4 py-3 text-left text-xs font-semibold text-zinc-400">
-                    阶段
-                  </th>
-                  <th className="px-4 py-3 text-right text-xs font-semibold text-zinc-400">
-                    Token
-                  </th>
-                  <th className="px-4 py-3 text-right text-xs font-semibold text-zinc-400">
-                    Money
-                  </th>
-                  <th className="px-4 py-3 text-right text-xs font-semibold text-zinc-400">
-                    信誉
-                  </th>
-                  <th className="px-4 py-3 text-left text-xs font-semibold text-zinc-400">
-                    技能
-                  </th>
-                  <th className="px-4 py-3 text-right text-xs font-semibold text-zinc-400">
-                    年龄
-                  </th>
-                </tr>
-              </thead>
-              <tbody>
-                {filtered.map((agent) => (
-                  <tr key={agent.id}>
-                    <td className="px-4 py-3">
-                      <Link
-                        href={`/agents/${agent.id}`}
-                        className="text-sm font-medium text-zinc-200 hover:text-blue-400 transition-colors"
-                      >
-                        {agent.name}
-                      </Link>
-                    </td>
-                    <td className="px-4 py-3">
-                      <span
-                        className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-medium ${
-                          agent.alive
-                            ? "bg-green-500/10 text-green-400"
-                            : "bg-red-500/10 text-red-400"
-                        }`}
-                      >
-                        <span
-                          className={`inline-block h-1.5 w-1.5 rounded-full ${
-                            agent.alive ? "bg-green-400" : "bg-red-400"
-                          }`}
-                        />
-                        {agent.alive ? "存活" : "死亡"}
-                      </span>
-                    </td>
-                    <td className="px-4 py-3 text-sm text-zinc-300">
-                      {phaseLabels[agent.phase] ?? agent.phase}
-                    </td>
-                    <td className="px-4 py-3 text-right text-sm text-zinc-300 tabular-nums">
-                      {agent.tokens.toLocaleString()}
-                    </td>
-                    <td className="px-4 py-3 text-right text-sm text-zinc-300 tabular-nums">
-                      {formatMoney(agent.money)}
-                    </td>
-                    <td className="px-4 py-3 text-right text-sm text-zinc-300 tabular-nums">
-                      {agent.reputation.toFixed(1)}
-                    </td>
-                    <td className="px-4 py-3 text-sm text-zinc-400 max-w-[200px] truncate">
-                      {formatSkills(agent.skills)}
-                    </td>
-                    <td className="px-4 py-3 text-right text-sm text-zinc-500 tabular-nums">
-                      {agent.age} Tick
-                    </td>
+
+          {/* Desktop table layout */}
+          <div className="hidden lg:block rounded-xl border border-zinc-800 bg-zinc-900/50">
+            <div className="overflow-x-auto">
+              <table className="w-full">
+                <thead>
+                  <tr className="border-b border-zinc-800">
+                    <th className="px-4 py-3 text-left text-xs font-semibold text-zinc-400">
+                      名称
+                    </th>
+                    <th className="px-4 py-3 text-left text-xs font-semibold text-zinc-400">
+                      状态
+                    </th>
+                    <th className="px-4 py-3 text-left text-xs font-semibold text-zinc-400">
+                      阶段
+                    </th>
+                    <th className="px-4 py-3 text-right text-xs font-semibold text-zinc-400">
+                      Token
+                    </th>
+                    <th className="px-4 py-3 text-right text-xs font-semibold text-zinc-400">
+                      Money
+                    </th>
+                    <th className="px-4 py-3 text-right text-xs font-semibold text-zinc-400">
+                      信誉
+                    </th>
+                    <th className="px-4 py-3 text-left text-xs font-semibold text-zinc-400">
+                      技能
+                    </th>
+                    <th className="px-4 py-3 text-right text-xs font-semibold text-zinc-400">
+                      年龄
+                    </th>
                   </tr>
-                ))}
-              </tbody>
-            </table>
+                </thead>
+                <tbody>
+                  {filtered.map((agent) => (
+                    <tr key={agent.id}>
+                      <td className="px-4 py-3">
+                        <Link
+                          href={`/agents/${agent.id}`}
+                          className="text-sm font-medium text-zinc-200 hover:text-blue-400 transition-colors"
+                        >
+                          {agent.name}
+                        </Link>
+                      </td>
+                      <td className="px-4 py-3">
+                        <span
+                          className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-medium ${
+                            agent.alive
+                              ? "bg-green-500/10 text-green-400"
+                              : "bg-red-500/10 text-red-400"
+                          }`}
+                        >
+                          <span
+                            className={`inline-block h-1.5 w-1.5 rounded-full ${
+                              agent.alive ? "bg-green-400" : "bg-red-400"
+                            }`}
+                          />
+                          {agent.alive ? "存活" : "死亡"}
+                        </span>
+                      </td>
+                      <td className="px-4 py-3 text-sm text-zinc-300">
+                        {phaseLabels[agent.phase] ?? agent.phase}
+                      </td>
+                      <td className="px-4 py-3 text-right text-sm text-zinc-300 tabular-nums">
+                        {agent.tokens.toLocaleString()}
+                      </td>
+                      <td className="px-4 py-3 text-right text-sm text-zinc-300 tabular-nums">
+                        {formatMoney(agent.money)}
+                      </td>
+                      <td className="px-4 py-3 text-right text-sm text-zinc-300 tabular-nums">
+                        {agent.reputation.toFixed(1)}
+                      </td>
+                      <td className="px-4 py-3 text-sm text-zinc-400 max-w-[200px] truncate">
+                        {formatSkills(agent.skills)}
+                      </td>
+                      <td className="px-4 py-3 text-right text-sm text-zinc-500 tabular-nums">
+                        {agent.age} Tick
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
           </div>
-        )}
-      </div>
+        </>
+      )}
     </div>
   );
 }

@@ -293,8 +293,8 @@ export default function TimelinePage() {
   return (
     <div className="flex h-full flex-col">
       {/* Header */}
-      <div className="shrink-0 border-b border-zinc-800 bg-zinc-950/80 px-6 py-4 backdrop-blur">
-        <div className="flex items-center justify-between">
+      <div className="shrink-0 border-b border-zinc-800 bg-zinc-950/80 px-4 md:px-6 py-4 backdrop-blur">
+        <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
           <div>
             <h1 className="text-2xl font-bold text-zinc-100">事件时间线</h1>
             <p className="text-sm text-zinc-500">
@@ -388,7 +388,7 @@ export default function TimelinePage() {
             </div>
           </div>
         ) : (
-          <div className="p-6">
+          <div className="p-4 md:p-6">
             <div className="mx-auto max-w-3xl space-y-0">
               {filteredEvents.map((event, idx) => {
                 const config = eventTypeConfig[event.type] ?? defaultConfig;
@@ -485,7 +485,7 @@ export default function TimelinePage() {
             scrollRef.current?.scrollTo({ top: 0, behavior: "smooth" });
             setAutoScroll(true);
           }}
-          className="absolute bottom-6 right-6 rounded-full bg-blue-500/20 border border-blue-500/30 px-3 py-1.5 text-xs font-medium text-blue-400 transition-colors hover:bg-blue-500/30"
+          className="fixed bottom-4 right-4 sm:absolute sm:bottom-6 sm:right-6 rounded-full bg-blue-500/20 border border-blue-500/30 px-3 py-1.5 text-xs font-medium text-blue-400 transition-colors hover:bg-blue-500/30"
         >
           ↓ 回到最新
         </button>

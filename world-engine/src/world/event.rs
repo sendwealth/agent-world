@@ -28,6 +28,9 @@ pub enum EventType {
     TaskCompleted,
     TaskExpired,
     RewardDistributed,
+    TokenExchanged,
+    InterestPaid,
+    AuditRecordCreated,
 }
 
 /// Events emitted by the world engine.
@@ -66,6 +69,24 @@ pub enum WorldEvent {
         xp_awarded: u64,
         reputation_change: f64,
     },
+    TokenExchanged {
+        agent_id: String,
+        from_currency: Currency,
+        from_amount: u64,
+        to_currency: Currency,
+        to_amount: u64,
+    },
+    InterestPaid {
+        agent_id: String,
+        principal: u64,
+        interest: u64,
+        new_balance: u64,
+    },
+    AuditRecordCreated {
+        operation: String,
+        actor: String,
+        tick: u64,
+    },
 }
 
 impl WorldEvent {
@@ -94,6 +115,9 @@ impl WorldEvent {
             WorldEvent::TaskCompleted { .. } => EventType::TaskCompleted,
             WorldEvent::TaskExpired { .. } => EventType::TaskExpired,
             WorldEvent::RewardDistributed { .. } => EventType::RewardDistributed,
+            WorldEvent::TokenExchanged { .. } => EventType::TokenExchanged,
+            WorldEvent::InterestPaid { .. } => EventType::InterestPaid,
+            WorldEvent::AuditRecordCreated { .. } => EventType::AuditRecordCreated,
         }
     }
 
@@ -122,6 +146,9 @@ impl WorldEvent {
             WorldEvent::TaskCompleted { .. } => None,
             WorldEvent::TaskExpired { .. } => None,
             WorldEvent::RewardDistributed { assignee_id, .. } => Some(assignee_id),
+            WorldEvent::TokenExchanged { agent_id, .. } => Some(agent_id),
+            WorldEvent::InterestPaid { agent_id, .. } => Some(agent_id),
+            WorldEvent::AuditRecordCreated { actor, .. } => Some(actor),
         }
     }
 

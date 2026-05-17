@@ -1,12 +1,14 @@
 use std::sync::Arc;
 use tokio::sync::Mutex;
 
+use agent_world_engine::a2a::server::{GrpcServer, GrpcState};
 use agent_world_engine::economy::task::TaskBoard;
 use agent_world_engine::wal::WAL;
+use agent_world_engine::world::EventBus;
 
 #[tokio::main]
 async fn main() {
-    let event_bus = agent_world_engine::world::EventBus::new(256);
+    let event_bus = Arc::new(EventBus::new(256));
 
     println!("Agent World Engine v0.1.0");
     println!("   Status: initializing...");
@@ -65,26 +67,43 @@ async fn main() {
     });
 
     // Initialize task board with event bus
-    let task_board = Arc::new(Mutex::new(TaskBoard::with_event_bus(event_bus)));
+    let task_board = Arc::new(Mutex::new(TaskBoard::with_event_bus((*event_bus).clone())));
 
     // Build the HTTP API router with WAL support
-    let app = agent_world_engine::api::create_router_with_wal(task_board, wal_writer.clone());
+    let app = agent_world_engine::api::create_router_with_wal(task_board.clone(), wal_writer.clone());
+
+    // Build the gRPC server
+    let grpc_state = GrpcState::new(event_bus.clone(), task_board);
+    let grpc_server = GrpcServer::new(grpc_state).into_service();
 
     // Start the HTTP server
-    let addr = std::net::SocketAddr::from(([127, 0, 0, 1], 3000));
-    println!("   API server: http://{}", addr);
+    let http_addr = std::net::SocketAddr::from(([127, 0, 0, 1], 3000));
+    println!("   API server: http://{}", http_addr);
+
+    // Start the gRPC server
+    let grpc_addr = std::net::SocketAddr::from(([127, 0, 0, 1], 50051));
+    println!("   gRPC server: http://{}", grpc_addr);
     println!("   Status: ready");
 
-    let listener = tokio::net::TcpListener::bind(addr).await.unwrap();
+    let http_listener = tokio::net::TcpListener::bind(http_addr).await.unwrap();
+    let grpc_listener = tokio::net::TcpListener::bind(grpc_addr).await.unwrap();
 
     // Graceful shutdown on ctrl-c
     let shutdown_wal = wal_writer.clone();
-    let server = axum::serve(listener, app);
+    let http_server = axum::serve(http_listener, app);
+    let grpc_server = tonic::transport::Server::builder()
+        .add_service(grpc_server)
+        .serve_with_incoming(tokio_stream::wrappers::TcpListenerStream::new(grpc_listener));
 
     tokio::select! {
-        result = server => {
+        result = http_server => {
             if let Err(e) = result {
-                eprintln!("Server error: {}", e);
+                eprintln!("HTTP server error: {}", e);
+            }
+        }
+        result = grpc_server => {
+            if let Err(e) = result {
+                eprintln!("gRPC server error: {}", e);
             }
         }
         _ = tokio::signal::ctrl_c() => {

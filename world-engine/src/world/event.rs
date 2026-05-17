@@ -1,3 +1,6 @@
+use std::fmt;
+use std::str::FromStr;
+
 use serde::{Deserialize, Serialize};
 
 use super::enums::{AgentPhase, Currency, DeathReason};
@@ -29,6 +32,25 @@ pub enum EventType {
     TaskCompleted,
     TaskExpired,
     RewardDistributed,
+}
+
+impl fmt::Display for EventType {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        let s = serde_json::to_value(self)
+            .ok()
+            .and_then(|v| v.as_str().map(String::from))
+            .unwrap_or_default();
+        write!(f, "{}", s)
+    }
+}
+
+impl FromStr for EventType {
+    type Err = String;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        serde_json::from_value(serde_json::Value::String(s.to_string()))
+            .map_err(|_| format!("unknown event type: {:?}", s))
+    }
 }
 
 /// Events emitted by the world engine.

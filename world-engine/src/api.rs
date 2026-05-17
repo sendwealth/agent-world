@@ -1,4 +1,4 @@
-use std::convert::Infallible;
+use std::str::FromStr;
 use std::sync::Arc;
 
 use axum::{
@@ -12,7 +12,7 @@ use axum::{
     },
     routing::{delete, get, post},
 };
-use futures::stream::Stream;
+use axum::response::Response;
 use serde::{Deserialize, Serialize};
 use tokio::sync::Mutex;
 use uuid::Uuid;
@@ -77,7 +77,7 @@ pub fn create_router_with_wal(
         .route("/wal/snapshot", post(wal_snapshot))
         .route("/wal/verify", get(wal_verify))
         // SSE route
-        .route("/events", get(events_sse))
+        .route("/world/events", get(events_sse))
         .with_state(state)
 }
 
@@ -521,12 +521,14 @@ async fn wal_verify(
 
 // ── SSE Handler ───────────────────────────────────────────
 
-/// GET /events — Server-Sent Events endpoint.
+/// GET /world/events — Server-Sent Events endpoint.
 ///
 /// Streams `WorldEvent`s to connected clients in real time.
 /// Supports optional query parameters for filtering:
 /// - `?types=tick_advanced,task_created` — only receive listed event types
 /// - `?agent_id=agent-001` — only receive events for a specific agent
+///
+/// Returns 400 if any event type name in the `types` parameter is unrecognized.
 ///
 /// Backpressure is handled by the underlying `tokio::sync::broadcast`
 /// channel. If a client falls behind, lagged events are skipped and a
@@ -534,19 +536,25 @@ async fn wal_verify(
 async fn events_sse(
     State(state): State<AppState>,
     Query(params): Query<EventsQuery>,
-) -> Sse<impl Stream<Item = Result<SseEvent, Infallible>>> {
+) -> Response {
     let event_bus = &state.event_bus;
 
-    // Parse optional event type filter
-    let filter_types: Vec<EventType> = params
-        .types
-        .as_deref()
-        .map(|s| {
-            s.split(',')
-                .filter_map(|t| serde_json::from_value(serde_json::Value::String(t.trim().to_string())).ok())
-                .collect()
-        })
-        .unwrap_or_default();
+    // Parse optional event type filter using FromStr
+    let filter_types: Vec<EventType> = match params.types.as_deref() {
+        Some(s) if !s.is_empty() => {
+            match s
+                .split(',')
+                .map(|t| EventType::from_str(t.trim()))
+                .collect::<Result<Vec<_>, _>>()
+            {
+                Ok(types) => types,
+                Err(e) => {
+                    return (StatusCode::BAD_REQUEST, Json(ErrorResponse { error: e })).into_response();
+                }
+            }
+        }
+        _ => vec![],
+    };
 
     let agent_id = params.agent_id;
 
@@ -561,7 +569,7 @@ async fn events_sse(
             match rx.recv().await {
                 Ok(event) => {
                     let data = event.to_json();
-                    yield Ok(SseEvent::default().data(data));
+                    yield Ok::<_, std::convert::Infallible>(SseEvent::default().data(data));
                 }
                 Err(tokio::sync::broadcast::error::RecvError::Lagged(n)) => {
                     let msg = format!("lagged: {} events skipped", n);
@@ -574,5 +582,5 @@ async fn events_sse(
         }
     };
 
-    Sse::new(stream).keep_alive(KeepAlive::default())
+    Sse::new(stream).keep_alive(KeepAlive::default()).into_response()
 }

@@ -1,4 +1,4 @@
-.PHONY: help setup dev test lint fmt proto clean build run
+.PHONY: help setup dev test lint fmt proto clean build run demo demo-json demo-death
 
 help: ## Show this help
 	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) | sort | awk 'BEGIN {FS = ":.*?## "}; {printf "\033[36m%-20s\033[0m %s\n", $$1, $$2}'
@@ -66,6 +66,15 @@ test-integration: ## Run integration tests
 
 test-e2e: ## Run end-to-end tests
 	cd world-engine && cargo test --test e2e_full_flow
+
+demo: ## Run E2E demo: 2 agents survive 1000 ticks with trading, tasks, death
+	python3 scripts/e2e_demo.py
+
+demo-json: ## Run E2E demo with JSON metrics output
+	python3 scripts/e2e_demo.py --json
+
+demo-death: ## Run death scenario (agent with 30 tokens)
+	python3 scripts/e2e_demo.py --death-scenario
 
 # ── Code Quality ─────────────────────────────────────────
 

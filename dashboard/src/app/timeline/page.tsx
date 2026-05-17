@@ -2,10 +2,8 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
-import type { WorldEvent, EventType } from "@/types/world";
-import { useSSE } from "@/hooks/useSSE";
-
-const MAX_EVENTS = 500;
+import type { EventType } from "@/types/world";
+import { useSSEContext } from "@/components/SSEProvider";
 
 // Event type config with icons, colors, and labels
 const eventTypeConfig: Record<
@@ -139,11 +137,9 @@ function formatDate(ts: string): string {
 }
 
 export default function TimelinePage() {
-  // SSE events via shared hook
-  const sse = useSSE<WorldEvent>("/api/v1/world/events", {
-    maxItems: MAX_EVENTS,
-  });
-  const events = sse.data;
+  // SSE events via shared context
+  const sse = useSSEContext();
+  const events = sse.events;
   const connected = sse.connected;
   const error = sse.error;
 

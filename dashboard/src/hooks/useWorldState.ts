@@ -3,9 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 import type { WorldEvent, WorldStats } from "@/types/world";
 import { fetchJSON } from "@/lib/api";
-import { useSSE } from "./useSSE";
-
-const MAX_EVENTS = 100;
+import { useSSEContext } from "@/components/SSEProvider";
 
 interface WorldState {
   stats: WorldStats | null;
@@ -17,10 +15,7 @@ interface WorldState {
 export function useWorldState() {
   const [stats, setStats] = useState<WorldStats | null>(null);
 
-  // SSE events via shared hook
-  const sse = useSSE<WorldEvent>("/api/v1/world/events", {
-    maxItems: MAX_EVENTS,
-  });
+  const sse = useSSEContext();
 
   // Fetch initial stats
   useEffect(() => {
@@ -43,10 +38,10 @@ export function useWorldState() {
 
   // Derive stats with tick update from SSE events (no setState in effect)
   const statsWithTick = useMemo(() => {
-    if (!stats || sse.data.length === 0) return stats;
-    const latestEvent = sse.data[0];
+    if (!stats || sse.events.length === 0) return stats;
+    const latestEvent = sse.events[0];
     return { ...stats, tick: latestEvent.tick };
-  }, [stats, sse.data]);
+  }, [stats, sse.events]);
 
   // Periodic stats refresh (every 5 seconds)
   useEffect(() => {
@@ -63,7 +58,7 @@ export function useWorldState() {
 
   const state: WorldState = {
     stats: statsWithTick,
-    events: sse.data,
+    events: sse.events,
     connected: sse.connected,
     error: sse.error,
   };

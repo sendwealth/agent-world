@@ -6,7 +6,10 @@ pub mod wal;
 pub mod world;
 
 pub use rules::{
-    Rule, RuleContext, RuleRegistry, RuleResult,
+    Rule, RuleCategory, RuleConflictPolicy, RuleContext, RuleRegistry, RuleResult,
     TokenConsumptionRule, DeathJudgmentRule, NewbieProtectionRule,
-    default_registry, custom_registry,
+    VoluntaryTradingRule, AntiMonopolyRule, DebtCeilingRule,
+    CommunicationHonestyRule, ContractBindingRule,
+    ResourceExhaustionRule, ReproductionRunawayRule,
+    default_registry, custom_registry, custom_registry_full,
 };

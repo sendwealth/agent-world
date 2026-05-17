@@ -2,6 +2,7 @@
 
 import { useMemo } from "react";
 import type { WorldEvent } from "@/types/world";
+import { EVENT_TYPE_CONFIG } from "@/lib/event-types";
 
 interface MemoryStatsProps {
   agentId: string;
@@ -66,21 +67,6 @@ export default function MemoryStats({ agentId, events }: MemoryStatsProps) {
 
   const maxBucket = Math.max(...stats.activityBuckets, 1);
 
-  const eventTypeLabels: Record<string, { label: string; color: string }> = {
-    agent_spawn: { label: "诞生", color: "bg-green-400" },
-    agent_death: { label: "死亡", color: "bg-red-400" },
-    trade: { label: "交易", color: "bg-amber-400" },
-    task_created: { label: "任务创建", color: "bg-blue-400" },
-    task_claimed: { label: "任务认领", color: "bg-cyan-400" },
-    task_completed: { label: "任务完成", color: "bg-emerald-400" },
-    message: { label: "消息", color: "bg-violet-400" },
-    skill_up: { label: "技能提升", color: "bg-purple-400" },
-    reputation_change: { label: "信誉变化", color: "bg-yellow-400" },
-    investment: { label: "投资", color: "bg-teal-400" },
-    tax: { label: "税收", color: "bg-orange-400" },
-    inflation: { label: "通胀", color: "bg-rose-400" },
-  };
-
   return (
     <div className="rounded-xl border border-zinc-800 bg-zinc-900/50 p-4 space-y-4">
       <div className="flex items-center justify-between">
@@ -142,14 +128,14 @@ export default function MemoryStats({ agentId, events }: MemoryStatsProps) {
             .sort(([, a], [, b]) => b - a)
             .slice(0, 6)
             .map(([type, count]) => {
-              const cfg = eventTypeLabels[type] ?? { label: type, color: "bg-zinc-400" };
+              const cfg = EVENT_TYPE_CONFIG[type] ?? { label: type, bgClass: "bg-zinc-400" };
               const pct = stats.totalEvents > 0 ? (count / stats.totalEvents) * 100 : 0;
               return (
                 <div key={type} className="flex items-center gap-2">
                   <span className="w-16 text-[10px] text-zinc-500 truncate">{cfg.label}</span>
                   <div className="h-1.5 flex-1 rounded-full bg-zinc-800">
                     <div
-                      className={`h-1.5 rounded-full ${cfg.color} transition-all duration-500`}
+                      className={`h-1.5 rounded-full ${cfg.bgClass} transition-all duration-500`}
                       style={{ width: `${pct}%` }}
                     />
                   </div>

@@ -1,15 +1,10 @@
 "use client";
 
 import { useMemo, useRef, useEffect, useCallback, useState } from "react";
+import { useRouter } from "next/navigation";
 import Link from "next/link";
 import type { Agent, WorldEvent } from "@/types/world";
-
-const phaseLabels: Record<string, string> = {
-  newborn: "新生",
-  child: "幼年",
-  adult: "成年",
-  elder: "老年",
-};
+import { phaseLabels } from "@/lib/format";
 
 interface RelationshipGraphProps {
   agent: Agent;
@@ -33,17 +28,16 @@ interface GraphEdge {
   source: string;
   target: string;
   weight: number;
-  types: Set<string>;
 }
 
 export default function RelationshipGraph({ agent, allAgents, agentEvents }: RelationshipGraphProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
-  const animRef = useRef<number>(0);
   const nodesRef = useRef<GraphNode[]>([]);
   const edgesRef = useRef<GraphEdge[]>([]);
   const [hoveredNode, setHoveredNode] = useState<string | null>(null);
   const [dimensions, setDimensions] = useState({ width: 400, height: 350 });
+  const router = useRouter();
 
   // Compute graph data
   const { nodes, edges, agentMap } = useMemo(() => {
@@ -71,13 +65,11 @@ export default function RelationshipGraph({ agent, allAgents, agentEvents }: Rel
         const existing = edgeMap.get(key);
         if (existing) {
           existing.weight++;
-          existing.types.add(e.type);
         } else {
           edgeMap.set(key, {
             source: sourceId,
             target: targetId,
             weight: 1,
-            types: new Set([e.type]),
           });
         }
         if (sourceId === agent.id) connectedIds.add(targetId);
@@ -131,6 +123,16 @@ export default function RelationshipGraph({ agent, allAgents, agentEvents }: Rel
     };
   }, [agent, allAgents, agentEvents]);
 
+  // Pre-compute weight map for O(1) lookup instead of O(E) edges.find()
+  const weightMap = useMemo(() => {
+    const m = new Map<string, number>();
+    for (const e of edges) {
+      if (e.source === agent.id) m.set(e.target, e.weight);
+      else if (e.target === agent.id) m.set(e.source, e.weight);
+    }
+    return m;
+  }, [edges, agent.id]);
+
   // Update refs
   useEffect(() => {
     nodesRef.current = nodes.map((n) => ({ ...n }));
@@ -153,55 +155,6 @@ export default function RelationshipGraph({ agent, allAgents, agentEvents }: Rel
   }, []);
 
   // Force simulation + rendering
-  const simulate = useCallback(() => {
-    const ns = nodesRef.current;
-    if (ns.length === 0) return;
-
-    const centerX = dimensions.width / 2;
-    const centerY = dimensions.height / 2;
-
-    // Keep center node pinned
-    ns[0].x = centerX;
-    ns[0].y = centerY;
-    ns[0].vx = 0;
-    ns[0].vy = 0;
-
-    // Apply forces
-    for (let i = 1; i < ns.length; i++) {
-      const node = ns[i];
-
-      // Repulsion from other nodes
-      for (let j = 1; j < ns.length; j++) {
-        if (i === j) continue;
-        const other = ns[j];
-        const dx = node.x - other.x;
-        const dy = node.y - other.y;
-        const dist = Math.sqrt(dx * dx + dy * dy) || 1;
-        const force = 800 / (dist * dist);
-        node.vx += (dx / dist) * force;
-        node.vy += (dy / dist) * force;
-      }
-
-      // Attraction to center
-      const dxCenter = centerX - node.x;
-      const dyCenter = centerY - node.y;
-      node.vx += dxCenter * 0.002;
-      node.vy += dyCenter * 0.002;
-
-      // Damping
-      node.vx *= 0.85;
-      node.vy *= 0.85;
-
-      node.x += node.vx;
-      node.y += node.vy;
-
-      // Bounds
-      node.x = Math.max(40, Math.min(dimensions.width - 40, node.x));
-      node.y = Math.max(40, Math.min(dimensions.height - 40, node.y));
-    }
-  }, [dimensions]);
-
-  // Render loop
   useEffect(() => {
     const canvas = canvasRef.current;
     if (!canvas) return;
@@ -214,16 +167,71 @@ export default function RelationshipGraph({ agent, allAgents, agentEvents }: Rel
     ctx.scale(dpr, dpr);
 
     let frameCount = 0;
+    let running = true;
+
+    const simulate = () => {
+      const ns = nodesRef.current;
+      if (ns.length === 0) return;
+
+      const centerX = dimensions.width / 2;
+      const centerY = dimensions.height / 2;
+
+      // Keep center node pinned
+      ns[0].x = centerX;
+      ns[0].y = centerY;
+      ns[0].vx = 0;
+      ns[0].vy = 0;
+
+      // Apply forces
+      for (let i = 1; i < ns.length; i++) {
+        const node = ns[i];
+
+        // Repulsion from other nodes
+        for (let j = 1; j < ns.length; j++) {
+          if (i === j) continue;
+          const other = ns[j];
+          const dx = node.x - other.x;
+          const dy = node.y - other.y;
+          const dist = Math.sqrt(dx * dx + dy * dy) || 1;
+          const force = 800 / (dist * dist);
+          node.vx += (dx / dist) * force;
+          node.vy += (dy / dist) * force;
+        }
+
+        // Attraction to center
+        const dxCenter = centerX - node.x;
+        const dyCenter = centerY - node.y;
+        node.vx += dxCenter * 0.002;
+        node.vy += dyCenter * 0.002;
+
+        // Damping
+        node.vx *= 0.85;
+        node.vy *= 0.85;
+
+        node.x += node.vx;
+        node.y += node.vy;
+
+        // Bounds
+        node.x = Math.max(40, Math.min(dimensions.width - 40, node.x));
+        node.y = Math.max(40, Math.min(dimensions.height - 40, node.y));
+      }
+    };
 
     function draw() {
-      if (!ctx) return;
+      if (!running || !ctx) return;
       frameCount++;
-      if (frameCount < 300) simulate(); // Run simulation for first 300 frames
+      if (frameCount < 300) simulate();
 
       const ns = nodesRef.current;
       const es = edgesRef.current;
 
       ctx.clearRect(0, 0, dimensions.width, dimensions.height);
+
+      // Compute maxWeight once
+      let maxWeight = 1;
+      for (const e of es) {
+        if (e.weight > maxWeight) maxWeight = e.weight;
+      }
 
       // Draw edges
       const nodeMap = new Map(ns.map((n) => [n.id, n]));
@@ -232,7 +240,6 @@ export default function RelationshipGraph({ agent, allAgents, agentEvents }: Rel
         const tgt = nodeMap.get(edge.target);
         if (!src || !tgt) continue;
 
-        const maxWeight = Math.max(...es.map((e) => e.weight), 1);
         const thickness = 0.5 + (edge.weight / maxWeight) * 2.5;
         const alpha = 0.15 + (edge.weight / maxWeight) * 0.35;
 
@@ -317,12 +324,19 @@ export default function RelationshipGraph({ agent, allAgents, agentEvents }: Rel
         );
       }
 
-      animRef.current = requestAnimationFrame(draw);
+      // Continue rendering only during simulation or while hovered
+      if (frameCount < 300 || hoveredNode !== null) {
+        rafId = requestAnimationFrame(draw);
+      }
     }
 
-    draw();
-    return () => cancelAnimationFrame(animRef.current);
-  }, [dimensions, hoveredNode, simulate]);
+    let rafId = requestAnimationFrame(draw);
+
+    return () => {
+      running = false;
+      cancelAnimationFrame(rafId);
+    };
+  }, [dimensions, hoveredNode]);
 
   // Mouse interaction
   const handleMouseMove = useCallback(
@@ -350,14 +364,10 @@ export default function RelationshipGraph({ agent, allAgents, agentEvents }: Rel
     []
   );
 
-  const handleClick = useCallback(
-    () => {
-      if (!hoveredNode || hoveredNode === agent.id) return;
-      // Navigate is handled via link overlay - but we can use window.location
-      // since this is a canvas
-    },
-    [hoveredNode, agent.id]
-  );
+  const handleClick = useCallback(() => {
+    if (!hoveredNode || hoveredNode === agent.id) return;
+    router.push(`/agents/${hoveredNode}`);
+  }, [hoveredNode, agent.id, router]);
 
   if (edges.length === 0) {
     return (
@@ -385,6 +395,8 @@ export default function RelationshipGraph({ agent, allAgents, agentEvents }: Rel
           style={{ width: dimensions.width, height: dimensions.height }}
           onMouseMove={handleMouseMove}
           onClick={handleClick}
+          aria-label="关系图，显示 Agent 之间的连接"
+          role="img"
           className="rounded-lg"
         />
 
@@ -425,29 +437,13 @@ export default function RelationshipGraph({ agent, allAgents, agentEvents }: Rel
         </div>
       </div>
 
-      {/* Related agents list */}
+      {/* Related agents list — uses weightMap for O(1) lookup */}
       <div className="space-y-1.5 max-h-[200px] overflow-y-auto scrollbar-thin">
         {nodes
           .filter((n) => !n.isCenter)
-          .sort((a, b) => {
-            const aW = edges.find(
-              (e) =>
-                (e.source === a.id && e.target === agent.id) ||
-                (e.source === agent.id && e.target === a.id)
-            )?.weight ?? 0;
-            const bW = edges.find(
-              (e) =>
-                (e.source === b.id && e.target === agent.id) ||
-                (e.source === agent.id && e.target === b.id)
-            )?.weight ?? 0;
-            return bW - aW;
-          })
+          .sort((a, b) => (weightMap.get(b.id) ?? 0) - (weightMap.get(a.id) ?? 0))
           .map((node) => {
-            const edge = edges.find(
-              (e) =>
-                (e.source === node.id && e.target === agent.id) ||
-                (e.source === agent.id && e.target === node.id)
-            );
+            const weight = weightMap.get(node.id) ?? 0;
             return (
               <Link
                 key={node.id}
@@ -463,7 +459,7 @@ export default function RelationshipGraph({ agent, allAgents, agentEvents }: Rel
                   <span className="text-xs text-zinc-300">{node.name}</span>
                 </div>
                 <span className="text-[10px] tabular-nums text-zinc-500">
-                  {edge?.weight ?? 0} 次互动
+                  {weight} 次互动
                 </span>
               </Link>
             );

@@ -4,36 +4,16 @@ import { useEffect, useState, useMemo } from "react";
 import { useParams, useRouter } from "next/navigation";
 import type { Agent, WorldEvent } from "@/types/world";
 import { fetchJSON } from "@/lib/api";
+import { formatDate, phaseLabels } from "@/lib/format";
 import SkillTree from "@/components/agent/SkillTree";
 import MemoryStats from "@/components/agent/MemoryStats";
 import RelationshipGraph from "@/components/agent/RelationshipGraph";
 import ActivityTimeline from "@/components/agent/ActivityTimeline";
 
-const phaseLabels: Record<string, string> = {
-  newborn: "新生",
-  child: "幼年",
-  adult: "成年",
-  elder: "老年",
-};
-
 function formatMoney(v: number): string {
   if (v >= 1_000_000) return `$${(v / 1_000_000).toFixed(1)}M`;
   if (v >= 1_000) return `$${(v / 1_000).toFixed(1)}K`;
   return `$${v.toFixed(0)}`;
-}
-
-function formatDate(iso: string): string {
-  const d = new Date(iso);
-  const now = new Date();
-  const diff = now.getTime() - d.getTime();
-  const minutes = Math.floor(diff / 60_000);
-  if (minutes < 1) return "刚刚";
-  if (minutes < 60) return `${minutes} 分钟前`;
-  const hours = Math.floor(minutes / 60);
-  if (hours < 24) return `${hours} 小时前`;
-  const days = Math.floor(hours / 24);
-  if (days < 30) return `${days} 天前`;
-  return d.toLocaleDateString("zh-CN");
 }
 
 // Mini bar chart component for balance visualization
@@ -49,10 +29,18 @@ function BalanceBar({ value, max, color }: { value: number; max: number; color: 
   );
 }
 
+const TABS = [
+  { key: "skills" as const, label: "技能树", icon: "🌳" },
+  { key: "memory" as const, label: "记忆统计", icon: "🧠" },
+  { key: "relations" as const, label: "关系图", icon: "🕸️" },
+  { key: "activity" as const, label: "活动时间线", icon: "📜" },
+];
+
 export default function AgentDetailPage() {
   const params = useParams();
   const router = useRouter();
-  const agentId = params.id as string;
+  const rawId = params.id;
+  const agentId = Array.isArray(rawId) ? rawId[0] : rawId;
 
   const [agent, setAgent] = useState<Agent | null>(null);
   const [events, setEvents] = useState<WorldEvent[]>([]);
@@ -62,6 +50,7 @@ export default function AgentDetailPage() {
   const [activeTab, setActiveTab] = useState<"skills" | "memory" | "relations" | "activity">("skills");
 
   useEffect(() => {
+    if (!agentId) return;
     let cancelled = false;
 
     async function load() {
@@ -121,7 +110,7 @@ export default function AgentDetailPage() {
     );
   }
 
-  if (error || !agent) {
+  if (error || !agent || !agentId) {
     return (
       <div className="p-6 space-y-4">
         <button
@@ -136,13 +125,6 @@ export default function AgentDetailPage() {
       </div>
     );
   }
-
-  const tabs = [
-    { key: "skills" as const, label: "技能树", icon: "🌳" },
-    { key: "memory" as const, label: "记忆统计", icon: "🧠" },
-    { key: "relations" as const, label: "关系图", icon: "🕸️" },
-    { key: "activity" as const, label: "活动时间线", icon: "📜" },
-  ];
 
   return (
     <div className="p-6 space-y-6">
@@ -254,7 +236,7 @@ export default function AgentDetailPage() {
 
       {/* Tab navigation */}
       <div className="flex items-center gap-1 border-b border-zinc-800">
-        {tabs.map((tab) => (
+        {TABS.map((tab) => (
           <button
             key={tab.key}
             onClick={() => setActiveTab(tab.key)}

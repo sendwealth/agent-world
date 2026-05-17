@@ -3,36 +3,8 @@
 import { useMemo, useState } from "react";
 import Link from "next/link";
 import type { WorldEvent, EventType } from "@/types/world";
-
-const eventTypeConfig: Record<string, { label: string; color: string; dot: string; icon: string }> = {
-  agent_spawn: { label: "诞生", color: "text-green-400", dot: "bg-green-400", icon: "👶" },
-  agent_death: { label: "死亡", color: "text-red-400", dot: "bg-red-400", icon: "💀" },
-  trade: { label: "交易", color: "text-amber-400", dot: "bg-amber-400", icon: "💰" },
-  task_created: { label: "发布任务", color: "text-blue-400", dot: "bg-blue-400", icon: "📋" },
-  task_claimed: { label: "认领任务", color: "text-cyan-400", dot: "bg-cyan-400", icon: "✋" },
-  task_completed: { label: "完成任务", color: "text-emerald-400", dot: "bg-emerald-400", icon: "✅" },
-  message: { label: "消息", color: "text-violet-400", dot: "bg-violet-400", icon: "💬" },
-  skill_up: { label: "技能提升", color: "text-purple-400", dot: "bg-purple-400", icon: "⬆" },
-  reputation_change: { label: "信誉变化", color: "text-yellow-400", dot: "bg-yellow-400", icon: "⭐" },
-  investment: { label: "投资", color: "text-teal-400", dot: "bg-teal-400", icon: "🏦" },
-  tax: { label: "税收", color: "text-orange-400", dot: "bg-orange-400", icon: "🏛" },
-  inflation: { label: "通胀", color: "text-rose-400", dot: "bg-rose-400", icon: "📈" },
-};
-
-function formatDate(iso: string): string {
-  const d = new Date(iso);
-  const now = new Date();
-  const diff = now.getTime() - d.getTime();
-  const minutes = Math.floor(diff / 60_000);
-  if (minutes < 1) return "刚刚";
-  if (minutes < 60) return `${minutes} 分钟前`;
-  const hours = Math.floor(minutes / 60);
-  if (hours < 24) return `${hours} 小时前`;
-  const days = Math.floor(hours / 24);
-  if (days < 30) return `${days} 天前`;
-  return d.toLocaleDateString("zh-CN");
-}
-
+import { EVENT_TYPE_CONFIG } from "@/lib/event-types";
+import { formatDate } from "@/lib/format";
 
 interface ActivityTimelineProps {
   agentId: string;
@@ -133,7 +105,7 @@ export default function ActivityTimeline({ agentId, events }: ActivityTimelinePr
           全部
         </button>
         {usedTypes.map((type) => {
-          const cfg = eventTypeConfig[type];
+          const cfg = EVENT_TYPE_CONFIG[type];
           if (!cfg) return null;
           return (
             <button
@@ -175,10 +147,11 @@ export default function ActivityTimeline({ agentId, events }: ActivityTimelinePr
 
             <div className="space-y-0 mt-1">
               {group.events.map((event, idx) => {
-                const meta = eventTypeConfig[event.type] ?? {
+                const meta = EVENT_TYPE_CONFIG[event.type] ?? {
                   label: event.type,
                   color: "text-zinc-400",
                   dot: "bg-zinc-400",
+                  bgClass: "bg-zinc-400",
                   icon: "•",
                 };
                 const isLast = idx === group.events.length - 1;

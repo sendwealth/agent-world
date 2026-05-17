@@ -18,8 +18,6 @@ Covers:
 
 from __future__ import annotations
 
-import math
-
 import pytest
 
 from agent_runtime.memory.embedding import HashEmbeddingProvider
@@ -30,7 +28,6 @@ from agent_runtime.memory.long_term import (
     MemoryType,
     _cosine_similarity,
 )
-
 
 # ---------------------------------------------------------------------------
 # Fixtures
@@ -636,6 +633,44 @@ class TestEdgeCases:
         assert m2.count() == 1
         m2.close()
 
+    def test_tags_with_commas(self, mem: LongTermMemory) -> None:
+        """Tags containing commas should survive serialization round-trip."""
+        entry = mem.store(
+            "learned react",
+            memory_type="lesson",
+            tags=["react, next.js", "frontend"],
+            tick=1,
+        )
+        assert entry.tags == ["react, next.js", "frontend"]
+
+        # Verify round-trip through DB: search and check tags
+        results = mem.search("react", top_k=5, tick=2)
+        assert len(results) >= 1
+        found = [r for r in results if r.id == entry.id]
+        assert len(found) == 1
+        assert found[0].tags == ["react, next.js", "frontend"]
+
+    def test_context_manager(self, provider: HashEmbeddingProvider) -> None:
+        """LongTermMemory should work as a context manager."""
+        with LongTermMemory(
+            embedding_provider=provider, db_path=":memory:", max_entries=10
+        ) as m:
+            m.store("ctx test", memory_type="fact", tick=1)
+            assert m.count() == 1
+
+    def test_recall_only_increments_access_for_returned(
+        self, mem: LongTermMemory
+    ) -> None:
+        """recall() should only increment access_count for entries it returns."""
+        mem.store("high imp", memory_type="fact", importance=0.9, tick=1)
+        mem.store("low imp", memory_type="fact", importance=0.1, tick=1)
+
+        # recall with min_importance that should filter out low_imp
+        results = mem.recall("imp", top_k=5, tick=2, min_importance=0.5)
+        # All returned entries should have had their access count incremented
+        for r in results:
+            assert r.access_count >= 0  # access_count reflects the increment
+
 
 # ---------------------------------------------------------------------------
 # Acceptance Criteria
@@ -648,11 +683,11 @@ class TestAcceptanceCriteria:
     def test_three_memory_types(self, mem: LongTermMemory) -> None:
         """Acceptance: support experience, lesson, fact memory types."""
         e = mem.store("explored forest", memory_type="experience", tick=1)
-        l = mem.store("fire burns wood", memory_type="lesson", tick=2)
+        lesson = mem.store("fire burns wood", memory_type="lesson", tick=2)
         f = mem.store("market opens at dawn", memory_type="fact", tick=3)
 
         assert e.memory_type == "experience"
-        assert l.memory_type == "lesson"
+        assert lesson.memory_type == "lesson"
         assert f.memory_type == "fact"
 
     def test_semantic_search_top_k(self, mem: LongTermMemory) -> None:

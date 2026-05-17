@@ -3,12 +3,13 @@ use std::sync::Arc;
 use std::sync::atomic::{AtomicU64, Ordering};
 
 use dashmap::DashMap;
+use dashmap::mapref::entry::Entry;
 use uuid::Uuid;
 
 use crate::economy::token_burn::AgentRecord;
 use crate::economy::reward::{Ledger, LedgerEntry};
 use crate::economy::task::{Task, TaskStatus};
-use crate::world::enums::AgentPhase;
+use crate::world::enums::{AgentPhase, DeathReason};
 use crate::world::event::WorldEvent;
 use crate::world::state::EventBus;
 
@@ -21,6 +22,7 @@ pub enum StateError {
     AgentAlreadyDead(String),
     InvalidPhaseTransition { agent_id: String, from: AgentPhase, to: AgentPhase },
     TaskNotFound(String),
+    InvalidTaskTransition { task_id: String, from: TaskStatus, to: TaskStatus },
     InsufficientTokens { agent_id: String, required: u64, available: u64 },
 }
 
@@ -34,6 +36,9 @@ impl std::fmt::Display for StateError {
                 write!(f, "invalid phase transition for {}: {:?} -> {:?}", agent_id, from, to)
             }
             StateError::TaskNotFound(id) => write!(f, "task not found: {}", id),
+            StateError::InvalidTaskTransition { task_id, from, to } => {
+                write!(f, "invalid task status transition for {}: {:?} -> {:?}", task_id, from, to)
+            }
             StateError::InsufficientTokens { agent_id, required, available } => {
                 write!(f, "insufficient tokens for {}: required {}, available {}", agent_id, required, available)
             }
@@ -43,25 +48,43 @@ impl std::fmt::Display for StateError {
 
 impl std::error::Error for StateError {}
 
+// ── Phase Transition Validation ──────────────────────────
+
+/// Valid agent phase transitions.
+///
+/// Birth -> Childhood -> Adult -> Elder -> Dying -> Dead
+/// Any living phase can transition directly to Dead (killed).
+fn is_valid_phase_transition(from: AgentPhase, to: AgentPhase) -> bool {
+    if from == to {
+        return true; // no-op transitions are allowed
+    }
+    match from {
+        AgentPhase::Birth => matches!(to, AgentPhase::Childhood | AgentPhase::Dead),
+        AgentPhase::Childhood => matches!(to, AgentPhase::Adult | AgentPhase::Dead),
+        AgentPhase::Adult => matches!(to, AgentPhase::Elder | AgentPhase::Dead),
+        AgentPhase::Elder => matches!(to, AgentPhase::Dying | AgentPhase::Dead),
+        AgentPhase::Dying => matches!(to, AgentPhase::Dead),
+        AgentPhase::Dead => false, // dead agents cannot transition
+    }
+}
+
 // ── WorldState ───────────────────────────────────────────
 
 /// Thread-safe global world state.
 ///
 /// Uses `DashMap` for concurrent agent/task storage and `AtomicU64` for the
-/// tick counter. The ledger is wrapped in `Arc<std::sync::RwLock>` since it
-/// needs mutable access for recording transactions but is not as hot a path
-/// as agent/task lookups.
+/// tick counter. Token balances are stored directly in `AgentRecord` within
+/// the agents map — a single source of truth avoids cross-map desync.
 pub struct WorldState {
     /// Global tick counter, incremented atomically.
     tick: AtomicU64,
     /// Registered agents, keyed by string ID.
+    /// Token balances are stored in `AgentRecord.tokens`.
     agents: DashMap<String, AgentRecord>,
     /// Active tasks, keyed by UUID string.
     tasks: DashMap<String, Task>,
     /// Shared ledger for recording financial transactions.
     ledger: Arc<std::sync::RwLock<Ledger>>,
-    /// Token balances per agent (separate from AgentRecord.tokens for fast lookup).
-    token_balances: DashMap<String, u64>,
     /// Optional event bus for broadcasting state changes.
     event_bus: Option<EventBus>,
 }
@@ -74,7 +97,6 @@ impl WorldState {
             agents: DashMap::new(),
             tasks: DashMap::new(),
             ledger: Arc::new(std::sync::RwLock::new(Ledger::new())),
-            token_balances: DashMap::new(),
             event_bus: None,
         }
     }
@@ -91,19 +113,19 @@ impl WorldState {
 
     /// Get the current tick value.
     pub fn tick(&self) -> u64 {
-        self.tick.load(Ordering::SeqCst)
+        self.tick.load(Ordering::Acquire)
     }
 
     /// Advance the tick counter by one and return the new tick value.
     pub fn advance_tick(&self) -> u64 {
-        let new_tick = self.tick.fetch_add(1, Ordering::SeqCst) + 1;
+        let new_tick = self.tick.fetch_add(1, Ordering::AcqRel) + 1;
         self.emit(WorldEvent::TickAdvanced { tick: new_tick });
         new_tick
     }
 
     /// Set the tick counter to a specific value (useful for recovery).
     pub fn set_tick(&self, tick: u64) {
-        self.tick.store(tick, Ordering::SeqCst);
+        self.tick.store(tick, Ordering::Release);
     }
 
     // ── Agent CRUD ────────────────────────────────────────
@@ -112,36 +134,19 @@ impl WorldState {
     ///
     /// The agent starts in the `Birth` phase.
     /// Returns an error if an agent with the same ID already exists.
+    /// Uses DashMap `entry()` for atomic check-and-insert (no TOCTOU race).
     pub fn register_agent(
         &self,
         id: String,
         name: String,
         initial_tokens: u64,
     ) -> Result<(), StateError> {
-        if self.agents.contains_key(&id) {
-            return Err(StateError::AgentAlreadyExists(id));
-        }
-
-        let agent = AgentRecord {
-            id: Uuid::new_v4(), // internal UUID
-            name: name.clone(),
-            phase: AgentPhase::Birth,
-            tokens: initial_tokens,
-            skills: HashMap::new(),
-        };
-
-        self.agents.insert(id.clone(), agent);
-        self.token_balances.insert(id.clone(), initial_tokens);
-
-        self.emit(WorldEvent::AgentSpawned {
-            agent_id: id.clone(),
-            name,
-        });
-
-        Ok(())
+        self.register_agent_with_phase(id, name, initial_tokens, AgentPhase::Birth)
     }
 
     /// Register a new agent with a specific phase (useful for testing/recovery).
+    ///
+    /// Uses DashMap `entry()` for atomic check-and-insert.
     pub fn register_agent_with_phase(
         &self,
         id: String,
@@ -149,10 +154,6 @@ impl WorldState {
         initial_tokens: u64,
         phase: AgentPhase,
     ) -> Result<(), StateError> {
-        if self.agents.contains_key(&id) {
-            return Err(StateError::AgentAlreadyExists(id));
-        }
-
         let agent = AgentRecord {
             id: Uuid::new_v4(),
             name: name.clone(),
@@ -161,8 +162,10 @@ impl WorldState {
             skills: HashMap::new(),
         };
 
-        self.agents.insert(id.clone(), agent);
-        self.token_balances.insert(id.clone(), initial_tokens);
+        match self.agents.entry(id.clone()) {
+            Entry::Occupied(_) => return Err(StateError::AgentAlreadyExists(id)),
+            Entry::Vacant(vacant) => vacant.insert(agent),
+        };
 
         self.emit(WorldEvent::AgentSpawned {
             agent_id: id.clone(),
@@ -177,10 +180,9 @@ impl WorldState {
     /// Returns the agent record if found.
     /// Dead agents can be deregistered to clean up state.
     pub fn deregister_agent(&self, id: &str) -> Result<AgentRecord, StateError> {
-        let (_, agent) = self.agents.remove(id)
-            .ok_or_else(|| StateError::AgentNotFound(id.to_string()))?;
-        self.token_balances.remove(id);
-        Ok(agent)
+        self.agents.remove(id)
+            .map(|(_, agent)| agent)
+            .ok_or_else(|| StateError::AgentNotFound(id.to_string()))
     }
 
     /// Get a clone of an agent record by ID.
@@ -225,7 +227,11 @@ impl WorldState {
 
     // ── Agent Phase Management ────────────────────────────
 
-    /// Update an agent's phase.
+    /// Update an agent's phase with transition validation.
+    ///
+    /// Valid transitions follow the lifecycle:
+    /// Birth -> Childhood -> Adult -> Elder -> Dying -> Dead
+    /// Any living phase may transition directly to Dead.
     ///
     /// Emits a `PhaseChanged` event on success.
     pub fn set_agent_phase(&self, agent_id: &str, new_phase: AgentPhase) -> Result<(), StateError> {
@@ -233,8 +239,16 @@ impl WorldState {
             .ok_or_else(|| StateError::AgentNotFound(agent_id.to_string()))?;
 
         let old_phase = agent.phase;
-        agent.phase = new_phase;
 
+        if !is_valid_phase_transition(old_phase, new_phase) {
+            return Err(StateError::InvalidPhaseTransition {
+                agent_id: agent_id.to_string(),
+                from: old_phase,
+                to: new_phase,
+            });
+        }
+
+        agent.phase = new_phase;
         drop(agent); // release the DashMap guard before emitting
 
         self.emit(WorldEvent::PhaseChanged {
@@ -246,8 +260,8 @@ impl WorldState {
         Ok(())
     }
 
-    /// Transition an agent to the Dead phase.
-    pub fn kill_agent(&self, agent_id: &str) -> Result<AgentPhase, StateError> {
+    /// Transition an agent to the Dead phase with the given reason.
+    pub fn kill_agent(&self, agent_id: &str, reason: DeathReason) -> Result<AgentPhase, StateError> {
         let mut agent = self.agents.get_mut(agent_id)
             .ok_or_else(|| StateError::AgentNotFound(agent_id.to_string()))?;
 
@@ -262,7 +276,7 @@ impl WorldState {
 
         self.emit(WorldEvent::AgentDied {
             agent_id: agent_id.to_string(),
-            reason: crate::world::enums::DeathReason::TokenDepleted,
+            reason,
         });
 
         Ok(old_phase)
@@ -274,26 +288,20 @@ impl WorldState {
     ///
     /// Returns 0 if the agent is not found.
     pub fn token_balance(&self, agent_id: &str) -> u64 {
-        self.token_balances.get(agent_id)
-            .map(|r| *r.value())
+        self.agents.get(agent_id)
+            .map(|r| r.tokens)
             .unwrap_or(0)
     }
 
     /// Set the token balance for an agent.
     ///
-    /// Updates both the balance map and the AgentRecord.
+    /// Updates the balance directly in the AgentRecord.
     pub fn set_token_balance(&self, agent_id: &str, amount: u64) -> Result<(), StateError> {
-        if !self.agents.contains_key(agent_id) {
-            return Err(StateError::AgentNotFound(agent_id.to_string()));
-        }
+        let mut agent = self.agents.get_mut(agent_id)
+            .ok_or_else(|| StateError::AgentNotFound(agent_id.to_string()))?;
 
-        let old_balance = self.token_balance(agent_id);
-        self.token_balances.insert(agent_id.to_string(), amount);
-
-        // Keep AgentRecord.tokens in sync
-        if let Some(mut agent) = self.agents.get_mut(agent_id) {
-            agent.tokens = amount;
-        }
+        let old_balance = agent.tokens;
+        agent.tokens = amount;
 
         self.emit(WorldEvent::BalanceChanged {
             agent_id: agent_id.to_string(),
@@ -310,24 +318,12 @@ impl WorldState {
     /// Uses saturating addition to prevent overflow.
     /// The read-modify-write is atomic via DashMap's entry lock.
     pub fn add_tokens(&self, agent_id: &str, amount: u64) -> Result<u64, StateError> {
-        if !self.agents.contains_key(agent_id) {
-            return Err(StateError::AgentNotFound(agent_id.to_string()));
-        }
+        let mut agent = self.agents.get_mut(agent_id)
+            .ok_or_else(|| StateError::AgentNotFound(agent_id.to_string()))?;
 
-        let old_balance;
-        let new_balance;
-        {
-            let mut bal = self.token_balances.get_mut(agent_id)
-                .ok_or_else(|| StateError::AgentNotFound(agent_id.to_string()))?;
-            old_balance = *bal;
-            new_balance = old_balance.saturating_add(amount);
-            *bal = new_balance;
-        }
-
-        // Keep AgentRecord.tokens in sync
-        if let Some(mut agent) = self.agents.get_mut(agent_id) {
-            agent.tokens = new_balance;
-        }
+        let old_balance = agent.tokens;
+        let new_balance = old_balance.saturating_add(amount);
+        agent.tokens = new_balance;
 
         self.emit(WorldEvent::BalanceChanged {
             agent_id: agent_id.to_string(),
@@ -344,33 +340,21 @@ impl WorldState {
     /// Returns an error if the agent doesn't have enough tokens.
     /// The read-modify-write is atomic via DashMap's entry lock.
     pub fn deduct_tokens(&self, agent_id: &str, amount: u64) -> Result<u64, StateError> {
-        if !self.agents.contains_key(agent_id) {
-            return Err(StateError::AgentNotFound(agent_id.to_string()));
+        let mut agent = self.agents.get_mut(agent_id)
+            .ok_or_else(|| StateError::AgentNotFound(agent_id.to_string()))?;
+
+        let old_balance = agent.tokens;
+
+        if old_balance < amount {
+            return Err(StateError::InsufficientTokens {
+                agent_id: agent_id.to_string(),
+                required: amount,
+                available: old_balance,
+            });
         }
 
-        let old_balance;
-        let new_balance;
-        {
-            let mut bal = self.token_balances.get_mut(agent_id)
-                .ok_or_else(|| StateError::AgentNotFound(agent_id.to_string()))?;
-            old_balance = *bal;
-
-            if old_balance < amount {
-                return Err(StateError::InsufficientTokens {
-                    agent_id: agent_id.to_string(),
-                    required: amount,
-                    available: old_balance,
-                });
-            }
-
-            new_balance = old_balance - amount;
-            *bal = new_balance;
-        }
-
-        // Keep AgentRecord.tokens in sync
-        if let Some(mut agent) = self.agents.get_mut(agent_id) {
-            agent.tokens = new_balance;
-        }
+        let new_balance = old_balance - amount;
+        agent.tokens = new_balance;
 
         self.emit(WorldEvent::BalanceChanged {
             agent_id: agent_id.to_string(),
@@ -387,26 +371,13 @@ impl WorldState {
     /// Returns the actual amount deducted.
     /// The read-modify-write is atomic via DashMap's entry lock.
     pub fn deduct_tokens_clamped(&self, agent_id: &str, amount: u64) -> Result<u64, StateError> {
-        if !self.agents.contains_key(agent_id) {
-            return Err(StateError::AgentNotFound(agent_id.to_string()));
-        }
+        let mut agent = self.agents.get_mut(agent_id)
+            .ok_or_else(|| StateError::AgentNotFound(agent_id.to_string()))?;
 
-        let old_balance;
-        let new_balance;
-        let actual_deduction;
-        {
-            let mut bal = self.token_balances.get_mut(agent_id)
-                .ok_or_else(|| StateError::AgentNotFound(agent_id.to_string()))?;
-            old_balance = *bal;
-            actual_deduction = amount.min(old_balance);
-            new_balance = old_balance - actual_deduction;
-            *bal = new_balance;
-        }
-
-        // Keep AgentRecord.tokens in sync
-        if let Some(mut agent) = self.agents.get_mut(agent_id) {
-            agent.tokens = new_balance;
-        }
+        let old_balance = agent.tokens;
+        let actual_deduction = amount.min(old_balance);
+        let new_balance = old_balance - actual_deduction;
+        agent.tokens = new_balance;
 
         self.emit(WorldEvent::BalanceChanged {
             agent_id: agent_id.to_string(),
@@ -420,8 +391,8 @@ impl WorldState {
 
     /// Get the total token supply across all agents.
     pub fn total_token_supply(&self) -> u64 {
-        self.token_balances.iter()
-            .map(|entry| *entry.value())
+        self.agents.iter()
+            .map(|entry| entry.value().tokens)
             .fold(0u64, |acc, v| acc.saturating_add(v))
     }
 
@@ -486,15 +457,20 @@ impl WorldState {
     }
 
     /// Update a task's status.
+    ///
+    /// Returns `InvalidTaskTransition` if the transition is not valid per the
+    /// task lifecycle state machine.
     pub fn update_task_status(&self, task_id: &str, new_status: TaskStatus) -> Result<(), StateError> {
         let mut task = self.tasks.get_mut(task_id)
             .ok_or_else(|| StateError::TaskNotFound(task_id.to_string()))?;
 
+        let old_status = task.status;
         if !task.status.can_transition_to(&new_status) {
-            return Err(StateError::TaskNotFound(format!(
-                "invalid transition {} -> {} for task {}",
-                task.status, new_status, task_id
-            )));
+            return Err(StateError::InvalidTaskTransition {
+                task_id: task_id.to_string(),
+                from: old_status,
+                to: new_status,
+            });
         }
 
         task.status = new_status;
@@ -503,9 +479,9 @@ impl WorldState {
 
     /// Remove a task from the world state.
     pub fn remove_task(&self, task_id: &str) -> Result<Task, StateError> {
-        let (_, task) = self.tasks.remove(task_id)
-            .ok_or_else(|| StateError::TaskNotFound(task_id.to_string()))?;
-        Ok(task)
+        self.tasks.remove(task_id)
+            .map(|(_, task)| task)
+            .ok_or_else(|| StateError::TaskNotFound(task_id.to_string()))
     }
 
     /// Get the number of tasks.
@@ -518,6 +494,7 @@ impl WorldState {
     /// Record a transaction in the shared ledger.
     ///
     /// Returns the ledger entry UUID.
+    /// Recovers from lock poisoning rather than panicking.
     pub fn record_transaction(
         &self,
         from_agent: Option<String>,
@@ -529,19 +506,23 @@ impl WorldState {
         reference_id: Option<String>,
     ) -> Uuid {
         let tick = self.tick();
-        let mut ledger = self.ledger.write().unwrap();
+        let mut ledger = self.ledger.write().unwrap_or_else(|e| e.into_inner());
         ledger.record(from_agent, to_agent, amount, currency, tx_type, description, tick, reference_id)
     }
 
     /// Get all ledger entries (cloned).
+    ///
+    /// Recovers from lock poisoning rather than panicking.
     pub fn ledger_entries(&self) -> Vec<LedgerEntry> {
-        let ledger = self.ledger.read().unwrap();
+        let ledger = self.ledger.read().unwrap_or_else(|e| e.into_inner());
         ledger.list().to_vec()
     }
 
     /// Get the number of ledger entries.
+    ///
+    /// Recovers from lock poisoning rather than panicking.
     pub fn ledger_entry_count(&self) -> usize {
-        let ledger = self.ledger.read().unwrap();
+        let ledger = self.ledger.read().unwrap_or_else(|e| e.into_inner());
         ledger.list().len()
     }
 
@@ -744,7 +725,7 @@ mod tests {
     // ── Agent Phase Management ────────────────────────────
 
     #[test]
-    fn test_set_agent_phase() {
+    fn test_set_agent_phase_valid_transitions() {
         let state = make_state();
         state.register_agent("a1".to_string(), "Alice".to_string(), 1000).unwrap();
 
@@ -753,6 +734,15 @@ mod tests {
 
         state.set_agent_phase("a1", AgentPhase::Adult).unwrap();
         assert_eq!(state.get_agent("a1").unwrap().phase, AgentPhase::Adult);
+
+        state.set_agent_phase("a1", AgentPhase::Elder).unwrap();
+        assert_eq!(state.get_agent("a1").unwrap().phase, AgentPhase::Elder);
+
+        state.set_agent_phase("a1", AgentPhase::Dying).unwrap();
+        assert_eq!(state.get_agent("a1").unwrap().phase, AgentPhase::Dying);
+
+        state.set_agent_phase("a1", AgentPhase::Dead).unwrap();
+        assert_eq!(state.get_agent("a1").unwrap().phase, AgentPhase::Dead);
     }
 
     #[test]
@@ -763,11 +753,43 @@ mod tests {
     }
 
     #[test]
+    fn test_invalid_phase_transition_birth_to_adult() {
+        let state = make_state();
+        state.register_agent("a1".to_string(), "Alice".to_string(), 1000).unwrap();
+
+        let result = state.set_agent_phase("a1", AgentPhase::Adult);
+        assert!(matches!(result, Err(StateError::InvalidPhaseTransition { .. })));
+        // Phase should remain unchanged
+        assert_eq!(state.get_agent("a1").unwrap().phase, AgentPhase::Birth);
+    }
+
+    #[test]
+    fn test_invalid_phase_transition_dead_to_birth() {
+        let state = make_state();
+        state.register_agent("a1".to_string(), "Alice".to_string(), 1000).unwrap();
+        state.kill_agent("a1", DeathReason::TokenDepleted).unwrap();
+
+        let result = state.set_agent_phase("a1", AgentPhase::Birth);
+        assert!(matches!(result, Err(StateError::InvalidPhaseTransition { .. })));
+        assert_eq!(state.get_agent("a1").unwrap().phase, AgentPhase::Dead);
+    }
+
+    #[test]
+    fn test_valid_skip_to_dead() {
+        let state = make_state();
+        state.register_agent("a1".to_string(), "Alice".to_string(), 1000).unwrap();
+
+        // Any living phase can transition directly to Dead
+        state.set_agent_phase("a1", AgentPhase::Dead).unwrap();
+        assert_eq!(state.get_agent("a1").unwrap().phase, AgentPhase::Dead);
+    }
+
+    #[test]
     fn test_kill_agent() {
         let state = make_state();
         state.register_agent("a1".to_string(), "Alice".to_string(), 1000).unwrap();
 
-        let old_phase = state.kill_agent("a1").unwrap();
+        let old_phase = state.kill_agent("a1", DeathReason::TokenDepleted).unwrap();
         assert_eq!(old_phase, AgentPhase::Birth);
         assert_eq!(state.get_agent("a1").unwrap().phase, AgentPhase::Dead);
         assert_eq!(state.living_agent_count(), 0);
@@ -777,10 +799,20 @@ mod tests {
     fn test_kill_already_dead_fails() {
         let state = make_state();
         state.register_agent("a1".to_string(), "Alice".to_string(), 1000).unwrap();
-        state.kill_agent("a1").unwrap();
+        state.kill_agent("a1", DeathReason::TokenDepleted).unwrap();
 
-        let result = state.kill_agent("a1");
+        let result = state.kill_agent("a1", DeathReason::TokenDepleted);
         assert!(matches!(result, Err(StateError::AgentAlreadyDead(_))));
+    }
+
+    #[test]
+    fn test_kill_agent_with_reason() {
+        let state = make_state();
+        state.register_agent("a1".to_string(), "Alice".to_string(), 1000).unwrap();
+
+        let old_phase = state.kill_agent("a1", DeathReason::HumanTerminated).unwrap();
+        assert_eq!(old_phase, AgentPhase::Birth);
+        assert_eq!(state.get_agent("a1").unwrap().phase, AgentPhase::Dead);
     }
 
     // ── Token Balance ─────────────────────────────────────
@@ -1014,7 +1046,16 @@ mod tests {
         let task_id = state.create_task("T1".to_string(), "".to_string(), 0, "p1".to_string(), None);
 
         let result = state.update_task_status(&task_id, TaskStatus::Completed);
-        assert!(result.is_err());
+        assert!(matches!(result, Err(StateError::InvalidTaskTransition { .. })));
+        // Status should remain unchanged
+        assert_eq!(state.get_task(&task_id).unwrap().status, TaskStatus::Published);
+    }
+
+    #[test]
+    fn test_update_task_status_not_found() {
+        let state = make_state();
+        let result = state.update_task_status("nonexistent", TaskStatus::Claimed);
+        assert!(matches!(result, Err(StateError::TaskNotFound(_))));
     }
 
     #[test]
@@ -1132,14 +1173,14 @@ mod tests {
         state.register_agent("a1".to_string(), "Alice".to_string(), 1000).unwrap();
         let _ = rx.try_recv(); // consume AgentSpawned
 
-        state.set_agent_phase("a1", AgentPhase::Adult).unwrap();
+        state.set_agent_phase("a1", AgentPhase::Childhood).unwrap();
         let event = rx.try_recv().unwrap();
         assert_eq!(
             event,
             WorldEvent::PhaseChanged {
                 agent_id: "a1".to_string(),
                 old_phase: AgentPhase::Birth,
-                new_phase: AgentPhase::Adult,
+                new_phase: AgentPhase::Childhood,
             }
         );
     }
@@ -1175,7 +1216,7 @@ mod tests {
         state.register_agent("a1".to_string(), "Alice".to_string(), 1000).unwrap();
         let _ = rx.try_recv(); // consume AgentSpawned
 
-        state.kill_agent("a1").unwrap();
+        state.kill_agent("a1", DeathReason::TokenDepleted).unwrap();
         let event = rx.try_recv().unwrap();
         assert!(matches!(event, WorldEvent::AgentDied { .. }));
         if let WorldEvent::AgentDied { agent_id, reason } = event {
@@ -1210,9 +1251,9 @@ mod tests {
         // These should not panic even without an event bus
         state.advance_tick();
         state.register_agent("a1".to_string(), "Alice".to_string(), 1000).unwrap();
-        state.set_agent_phase("a1", AgentPhase::Adult).unwrap();
+        state.set_agent_phase("a1", AgentPhase::Childhood).unwrap();
         state.set_token_balance("a1", 500).unwrap();
-        state.kill_agent("a1").unwrap();
+        state.kill_agent("a1", DeathReason::TokenDepleted).unwrap();
     }
 
     // ── Thread Safety ─────────────────────────────────────
@@ -1289,6 +1330,31 @@ mod tests {
         assert_eq!(state.token_balance("a1"), 9000);
     }
 
+    #[test]
+    fn test_concurrent_register_same_id() {
+        use std::sync::Arc;
+        use std::thread;
+
+        let state = Arc::new(make_state());
+        let mut handles = vec![];
+
+        // All threads try to register the same ID — exactly one should succeed
+        for i in 0..20 {
+            let state = state.clone();
+            handles.push(thread::spawn(move || {
+                state.register_agent("same-id".to_string(), format!("Agent {}", i), 1000)
+            }));
+        }
+
+        let results: Vec<_> = handles.into_iter().map(|h| h.join().unwrap()).collect();
+        let successes = results.iter().filter(|r| r.is_ok()).count();
+        let failures = results.iter().filter(|r| r.is_err()).count();
+
+        assert_eq!(successes, 1);
+        assert_eq!(failures, 19);
+        assert_eq!(state.agent_count(), 1);
+    }
+
     // ── Error Display ─────────────────────────────────────
 
     #[test]
@@ -1302,6 +1368,16 @@ mod tests {
             required: 100,
             available: 50,
         }.to_string().contains("50"));
+        assert!(StateError::InvalidTaskTransition {
+            task_id: "t1".to_string(),
+            from: TaskStatus::Published,
+            to: TaskStatus::Completed,
+        }.to_string().contains("t1"));
+        assert!(StateError::InvalidPhaseTransition {
+            agent_id: "a1".to_string(),
+            from: AgentPhase::Dead,
+            to: AgentPhase::Birth,
+        }.to_string().contains("invalid"));
     }
 
     // ── Default ───────────────────────────────────────────

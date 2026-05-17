@@ -136,7 +136,7 @@ function CreateTaskDialog({
         role="dialog"
         aria-modal="true"
         aria-label="创建任务"
-        className="w-full max-w-lg rounded-xl border border-zinc-800 bg-zinc-900 p-6 shadow-xl"
+        className="w-[calc(100vw-2rem)] max-w-lg rounded-xl border border-zinc-800 bg-zinc-900 p-4 sm:p-6 shadow-xl"
         onClick={(e) => e.stopPropagation()}
       >
         <h2 className="text-lg font-bold text-zinc-100 mb-4">创建任务</h2>
@@ -323,7 +323,7 @@ function TaskDetailCard({
         role="dialog"
         aria-modal="true"
         aria-label={task.title}
-        className="w-full max-w-lg rounded-xl border border-zinc-800 bg-zinc-900 p-6 shadow-xl"
+        className="w-[calc(100vw-2rem)] max-w-lg rounded-xl border border-zinc-800 bg-zinc-900 p-4 sm:p-6 shadow-xl"
         onClick={(e) => e.stopPropagation()}
       >
         <div className="flex items-start justify-between mb-4">
@@ -588,11 +588,11 @@ export default function TasksPage() {
   }, [tasks]);
 
   return (
-    <div className="p-6 space-y-6">
+    <div className="p-4 md:p-6 space-y-6">
       {/* Header */}
-      <div className="flex items-center justify-between">
+      <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
         <div>
-          <h1 className="text-2xl font-bold text-zinc-100">任务板</h1>
+          <h1 className="text-xl md:text-2xl font-bold text-zinc-100">任务板</h1>
           <p className="text-sm text-zinc-500">
             {loading
               ? "正在加载..."

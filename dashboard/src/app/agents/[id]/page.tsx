@@ -196,21 +196,21 @@ export default function AgentDetailPage() {
   }
 
   return (
-    <div className="p-6 space-y-6">
+    <div className="p-4 md:p-6 space-y-6">
       {/* Header */}
       <div className="flex items-center justify-between">
-        <div className="flex items-center gap-4">
+        <div className="flex items-center gap-2 md:gap-4">
           <button
             onClick={() => router.push("/agents")}
-            className="rounded-lg p-1.5 text-zinc-400 hover:bg-zinc-800 hover:text-zinc-200 transition-colors"
+            className="flex min-h-[44px] min-w-[44px] items-center justify-center rounded-lg p-1.5 text-zinc-400 hover:bg-zinc-800 hover:text-zinc-200 transition-colors"
           >
             <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
             </svg>
           </button>
           <div>
-            <div className="flex items-center gap-3">
-              <h1 className="text-2xl font-bold text-zinc-100">{agent.name}</h1>
+            <div className="flex flex-wrap items-center gap-2 md:gap-3">
+              <h1 className="text-xl md:text-2xl font-bold text-zinc-100">{agent.name}</h1>
               <span
                 className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-medium ${
                   agent.alive
@@ -237,35 +237,35 @@ export default function AgentDetailPage() {
       </div>
 
       {/* Economic Dashboard: Token / Money */}
-      <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-4">
-        <div className="rounded-xl border border-blue-500/20 bg-blue-500/5 p-4 space-y-2">
+      <div className="grid grid-cols-2 gap-3 md:grid-cols-2 xl:grid-cols-4 md:gap-4">
+        <div className="rounded-xl border border-blue-500/20 bg-blue-500/5 p-3 md:p-4 space-y-2">
           <div className="flex items-center justify-between">
-            <span className="text-sm font-medium text-zinc-400">Token 余额</span>
+            <span className="text-xs md:text-sm font-medium text-zinc-400">Token 余额</span>
             <span className="text-xs text-blue-400">
               <svg className="inline h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
               </svg>
             </span>
           </div>
-          <p className="text-2xl font-bold tabular-nums text-zinc-100">{agent.tokens.toLocaleString()}</p>
+          <p className="text-xl md:text-2xl font-bold tabular-nums text-zinc-100">{agent.tokens.toLocaleString()}</p>
           <BalanceBar value={agent.tokens} max={maxTokens} color="bg-blue-400" />
         </div>
 
-        <div className="rounded-xl border border-green-500/20 bg-green-500/5 p-4 space-y-2">
+        <div className="rounded-xl border border-green-500/20 bg-green-500/5 p-3 md:p-4 space-y-2">
           <div className="flex items-center justify-between">
-            <span className="text-sm font-medium text-zinc-400">Money 余额</span>
+            <span className="text-xs md:text-sm font-medium text-zinc-400">Money 余额</span>
             <span className="text-xs text-green-400">$</span>
           </div>
-          <p className="text-2xl font-bold tabular-nums text-zinc-100">{formatMoney(agent.money)}</p>
+          <p className="text-xl md:text-2xl font-bold tabular-nums text-zinc-100">{formatMoney(agent.money)}</p>
           <BalanceBar value={agent.money} max={maxMoney} color="bg-green-400" />
         </div>
 
-        <div className="rounded-xl border border-amber-500/20 bg-amber-500/5 p-4 space-y-2">
+        <div className="rounded-xl border border-amber-500/20 bg-amber-500/5 p-3 md:p-4 space-y-2">
           <div className="flex items-center justify-between">
-            <span className="text-sm font-medium text-zinc-400">信誉值</span>
+            <span className="text-xs md:text-sm font-medium text-zinc-400">信誉值</span>
             <span className="text-xs text-amber-400">&#9733;</span>
           </div>
-          <p className="text-2xl font-bold tabular-nums text-zinc-100">{agent.reputation.toFixed(1)}</p>
+          <p className="text-xl md:text-2xl font-bold tabular-nums text-zinc-100">{agent.reputation.toFixed(1)}</p>
           <BalanceBar value={agent.reputation} max={100} color="bg-amber-400" />
         </div>
 

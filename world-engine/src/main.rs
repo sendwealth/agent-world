@@ -8,7 +8,7 @@ use agent_world_engine::wal::WAL;
 async fn main() {
     let event_bus = agent_world_engine::world::EventBus::new(256);
 
-    println!("Agent World Engine v0.1.0");
+    println!("Agent World Engine v1.0.0");
     println!("   Status: initializing...");
 
     // Initialize WAL and recover from crash

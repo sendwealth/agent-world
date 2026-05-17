@@ -9,9 +9,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
-## [0.1.0] - 2026-05-17
+## [1.0.0] - 2026-05-17
 
-Phase 1 (Island) initial release -- core subsystems with E2E tests, Docker Compose deployment, and a GitHub Release workflow.
+**Phase 1 (Island) — first stable release.** Complete core subsystems with comprehensive tests, Docker Compose deployment, cross-compiled binaries, Docker images on GHCR, and full documentation.
+
+This is the culmination of the Island phase: a self-contained survival sandbox for AI agents with economy, events, memory, LLM-driven decision making, and a real-time dashboard.
 
 ### Added
 
@@ -91,7 +93,7 @@ Phase 1 (Island) initial release -- core subsystems with E2E tests, Docker Compo
 - Dockerfile Rust toolchain upgraded to 1.85 for edition2024 support
 - Missing HashMap import in rules test module
 
-### Not Yet Implemented
+### Not Yet Implemented (planned for Phase 2+)
 - Tick scheduler (world cannot advance)
 - gRPC server / A2A message router
 - Agent CLI entry point (no spawn mechanism)
@@ -104,5 +106,12 @@ Phase 1 (Island) initial release -- core subsystems with E2E tests, Docker Compo
 
 ---
 
-[Unreleased]: https://github.com/sendwealth/agent-world/compare/v0.1.0...HEAD
+## [0.1.0] - 2026-05-17
+
+Phase 1 (Island) initial release -- core subsystems with E2E tests, Docker Compose deployment, and a GitHub Release workflow.
+
+---
+
+[Unreleased]: https://github.com/sendwealth/agent-world/compare/v1.0.0...HEAD
+[1.0.0]: https://github.com/sendwealth/agent-world/releases/tag/v1.0.0
 [0.1.0]: https://github.com/sendwealth/agent-world/releases/tag/v0.1.0

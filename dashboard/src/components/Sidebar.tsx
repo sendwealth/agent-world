@@ -48,7 +48,7 @@ export function Sidebar() {
       {/* Footer */}
       <div className="border-t border-zinc-800 p-3">
         <div className="rounded-lg bg-zinc-900/50 px-3 py-2">
-          <p className="text-[10px] text-zinc-600">Agent World v0.1.0</p>
+          <p className="text-[10px] text-zinc-600">Agent World v1.0.0</p>
         </div>
       </div>
     </aside>

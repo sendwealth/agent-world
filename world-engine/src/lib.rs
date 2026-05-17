@@ -10,3 +10,7 @@ pub use rules::{
     TokenConsumptionRule, DeathJudgmentRule, NewbieProtectionRule,
     default_registry, custom_registry,
 };
+
+pub use world::discovery::{
+    AgentProfile, AgentRegistry, AgentStatus, DiscoveryError, SharedAgentRegistry,
+};

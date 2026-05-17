@@ -14,6 +14,7 @@ use uuid::Uuid;
 
 use crate::economy::task::{TaskBoard, Task};
 use crate::wal::WAL;
+use crate::world::discovery::{AgentProfile, AgentStatus, DiscoveryError, SharedAgentRegistry};
 
 // ── Shared State ──────────────────────────────────────────
 
@@ -25,6 +26,7 @@ pub type SharedWAL = Arc<Mutex<WAL>>;
 pub struct AppState {
     pub board: SharedTaskBoard,
     pub wal: SharedWAL,
+    pub registry: SharedAgentRegistry,
 }
 
 pub fn create_router(board: SharedTaskBoard) -> Router {
@@ -42,8 +44,8 @@ pub fn create_router(board: SharedTaskBoard) -> Router {
         .with_state(board)
 }
 
-pub fn create_router_with_wal(board: SharedTaskBoard, wal: SharedWAL) -> Router {
-    let state = AppState { board, wal };
+pub fn create_router_with_wal(board: SharedTaskBoard, wal: SharedWAL, registry: SharedAgentRegistry) -> Router {
+    let state = AppState { board, wal, registry };
     Router::new()
         // Task routes
         .route("/tasks", post(create_task_with_wal))
@@ -60,6 +62,15 @@ pub fn create_router_with_wal(board: SharedTaskBoard, wal: SharedWAL) -> Router 
         .route("/wal/stats", get(wal_stats))
         .route("/wal/snapshot", post(wal_snapshot))
         .route("/wal/verify", get(wal_verify))
+        // Agent Discovery routes
+        .route("/agents", post(register_agent))
+        .route("/agents", get(list_agents))
+        .route("/agents/search", get(search_agents))
+        .route("/agents/stats", get(agent_stats))
+        .route("/agents/:id", get(get_agent))
+        .route("/agents/:id", delete(deregister_agent))
+        .route("/agents/:id/heartbeat", post(heartbeat_agent))
+        .route("/agents/:id/profile", post(update_agent_profile))
         .with_state(state)
 }
 
@@ -488,4 +499,257 @@ async fn wal_verify(
         })).into_response(),
         Err(e) => (StatusCode::INTERNAL_SERVER_ERROR, Json(ErrorResponse { error: e.to_string() })).into_response(),
     }
+}
+
+// ── Agent Discovery Request Types ─────────────────────────
+
+#[derive(Debug, Deserialize)]
+pub struct RegisterAgentRequest {
+    pub name: String,
+    #[serde(default)]
+    pub traits: Vec<String>,
+    #[serde(default)]
+    pub skills: Vec<String>,
+}
+
+#[derive(Debug, Deserialize)]
+pub struct UpdateProfileRequest {
+    pub name: Option<String>,
+    pub traits: Option<Vec<String>>,
+    pub skills: Option<Vec<String>>,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(default)]
+pub struct ListAgentsQuery {
+    pub status: Option<String>,
+    pub skill: Option<String>,
+}
+
+impl Default for ListAgentsQuery {
+    fn default() -> Self {
+        Self {
+            status: None,
+            skill: None,
+        }
+    }
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(default)]
+pub struct SearchAgentsQuery {
+    pub skills: Option<String>,
+    pub status: Option<String>,
+}
+
+impl Default for SearchAgentsQuery {
+    fn default() -> Self {
+        Self {
+            skills: None,
+            status: None,
+        }
+    }
+}
+
+// ── Agent Discovery Response Types ────────────────────────
+
+#[derive(Debug, Serialize)]
+pub struct AgentResponse {
+    pub agent_id: String,
+    pub name: String,
+    pub traits: Vec<String>,
+    pub skills: Vec<String>,
+    pub status: String,
+    pub last_heartbeat_at: u64,
+    pub registered_at: u64,
+}
+
+impl From<&AgentProfile> for AgentResponse {
+    fn from(p: &AgentProfile) -> Self {
+        AgentResponse {
+            agent_id: p.agent_id.clone(),
+            name: p.name.clone(),
+            traits: p.traits.clone(),
+            skills: p.skills.clone(),
+            status: p.status.to_string(),
+            last_heartbeat_at: p.last_heartbeat_at,
+            registered_at: p.registered_at,
+        }
+    }
+}
+
+#[derive(Debug, Serialize)]
+pub struct AgentStatsResponse {
+    pub total: usize,
+    pub online: usize,
+    pub offline: usize,
+}
+
+// ── Agent Discovery Handlers ──────────────────────────────
+
+async fn register_agent(
+    State(state): State<AppState>,
+    Json(body): Json<RegisterAgentRequest>,
+) -> impl IntoResponse {
+    let mut registry = state.registry.lock().await;
+    match registry.register(body.name, body.traits, body.skills) {
+        Ok(id) => {
+            let profile = registry.get(&id).unwrap();
+            (StatusCode::CREATED, Json(AgentResponse::from(profile))).into_response()
+        }
+        Err(DiscoveryError::NameRequired) => {
+            (StatusCode::BAD_REQUEST, Json(ErrorResponse { error: "name is required".into() })).into_response()
+        }
+        Err(e) => {
+            (StatusCode::INTERNAL_SERVER_ERROR, Json(ErrorResponse { error: e.to_string() })).into_response()
+        }
+    }
+}
+
+async fn list_agents(
+    State(state): State<AppState>,
+    axum::extract::Query(query): axum::extract::Query<ListAgentsQuery>,
+) -> impl IntoResponse {
+    let registry = state.registry.lock().await;
+
+    let agents: Vec<AgentResponse> = if let Some(ref skill) = query.skill {
+        registry.find_by_skill(skill)
+            .into_iter()
+            .map(AgentResponse::from)
+            .collect()
+    } else if let Some(ref status_str) = query.status {
+        match status_str.as_str() {
+            "online" => registry.list_by_status(AgentStatus::Online)
+                .into_iter()
+                .map(AgentResponse::from)
+                .collect(),
+            "offline" => registry.list_by_status(AgentStatus::Offline)
+                .into_iter()
+                .map(AgentResponse::from)
+                .collect(),
+            _ => registry.list().into_iter().map(AgentResponse::from).collect(),
+        }
+    } else {
+        registry.list().into_iter().map(AgentResponse::from).collect()
+    };
+
+    Json(agents).into_response()
+}
+
+async fn get_agent(
+    State(state): State<AppState>,
+    Path(id): Path<String>,
+) -> impl IntoResponse {
+    let registry = state.registry.lock().await;
+    match registry.get(&id) {
+        Some(profile) => Json(AgentResponse::from(profile)).into_response(),
+        None => (StatusCode::NOT_FOUND, Json(ErrorResponse { error: "agent not found".into() })).into_response(),
+    }
+}
+
+async fn deregister_agent(
+    State(state): State<AppState>,
+    Path(id): Path<String>,
+) -> impl IntoResponse {
+    let mut registry = state.registry.lock().await;
+    match registry.deregister(&id) {
+        Ok(_) => StatusCode::NO_CONTENT.into_response(),
+        Err(DiscoveryError::NotFound(_)) => {
+            (StatusCode::NOT_FOUND, Json(ErrorResponse { error: "agent not found".into() })).into_response()
+        }
+        Err(e) => {
+            (StatusCode::BAD_REQUEST, Json(ErrorResponse { error: e.to_string() })).into_response()
+        }
+    }
+}
+
+async fn heartbeat_agent(
+    State(state): State<AppState>,
+    Path(id): Path<String>,
+) -> impl IntoResponse {
+    let mut registry = state.registry.lock().await;
+    match registry.heartbeat(&id) {
+        Ok(()) => {
+            let profile = registry.get(&id).unwrap();
+            Json(AgentResponse::from(profile)).into_response()
+        }
+        Err(DiscoveryError::NotFound(_)) => {
+            (StatusCode::NOT_FOUND, Json(ErrorResponse { error: "agent not found".into() })).into_response()
+        }
+        Err(e) => {
+            (StatusCode::BAD_REQUEST, Json(ErrorResponse { error: e.to_string() })).into_response()
+        }
+    }
+}
+
+async fn update_agent_profile(
+    State(state): State<AppState>,
+    Path(id): Path<String>,
+    Json(body): Json<UpdateProfileRequest>,
+) -> impl IntoResponse {
+    let mut registry = state.registry.lock().await;
+    match registry.update_profile(&id, body.name, body.traits, body.skills) {
+        Ok(()) => {
+            let profile = registry.get(&id).unwrap();
+            Json(AgentResponse::from(profile)).into_response()
+        }
+        Err(DiscoveryError::NotFound(_)) => {
+            (StatusCode::NOT_FOUND, Json(ErrorResponse { error: "agent not found".into() })).into_response()
+        }
+        Err(DiscoveryError::NameRequired) => {
+            (StatusCode::BAD_REQUEST, Json(ErrorResponse { error: "name is required".into() })).into_response()
+        }
+        Err(e) => {
+            (StatusCode::BAD_REQUEST, Json(ErrorResponse { error: e.to_string() })).into_response()
+        }
+    }
+}
+
+async fn search_agents(
+    State(state): State<AppState>,
+    axum::extract::Query(query): axum::extract::Query<SearchAgentsQuery>,
+) -> impl IntoResponse {
+    let registry = state.registry.lock().await;
+
+    let agents: Vec<AgentResponse> = if let Some(ref skills_str) = query.skills {
+        let skills: Vec<String> = skills_str
+            .split(',')
+            .map(|s| s.trim().to_string())
+            .filter(|s| !s.is_empty())
+            .collect();
+        let results = registry.find_by_skills(&skills);
+
+        results
+            .into_iter()
+            .filter(|p| {
+                if let Some(ref status_str) = query.status {
+                    match status_str.as_str() {
+                        "online" => p.status == AgentStatus::Online,
+                        "offline" => p.status == AgentStatus::Offline,
+                        _ => true,
+                    }
+                } else {
+                    true
+                }
+            })
+            .map(AgentResponse::from)
+            .collect()
+    } else {
+        registry.list().into_iter().map(AgentResponse::from).collect()
+    };
+
+    Json(agents).into_response()
+}
+
+async fn agent_stats(
+    State(state): State<AppState>,
+) -> impl IntoResponse {
+    let registry = state.registry.lock().await;
+    let total = registry.count();
+    let online = registry.count_online();
+    Json(AgentStatsResponse {
+        total,
+        online,
+        offline: total - online,
+    })
 }

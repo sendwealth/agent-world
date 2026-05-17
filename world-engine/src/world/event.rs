@@ -7,6 +7,9 @@ use super::enums::{AgentPhase, Currency, DeathReason};
 pub enum EventType {
     TickAdvanced,
     AgentSpawned,
+    AgentRegistered,
+    AgentDeregistered,
+    AgentHeartbeat,
     AgentDying,
     AgentDied,
     AgentRescued,
@@ -37,6 +40,9 @@ pub enum EventType {
 pub enum WorldEvent {
     TickAdvanced { tick: u64 },
     AgentSpawned { agent_id: String, name: String },
+    AgentRegistered { agent_id: String, name: String },
+    AgentDeregistered { agent_id: String, name: String },
+    AgentHeartbeat { agent_id: String, timestamp: u64 },
     AgentDying { agent_id: String, reason: DeathReason, grace_ticks: u64 },
     AgentDied { agent_id: String, reason: DeathReason },
     AgentRescued { agent_id: String },
@@ -73,6 +79,9 @@ impl WorldEvent {
         match self {
             WorldEvent::TickAdvanced { .. } => EventType::TickAdvanced,
             WorldEvent::AgentSpawned { .. } => EventType::AgentSpawned,
+            WorldEvent::AgentRegistered { .. } => EventType::AgentRegistered,
+            WorldEvent::AgentDeregistered { .. } => EventType::AgentDeregistered,
+            WorldEvent::AgentHeartbeat { .. } => EventType::AgentHeartbeat,
             WorldEvent::AgentDying { .. } => EventType::AgentDying,
             WorldEvent::AgentDied { .. } => EventType::AgentDied,
             WorldEvent::AgentRescued { .. } => EventType::AgentRescued,
@@ -101,6 +110,9 @@ impl WorldEvent {
         match self {
             WorldEvent::TickAdvanced { .. } => None,
             WorldEvent::AgentSpawned { agent_id, .. } => Some(agent_id),
+            WorldEvent::AgentRegistered { agent_id, .. } => Some(agent_id),
+            WorldEvent::AgentDeregistered { agent_id, .. } => Some(agent_id),
+            WorldEvent::AgentHeartbeat { agent_id, .. } => Some(agent_id),
             WorldEvent::AgentDying { agent_id, .. } => Some(agent_id),
             WorldEvent::AgentDied { agent_id, .. } => Some(agent_id),
             WorldEvent::AgentRescued { agent_id } => Some(agent_id),

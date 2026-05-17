@@ -1,5 +1,5 @@
 use std::sync::Arc;
-use tokio::sync::Mutex;
+use tokio::sync::RwLock;
 
 use agent_world_engine::economy::task::TaskBoard;
 use agent_world_engine::wal::WAL;
@@ -40,7 +40,7 @@ async fn main() {
     println!("   EventBus: created (capacity: 256)");
 
     // Subscribe WAL to all events (write-ahead logging)
-    let wal_writer = Arc::new(Mutex::new(wal));
+    let wal_writer = Arc::new(RwLock::new(wal));
     let wal_subscriber = wal_writer.clone();
     let mut wal_rx = event_bus.subscribe();
 
@@ -49,7 +49,7 @@ async fn main() {
         loop {
             match wal_rx.recv().await {
                 Ok(event) => {
-                    let mut wal = wal_subscriber.lock().await;
+                    let mut wal = wal_subscriber.write().await;
                     if let Err(e) = wal.append_event(&event) {
                         eprintln!("[WAL] Failed to write event: {}", e);
                     }
@@ -64,8 +64,8 @@ async fn main() {
         }
     });
 
-    // Initialize task board with event bus
-    let task_board = Arc::new(Mutex::new(TaskBoard::with_event_bus(event_bus)));
+    // Initialize task board with event bus (use RwLock for read concurrency)
+    let task_board = Arc::new(RwLock::new(TaskBoard::with_event_bus(event_bus)));
 
     // Build the HTTP API router with WAL support
     let app = agent_world_engine::api::create_router_with_wal(task_board, wal_writer.clone());
@@ -94,7 +94,7 @@ async fn main() {
 
     // Final snapshot and close WAL
     {
-        let mut wal = shutdown_wal.lock().await;
+        let mut wal = shutdown_wal.write().await;
         if let Err(e) = wal.take_snapshot(&[], 0) {
             eprintln!("[WAL] Final snapshot failed: {}", e);
         }

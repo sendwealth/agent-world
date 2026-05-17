@@ -9,7 +9,7 @@
 use std::collections::HashMap;
 use std::sync::Arc;
 
-use tokio::sync::Mutex;
+use tokio::sync::RwLock;
 use uuid::Uuid;
 
 use agent_world_engine::economy::token_burn::{AgentRecord, ConsumptionConfig, SkillRecord, TokenBurnEngine};
@@ -29,7 +29,7 @@ use agent_world_engine::world::state::EventBus;
 /// simulating the production startup path from `main.rs`.
 struct WorldState {
     event_bus: Arc<EventBus>,
-    task_board: Arc<Mutex<TaskBoard>>,
+    task_board: Arc<RwLock<TaskBoard>>,
     token_engine: TokenBurnEngine,
     reward_distributor: RewardDistributor,
     escrow_manager: EscrowManager,
@@ -46,7 +46,7 @@ impl WorldState {
         let config = ConsumptionConfig::from_yaml_value(&value);
 
         let event_bus = Arc::new(EventBus::new(4096));
-        let task_board = Arc::new(Mutex::new(TaskBoard::new()));
+        let task_board = Arc::new(RwLock::new(TaskBoard::new()));
 
         Self {
             event_bus,
@@ -63,7 +63,7 @@ impl WorldState {
     /// Bootstrap with default config (no YAML).
     fn new_default() -> Self {
         let event_bus = Arc::new(EventBus::new(4096));
-        let task_board = Arc::new(Mutex::new(TaskBoard::new()));
+        let task_board = Arc::new(RwLock::new(TaskBoard::new()));
 
         Self {
             event_bus,
@@ -142,7 +142,7 @@ impl WorldState {
 
         // Process task expiry
         {
-            let mut board = self.task_board.lock().await;
+            let mut board = self.task_board.write().await;
             board.process_expiry(self.tick);
         }
 
@@ -223,7 +223,7 @@ economy:
 
     // TaskBoard should be ready
     {
-        let board = world.task_board.lock().await;
+        let board = world.task_board.read().await;
         assert!(board.list().is_empty(), "TaskBoard should start empty");
     }
 
@@ -422,7 +422,7 @@ async fn test_100_tick_stability_no_panics_consistent() {
 
     // Set up task board balances
     {
-        let mut board = world.task_board.lock().await;
+        let mut board = world.task_board.write().await;
         board.set_balance(&alice_id, 50_000);
         board.set_balance(&bob_id, 50_000);
         board.set_balance(&carol_id, 50_000);
@@ -439,7 +439,7 @@ async fn test_100_tick_stability_no_panics_consistent() {
         if tick_num % 20 == 0 {
             let publisher = if tick_num % 40 == 0 { &alice_id } else { &bob_id };
             let task_id = {
-                let mut board = world.task_board.lock().await;
+                let mut board = world.task_board.write().await;
                 board.create_task(
                     format!("Task @ tick {}", tick_num),
                     format!("Integration task created at tick {}", tick_num),
@@ -453,7 +453,7 @@ async fn test_100_tick_stability_no_panics_consistent() {
 
             // Complete the task within the same tick
             let assignee = if publisher == &alice_id { &bob_id } else { &carol_id };
-            let mut board = world.task_board.lock().await;
+            let mut board = world.task_board.write().await;
             board.claim_task(task_id, assignee.clone()).unwrap();
             board.start_task(task_id).unwrap();
             board.submit_result(task_id, format!("Done at tick {}", tick_num)).unwrap();
@@ -499,7 +499,7 @@ async fn test_100_tick_stability_no_panics_consistent() {
 
     // Verify task board state
     {
-        let board = world.task_board.lock().await;
+        let board = world.task_board.read().await;
         for task in board.list() {
             assert_eq!(task.status, TaskStatus::Completed,
                 "All tasks should be completed, found {:?}", task.status);

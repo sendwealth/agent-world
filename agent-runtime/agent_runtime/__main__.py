@@ -24,27 +24,25 @@ import argparse
 import asyncio
 import json
 import logging
+import os
 import signal
 import sys
 import time
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
-from uuid import uuid4
 
 from agent_runtime import __version__
 from agent_runtime.config import (
     AgentSpawnConfig,
     RuntimeConfig,
-    WorldConfig,
     load_runtime_config,
-    parse_runtime_config,
 )
 from agent_runtime.core.act import ActionExecutor
-from agent_runtime.core.think_loop import ThinkLoop, ThinkLoopConfig
+from agent_runtime.core.think_loop import ThinkLoop
 from agent_runtime.llm.base import LLMConfig, ProviderType
-from agent_runtime.memory.working_memory import WorkingMemory
 from agent_runtime.models.agent_state import AgentState
+from agent_runtime.models.skill import Skill
 from agent_runtime.survival.instinct import SurvivalInstinct
 
 logger = logging.getLogger(__name__)
@@ -138,8 +136,6 @@ def spawn_agent(config: AgentSpawnConfig) -> AgentState:
 
     # Register initial skills
     for skill_name, level in config.skills.items():
-        from agent_runtime.models.skill import Skill
-
         state.add_skill(Skill(name=skill_name, level=level))
 
     logger.info(
@@ -185,12 +181,34 @@ class RunStats:
         }
 
 
+def _register_signal_handler(loop: asyncio.AbstractEventLoop, callback: Any) -> None:
+    """Register a SIGINT handler, with a cross-platform fallback.
+
+    ``loop.add_signal_handler`` is Unix-only. On Windows we fall back to
+    ``signal.signal()`` which works but runs the callback synchronously.
+    """
+    try:
+        loop.add_signal_handler(signal.SIGINT, callback)
+    except NotImplementedError:
+        # Windows fallback
+        signal.signal(signal.SIGINT, lambda *_: callback())
+
+
+def _unregister_signal_handler(loop: asyncio.AbstractEventLoop) -> None:
+    """Remove the SIGINT handler registered by ``_register_signal_handler``."""
+    try:
+        loop.remove_signal_handler(signal.SIGINT)
+    except (NotImplementedError, OSError):
+        # Windows: restore default handler
+        signal.signal(signal.SIGINT, signal.SIG_DFL)
+
+
 async def run_agent(config: RuntimeConfig) -> RunStats:
     """Spawn an agent and run its think loop until signalled to stop.
 
     This is the main runtime entry point.  It:
     1. Creates the agent state from config.
-    2. Wires up survival instinct, action executor, working memory.
+    2. Wires up survival instinct and action executor.
     3. Runs the observe-think-decide-act loop.
     4. Handles SIGINT for graceful shutdown.
     """
@@ -203,7 +221,6 @@ async def run_agent(config: RuntimeConfig) -> RunStats:
     # Set up components
     survival = SurvivalInstinct()
     executor = ActionExecutor()
-    working_memory = WorkingMemory(capacity=20)
 
     think_loop = ThinkLoop(
         state=state,
@@ -214,7 +231,6 @@ async def run_agent(config: RuntimeConfig) -> RunStats:
 
     # Graceful shutdown on SIGINT
     loop = asyncio.get_running_loop()
-    shutdown_event = asyncio.Event()
 
     def _signal_handler() -> None:
         logger.info(
@@ -222,9 +238,8 @@ async def run_agent(config: RuntimeConfig) -> RunStats:
             extra={"agent": state.name, "event": "shutdown_signal"},
         )
         think_loop.stop()
-        shutdown_event.set()
 
-    loop.add_signal_handler(signal.SIGINT, _signal_handler)
+    _register_signal_handler(loop, _signal_handler)
 
     logger.info(
         "Starting agent runtime",
@@ -247,7 +262,7 @@ async def run_agent(config: RuntimeConfig) -> RunStats:
         stats.end_time = time.monotonic()
         stats.ticks = think_loop.tick
         stats.errors = think_loop.total_errors
-        loop.remove_signal_handler(signal.SIGINT)
+        _unregister_signal_handler(loop)
 
     logger.info(
         "Agent runtime stopped",
@@ -350,7 +365,14 @@ def parse_traits(trait_args: list[str] | None) -> dict[str, float]:
     for item in trait_args:
         if "=" in item:
             key, val = item.split("=", 1)
-            traits[key.strip()] = float(val.strip())
+            try:
+                traits[key.strip()] = float(val.strip())
+            except ValueError:
+                logger.error(
+                    "Invalid trait value for %r: %r (expected a number)",
+                    key.strip(), val,
+                )
+                sys.exit(1)
         else:
             logger.warning("Ignoring malformed trait: %r (expected key=value)", item)
     return traits
@@ -439,7 +461,16 @@ def main() -> None:
 
     if args.command == "spawn":
         config = build_config_from_args(args)
-        stats = asyncio.run(run_agent(config))
+        try:
+            stats = asyncio.run(run_agent(config))
+        except KeyboardInterrupt:
+            # Graceful handling: user pressed Ctrl+C during asyncio.run()
+            # which cancels the coroutine — stats summary is skipped, that's OK.
+            logger.info(
+                "Agent runtime interrupted by user",
+                extra={"event": "keyboard_interrupt"},
+            )
+            sys.exit(0)
         # Print final summary to stdout (always human-readable)
         print(json.dumps(stats.to_dict(), indent=2))
     else:

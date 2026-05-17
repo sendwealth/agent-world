@@ -8,17 +8,15 @@ Covers:
 - Runtime execution (think loop runs, stats collected)
 - Signal handling (SIGINT graceful shutdown)
 - Structured JSON logging
+- Error handling (bad trait values, unknown providers, YAML floats)
 """
 
 from __future__ import annotations
 
-import asyncio
 import json
 import logging
-import signal
-import tempfile
+import os
 from pathlib import Path
-from unittest.mock import patch
 
 import pytest
 
@@ -110,6 +108,12 @@ agent:
         with pytest.raises(ValueError, match="Unsupported"):
             load_config_file(p)
 
+    def test_empty_yaml_returns_empty_dict(self, tmp_path: Path):
+        p = tmp_path / "empty.yaml"
+        p.write_text("")
+        data = load_config_file(p)
+        assert data == {}
+
 
 # ---------------------------------------------------------------------------
 # Config parsing
@@ -176,6 +180,49 @@ class TestParseRuntimeConfig:
         config = parse_runtime_config(raw)
         assert config.agent.skills == {"research": 5, "teaching": 1}
 
+    def test_skills_as_floats(self):
+        """YAML parses 3.0 as float — ensure it's converted to int."""
+        raw = {"agent": {"skills": {"coding": 3.0, "trading": 1.5}}}
+        config = parse_runtime_config(raw)
+        assert config.agent.skills == {"coding": 3, "trading": 1}
+
+    def test_skills_as_non_numeric_string_warns(self):
+        """Non-numeric string skill levels should be silently dropped with a warning."""
+        raw = {"agent": {"skills": {"coding": "expert"}}}
+        config = parse_runtime_config(raw)
+        assert config.agent.skills == {}
+
+    def test_unknown_llm_provider_exits(self):
+        """Unknown provider string should cause sys.exit with clear message."""
+        raw = {"llm": {"provider": "azure"}}
+        with pytest.raises(SystemExit):
+            parse_runtime_config(raw)
+
+    def test_api_key_from_env_var(self, monkeypatch):
+        """API key should come from environment, not config file."""
+        monkeypatch.setenv("LLM_API_KEY", "test-key-123")
+        raw = {"llm": {"provider": "ollama", "model": "llama3"}}
+        config = parse_runtime_config(raw)
+        assert config.llm is not None
+        assert config.llm.api_key == "test-key-123"
+
+    def test_api_key_from_provider_specific_env(self, monkeypatch):
+        """Provider-specific env var (e.g. OPENAI_API_KEY) should work."""
+        monkeypatch.setenv("OPENAI_API_KEY", "openai-key-456")
+        raw = {"llm": {"provider": "openai", "model": "gpt-4"}}
+        config = parse_runtime_config(raw)
+        assert config.llm is not None
+        assert config.llm.api_key == "openai-key-456"
+
+    def test_api_key_not_from_config_file(self, monkeypatch):
+        """api_key in config file should be ignored."""
+        monkeypatch.delenv("LLM_API_KEY", raising=False)
+        monkeypatch.delenv("OLLAMA_API_KEY", raising=False)
+        raw = {"llm": {"provider": "ollama", "api_key": "should-be-ignored"}}
+        config = parse_runtime_config(raw)
+        assert config.llm is not None
+        assert config.llm.api_key is None
+
 
 class TestLoadRuntimeConfig:
     def test_load_toml_file(self, tmp_path: Path):
@@ -202,6 +249,18 @@ agent:
         assert config.agent.name == "YamlFile"
         assert config.agent.tokens == 777
 
+    def test_yaml_float_skills(self, tmp_path: Path):
+        """YAML parses bare numbers as float — ensure they become int skills."""
+        p = _write_yaml(tmp_path / "skills.yaml", """
+agent:
+  name: FloatSkillBot
+  skills:
+    coding: 3.0
+    trading: 2
+""")
+        config = load_runtime_config(p)
+        assert config.agent.skills == {"coding": 3, "trading": 2}
+
 
 # ---------------------------------------------------------------------------
 # Trait / skill parsing
@@ -222,6 +281,11 @@ class TestParseTraits:
     def test_malformed_trait_ignored(self):
         result = parse_traits(["curiosity=0.8", "bad_trait"])
         assert result == {"curiosity": 0.8}
+
+    def test_non_numeric_trait_exits(self):
+        """Non-numeric trait values should cause a clear exit, not a raw traceback."""
+        with pytest.raises(SystemExit):
+            parse_traits(["curiosity=not_a_number"])
 
 
 class TestParseSkills:
@@ -379,6 +443,27 @@ max_ticks = 50
         config = build_config_from_args(args)
         assert "coding" in config.agent.skills
         assert "research" in config.agent.skills
+
+    def test_default_name_when_none_provided(self):
+        parser = build_parser()
+        args = parser.parse_args(["spawn"])
+        config = build_config_from_args(args)
+        assert config.agent.name == "Agent"  # Default from RuntimeConfig
+
+    def test_skills_merge_with_config_file(self, tmp_path: Path):
+        cfg_path = _write_yaml(tmp_path / "base.yaml", """
+agent:
+  name: MergeBot
+  skills:
+    coding: 3
+""")
+        parser = build_parser()
+        args = parser.parse_args([
+            "spawn", "--config", str(cfg_path), "--skills", "trading",
+        ])
+        config = build_config_from_args(args)
+        assert "coding" in config.agent.skills  # From file
+        assert "trading" in config.agent.skills  # From CLI
 
 
 # ---------------------------------------------------------------------------

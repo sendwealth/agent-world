@@ -58,6 +58,8 @@ Config file example (YAML)::
 from __future__ import annotations
 
 import logging
+import os
+import sys
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
@@ -69,6 +71,9 @@ from agent_runtime.llm.base import LLMConfig, ProviderType
 
 logger = logging.getLogger(__name__)
 
+# Default World Engine URL (single source of truth)
+_DEFAULT_ENGINE_URL = "http://localhost:3000"
+
 
 # ---------------------------------------------------------------------------
 # Data classes
@@ -79,7 +84,7 @@ logger = logging.getLogger(__name__)
 class WorldConfig:
     """Connection settings for the World Engine."""
 
-    engine_url: str = "http://localhost:3000"
+    engine_url: str = _DEFAULT_ENGINE_URL
 
 
 @dataclass
@@ -158,17 +163,38 @@ def load_config_file(path: Path) -> dict[str, Any]:
 
 
 def _parse_llm_config(data: dict[str, Any]) -> LLMConfig | None:
-    """Parse the ``[llm]`` section into an LLMConfig."""
+    """Parse the ``[llm]`` section into an LLMConfig.
+
+    The API key is loaded from the environment variable ``LLM_API_KEY``
+    (or ``OPENAI_API_KEY`` / ``ANTHROPIC_API_KEY`` as provider-specific
+    fallbacks). Config file ``api_key`` entries are ignored to prevent
+    accidental plaintext secret exposure.
+    """
     if not data:
         return None
 
     provider_str = data.get("provider", "ollama").lower()
-    provider = ProviderType(provider_str)
+    try:
+        provider = ProviderType(provider_str)
+    except ValueError:
+        valid = ", ".join(p.value for p in ProviderType)
+        logger.error(
+            "Unknown LLM provider %r in config. Valid options: %s",
+            provider_str, valid,
+        )
+        sys.exit(1)
+
+    # Load API key from environment, never from config file
+    api_key = (
+        os.environ.get("LLM_API_KEY")
+        or os.environ.get(f"{provider_str.upper()}_API_KEY")
+        or None
+    )
 
     return LLMConfig(
         provider=provider,
         model=data.get("model", "llama3"),
-        api_key=data.get("api_key"),
+        api_key=api_key,
         base_url=data.get("base_url"),
         timeout=data.get("timeout", 60.0),
         max_tokens=data.get("max_tokens", 4096),
@@ -190,7 +216,7 @@ def _parse_think_loop_config(data: dict[str, Any]) -> ThinkLoopConfig:
 def _parse_world_config(data: dict[str, Any]) -> WorldConfig:
     """Parse the ``[world]`` section."""
     return WorldConfig(
-        engine_url=data.get("engine_url", "http://localhost:3000"),
+        engine_url=data.get("engine_url", _DEFAULT_ENGINE_URL),
     )
 
 
@@ -202,15 +228,22 @@ def parse_runtime_config(raw: dict[str, Any]) -> RuntimeConfig:
     agent_raw = raw.get("agent", {})
     skills_raw = agent_raw.get("skills", {})
 
-    # Parse skills: accept {"coding": {"level": 3}} or {"coding": 3}
+    # Parse skills: accept {"coding": {"level": 3}} or {"coding": 3} or {"coding": 3.0}
     skills: dict[str, int] = {}
     for name, val in skills_raw.items():
         if isinstance(val, dict):
             skills[name] = val.get("level", 1)
         elif isinstance(val, int):
             skills[name] = val
-        elif isinstance(val, str):
+        elif isinstance(val, float):
             skills[name] = int(val)
+        elif isinstance(val, str):
+            try:
+                skills[name] = int(val)
+            except ValueError:
+                logger.warning(
+                    "Ignoring non-numeric skill level for %r: %r", name, val
+                )
 
     agent_cfg = AgentSpawnConfig(
         name=agent_raw.get("name", "Agent"),

@@ -28,6 +28,10 @@ pub enum EventType {
     TaskCompleted,
     TaskExpired,
     RewardDistributed,
+    KnowledgeListed,
+    KnowledgePurchased,
+    KnowledgeRated,
+    KnowledgeDelisted,
 }
 
 /// Events emitted by the world engine.
@@ -66,6 +70,28 @@ pub enum WorldEvent {
         xp_awarded: u64,
         reputation_change: f64,
     },
+    KnowledgeListed {
+        listing_id: String,
+        publisher: String,
+        price: u64,
+        currency: Currency,
+    },
+    KnowledgePurchased {
+        listing_id: String,
+        buyer: String,
+        seller: String,
+        price: u64,
+        currency: Currency,
+    },
+    KnowledgeRated {
+        listing_id: String,
+        rater: String,
+        score: u8,
+        average_rating: f64,
+    },
+    KnowledgeDelisted {
+        listing_id: String,
+    },
 }
 
 impl WorldEvent {
@@ -94,6 +120,10 @@ impl WorldEvent {
             WorldEvent::TaskCompleted { .. } => EventType::TaskCompleted,
             WorldEvent::TaskExpired { .. } => EventType::TaskExpired,
             WorldEvent::RewardDistributed { .. } => EventType::RewardDistributed,
+            WorldEvent::KnowledgeListed { .. } => EventType::KnowledgeListed,
+            WorldEvent::KnowledgePurchased { .. } => EventType::KnowledgePurchased,
+            WorldEvent::KnowledgeRated { .. } => EventType::KnowledgeRated,
+            WorldEvent::KnowledgeDelisted { .. } => EventType::KnowledgeDelisted,
         }
     }
 
@@ -122,6 +152,10 @@ impl WorldEvent {
             WorldEvent::TaskCompleted { .. } => None,
             WorldEvent::TaskExpired { .. } => None,
             WorldEvent::RewardDistributed { assignee_id, .. } => Some(assignee_id),
+            WorldEvent::KnowledgeListed { publisher, .. } => Some(publisher),
+            WorldEvent::KnowledgePurchased { buyer, .. } => Some(buyer),
+            WorldEvent::KnowledgeRated { rater, .. } => Some(rater),
+            WorldEvent::KnowledgeDelisted { .. } => None,
         }
     }
 

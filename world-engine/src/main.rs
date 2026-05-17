@@ -65,10 +65,12 @@ async fn main() {
     });
 
     // Initialize task board with event bus
+    // Clone the EventBus for the task board — both share the same broadcast channel.
+    let shared_event_bus = Arc::new(event_bus.clone());
     let task_board = Arc::new(Mutex::new(TaskBoard::with_event_bus(event_bus)));
 
-    // Build the HTTP API router with WAL support
-    let app = agent_world_engine::api::create_router_with_wal(task_board, wal_writer.clone());
+    // Build the HTTP API router with WAL and EventBus support
+    let app = agent_world_engine::api::create_router_with_wal(task_board, wal_writer.clone(), shared_event_bus);
 
     // Start the HTTP server
     let addr = std::net::SocketAddr::from(([127, 0, 0, 1], 3000));

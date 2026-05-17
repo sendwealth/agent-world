@@ -3,7 +3,8 @@ use serde::{Deserialize, Serialize};
 use super::enums::{AgentPhase, Currency, DeathReason};
 
 /// Discriminant for filtering events by kind.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
 pub enum EventType {
     TickAdvanced,
     AgentSpawned,

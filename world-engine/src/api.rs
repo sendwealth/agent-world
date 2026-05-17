@@ -1,30 +1,38 @@
+use std::convert::Infallible;
 use std::sync::Arc;
 
 use axum::{
     Json,
     Router,
-    extract::{Path, State},
+    extract::{Path, Query, State},
     http::StatusCode,
-    response::IntoResponse,
+    response::{
+        sse::{Event as SseEvent, KeepAlive, Sse},
+        IntoResponse,
+    },
     routing::{delete, get, post},
 };
+use futures::stream::Stream;
 use serde::{Deserialize, Serialize};
 use tokio::sync::Mutex;
 use uuid::Uuid;
 
 use crate::economy::task::{TaskBoard, Task};
 use crate::wal::WAL;
+use crate::world::event::EventType;
+use crate::world::state::SharedEventBus;
 
 // ── Shared State ──────────────────────────────────────────
 
 pub type SharedTaskBoard = Arc<Mutex<TaskBoard>>;
 pub type SharedWAL = Arc<Mutex<WAL>>;
 
-/// Combined state for the API with WAL support.
+/// Combined state for the API with WAL and EventBus support.
 #[derive(Clone)]
 pub struct AppState {
     pub board: SharedTaskBoard,
     pub wal: SharedWAL,
+    pub event_bus: SharedEventBus,
 }
 
 pub fn create_router(board: SharedTaskBoard) -> Router {
@@ -42,8 +50,16 @@ pub fn create_router(board: SharedTaskBoard) -> Router {
         .with_state(board)
 }
 
-pub fn create_router_with_wal(board: SharedTaskBoard, wal: SharedWAL) -> Router {
-    let state = AppState { board, wal };
+pub fn create_router_with_wal(
+    board: SharedTaskBoard,
+    wal: SharedWAL,
+    event_bus: SharedEventBus,
+) -> Router {
+    let state = AppState {
+        board,
+        wal,
+        event_bus,
+    };
     Router::new()
         // Task routes
         .route("/tasks", post(create_task_with_wal))
@@ -60,6 +76,8 @@ pub fn create_router_with_wal(board: SharedTaskBoard, wal: SharedWAL) -> Router 
         .route("/wal/stats", get(wal_stats))
         .route("/wal/snapshot", post(wal_snapshot))
         .route("/wal/verify", get(wal_verify))
+        // SSE route
+        .route("/events", get(events_sse))
         .with_state(state)
 }
 
@@ -108,6 +126,17 @@ impl Default for ListTasksQuery {
             assignee_id: None,
         }
     }
+}
+
+/// Query parameters for the SSE `/events` endpoint.
+///
+/// - `types`: Comma-separated list of event types to subscribe to
+///   (e.g. `tick_advanced,task_created,agent_died`). Empty = all events.
+/// - `agent_id`: Only receive events related to a specific agent.
+#[derive(Debug, Deserialize, Default)]
+pub struct EventsQuery {
+    pub types: Option<String>,
+    pub agent_id: Option<String>,
 }
 
 // ── Response Types ────────────────────────────────────────
@@ -488,4 +517,62 @@ async fn wal_verify(
         })).into_response(),
         Err(e) => (StatusCode::INTERNAL_SERVER_ERROR, Json(ErrorResponse { error: e.to_string() })).into_response(),
     }
+}
+
+// ── SSE Handler ───────────────────────────────────────────
+
+/// GET /events — Server-Sent Events endpoint.
+///
+/// Streams `WorldEvent`s to connected clients in real time.
+/// Supports optional query parameters for filtering:
+/// - `?types=tick_advanced,task_created` — only receive listed event types
+/// - `?agent_id=agent-001` — only receive events for a specific agent
+///
+/// Backpressure is handled by the underlying `tokio::sync::broadcast`
+/// channel. If a client falls behind, lagged events are skipped and a
+/// comment is injected into the SSE stream to signal the gap.
+async fn events_sse(
+    State(state): State<AppState>,
+    Query(params): Query<EventsQuery>,
+) -> Sse<impl Stream<Item = Result<SseEvent, Infallible>>> {
+    let event_bus = &state.event_bus;
+
+    // Parse optional event type filter
+    let filter_types: Vec<EventType> = params
+        .types
+        .as_deref()
+        .map(|s| {
+            s.split(',')
+                .filter_map(|t| serde_json::from_value(serde_json::Value::String(t.trim().to_string())).ok())
+                .collect()
+        })
+        .unwrap_or_default();
+
+    let agent_id = params.agent_id;
+
+    // Subscribe with filters
+    let mut rx = event_bus.subscribe_filtered(filter_types, agent_id);
+
+    // Convert the broadcast receiver into a stream that maps WorldEvent → SSE Event.
+    // On Lagged errors (backpressure), inject a keep-alive comment so the client
+    // knows events were dropped.
+    let stream = async_stream::stream! {
+        loop {
+            match rx.recv().await {
+                Ok(event) => {
+                    let data = event.to_json();
+                    yield Ok(SseEvent::default().data(data));
+                }
+                Err(tokio::sync::broadcast::error::RecvError::Lagged(n)) => {
+                    let msg = format!("lagged: {} events skipped", n);
+                    yield Ok(SseEvent::default().comment(msg));
+                }
+                Err(tokio::sync::broadcast::error::RecvError::Closed) => {
+                    break;
+                }
+            }
+        }
+    };
+
+    Sse::new(stream).keep_alive(KeepAlive::default())
 }

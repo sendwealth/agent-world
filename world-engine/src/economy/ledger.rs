@@ -185,6 +185,8 @@ pub struct MoneyLedger {
     audit_log: Vec<AuditRecord>,
     exchange_rate: ExchangeRate,
     wal: Option<WAL>,
+    /// Index of the last entry that was persisted to the WAL.
+    last_persisted_idx: usize,
 }
 
 impl MoneyLedger {
@@ -197,6 +199,7 @@ impl MoneyLedger {
             audit_log: Vec::new(),
             exchange_rate,
             wal: None,
+            last_persisted_idx: 0,
         };
         // Bootstrap system accounts
         let cb = Account::central_bank();
@@ -792,21 +795,32 @@ impl MoneyLedger {
     }
 
     fn persist_entries(&mut self) {
+        if self.wal.is_none() {
+            return;
+        }
+        // Collect snapshot data first to avoid borrow conflicts.
+        let start = self.last_persisted_idx;
+        let events: Vec<WorldEvent> = self.entries[start..].iter().map(|entry| {
+            let new_balance = self.get_balance(&entry.account_id, entry.currency);
+            let old_balance = match entry.side {
+                EntrySide::Credit => new_balance.saturating_sub(entry.amount),
+                EntrySide::Debit => new_balance.saturating_add(entry.amount),
+            };
+            WorldEvent::BalanceChanged {
+                agent_id: entry.account_id.clone(),
+                currency: entry.currency,
+                old_balance,
+                new_balance,
+            }
+        }).collect();
         if let Some(ref mut wal) = self.wal {
-            // Write the most recently added entries as a Transaction event
-            // so the WAL captures actual financial data for crash recovery.
-            if let Some(last) = self.entries.last() {
-                let event = WorldEvent::BalanceChanged {
-                    agent_id: last.account_id.clone(),
-                    currency: last.currency,
-                    old_balance: 0, // old balance not tracked per-entry; snapshot provides full state
-                    new_balance: last.amount,
-                };
+            for event in events {
                 if let Err(e) = wal.append_event(&event) {
                     eprintln!("[Ledger] WAL write failed: {}", e);
                 }
             }
         }
+        self.last_persisted_idx = self.entries.len();
     }
 }
 

@@ -1,10 +1,11 @@
 "use client";
 
-import { useEffect, useState, useMemo } from "react";
+import { useEffect, useState, useMemo, useRef } from "react";
 import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";
 import type { Agent, WorldEvent } from "@/types/world";
 import { fetchJSON } from "@/lib/api";
+import { useSSE } from "@/hooks/useSSE";
 
 const phaseLabels: Record<string, string> = {
   newborn: "新生",
@@ -92,24 +93,28 @@ export default function AgentDetailPage() {
   const agentId = params.id as string;
 
   const [agent, setAgent] = useState<Agent | null>(null);
-  const [events, setEvents] = useState<WorldEvent[]>([]);
   const [allAgents, setAllAgents] = useState<Agent[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
+  // SSE events for this agent (all events, we filter below)
+  const sse = useSSE<WorldEvent>("/api/v1/world/events", { maxItems: 200 });
+  const events = sse.data;
+
+  const refreshPending = useRef(false);
+
+  // Initial load
   useEffect(() => {
     let cancelled = false;
 
     async function load() {
       try {
-        const [agentData, eventsData, agentsData] = await Promise.all([
+        const [agentData, agentsData] = await Promise.all([
           fetchJSON<Agent>(`/api/v1/agents/${agentId}`),
-          fetchJSON<WorldEvent[]>("/api/v1/world/events").catch(() => []),
           fetchJSON<Agent[]>("/api/v1/agents").catch(() => []),
         ]);
         if (!cancelled) {
           setAgent(agentData);
-          setEvents(eventsData);
           setAllAgents(agentsData);
           setError(null);
         }
@@ -123,12 +128,66 @@ export default function AgentDetailPage() {
     }
 
     load();
+    return () => {
+      cancelled = true;
+    };
+  }, [agentId]);
+
+  // SSE-driven refresh: when events related to this agent arrive, refresh data
+  useEffect(() => {
+    if (!sse.connected || events.length === 0) return;
+
+    const latestEvent = events[0];
+    const isRelevant =
+      latestEvent.agentId === agentId ||
+      latestEvent.targetId === agentId ||
+      latestEvent.type === "agent_spawn" ||
+      latestEvent.type === "agent_death";
+
+    if (isRelevant && !refreshPending.current) {
+      refreshPending.current = true;
+      setTimeout(async () => {
+        try {
+          const [agentData, agentsData] = await Promise.all([
+            fetchJSON<Agent>(`/api/v1/agents/${agentId}`),
+            fetchJSON<Agent[]>("/api/v1/agents").catch(() => []),
+          ]);
+          setAgent(agentData);
+          setAllAgents(agentsData);
+        } catch {
+          // Ignore refresh errors
+        }
+        refreshPending.current = false;
+      }, 500);
+    }
+  }, [events, agentId, sse.connected]);
+
+  // Fallback polling when SSE is not connected
+  useEffect(() => {
+    if (sse.connected) return;
+
+    let cancelled = false;
+    async function load() {
+      try {
+        const [agentData, agentsData] = await Promise.all([
+          fetchJSON<Agent>(`/api/v1/agents/${agentId}`),
+          fetchJSON<Agent[]>("/api/v1/agents").catch(() => []),
+        ]);
+        if (!cancelled) {
+          setAgent(agentData);
+          setAllAgents(agentsData);
+        }
+      } catch {
+        // Ignore
+      }
+    }
+
     const interval = setInterval(load, 5000);
     return () => {
       cancelled = true;
       clearInterval(interval);
     };
-  }, [agentId]);
+  }, [agentId, sse.connected]);
 
   // Filter events for this agent
   const agentEvents = useMemo(

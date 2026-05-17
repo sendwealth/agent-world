@@ -3,10 +3,11 @@ use tokio::sync::Mutex;
 
 use agent_world_engine::economy::task::TaskBoard;
 use agent_world_engine::wal::WAL;
+use agent_world_engine::world::EventBus;
 
 #[tokio::main]
 async fn main() {
-    let event_bus = agent_world_engine::world::EventBus::new(256);
+    let event_bus = Arc::new(EventBus::new(256));
 
     println!("Agent World Engine v1.0.0");
     println!("   Status: initializing...");
@@ -65,17 +66,36 @@ async fn main() {
     });
 
     // Initialize task board with event bus
-    let task_board = Arc::new(Mutex::new(TaskBoard::with_event_bus(event_bus)));
+    let task_board = Arc::new(Mutex::new(TaskBoard::with_event_bus((*event_bus).clone())));
 
     // Build the HTTP API router with WAL support
     let app = agent_world_engine::api::create_router_with_wal(task_board, wal_writer.clone());
 
     // Start the HTTP server
-    let addr = std::net::SocketAddr::from(([127, 0, 0, 1], 3000));
-    println!("   API server: http://{}", addr);
+    let http_addr = std::net::SocketAddr::from(([127, 0, 0, 1], 3000));
+    println!("   API server: http://{}", http_addr);
+
+    // Start the gRPC server alongside HTTP
+    let grpc_addr = std::net::SocketAddr::from(([127, 0, 0, 1], 50051));
+    let grpc_handle = match agent_world_engine::a2a::server::start_grpc_server(
+        grpc_addr,
+        event_bus.clone(),
+    )
+    .await
+    {
+        Ok(handle) => {
+            println!("   gRPC server: http://{}", grpc_addr);
+            Some(handle)
+        }
+        Err(e) => {
+            eprintln!("   gRPC server failed to start: {}", e);
+            None
+        }
+    };
+
     println!("   Status: ready");
 
-    let listener = tokio::net::TcpListener::bind(addr).await.unwrap();
+    let listener = tokio::net::TcpListener::bind(http_addr).await.unwrap();
 
     // Graceful shutdown on ctrl-c
     let shutdown_wal = wal_writer.clone();
@@ -90,6 +110,11 @@ async fn main() {
         _ = tokio::signal::ctrl_c() => {
             println!("\n[Server] SIGINT received, shutting down gracefully...");
         }
+    }
+
+    // Abort gRPC server
+    if let Some(handle) = grpc_handle {
+        handle.abort();
     }
 
     // Final snapshot and close WAL

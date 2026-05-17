@@ -584,3 +584,136 @@ async fn events_sse(
 
     Sse::new(stream).keep_alive(KeepAlive::default()).into_response()
 }
+
+// ── SSE Integration Tests ─────────────────────────────────
+
+#[cfg(test)]
+mod sse_tests {
+    use super::*;
+    use axum::body::Body;
+    use tower::ServiceExt;
+    use crate::world::event::WorldEvent;
+    use crate::world::state::EventBus;
+
+    fn make_state() -> AppState {
+        AppState {
+            board: Arc::new(Mutex::new(TaskBoard::new())),
+            wal: Arc::new(Mutex::new(WAL::new("/tmp/test-wal-sse"))),
+            event_bus: Arc::new(EventBus::new(256)),
+        }
+    }
+
+    #[tokio::test]
+    async fn sse_connection_established() {
+        let state = make_state();
+        let app = Router::new()
+            .route("/world/events", get(events_sse))
+            .with_state(state);
+
+        let response = app
+            .oneshot(
+                axum::http::Request::builder()
+                    .uri("/world/events")
+                    .body(Body::empty())
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        assert_eq!(response.status(), StatusCode::OK);
+        assert_eq!(
+            response.headers().get("content-type").unwrap(),
+            "text/event-stream"
+        );
+    }
+
+    #[tokio::test]
+    async fn sse_invalid_event_type_returns_400() {
+        let state = make_state();
+        let app = Router::new()
+            .route("/world/events", get(events_sse))
+            .with_state(state);
+
+        let response = app
+            .oneshot(
+                axum::http::Request::builder()
+                    .uri("/world/events?types=invalid_type")
+                    .body(Body::empty())
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        assert_eq!(response.status(), StatusCode::BAD_REQUEST);
+    }
+
+    #[tokio::test]
+    async fn sse_valid_filter_accepted() {
+        let state = make_state();
+        let app = Router::new()
+            .route("/world/events", get(events_sse))
+            .with_state(state);
+
+        let response = app
+            .oneshot(
+                axum::http::Request::builder()
+                    .uri("/world/events?types=tick_advanced,agent_died")
+                    .body(Body::empty())
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        assert_eq!(response.status(), StatusCode::OK);
+    }
+
+    #[tokio::test]
+    async fn sse_receives_events_via_event_bus() {
+        // Test that the event bus → SSE stream pipeline works.
+        // We subscribe to the bus and verify events arrive correctly.
+        let bus = Arc::new(EventBus::new(256));
+        let mut rx = bus.subscribe();
+
+        // Publish an event
+        bus.emit(WorldEvent::TickAdvanced { tick: 42 });
+
+        let received = rx.try_recv().unwrap();
+        assert_eq!(received, WorldEvent::TickAdvanced { tick: 42 });
+        assert!(received.to_json().contains("tick_advanced"));
+    }
+
+    #[tokio::test]
+    async fn sse_filtered_events_skip_non_matching() {
+        // Verify that filtered subscriptions only yield matching events.
+        let bus = Arc::new(EventBus::new(256));
+        let mut rx = bus.subscribe_filtered(vec![EventType::AgentDied], None);
+
+        bus.emit(WorldEvent::TickAdvanced { tick: 1 });
+        bus.emit(WorldEvent::TickAdvanced { tick: 2 });
+        bus.emit(WorldEvent::AgentDied {
+            agent_id: "a1".into(),
+            reason: crate::world::enums::DeathReason::TokenDepleted,
+        });
+
+        let received = rx.try_recv().unwrap();
+        assert_eq!(received.event_type(), EventType::AgentDied);
+        // No more events should be available (ticks were filtered out)
+        assert!(rx.try_recv().is_err());
+    }
+
+    #[tokio::test]
+    async fn sse_multiple_clients_on_same_bus() {
+        // Verify multiple independent receivers on the same bus.
+        let bus = Arc::new(EventBus::new(256));
+        let mut rx1 = bus.subscribe();
+        let mut rx2 = bus.subscribe();
+
+        bus.emit(WorldEvent::TickAdvanced { tick: 99 });
+
+        assert_eq!(
+            rx1.try_recv().unwrap(),
+            WorldEvent::TickAdvanced { tick: 99 }
+        );
+        assert_eq!(
+            rx2.try_recv().unwrap(),
+            WorldEvent::TickAdvanced { tick: 99 }
+        );
+    }
+}

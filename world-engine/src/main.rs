@@ -71,7 +71,15 @@ async fn main() {
     let app = agent_world_engine::api::create_router_with_wal(task_board, wal_writer.clone());
 
     // Start the HTTP server
-    let addr = std::net::SocketAddr::from(([127, 0, 0, 1], 3000));
+    let host: std::net::IpAddr = std::env::var("HOST")
+        .unwrap_or_else(|_| "127.0.0.1".to_string())
+        .parse()
+        .unwrap_or_else(|_| "127.0.0.1".parse().unwrap());
+    let port: u16 = std::env::var("PORT")
+        .ok()
+        .and_then(|s| s.parse().ok())
+        .unwrap_or(3000);
+    let addr = std::net::SocketAddr::from((host, port));
     println!("   API server: http://{}", addr);
     println!("   Status: ready");
 

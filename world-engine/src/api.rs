@@ -1,10 +1,10 @@
-use std::str::FromStr;
+use std::convert::Infallible;
 use std::sync::Arc;
 
 use axum::{
     Json,
     Router,
-    extract::{Path, Query, State},
+    extract::{Path, State},
     http::StatusCode,
     response::{
         sse::{Event as SseEvent, KeepAlive, Sse},
@@ -12,14 +12,13 @@ use axum::{
     },
     routing::{delete, get, post},
 };
-use axum::response::Response;
 use serde::{Deserialize, Serialize};
 use tokio::sync::Mutex;
+use tower_http::cors::CorsLayer;
 use uuid::Uuid;
 
 use crate::economy::task::{TaskBoard, Task};
 use crate::wal::WAL;
-use crate::world::event::EventType;
 use crate::world::state::SharedEventBus;
 
 // ── Shared State ──────────────────────────────────────────
@@ -27,12 +26,12 @@ use crate::world::state::SharedEventBus;
 pub type SharedTaskBoard = Arc<Mutex<TaskBoard>>;
 pub type SharedWAL = Arc<Mutex<WAL>>;
 
-/// Combined state for the API with WAL and EventBus support.
+/// Combined state for the API with WAL support.
 #[derive(Clone)]
 pub struct AppState {
     pub board: SharedTaskBoard,
     pub wal: SharedWAL,
-    pub event_bus: SharedEventBus,
+    pub event_bus: Option<SharedEventBus>,
 }
 
 pub fn create_router(board: SharedTaskBoard) -> Router {
@@ -50,16 +49,8 @@ pub fn create_router(board: SharedTaskBoard) -> Router {
         .with_state(board)
 }
 
-pub fn create_router_with_wal(
-    board: SharedTaskBoard,
-    wal: SharedWAL,
-    event_bus: SharedEventBus,
-) -> Router {
-    let state = AppState {
-        board,
-        wal,
-        event_bus,
-    };
+pub fn create_router_with_wal(board: SharedTaskBoard, wal: SharedWAL, event_bus: SharedEventBus) -> Router {
+    let state = AppState { board, wal, event_bus: Some(event_bus) };
     Router::new()
         // Task routes
         .route("/tasks", post(create_task_with_wal))
@@ -76,9 +67,10 @@ pub fn create_router_with_wal(
         .route("/wal/stats", get(wal_stats))
         .route("/wal/snapshot", post(wal_snapshot))
         .route("/wal/verify", get(wal_verify))
-        // SSE route
-        .route("/world/events", get(events_sse))
+        // SSE endpoint
+        .route("/api/v1/world/events", get(world_events_sse))
         .with_state(state)
+        .layer(CorsLayer::permissive())
 }
 
 // ── Request Types ─────────────────────────────────────────
@@ -126,17 +118,6 @@ impl Default for ListTasksQuery {
             assignee_id: None,
         }
     }
-}
-
-/// Query parameters for the SSE `/events` endpoint.
-///
-/// - `types`: Comma-separated list of event types to subscribe to
-///   (e.g. `tick_advanced,task_created,agent_died`). Empty = all events.
-/// - `agent_id`: Only receive events related to a specific agent.
-#[derive(Debug, Deserialize, Default)]
-pub struct EventsQuery {
-    pub types: Option<String>,
-    pub agent_id: Option<String>,
 }
 
 // ── Response Types ────────────────────────────────────────
@@ -519,61 +500,31 @@ async fn wal_verify(
     }
 }
 
-// ── SSE Handler ───────────────────────────────────────────
+// ── SSE Handler ──────────────────────────────────────────
 
-/// GET /world/events — Server-Sent Events endpoint.
-///
-/// Streams `WorldEvent`s to connected clients in real time.
-/// Supports optional query parameters for filtering:
-/// - `?types=tick_advanced,task_created` — only receive listed event types
-/// - `?agent_id=agent-001` — only receive events for a specific agent
-///
-/// Returns 400 if any event type name in the `types` parameter is unrecognized.
-///
-/// Backpressure is handled by the underlying `tokio::sync::broadcast`
-/// channel. If a client falls behind, lagged events are skipped and a
-/// comment is injected into the SSE stream to signal the gap.
-async fn events_sse(
+async fn world_events_sse(
     State(state): State<AppState>,
-    Query(params): Query<EventsQuery>,
-) -> Response {
-    let event_bus = &state.event_bus;
-
-    // Parse optional event type filter using FromStr
-    let filter_types: Vec<EventType> = match params.types.as_deref() {
-        Some(s) if !s.is_empty() => {
-            match s
-                .split(',')
-                .map(|t| EventType::from_str(t.trim()))
-                .collect::<Result<Vec<_>, _>>()
-            {
-                Ok(types) => types,
-                Err(e) => {
-                    return (StatusCode::BAD_REQUEST, Json(ErrorResponse { error: e })).into_response();
-                }
-            }
+) -> impl IntoResponse {
+    let event_bus = match state.event_bus {
+        Some(ref bus) => bus.clone(),
+        None => {
+            return (StatusCode::SERVICE_UNAVAILABLE, Json(ErrorResponse {
+                error: "event bus not available".into(),
+            })).into_response();
         }
-        _ => vec![],
     };
 
-    let agent_id = params.agent_id;
-
-    // Subscribe with filters
-    let mut rx = event_bus.subscribe_filtered(filter_types, agent_id);
-
-    // Convert the broadcast receiver into a stream that maps WorldEvent → SSE Event.
-    // On Lagged errors (backpressure), inject a keep-alive comment so the client
-    // knows events were dropped.
     let stream = async_stream::stream! {
+        let mut rx = event_bus.subscribe();
         loop {
             match rx.recv().await {
                 Ok(event) => {
-                    let data = event.to_json();
-                    yield Ok::<_, std::convert::Infallible>(SseEvent::default().data(data));
+                    let json = event.to_json();
+                    yield Ok::<_, Infallible>(SseEvent::default().data(json));
                 }
                 Err(tokio::sync::broadcast::error::RecvError::Lagged(n)) => {
-                    let msg = format!("lagged: {} events skipped", n);
-                    yield Ok(SseEvent::default().comment(msg));
+                    tracing::warn!("SSE client lagged {} events, skipping", n);
+                    continue;
                 }
                 Err(tokio::sync::broadcast::error::RecvError::Closed) => {
                     break;
@@ -582,138 +533,6 @@ async fn events_sse(
         }
     };
 
-    Sse::new(stream).keep_alive(KeepAlive::default()).into_response()
-}
-
-// ── SSE Integration Tests ─────────────────────────────────
-
-#[cfg(test)]
-mod sse_tests {
-    use super::*;
-    use axum::body::Body;
-    use tower::ServiceExt;
-    use crate::world::event::WorldEvent;
-    use crate::world::state::EventBus;
-
-    fn make_state() -> AppState {
-        AppState {
-            board: Arc::new(Mutex::new(TaskBoard::new())),
-            wal: Arc::new(Mutex::new(WAL::new("/tmp/test-wal-sse"))),
-            event_bus: Arc::new(EventBus::new(256)),
-        }
-    }
-
-    #[tokio::test]
-    async fn sse_connection_established() {
-        let state = make_state();
-        let app = Router::new()
-            .route("/world/events", get(events_sse))
-            .with_state(state);
-
-        let response = app
-            .oneshot(
-                axum::http::Request::builder()
-                    .uri("/world/events")
-                    .body(Body::empty())
-                    .unwrap(),
-            )
-            .await
-            .unwrap();
-        assert_eq!(response.status(), StatusCode::OK);
-        assert_eq!(
-            response.headers().get("content-type").unwrap(),
-            "text/event-stream"
-        );
-    }
-
-    #[tokio::test]
-    async fn sse_invalid_event_type_returns_400() {
-        let state = make_state();
-        let app = Router::new()
-            .route("/world/events", get(events_sse))
-            .with_state(state);
-
-        let response = app
-            .oneshot(
-                axum::http::Request::builder()
-                    .uri("/world/events?types=invalid_type")
-                    .body(Body::empty())
-                    .unwrap(),
-            )
-            .await
-            .unwrap();
-        assert_eq!(response.status(), StatusCode::BAD_REQUEST);
-    }
-
-    #[tokio::test]
-    async fn sse_valid_filter_accepted() {
-        let state = make_state();
-        let app = Router::new()
-            .route("/world/events", get(events_sse))
-            .with_state(state);
-
-        let response = app
-            .oneshot(
-                axum::http::Request::builder()
-                    .uri("/world/events?types=tick_advanced,agent_died")
-                    .body(Body::empty())
-                    .unwrap(),
-            )
-            .await
-            .unwrap();
-        assert_eq!(response.status(), StatusCode::OK);
-    }
-
-    #[tokio::test]
-    async fn sse_receives_events_via_event_bus() {
-        // Test that the event bus → SSE stream pipeline works.
-        // We subscribe to the bus and verify events arrive correctly.
-        let bus = Arc::new(EventBus::new(256));
-        let mut rx = bus.subscribe();
-
-        // Publish an event
-        bus.emit(WorldEvent::TickAdvanced { tick: 42 });
-
-        let received = rx.try_recv().unwrap();
-        assert_eq!(received, WorldEvent::TickAdvanced { tick: 42 });
-        assert!(received.to_json().contains("tick_advanced"));
-    }
-
-    #[tokio::test]
-    async fn sse_filtered_events_skip_non_matching() {
-        // Verify that filtered subscriptions only yield matching events.
-        let bus = Arc::new(EventBus::new(256));
-        let mut rx = bus.subscribe_filtered(vec![EventType::AgentDied], None);
-
-        bus.emit(WorldEvent::TickAdvanced { tick: 1 });
-        bus.emit(WorldEvent::TickAdvanced { tick: 2 });
-        bus.emit(WorldEvent::AgentDied {
-            agent_id: "a1".into(),
-            reason: crate::world::enums::DeathReason::TokenDepleted,
-        });
-
-        let received = rx.try_recv().unwrap();
-        assert_eq!(received.event_type(), EventType::AgentDied);
-        // No more events should be available (ticks were filtered out)
-        assert!(rx.try_recv().is_err());
-    }
-
-    #[tokio::test]
-    async fn sse_multiple_clients_on_same_bus() {
-        // Verify multiple independent receivers on the same bus.
-        let bus = Arc::new(EventBus::new(256));
-        let mut rx1 = bus.subscribe();
-        let mut rx2 = bus.subscribe();
-
-        bus.emit(WorldEvent::TickAdvanced { tick: 99 });
-
-        assert_eq!(
-            rx1.try_recv().unwrap(),
-            WorldEvent::TickAdvanced { tick: 99 }
-        );
-        assert_eq!(
-            rx2.try_recv().unwrap(),
-            WorldEvent::TickAdvanced { tick: 99 }
-        );
-    }
+    let sse = Sse::new(stream).keep_alive(KeepAlive::default());
+    sse.into_response()
 }

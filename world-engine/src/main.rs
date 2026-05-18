@@ -3,12 +3,13 @@ use tokio::sync::Mutex;
 
 use agent_world_engine::economy::task::TaskBoard;
 use agent_world_engine::wal::WAL;
+use agent_world_engine::world::state::SharedEventBus;
 
 #[tokio::main]
 async fn main() {
-    let event_bus = agent_world_engine::world::EventBus::new(256);
+    let event_bus: SharedEventBus = Arc::new(agent_world_engine::world::EventBus::new(256));
 
-    println!("Agent World Engine v0.1.0");
+    println!("Agent World Engine v1.0.0");
     println!("   Status: initializing...");
 
     // Initialize WAL and recover from crash
@@ -65,12 +66,10 @@ async fn main() {
     });
 
     // Initialize task board with event bus
-    // Clone the EventBus for the task board — both share the same broadcast channel.
-    let shared_event_bus = Arc::new(event_bus.clone());
-    let task_board = Arc::new(Mutex::new(TaskBoard::with_event_bus(event_bus)));
+    let task_board = Arc::new(Mutex::new(TaskBoard::with_shared_event_bus(event_bus.clone())));
 
-    // Build the HTTP API router with WAL and EventBus support
-    let app = agent_world_engine::api::create_router_with_wal(task_board, wal_writer.clone(), shared_event_bus);
+    // Build the HTTP API router with WAL support
+    let app = agent_world_engine::api::create_router_with_wal(task_board, wal_writer.clone(), event_bus);
 
     // Start the HTTP server
     let addr = std::net::SocketAddr::from(([127, 0, 0, 1], 3000));

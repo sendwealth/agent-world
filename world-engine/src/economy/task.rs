@@ -1,11 +1,12 @@
 use std::collections::HashMap;
+use std::sync::Arc;
 
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
 use crate::world::enums::Currency;
 use crate::world::event::WorldEvent;
-use crate::world::state::EventBus;
+use crate::world::state::{EventBus, SharedEventBus};
 
 use super::reward::{RewardConfig, RewardDistributor, RewardDistribution};
 use super::reputation::{ReputationConfig, ReputationSystem};
@@ -158,7 +159,7 @@ pub struct TaskBoard {
     balances: HashMap<String, u64>,
     /// Escrow amounts locked per task.
     escrows: HashMap<Uuid, u64>,
-    event_bus: Option<EventBus>,
+    event_bus: Option<SharedEventBus>,
     /// Optional reward distributor for fee deduction, XP, reputation, and ledger.
     reward_distributor: Option<RewardDistributor>,
     /// Optional reputation system for marketplace-reputation integration.
@@ -177,7 +178,7 @@ impl TaskBoard {
         }
     }
 
-    pub fn with_event_bus(event_bus: EventBus) -> Self {
+    pub fn with_shared_event_bus(event_bus: SharedEventBus) -> Self {
         Self {
             tasks: HashMap::new(),
             balances: HashMap::new(),
@@ -186,6 +187,10 @@ impl TaskBoard {
             reward_distributor: None,
             reputation_system: None,
         }
+    }
+
+    pub fn with_event_bus(event_bus: EventBus) -> Self {
+        Self::with_shared_event_bus(Arc::new(event_bus))
     }
 
     /// Create a TaskBoard with reward distribution enabled.

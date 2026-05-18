@@ -1,16 +1,16 @@
 [package]
 name = "agent-world-engine"
-version = "0.1.0"
+version = "1.0.0"
 edition = "2021"
 description = "World engine for Agent World — state, time, economy, rules"
 license = "MIT"
 
 [dependencies]
 tokio = { version = "1", features = ["full"] }
+axum = { version = "0.7", features = ["tokio"] }
+tower-http = { version = "0.5", features = ["cors"] }
 tokio-stream = "0.1"
 async-stream = "0.3"
-axum = "0.7"
-tower-http = { version = "0.5", features = ["cors"] }
 tonic = "0.12"
 prost = "0.13"
 serde = { version = "1", features = ["derive"] }
@@ -28,8 +28,7 @@ tempfile = "3"
 [dev-dependencies]
 tower = { version = "0.5", features = ["util"] }
 http-body-util = "0.1"
-reqwest = { version = "0.12", features = ["json", "stream"] }
-futures = "0.3"
+reqwest = { version = "0.12", features = ["json"] }
 
 [build-dependencies]
 tonic-build = "0.12"

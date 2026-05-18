@@ -1,7 +1,5 @@
-pub mod discovery;
+pub mod grpc;
 pub mod router;
-pub mod server;
 
-pub use discovery::AgentRegistry;
-pub use router::MessageRouter;
-pub use server::A2AServiceImpl;
+pub use grpc::{A2AServiceImpl, SharedA2ARouter, create_a2a_server};
+pub use router::{A2AConfig, A2ARouter, RegisteredAgent, RouterError, RouterMessage};

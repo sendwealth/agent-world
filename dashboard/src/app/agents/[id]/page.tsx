@@ -1,36 +1,19 @@
 "use client";
 
 import { useEffect, useState, useMemo } from "react";
-import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";
 import type { Agent, WorldEvent } from "@/types/world";
 import { fetchJSON } from "@/lib/api";
-
-const phaseLabels: Record<string, string> = {
-  newborn: "新生",
-  child: "幼年",
-  adult: "成年",
-  elder: "老年",
-};
+import { formatDate, phaseLabels } from "@/lib/format";
+import SkillTree from "@/components/agent/SkillTree";
+import MemoryStats from "@/components/agent/MemoryStats";
+import RelationshipGraph from "@/components/agent/RelationshipGraph";
+import ActivityTimeline from "@/components/agent/ActivityTimeline";
 
 function formatMoney(v: number): string {
   if (v >= 1_000_000) return `$${(v / 1_000_000).toFixed(1)}M`;
   if (v >= 1_000) return `$${(v / 1_000).toFixed(1)}K`;
   return `$${v.toFixed(0)}`;
-}
-
-function formatDate(iso: string): string {
-  const d = new Date(iso);
-  const now = new Date();
-  const diff = now.getTime() - d.getTime();
-  const minutes = Math.floor(diff / 60_000);
-  if (minutes < 1) return "刚刚";
-  if (minutes < 60) return `${minutes} 分钟前`;
-  const hours = Math.floor(minutes / 60);
-  if (hours < 24) return `${hours} 小时前`;
-  const days = Math.floor(hours / 24);
-  if (days < 30) return `${days} 天前`;
-  return d.toLocaleDateString("zh-CN");
 }
 
 // Mini bar chart component for balance visualization
@@ -46,58 +29,28 @@ function BalanceBar({ value, max, color }: { value: number; max: number; color: 
   );
 }
 
-// Skill progress bar component
-function SkillBar({ name, level }: { name: string; level: number }) {
-  const maxLevel = 10;
-  const pct = Math.min((level / maxLevel) * 100, 100);
-  const color =
-    level >= 8 ? "bg-purple-400" : level >= 5 ? "bg-blue-400" : level >= 3 ? "bg-green-400" : "bg-zinc-500";
-
-  return (
-    <div className="space-y-1">
-      <div className="flex items-center justify-between">
-        <span className="text-sm text-zinc-300">{name}</span>
-        <span className="text-xs font-medium tabular-nums text-zinc-500">
-          Lv.{level}
-        </span>
-      </div>
-      <div className="h-1.5 w-full rounded-full bg-zinc-800">
-        <div
-          className={`h-1.5 rounded-full transition-all duration-500 ${color}`}
-          style={{ width: `${pct}%` }}
-        />
-      </div>
-    </div>
-  );
-}
-
-// Event type labels and colors
-const eventTypeLabels: Record<string, { label: string; color: string; dot: string }> = {
-  agent_spawn: { label: "诞生", color: "text-green-400", dot: "bg-green-400" },
-  agent_death: { label: "死亡", color: "text-red-400", dot: "bg-red-400" },
-  trade: { label: "交易", color: "text-amber-400", dot: "bg-amber-400" },
-  task_created: { label: "发布任务", color: "text-blue-400", dot: "bg-blue-400" },
-  task_claimed: { label: "认领任务", color: "text-cyan-400", dot: "bg-cyan-400" },
-  task_completed: { label: "完成任务", color: "text-emerald-400", dot: "bg-emerald-400" },
-  message: { label: "消息", color: "text-violet-400", dot: "bg-violet-400" },
-  skill_up: { label: "技能提升", color: "text-purple-400", dot: "bg-purple-400" },
-  reputation_change: { label: "信誉变化", color: "text-yellow-400", dot: "bg-yellow-400" },
-  investment: { label: "投资", color: "text-teal-400", dot: "bg-teal-400" },
-  tax: { label: "税收", color: "text-orange-400", dot: "bg-orange-400" },
-};
+const TABS = [
+  { key: "skills" as const, label: "技能树", icon: "🌳" },
+  { key: "memory" as const, label: "记忆统计", icon: "🧠" },
+  { key: "relations" as const, label: "关系图", icon: "🕸️" },
+  { key: "activity" as const, label: "活动时间线", icon: "📜" },
+];
 
 export default function AgentDetailPage() {
   const params = useParams();
   const router = useRouter();
-  const agentId = params.id as string;
+  const rawId = params.id;
+  const agentId = Array.isArray(rawId) ? rawId[0] : rawId;
 
   const [agent, setAgent] = useState<Agent | null>(null);
   const [events, setEvents] = useState<WorldEvent[]>([]);
   const [allAgents, setAllAgents] = useState<Agent[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [activeTab, setActiveTab] = useState<"skills" | "memory" | "relations" | "activity">("skills");
 
   useEffect(() => {
+    if (!agentId) return;
     let cancelled = false;
 
     async function load() {
@@ -135,24 +88,8 @@ export default function AgentDetailPage() {
     () =>
       events
         .filter((e) => e.agentId === agentId || e.targetId === agentId)
-        .sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime())
-        .slice(0, 50),
+        .sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime()),
     [events, agentId]
-  );
-
-  // Related agents from events
-  const relatedAgentIds = useMemo(() => {
-    const ids = new Set<string>();
-    for (const e of agentEvents) {
-      if (e.agentId && e.agentId !== agentId) ids.add(e.agentId);
-      if (e.targetId && e.targetId !== agentId) ids.add(e.targetId);
-    }
-    return ids;
-  }, [agentEvents, agentId]);
-
-  const relatedAgents = useMemo(
-    () => allAgents.filter((a) => relatedAgentIds.has(a.id)),
-    [allAgents, relatedAgentIds]
   );
 
   // Compute max values for bar charts
@@ -165,12 +102,6 @@ export default function AgentDetailPage() {
     [agent, allAgents]
   );
 
-  // Sorted skills
-  const sortedSkills = useMemo(() => {
-    if (!agent) return [];
-    return Object.entries(agent.skills).sort(([, a], [, b]) => b - a);
-  }, [agent]);
-
   if (loading) {
     return (
       <div className="flex h-full items-center justify-center">
@@ -179,7 +110,7 @@ export default function AgentDetailPage() {
     );
   }
 
-  if (error || !agent) {
+  if (error || !agent || !agentId) {
     return (
       <div className="p-6 space-y-4">
         <button
@@ -234,6 +165,19 @@ export default function AgentDetailPage() {
             </p>
           </div>
         </div>
+
+        {/* Action buttons in header */}
+        <div className="flex items-center gap-2">
+          <button className="rounded-lg bg-blue-500/10 border border-blue-500/20 px-3 py-1.5 text-xs font-medium text-blue-400 transition-colors hover:bg-blue-500/20">
+            投资
+          </button>
+          <button className="rounded-lg bg-purple-500/10 border border-purple-500/20 px-3 py-1.5 text-xs font-medium text-purple-400 transition-colors hover:bg-purple-500/20">
+            发布任务
+          </button>
+          <button className="rounded-lg bg-emerald-500/10 border border-emerald-500/20 px-3 py-1.5 text-xs font-medium text-emerald-400 transition-colors hover:bg-emerald-500/20">
+            发消息
+          </button>
+        </div>
       </div>
 
       {/* Economic Dashboard: Token / Money */}
@@ -278,142 +222,55 @@ export default function AgentDetailPage() {
               </svg>
             </span>
           </div>
-          <p className="text-2xl font-bold tabular-nums text-zinc-100">{sortedSkills.length}</p>
+          <p className="text-2xl font-bold tabular-nums text-zinc-100">
+            {Object.keys(agent.skills).length}
+          </p>
           <div className="h-2 w-full rounded-full bg-zinc-800">
             <div
               className="h-2 rounded-full bg-purple-400 transition-all duration-500"
-              style={{ width: `${Math.min((sortedSkills.length / 10) * 100, 100)}%` }}
+              style={{ width: `${Math.min((Object.keys(agent.skills).length / 10) * 100, 100)}%` }}
             />
           </div>
         </div>
       </div>
 
-      {/* Main content grid: Skills + Relations | Activity + Actions */}
-      <div className="grid grid-cols-1 gap-6 xl:grid-cols-2">
-        {/* Left column */}
-        <div className="space-y-6">
-          {/* Skill Tree */}
-          <div className="rounded-xl border border-zinc-800 bg-zinc-900/50 p-4 space-y-4">
-            <h2 className="text-sm font-semibold text-zinc-200">技能树</h2>
-            {sortedSkills.length === 0 ? (
-              <p className="text-sm text-zinc-600">暂无技能数据</p>
-            ) : (
-              <div className="space-y-3">
-                {sortedSkills.map(([name, level]) => (
-                  <SkillBar key={name} name={name} level={level} />
-                ))}
-              </div>
-            )}
-          </div>
+      {/* Tab navigation */}
+      <div className="flex items-center gap-1 border-b border-zinc-800">
+        {TABS.map((tab) => (
+          <button
+            key={tab.key}
+            onClick={() => setActiveTab(tab.key)}
+            className={`flex items-center gap-1.5 border-b-2 px-4 py-2.5 text-sm font-medium transition-colors ${
+              activeTab === tab.key
+                ? "border-blue-400 text-blue-400"
+                : "border-transparent text-zinc-500 hover:text-zinc-300"
+            }`}
+          >
+            <span className="text-sm">{tab.icon}</span>
+            {tab.label}
+          </button>
+        ))}
+      </div>
 
-          {/* Relationship Graph */}
-          <div className="rounded-xl border border-zinc-800 bg-zinc-900/50 p-4 space-y-4">
-            <h2 className="text-sm font-semibold text-zinc-200">关系图</h2>
-            {relatedAgents.length === 0 ? (
-              <p className="text-sm text-zinc-600">暂无关系数据</p>
-            ) : (
-              <div className="space-y-2">
-                {relatedAgents.map((related) => {
-                  const interactionCount = agentEvents.filter(
-                    (e) =>
-                      (e.agentId === related.id && e.targetId === agentId) ||
-                      (e.agentId === agentId && e.targetId === related.id)
-                  ).length;
-                  return (
-                    <Link
-                      key={related.id}
-                      href={`/agents/${related.id}`}
-                      className="flex items-center justify-between rounded-lg border border-zinc-800 bg-zinc-900/30 px-3 py-2 transition-colors hover:bg-zinc-800/50"
-                    >
-                      <div className="flex items-center gap-2">
-                        <span
-                          className={`inline-block h-2 w-2 rounded-full ${
-                            related.alive ? "bg-green-400" : "bg-red-400"
-                          }`}
-                        />
-                        <span className="text-sm text-zinc-200">{related.name}</span>
-                        <span className="rounded-full bg-zinc-800 px-1.5 py-0.5 text-[10px] text-zinc-500">
-                          {phaseLabels[related.phase] ?? related.phase}
-                        </span>
-                      </div>
-                      <div className="flex items-center gap-3">
-                        <span className="text-xs text-zinc-500">{interactionCount} 次互动</span>
-                        <svg className="h-4 w-4 text-zinc-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
-                        </svg>
-                      </div>
-                    </Link>
-                  );
-                })}
-              </div>
-            )}
-          </div>
-        </div>
-
-        {/* Right column */}
-        <div className="space-y-6">
-          {/* Action Buttons */}
-          <div className="rounded-xl border border-zinc-800 bg-zinc-900/50 p-4 space-y-4">
-            <h2 className="text-sm font-semibold text-zinc-200">操作</h2>
-            <div className="grid grid-cols-1 gap-2 sm:grid-cols-3">
-              <button className="rounded-lg bg-blue-500/10 border border-blue-500/20 px-4 py-2.5 text-sm font-medium text-blue-400 transition-colors hover:bg-blue-500/20">
-                投资
-              </button>
-              <button className="rounded-lg bg-purple-500/10 border border-purple-500/20 px-4 py-2.5 text-sm font-medium text-purple-400 transition-colors hover:bg-purple-500/20">
-                发布任务
-              </button>
-              <button className="rounded-lg bg-emerald-500/10 border border-emerald-500/20 px-4 py-2.5 text-sm font-medium text-emerald-400 transition-colors hover:bg-emerald-500/20">
-                发消息
-              </button>
-            </div>
-          </div>
-
-          {/* Activity History */}
-          <div className="rounded-xl border border-zinc-800 bg-zinc-900/50 p-4 space-y-4">
-            <h2 className="text-sm font-semibold text-zinc-200">活动历史</h2>
-            {agentEvents.length === 0 ? (
-              <p className="text-sm text-zinc-600">暂无活动记录</p>
-            ) : (
-              <div className="max-h-[480px] overflow-y-auto scrollbar-thin space-y-0">
-                {agentEvents.map((event, idx) => {
-                  const meta = eventTypeLabels[event.type] ?? {
-                    label: event.type,
-                    color: "text-zinc-400",
-                    dot: "bg-zinc-400",
-                  };
-                  return (
-                    <div key={event.id} className="relative flex gap-3 pb-4">
-                      {/* Timeline line */}
-                      {idx < agentEvents.length - 1 && (
-                        <div className="absolute left-[5px] top-3 h-full w-px bg-zinc-800" />
-                      )}
-                      {/* Dot */}
-                      <div className={`relative mt-1.5 h-2.5 w-2.5 shrink-0 rounded-full ${meta.dot}`} />
-                      {/* Content */}
-                      <div className="min-w-0 flex-1 space-y-0.5">
-                        <div className="flex items-center gap-2">
-                          <span className={`text-xs font-medium ${meta.color}`}>{meta.label}</span>
-                          <span className="text-[10px] text-zinc-600">
-                            Tick #{event.tick} · {formatDate(event.timestamp)}
-                          </span>
-                        </div>
-                        <p className="text-sm text-zinc-400 leading-relaxed">
-                          {event.description}
-                          {event.amount != null && (
-                            <span className="ml-1 tabular-nums font-medium text-amber-400">
-                              ({event.amount > 0 ? "+" : ""}
-                              {event.amount.toLocaleString()})
-                            </span>
-                          )}
-                        </p>
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
-            )}
-          </div>
-        </div>
+      {/* Tab content */}
+      <div>
+        {activeTab === "skills" && <SkillTree skills={agent.skills} />}
+        {activeTab === "memory" && (
+          <MemoryStats agentId={agentId} events={events} />
+        )}
+        {activeTab === "relations" && (
+          <RelationshipGraph
+            agent={agent}
+            allAgents={allAgents}
+            agentEvents={agentEvents}
+          />
+        )}
+        {activeTab === "activity" && (
+          <ActivityTimeline
+            agentId={agentId}
+            events={events}
+          />
+        )}
       </div>
     </div>
   );

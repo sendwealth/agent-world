@@ -1,43 +1,17 @@
 use std::sync::Arc;
 use tokio::sync::Mutex;
 
-use agent_world_engine::config::{ConfigManager, SharedConfig, spawn_config_watcher};
 use agent_world_engine::economy::task::TaskBoard;
 use agent_world_engine::wal::WAL;
-use agent_world_engine::world::EventBus;
+use agent_world_engine::world::AgentRegistry;
 
 #[tokio::main]
 async fn main() {
-    // Initialize tracing
-    tracing_subscriber::fmt()
-        .with_env_filter(
-            tracing_subscriber::EnvFilter::try_from_default_env()
-                .unwrap_or_else(|_| tracing_subscriber::EnvFilter::new("info")),
-        )
-        .init();
-
-    let event_bus = EventBus::new(256);
+    let event_bus = agent_world_engine::world::EventBus::new(256);
+    let shared_event_bus = Arc::new(event_bus);
 
     println!("Agent World Engine v0.1.0");
     println!("   Status: initializing...");
-
-    // ── Load genesis config ──────────────────────────────
-    let genesis_path = std::env::var("GENESIS_PATH")
-        .unwrap_or_else(|_| "./config/genesis.yaml".to_string());
-
-    // Clone the EventBus for ConfigManager before moving the original into TaskBoard.
-    let event_bus_for_config = event_bus.clone();
-    let config_manager: SharedConfig = match ConfigManager::new(&genesis_path, Some(Arc::new(event_bus_for_config))) {
-        Ok(mgr) => {
-            let tick_ms = mgr.get().await.world.tick_interval_ms;
-            println!("   Config: loaded from {} (tick_interval={}ms)", genesis_path, tick_ms);
-            Arc::new(mgr)
-        }
-        Err(e) => {
-            eprintln!("   FATAL: Failed to load genesis config from {}: {}", genesis_path, e);
-            std::process::exit(1);
-        }
-    };
 
     // Initialize WAL and recover from crash
     let mut wal = WAL::new("./data");
@@ -70,7 +44,7 @@ async fn main() {
     // Subscribe WAL to all events (write-ahead logging)
     let wal_writer = Arc::new(Mutex::new(wal));
     let wal_subscriber = wal_writer.clone();
-    let mut wal_rx = event_bus.subscribe();
+    let mut wal_rx = shared_event_bus.subscribe();
 
     // Spawn background task to write events to WAL
     let wal_handle = tokio::spawn(async move {
@@ -92,48 +66,36 @@ async fn main() {
         }
     });
 
-    // Initialize task board with event bus (event_bus is moved here)
-    let task_board = Arc::new(Mutex::new(TaskBoard::with_event_bus(event_bus)));
+    // Initialize task board with shared event bus
+    let task_board = Arc::new(Mutex::new(TaskBoard::with_event_bus(
+        (*shared_event_bus).clone(),
+    )));
 
-    // ── Spawn config file watcher ────────────────────────
-    let (watcher_handle, watcher_cancel) = match spawn_config_watcher(config_manager.clone()) {
-        Ok((h, cancel)) => {
-            println!("   ConfigWatcher: watching {}", genesis_path);
-            (Some(h), Some(cancel))
-        }
-        Err(e) => {
-            eprintln!("   ConfigWatcher: failed to start ({}), hot-reload disabled", e);
-            (None, None)
-        }
-    };
+    // Initialize agent registry with shared event bus
+    let agents = Arc::new(Mutex::new(AgentRegistry::with_event_bus(
+        (*shared_event_bus).clone(),
+    )));
 
-    // ── Spawn tick loop ──────────────────────────────────
-    let tick_config = config_manager.clone();
-
-    let tick_handle = tokio::spawn(async move {
-        loop {
-            let interval_ms = {
-                let config = tick_config.get().await;
-                config.world.tick_interval_ms
-            };
-
-            tokio::time::sleep(std::time::Duration::from_millis(interval_ms)).await;
-
-            // Apply any pending config reload at the tick boundary.
-            tick_config.apply_pending().await;
-        }
-    });
-
-    // Build the HTTP API router with WAL support
-    let app = agent_world_engine::api::create_router_with_wal_and_config(
+    // Build the HTTP API router with full state
+    let app = agent_world_engine::api::create_router_full(
         task_board,
         wal_writer.clone(),
-        config_manager.clone(),
+        agents,
+        shared_event_bus,
     );
 
     // Start the HTTP server
     let addr = std::net::SocketAddr::from(([127, 0, 0, 1], 3000));
     println!("   API server: http://{}", addr);
+    println!("   Endpoints:");
+    println!("     GET  /agents           - List agents");
+    println!("     POST /agents           - Create agent");
+    println!("     GET  /agents/:id       - Get agent detail");
+    println!("     GET  /tasks            - List tasks");
+    println!("     POST /tasks            - Create task");
+    println!("     GET  /world/stats      - World statistics");
+    println!("     GET  /world/events     - SSE event stream");
+    println!("     GET  /world/leaderboard - Leaderboard");
     println!("   Status: ready");
 
     let listener = tokio::net::TcpListener::bind(addr).await.unwrap();
@@ -151,13 +113,6 @@ async fn main() {
         _ = tokio::signal::ctrl_c() => {
             println!("\n[Server] SIGINT received, shutting down gracefully...");
         }
-    }
-
-    // Cleanup
-    tick_handle.abort();
-    if let (Some(handle), Some(cancel)) = (watcher_handle, watcher_cancel) {
-        let _ = cancel.send(());
-        handle.abort();
     }
 
     // Final snapshot and close WAL

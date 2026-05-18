@@ -1,15 +1,15 @@
 [package]
 name = "agent-world-engine"
-version = "1.0.0"
+version = "0.1.0"
 edition = "2021"
 description = "World engine for Agent World — state, time, economy, rules"
 license = "MIT"
 
 [dependencies]
 tokio = { version = "1", features = ["full"] }
-axum = { version = "0.7", features = ["tokio"] }
+axum = { version = "0.7", features = ["macros"] }
 tower-http = { version = "0.5", features = ["cors"] }
-tokio-stream = "0.1"
+futures = "0.3"
 async-stream = "0.3"
 tonic = "0.12"
 prost = "0.13"
@@ -17,14 +17,13 @@ serde = { version = "1", features = ["derive"] }
 serde_yaml = "0.9"
 serde_json = "1"
 tracing = "0.1"
-tracing-subscriber = { version = "0.3", features = ["env-filter"] }
+tracing-subscriber = "0.3"
 uuid = { version = "1", features = ["v4", "serde"] }
 chrono = "0.4"
 thiserror = "1"
 anyhow = "1"
 sha2 = "0.10"
 tempfile = "3"
-notify = { version = "7", features = ["macos_kqueue"] }
 
 [dev-dependencies]
 tower = { version = "0.5", features = ["util"] }

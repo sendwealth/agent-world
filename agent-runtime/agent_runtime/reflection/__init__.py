@@ -1,28 +1,21 @@
-"""Reflection layer — periodic self-assessment and strategy adjustment.
+"""Reflection subsystem — self-assessment and strategy evolution.
 
-Triggered every 10 ticks (configurable). Evaluates recent action outcomes,
-computes success rate and token efficiency per action type, updates strategy
-preferences, and writes key decisions and lessons to long-term memory.
+Enables agents to periodically reflect on their behaviour, evaluate
+strategy effectiveness, and adapt their decision-making approach.
 """
 
-from agent_runtime.reflection.reflection import (
-    ActionStatus,
-    ActionTypeStats,
-    ReflectionConfig,
-    ReflectionLayer,
+from agent_runtime.reflection.self_assess import (
+    BehaviorStrategy,
+    ReflectionEngine,
+    ReflectionEngineConfig,
     ReflectionResult,
+    StrategyAdjustment,
 )
-from agent_runtime.reflection.strategy import StrategyPreference, StrategyRegistry
-from agent_runtime.reflection.memory import LongTermMemory, MemoryEntry
 
 __all__ = [
-    "ActionStatus",
-    "ActionTypeStats",
-    "LongTermMemory",
-    "MemoryEntry",
-    "ReflectionConfig",
-    "ReflectionLayer",
+    "BehaviorStrategy",
+    "ReflectionEngine",
+    "ReflectionEngineConfig",
     "ReflectionResult",
-    "StrategyPreference",
-    "StrategyRegistry",
+    "StrategyAdjustment",
 ]

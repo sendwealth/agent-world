@@ -36,7 +36,7 @@ function formatTime(ts: string): string {
 
 export function EventStream({ events, connected }: EventStreamProps) {
   return (
-    <div className="rounded-xl border border-zinc-800 bg-zinc-900/50 p-4">
+    <div className="rounded-xl border border-zinc-800 bg-zinc-900/50 p-3 md:p-4">
       <div className="mb-3 flex items-center justify-between">
         <h2 className="text-sm font-semibold text-zinc-200">实时事件流</h2>
         <div className="flex items-center gap-1.5">
@@ -70,7 +70,7 @@ export function EventStream({ events, connected }: EventStreamProps) {
               >
                 <span className="mt-0.5 text-sm leading-none">{config.icon}</span>
                 <div className="min-w-0 flex-1">
-                  <div className="flex items-center gap-2">
+                  <div className="flex flex-wrap items-center gap-2">
                     <span
                       className={`inline-block rounded px-1.5 py-0.5 text-[10px] font-medium text-white ${config.color}`}
                     >
@@ -80,11 +80,11 @@ export function EventStream({ events, connected }: EventStreamProps) {
                       Tick #{event.tick}
                     </span>
                   </div>
-                  <p className="mt-0.5 text-xs text-zinc-300">
+                  <p className="mt-0.5 break-words text-xs text-zinc-300">
                     {event.description}
                   </p>
                 </div>
-                <span className="shrink-0 text-[10px] text-zinc-600">
+                <span className="hidden shrink-0 text-[10px] text-zinc-600 sm:block">
                   {formatTime(event.timestamp)}
                 </span>
               </div>

@@ -43,7 +43,7 @@ export function StatCard({ title, value, icon, subtitle, color }: StatCardProps)
 
   return (
     <div
-      className={`relative overflow-hidden rounded-xl border ${c.border} ${c.bg} p-5 shadow-lg ${c.glow} transition-all hover:scale-[1.02]`}
+      className={`relative overflow-hidden rounded-xl border ${c.border} ${c.bg} p-4 md:p-5 shadow-lg ${c.glow} transition-all hover:scale-[1.02]`}
     >
       <div className="flex items-start justify-between">
         <div className="space-y-1">

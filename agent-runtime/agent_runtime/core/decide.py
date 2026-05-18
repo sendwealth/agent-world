@@ -298,7 +298,10 @@ def build_prompt(
     reputation_note = (
         "You CAN claim high-value tasks."
         if state.reputation >= 10.0
-        else "You CANNOT claim high-value tasks (reward >= 500) — build reputation by completing smaller tasks first."
+        else (
+            "You CANNOT claim high-value tasks (reward >= 500)"
+            " — build reputation by completing smaller tasks first."
+        )
     )
 
     return _DECISION_PROMPT_TEMPLATE.format(

@@ -1,6 +1,6 @@
 """Embedding providers — pluggable embedding generation for semantic search.
 
-Provides an ``EmbeddingProviderProtocol`` and two built-in implementations:
+Provides an ``EmbeddingProviderProtocol`` and three built-in implementations:
 
 - ``HashEmbeddingProvider``: Deterministic hash-based embeddings that require
   no external model.  Fast, zero-dependency, suitable for development and
@@ -9,6 +9,10 @@ Provides an ``EmbeddingProviderProtocol`` and two built-in implementations:
 
 - ``OpenAIEmbeddingProvider``: Uses the OpenAI embeddings API (text-embedding-
   3-small by default) for production-quality semantic embeddings.
+
+- ``SentenceTransformerEmbeddingProvider``: Uses a local sentence-transformers
+  model for zero-cost (no API) semantic embeddings.  Suitable for production
+  use without external API dependencies.
 """
 
 from __future__ import annotations
@@ -194,3 +198,77 @@ class OpenAIEmbeddingProvider:
         # Sort by index to maintain order
         embeddings_data = sorted(data["data"], key=lambda x: x["index"])
         return [item["embedding"] for item in embeddings_data]
+
+
+# ---------------------------------------------------------------------------
+# Sentence-Transformers embedding provider
+# ---------------------------------------------------------------------------
+
+
+class SentenceTransformerEmbeddingProvider:
+    """Local sentence-transformers embedding provider.
+
+    Uses a locally-downloaded sentence-transformers model for zero API cost
+    semantic embeddings.  The model is loaded lazily on first use.
+
+    Parameters
+    ----------
+    model_name : str
+        The sentence-transformers model name.  Default ``all-MiniLM-L6-v2``
+        (80MB, 384-dim, good balance of speed and quality).
+    device : str | None
+        Torch device string (e.g. ``"cuda"``, ``"cpu"``).  If None, auto-
+        detects CUDA availability.
+    """
+
+    def __init__(
+        self,
+        model_name: str = "all-MiniLM-L6-v2",
+        device: str | None = None,
+    ) -> None:
+        self._model_name = model_name
+        self._device = device
+        self._model = None
+
+    @property
+    def dimension(self) -> int:
+        """Dimensionality of the embedding vectors produced."""
+        _dim_map: dict[str, int] = {
+            "all-MiniLM-L6-v2": 384,
+            "all-mpnet-base-v2": 768,
+            "paraphrase-MiniLM-L6-v2": 384,
+            "paraphrase-multilingual-MiniLM-L12-v2": 384,
+        }
+        return _dim_map.get(self._model_name, 384)
+
+    @property
+    def model_name(self) -> str:
+        return self._model_name
+
+    def _load_model(self):
+        """Lazy-load the sentence-transformers model."""
+        if self._model is not None:
+            return
+        try:
+            from sentence_transformers import SentenceTransformer
+        except ImportError as e:
+            raise ImportError(
+                "sentence-transformers is required for "
+                "SentenceTransformerEmbeddingProvider. "
+                "Install with: pip install sentence-transformers"
+            ) from e
+        self._model = SentenceTransformer(self._model_name, device=self._device)
+
+    def embed(self, text: str) -> list[float]:
+        """Generate an embedding vector using the local model."""
+        return self.embed_batch([text])[0]
+
+    def embed_batch(self, texts: list[str]) -> list[list[float]]:
+        """Generate embedding vectors for multiple texts using the local model."""
+        self._load_model()
+        import numpy as np
+
+        embeddings = self._model.encode(texts, convert_to_numpy=True, normalize_embeddings=True)
+        if isinstance(embeddings, np.ndarray):
+            return embeddings.tolist()
+        return [e.tolist() for e in embeddings]

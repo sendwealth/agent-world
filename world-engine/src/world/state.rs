@@ -7,6 +7,9 @@ use super::event::{EventType, WorldEvent};
 ///
 /// Uses `tokio::sync::broadcast` for async-friendly fan-out.
 /// Each subscriber gets its own receiver, allowing independent consumption.
+///
+/// Cloning an `EventBus` creates a new handle to the same broadcast channel,
+/// so all clones share the same subscriber set.
 #[derive(Clone)]
 pub struct EventBus {
     sender: tokio::sync::broadcast::Sender<WorldEvent>,
@@ -201,8 +204,10 @@ mod tests {
     #[tokio::test]
     async fn event_bus_filter_by_type() {
         let bus = EventBus::new(64);
-        let mut rx =
-            bus.subscribe_filtered(vec![EventType::AgentDied, EventType::AgentRescued], None);
+        let mut rx = bus.subscribe_filtered(
+            vec![EventType::AgentDied, EventType::AgentRescued],
+            None,
+        );
 
         bus.emit(WorldEvent::TickAdvanced { tick: 1 });
         bus.emit(WorldEvent::AgentDied {
@@ -275,8 +280,10 @@ mod tests {
     #[tokio::test]
     async fn event_bus_filter_by_type_and_agent_id() {
         let bus = EventBus::new(64);
-        let mut rx =
-            bus.subscribe_filtered(vec![EventType::PhaseChanged], Some("agent-001".into()));
+        let mut rx = bus.subscribe_filtered(
+            vec![EventType::PhaseChanged],
+            Some("agent-001".into()),
+        );
 
         bus.emit(WorldEvent::PhaseChanged {
             agent_id: "agent-001".into(),

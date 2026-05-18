@@ -20,6 +20,7 @@ use tokio_stream::StreamExt;
 use uuid::Uuid;
 
 use crate::economy::task::{TaskBoard, Task};
+use crate::time_capsule::SnapshotStore;
 use crate::wal::WAL;
 use crate::world::event::WorldEvent;
 use crate::world::state::EventBus;
@@ -28,6 +29,7 @@ use crate::world::state::EventBus;
 
 pub type SharedTaskBoard = Arc<Mutex<TaskBoard>>;
 pub type SharedWAL = Arc<Mutex<WAL>>;
+pub type SharedSnapshotStore = Arc<Mutex<SnapshotStore>>;
 
 /// Agent record tracked by the world engine.
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -52,7 +54,7 @@ pub struct A2AMessage {
     pub tick: u64,
 }
 
-/// Combined state for the API with WAL + EventBus + agents + messages.
+/// Combined state for the API with WAL + EventBus + agents + messages + snapshot store.
 #[derive(Clone)]
 pub struct AppState {
     pub board: SharedTaskBoard,
@@ -62,6 +64,7 @@ pub struct AppState {
     pub messages: Arc<Mutex<Vec<A2AMessage>>>,
     pub tick_tx: watch::Sender<u64>,
     pub tick_rx: watch::Receiver<u64>,
+    pub snapshot_store: Option<SharedSnapshotStore>,
 }
 
 pub fn create_router(board: SharedTaskBoard) -> Router {
@@ -82,6 +85,9 @@ pub fn create_router(board: SharedTaskBoard) -> Router {
 pub fn create_router_with_wal(board: SharedTaskBoard, wal: SharedWAL) -> Router {
     let event_bus = Arc::new(EventBus::new(256));
     let (tick_tx, tick_rx) = watch::channel(0u64);
+    let snapshot_store = SnapshotStore::new("./data/snapshots.db")
+        .ok()
+        .map(|s| Arc::new(Mutex::new(s)));
     let state = AppState {
         board,
         wal,
@@ -90,6 +96,27 @@ pub fn create_router_with_wal(board: SharedTaskBoard, wal: SharedWAL) -> Router 
         messages: Arc::new(Mutex::new(Vec::new())),
         tick_tx,
         tick_rx,
+        snapshot_store,
+    };
+    build_full_router(state)
+}
+
+/// Create router with explicit snapshot store path.
+pub fn create_router_with_wal_and_snapshots(board: SharedTaskBoard, wal: SharedWAL, snapshot_path: &str) -> Router {
+    let event_bus = Arc::new(EventBus::new(256));
+    let (tick_tx, tick_rx) = watch::channel(0u64);
+    let snapshot_store = SnapshotStore::new(snapshot_path)
+        .ok()
+        .map(|s| Arc::new(Mutex::new(s)));
+    let state = AppState {
+        board,
+        wal,
+        event_bus,
+        agents: Arc::new(Mutex::new(Vec::new())),
+        messages: Arc::new(Mutex::new(Vec::new())),
+        tick_tx,
+        tick_rx,
+        snapshot_store,
     };
     build_full_router(state)
 }
@@ -125,6 +152,13 @@ pub fn build_full_router(state: AppState) -> Router {
         // Tick control
         .route("/api/v1/tick", post(advance_tick))
         .route("/api/v1/tick", get(get_tick))
+        // Time Capsule / World Briefing
+        .route("/api/v1/snapshots", get(list_snapshots))
+        .route("/api/v1/snapshots/latest", get(get_latest_snapshot))
+        .route("/api/v1/snapshots/:tick", get(get_snapshot_by_tick))
+        .route("/api/v1/snapshots", post(create_snapshot))
+        .route("/api/v1/snapshots/export/json", get(export_snapshots_json))
+        .route("/api/v1/snapshots/export/csv", get(export_snapshots_csv))
         .with_state(state)
 }
 
@@ -136,6 +170,9 @@ pub fn create_router_for_test(
     tick_tx: watch::Sender<u64>,
     tick_rx: watch::Receiver<u64>,
 ) -> Router {
+    let snapshot_store = SnapshotStore::new_in_memory()
+        .ok()
+        .map(|s| Arc::new(Mutex::new(s)));
     let state = AppState {
         board,
         wal,
@@ -144,6 +181,7 @@ pub fn create_router_for_test(
         messages: Arc::new(Mutex::new(Vec::new())),
         tick_tx,
         tick_rx,
+        snapshot_store,
     };
     build_full_router(state)
 }
@@ -862,4 +900,147 @@ async fn get_tick(
 ) -> impl IntoResponse {
     let tick = *state.tick_rx.borrow();
     Json(serde_json::json!({ "tick": tick }))
+}
+
+// ── Time Capsule / Snapshot Handlers ──────────────────────
+
+#[derive(Debug, Deserialize, Default)]
+pub struct ListSnapshotsQuery {
+    pub from_tick: Option<u64>,
+    pub to_tick: Option<u64>,
+    #[serde(default = "default_snapshot_limit")]
+    pub limit: Option<u64>,
+}
+
+fn default_snapshot_limit() -> Option<u64> {
+    Some(100)
+}
+
+async fn list_snapshots(
+    State(state): State<AppState>,
+    Query(query): Query<ListSnapshotsQuery>,
+) -> impl IntoResponse {
+    let store = match &state.snapshot_store {
+        Some(s) => s.clone(),
+        None => return (StatusCode::SERVICE_UNAVAILABLE, Json(ErrorResponse { error: "snapshot store not configured".into() })).into_response(),
+    };
+
+    let store = store.lock().await;
+    match store.list(query.from_tick, query.to_tick, query.limit) {
+        Ok(snapshots) => Json(&snapshots).into_response(),
+        Err(e) => (StatusCode::INTERNAL_SERVER_ERROR, Json(ErrorResponse { error: e.to_string() })).into_response(),
+    }
+}
+
+async fn get_latest_snapshot(
+    State(state): State<AppState>,
+) -> impl IntoResponse {
+    let store = match &state.snapshot_store {
+        Some(s) => s.clone(),
+        None => return (StatusCode::SERVICE_UNAVAILABLE, Json(ErrorResponse { error: "snapshot store not configured".into() })).into_response(),
+    };
+
+    let store = store.lock().await;
+    match store.latest() {
+        Ok(Some(snapshot)) => Json(&snapshot).into_response(),
+        Ok(None) => (StatusCode::NOT_FOUND, Json(ErrorResponse { error: "no snapshots available".into() })).into_response(),
+        Err(e) => (StatusCode::INTERNAL_SERVER_ERROR, Json(ErrorResponse { error: e.to_string() })).into_response(),
+    }
+}
+
+async fn get_snapshot_by_tick(
+    State(state): State<AppState>,
+    Path(tick): Path<u64>,
+) -> impl IntoResponse {
+    let store = match &state.snapshot_store {
+        Some(s) => s.clone(),
+        None => return (StatusCode::SERVICE_UNAVAILABLE, Json(ErrorResponse { error: "snapshot store not configured".into() })).into_response(),
+    };
+
+    let store = store.lock().await;
+    match store.get_by_tick(tick) {
+        Ok(Some(snapshot)) => Json(&snapshot).into_response(),
+        Ok(None) => (StatusCode::NOT_FOUND, Json(ErrorResponse { error: format!("no snapshot at tick {}", tick) })).into_response(),
+        Err(e) => (StatusCode::INTERNAL_SERVER_ERROR, Json(ErrorResponse { error: e.to_string() })).into_response(),
+    }
+}
+
+async fn create_snapshot(
+    State(state): State<AppState>,
+) -> impl IntoResponse {
+    let store = match &state.snapshot_store {
+        Some(s) => s.clone(),
+        None => return (StatusCode::SERVICE_UNAVAILABLE, Json(ErrorResponse { error: "snapshot store not configured".into() })).into_response(),
+    };
+
+    let tick = *state.tick_rx.borrow();
+    let agents = state.agents.lock().await;
+
+    let snapshot = crate::time_capsule::build_snapshot(tick, &agents.iter().map(|a| {
+        let id = Uuid::parse_str(&a.id).unwrap_or_else(|_| Uuid::new_v4());
+        let record = crate::economy::token_burn::AgentRecord {
+            id,
+            name: a.name.clone(),
+            phase: if a.alive { crate::world::enums::AgentPhase::Adult } else { crate::world::enums::AgentPhase::Dead },
+            tokens: a.tokens,
+            skills: std::collections::HashMap::new(),
+        };
+        (id, a.ticks_survived, record)
+    }).collect::<Vec<_>>(), &[]);
+
+    let store = store.lock().await;
+    match store.save(&snapshot) {
+        Ok(id) => {
+            state.event_bus.emit(WorldEvent::SnapshotTaken {
+                tick,
+                path: format!("snapshot:{}", id),
+            });
+            (StatusCode::CREATED, Json(&snapshot)).into_response()
+        }
+        Err(e) => (StatusCode::INTERNAL_SERVER_ERROR, Json(ErrorResponse { error: e.to_string() })).into_response(),
+    }
+}
+
+async fn export_snapshots_json(
+    State(state): State<AppState>,
+) -> impl IntoResponse {
+    let store = match &state.snapshot_store {
+        Some(s) => s.clone(),
+        None => return (StatusCode::SERVICE_UNAVAILABLE, Json(ErrorResponse { error: "snapshot store not configured".into() })).into_response(),
+    };
+
+    let store = store.lock().await;
+    match store.export_json() {
+        Ok(json) => {
+            let body = axum::body::Body::from(json);
+            let mut resp = axum::response::Response::new(body);
+            *resp.status_mut() = StatusCode::OK;
+            resp.headers_mut().insert("content-type", "application/json".parse().unwrap());
+            resp.headers_mut().insert("content-disposition", "attachment; filename=\"world_snapshots.json\"".parse().unwrap());
+            resp
+        }
+        Err(e) => (StatusCode::INTERNAL_SERVER_ERROR, Json(ErrorResponse { error: e.to_string() })).into_response(),
+    }
+}
+
+async fn export_snapshots_csv(
+    State(state): State<AppState>,
+) -> impl IntoResponse {
+    let store = match &state.snapshot_store {
+        Some(s) => s.clone(),
+        None => return (StatusCode::SERVICE_UNAVAILABLE, Json(ErrorResponse { error: "snapshot store not configured".into() })).into_response(),
+    };
+
+    let store = store.lock().await;
+    match store.export_csv() {
+        Ok(csv) => {
+            let body = axum::body::Body::from(csv);
+            let mut resp = axum::response::Response::new(body);
+            *resp.status_mut() = StatusCode::OK;
+            resp.headers_mut().insert("content-type", "text/csv".parse().unwrap());
+            resp.headers_mut().insert("content-disposition", "attachment; filename=\"world_snapshots.csv\"".parse().unwrap());
+            resp
+        }
+        Err(e) => (StatusCode::INTERNAL_SERVER_ERROR, Json(ErrorResponse { error: e.to_string() })).into_response(),
+    }
 }

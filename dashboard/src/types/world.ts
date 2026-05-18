@@ -104,3 +104,29 @@ export interface ReputationResponse {
   reputation: number;
   can_claim_high_value: boolean;
 }
+
+// Time Capsule / World Snapshot types
+
+export interface SkillCount {
+  skill_name: string;
+  agent_count: number;
+  avg_level: number;
+}
+
+export interface KeyEvent {
+  tick: number;
+  event_type: string;
+  agent_id: string | null;
+  description: string;
+}
+
+export interface WorldSnapshotData {
+  tick: number;
+  timestamp: number;
+  total_population: number;
+  active_agents: number;
+  gdp: number;
+  gini_coefficient: number;
+  skill_distribution_top5: SkillCount[];
+  key_events: KeyEvent[];
+}

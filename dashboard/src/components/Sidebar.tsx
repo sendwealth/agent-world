@@ -9,6 +9,7 @@ const navItems = [
   { href: "/agents", label: "Agent 列表", icon: "🤖" },
   { href: "/tasks", label: "任务板", icon: "📋" },
   { href: "/timeline", label: "事件时间线", icon: "📜" },
+  { href: "/briefing", label: "世界简报", icon: "📊" },
 ];
 
 export function Sidebar() {

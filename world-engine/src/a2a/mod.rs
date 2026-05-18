@@ -1,5 +1,7 @@
-pub mod grpc;
+pub mod registry;
 pub mod router;
+pub mod service;
 
-pub use grpc::{A2AServiceImpl, SharedA2ARouter, create_a2a_server};
-pub use router::{A2AConfig, A2ARouter, RegisteredAgent, RouterError, RouterMessage};
+pub use registry::{AgentRegistry, RegisteredAgent};
+pub use router::MessageRouter;
+pub use service::A2aServiceImpl;

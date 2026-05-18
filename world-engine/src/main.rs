@@ -1,14 +1,14 @@
 use std::sync::Arc;
 use tokio::sync::Mutex;
 
-use agent_world_engine::a2a::router::{A2AConfig, A2ARouter};
-use agent_world_engine::a2a::grpc::create_a2a_server;
+use agent_world_engine::a2a::{A2aServiceImpl, AgentRegistry, MessageRouter};
+use agent_world_engine::agentworld::a2a::v1::a2a_service_server::A2aServiceServer;
 use agent_world_engine::economy::task::TaskBoard;
 use agent_world_engine::wal::WAL;
 
 #[tokio::main]
 async fn main() {
-    let event_bus = Arc::new(agent_world_engine::world::EventBus::new(256));
+    let event_bus = agent_world_engine::world::EventBus::new(256);
 
     println!("Agent World Engine v0.1.0");
     println!("   Status: initializing...");
@@ -66,38 +66,40 @@ async fn main() {
         }
     });
 
-    // Initialize task board — EventBus is Clone (broadcast::Sender internally),
-    // so creating a separate EventBus that shares the same underlying channel.
-    let task_board_event_bus = agent_world_engine::world::EventBus::new(256);
-    let task_board = Arc::new(Mutex::new(TaskBoard::with_event_bus(task_board_event_bus)));
+    // Initialize A2A subsystem (agent registry + message router)
+    // Uses a dedicated event bus for agent lifecycle events
+    let a2a_event_bus = Arc::new(agent_world_engine::world::EventBus::new(256));
+    let registry = Arc::new(AgentRegistry::new(a2a_event_bus));
+    let router = Arc::new(MessageRouter::new(Arc::clone(&registry)));
 
-    // Initialize A2A message router with shared event bus
-    let a2a_router = Arc::new(A2ARouter::with_event_bus(
-        A2AConfig::default(),
-        event_bus.clone(),
-    ));
-    let a2a_grpc = create_a2a_server(a2a_router);
+    // Start liveness monitor to evict stale agents
+    registry.spawn_liveness_monitor();
+
+    let a2a_service = A2aServiceImpl::new(Arc::clone(&registry), Arc::clone(&router));
+    println!("   A2A gRPC: initialized");
+
+    // Initialize task board with event bus
+    let task_board = Arc::new(Mutex::new(TaskBoard::with_event_bus(event_bus)));
 
     // Build the HTTP API router with WAL support
     let app = agent_world_engine::api::create_router_with_wal(task_board, wal_writer.clone());
 
     // Start the HTTP server
     let http_addr = std::net::SocketAddr::from(([127, 0, 0, 1], 3000));
-    println!("   API server: http://{}", http_addr);
+    println!("   HTTP API: http://{}", http_addr);
 
     // Start the gRPC server
     let grpc_addr = std::net::SocketAddr::from(([127, 0, 0, 1], 50051));
-    println!("   gRPC server: http://{}", grpc_addr);
+    println!("   gRPC A2A: http://{}", grpc_addr);
     println!("   Status: ready");
 
     let http_listener = tokio::net::TcpListener::bind(http_addr).await.unwrap();
 
     // Graceful shutdown on ctrl-c
     let shutdown_wal = wal_writer.clone();
-
     let http_server = axum::serve(http_listener, app);
     let grpc_server = tonic::transport::Server::builder()
-        .add_service(a2a_grpc)
+        .add_service(A2aServiceServer::new(a2a_service))
         .serve(grpc_addr);
 
     tokio::select! {

@@ -1,535 +1,287 @@
-"""A2A gRPC client — connects the agent runtime to the World Engine.
+"""Low-level A2A gRPC client with retry logic and bidirectional streaming.
 
-Provides:
-- ``A2AClient``: Full-featured gRPC client with auto-reconnect, heartbeat,
-  and message streaming.
-- ``A2AClientConfig``: Configuration dataclass.
+Provides two communication modes:
+    - **Synchronous**: ``SendMessage`` (unary) and ``Discover`` (unary).
+    - **Streaming**: ``StreamMessages`` (bidirectional) for background
+      message receive and send.
 
-The client implements both the ``WorldClientProtocol`` (used by ActionExecutor)
-and the ``A2AClientProtocol`` (used by SurvivalInstinct), so it can be injected
-directly into the Think Loop.
-
-Usage::
-
-    from agent_runtime.a2a import A2AClient, A2AClientConfig
-
-    client = A2AClient(
-        config=A2AClientConfig(server_address="localhost:50051"),
-        agent_id="agent-123",
-    )
-    await client.start()
-
-    # Now inject into ThinkLoop as the world client
-    loop = ThinkLoop(state=state, survival=instinct, executor=executor, a2a_client=client)
-    await loop.run()
+Network errors trigger automatic retry with exponential backoff + jitter.
+The streaming connection auto-reconnects on disconnect.
 """
 
 from __future__ import annotations
 
 import asyncio
-import json
 import logging
-import time
-import uuid
-from dataclasses import dataclass, field
-from typing import Any
+import random
+from typing import AsyncIterator
 
 import grpc
-from grpc import aio as grpc_aio
+
+from protocol.gen.python import a2a_pb2
+from protocol.gen.python import a2a_pb2_grpc
+
+from .config import A2AClientConfig
+from .message import build_a2a_message
 
 logger = logging.getLogger(__name__)
 
 
-# ---------------------------------------------------------------------------
-# Configuration
-# ---------------------------------------------------------------------------
-
-
-@dataclass
-class A2AClientConfig:
-    """Configuration for the A2A gRPC client.
-
-    Attributes:
-        server_address: ``host:port`` of the World Engine gRPC server.
-        heartbeat_interval: Seconds between heartbeat pings.  0 disables.
-        reconnect_backoff_base: Base seconds for exponential reconnect backoff.
-        reconnect_backoff_max: Cap for backoff duration.
-        reconnect_max_retries: Max consecutive reconnect attempts (0 = unlimited).
-        request_timeout: Seconds before a unary RPC times out.
-        streaming_timeout: Seconds before a streaming RPC times out (per message).
-    """
-
-    server_address: str = "localhost:50051"
-    heartbeat_interval: float = 30.0
-    reconnect_backoff_base: float = 1.0
-    reconnect_backoff_max: float = 60.0
-    reconnect_max_retries: int = 0  # unlimited
-    request_timeout: float = 10.0
-    streaming_timeout: float = 30.0
-
-
-# ---------------------------------------------------------------------------
-# A2AClient
-# ---------------------------------------------------------------------------
-
-
 class A2AClient:
-    """gRPC client for the A2A protocol.
+    """Low-level gRPC client for A2A communication.
 
-    Connects to the World Engine, supports:
-    - Sending / receiving messages via gRPC
-    - Claiming and submitting tasks
-    - Discovering other agents
-    - Automatic reconnection with exponential backoff
-    - Heartbeat maintenance to keep the connection alive
+    Usage::
 
-    Implements:
-    - ``WorldClientProtocol`` (from ``agent_runtime.core.act``)
-    - ``A2AClientProtocol`` (from ``agent_runtime.survival.instinct``)
+        config = A2AClientConfig(server_address="localhost:50051", agent_id="alice")
+        client = A2AClient(config)
+        await client.connect()
+
+        # Synchronous send
+        ack = await client.send_message(to_agent="bob", message_type=a2a_pb2.INFORM,
+                                         payload={"text": "hello"})
+
+        # Streaming
+        await client.start_streaming()
+        async for msg in client.incoming_messages():
+            ...
+        await client.stop_streaming()
+
+        await client.close()
     """
 
-    def __init__(
-        self,
-        config: A2AClientConfig | None = None,
-        *,
-        agent_id: str = "",
-    ) -> None:
-        self.config = config or A2AClientConfig()
-        self.agent_id = agent_id
-
-        # gRPC channel and stub
-        self._channel: grpc_aio.Channel | None = None
-        self._connected: bool = False
-
-        # Internal state
-        self._message_queue: asyncio.Queue[dict[str, Any]] = asyncio.Queue()
+    def __init__(self, config: A2AClientConfig) -> None:
+        self._config = config
+        self._channel: grpc.aio.Channel | None = None
+        self._stub: a2a_pb2_grpc.A2AServiceStub | None = None
+        self._incoming_queue: asyncio.Queue[a2a_pb2.A2AMessage] = asyncio.Queue()
         self._stream_task: asyncio.Task[None] | None = None
-        self._heartbeat_task: asyncio.Task[None] | None = None
-        self._running: bool = False
-        self._consecutive_reconnects: int = 0
+        self._send_queue: asyncio.Queue[a2a_pb2.A2AMessage] = asyncio.Queue()
+        self._streaming = False
 
     # ------------------------------------------------------------------
-    # Properties
+    # Connection lifecycle
     # ------------------------------------------------------------------
+
+    async def connect(self) -> None:
+        """Open a gRPC channel and create the service stub."""
+        self._channel = grpc.aio.insecure_channel(self._config.server_address)
+        self._stub = a2a_pb2_grpc.A2AServiceStub(self._channel)
+        logger.info("A2A client connected to %s", self._config.server_address)
+
+    async def close(self) -> None:
+        """Stop streaming (if active) and close the gRPC channel."""
+        await self.stop_streaming()
+        if self._channel is not None:
+            await self._channel.close()
+            self._channel = None
+            self._stub = None
+        logger.info("A2A client closed")
 
     @property
     def connected(self) -> bool:
-        """Whether the client is currently connected to the server."""
-        return self._connected
+        """Return True if the gRPC channel is open."""
+        return self._channel is not None
 
     # ------------------------------------------------------------------
-    # Lifecycle
+    # Synchronous RPCs (with retry)
     # ------------------------------------------------------------------
 
-    async def start(self) -> None:
-        """Connect to the server and start background tasks.
+    async def send_message(
+        self,
+        *,
+        to_agent: str = "",
+        message_type: int = a2a_pb2.INFORM,
+        payload: dict | None = None,
+    ) -> a2a_pb2.MessageAck:
+        """Send a message via the unary SendMessage RPC (with retry).
 
-        Starts the message stream receiver and heartbeat sender.
-        If the connection fails, it will be retried with backoff.
+        Args:
+            to_agent: Recipient agent ID (empty = broadcast).
+            message_type: MessageType enum value.
+            payload: Dict payload to JSON-encode.
+
+        Returns:
+            MessageAck from the server.
         """
-        self._running = True
-        await self._connect()
-
-        # Start background tasks
-        self._stream_task = asyncio.create_task(
-            self._stream_receiver_loop(), name="a2a-stream-receiver"
+        msg = build_a2a_message(
+            from_agent=self._config.agent_id,
+            to_agent=to_agent,
+            message_type=message_type,
+            payload=payload,
         )
-        if self.config.heartbeat_interval > 0:
-            self._heartbeat_task = asyncio.create_task(
-                self._heartbeat_loop(), name="a2a-heartbeat"
+        return await self._retry_rpc(
+            lambda: self._stub.SendMessage(  # type: ignore[union-attr]
+                msg, timeout=self._config.timeout
             )
-
-        logger.info(
-            "A2AClient started: agent=%s server=%s",
-            self.agent_id,
-            self.config.server_address,
         )
-
-    async def stop(self) -> None:
-        """Gracefully shut down the client and cancel background tasks."""
-        self._running = False
-
-        # Cancel background tasks
-        for task in (self._stream_task, self._heartbeat_task):
-            if task is not None and not task.done():
-                task.cancel()
-                try:
-                    await task
-                except asyncio.CancelledError:
-                    pass
-
-        # Close channel
-        if self._channel is not None:
-            await self._channel.close()
-            self._channel = None
-
-        self._connected = False
-        logger.info("A2AClient stopped: agent=%s", self.agent_id)
-
-    # ------------------------------------------------------------------
-    # Connection management
-    # ------------------------------------------------------------------
-
-    async def _connect(self) -> None:
-        """Establish a gRPC channel to the server."""
-        attempt = 0
-        while self._running:
-            try:
-                self._channel = grpc_aio.insecure_channel(
-                    self.config.server_address,
-                    options=[
-                        ("grpc.keepalive_time_ms", int(self.config.heartbeat_interval * 1000)),
-                        ("grpc.keepalive_timeout_ms", 10000),
-                        ("grpc.keepalive_permit_without_calls", 1),
-                        ("grpc.http2.max_pings_without_data", 0),
-                    ],
-                )
-                # Verify connectivity with a brief wait
-                await asyncio.wait_for(
-                    self._channel.channel_ready(), timeout=self.config.request_timeout
-                )
-                self._connected = True
-                self._consecutive_reconnects = 0
-                logger.info(
-                    "Connected to World Engine at %s", self.config.server_address
-                )
-                return
-            except Exception:
-                attempt += 1
-                self._connected = False
-                if (
-                    self.config.reconnect_max_retries > 0
-                    and attempt >= self.config.reconnect_max_retries
-                ):
-                    logger.error(
-                        "Max reconnect attempts (%d) reached. Giving up.",
-                        self.config.reconnect_max_retries,
-                    )
-                    raise
-
-                backoff = min(
-                    self.config.reconnect_backoff_base * (2 ** (attempt - 1)),
-                    self.config.reconnect_backoff_max,
-                )
-                logger.warning(
-                    "Connection attempt %d failed. Retrying in %.1fs...",
-                    attempt,
-                    backoff,
-                )
-                await asyncio.sleep(backoff)
-
-    async def _ensure_connected(self) -> None:
-        """Ensure we have an active connection; reconnect if needed."""
-        if self._connected and self._channel is not None:
-            try:
-                # Quick connectivity check
-                grpc_state = self._channel.get_state()
-                if grpc_state in (
-                    grpc.ChannelConnectivity.READY,
-                    grpc.ChannelConnectivity.IDLE,
-                ):
-                    return
-            except Exception:
-                pass
-
-        # Need to reconnect
-        self._connected = False
-        if self._channel is not None:
-            await self._channel.close()
-            self._channel = None
-
-        self._consecutive_reconnects += 1
-        await self._connect()
-
-    # ------------------------------------------------------------------
-    # Background loops
-    # ------------------------------------------------------------------
-
-    async def _stream_receiver_loop(self) -> None:
-        """Background loop that receives messages from the server stream.
-
-        On disconnection, attempts to reconnect with backoff.
-        """
-        while self._running:
-            try:
-                await self._ensure_connected()
-                # In a real deployment, this would call
-                # stub.StreamMessages(...) and iterate over the response stream.
-                # For now we sleep briefly to avoid busy-waiting.
-                await asyncio.sleep(1.0)
-            except asyncio.CancelledError:
-                return
-            except Exception:
-                logger.exception("Stream receiver error, reconnecting...")
-                self._connected = False
-                backoff = min(
-                    self.config.reconnect_backoff_base * 2,
-                    self.config.reconnect_backoff_max,
-                )
-                await asyncio.sleep(backoff)
-
-    async def _heartbeat_loop(self) -> None:
-        """Send periodic heartbeat pings to keep the connection alive."""
-        while self._running:
-            try:
-                await asyncio.sleep(self.config.heartbeat_interval)
-                if not self._running:
-                    return
-                await self._ensure_connected()
-                logger.debug("Heartbeat OK: agent=%s", self.agent_id)
-            except asyncio.CancelledError:
-                return
-            except Exception:
-                logger.warning("Heartbeat failed, will reconnect on next cycle")
-                self._connected = False
-
-    # ------------------------------------------------------------------
-    # Message API — implements WorldClientProtocol
-    # ------------------------------------------------------------------
-
-    async def send_message(self, payload: dict[str, Any]) -> dict[str, Any]:
-        """Send a message to another agent via gRPC.
-
-        Args:
-            payload: Message payload containing ``to_agent``, ``type``,
-                     ``content``, etc.
-
-        Returns:
-            Server response dict.
-        """
-        return await self._rpc_with_retry("SendMessage", payload)
-
-    async def claim_task(self, task_id: str) -> dict[str, Any]:
-        """Claim an available task from the World Engine.
-
-        Args:
-            task_id: The task to claim.
-
-        Returns:
-            Server response dict with claim status.
-        """
-        return await self._rpc_with_retry(
-            "ClaimTask", {"task_id": task_id, "agent_id": self.agent_id}
-        )
-
-    async def submit_task(
-        self, task_id: str, result: dict[str, Any]
-    ) -> dict[str, Any]:
-        """Submit completed work for a claimed task.
-
-        Args:
-            task_id: The task being submitted.
-            result: The work result payload.
-
-        Returns:
-            Server response dict.
-        """
-        return await self._rpc_with_retry(
-            "SubmitTask",
-            {"task_id": task_id, "agent_id": self.agent_id, "result": result},
-        )
-
-    async def propose_deal(self, proposal: dict[str, Any]) -> dict[str, Any]:
-        """Propose a deal/contract to another agent.
-
-        Args:
-            proposal: Deal terms and details.
-
-        Returns:
-            Server response dict.
-        """
-        return await self._rpc_with_retry("ProposeDeal", proposal)
-
-    async def teach_skill(
-        self, target_agent_id: str, skill_name: str, level: int
-    ) -> dict[str, Any]:
-        """Teach a skill to another agent.
-
-        Args:
-            target_agent_id: Agent to teach.
-            skill_name: Name of the skill.
-            level: Skill level being taught.
-
-        Returns:
-            Server response dict.
-        """
-        return await self._rpc_with_retry(
-            "TeachSkill",
-            {
-                "from_agent": self.agent_id,
-                "to_agent": target_agent_id,
-                "skill_name": skill_name,
-                "level": level,
-            },
-        )
-
-    async def explore(self, parameters: dict[str, Any]) -> dict[str, Any]:
-        """Explore the world for opportunities.
-
-        Args:
-            parameters: Exploration parameters.
-
-        Returns:
-            Server response dict with findings.
-        """
-        return await self._rpc_with_retry("Explore", parameters)
-
-    # ------------------------------------------------------------------
-    # Discovery API
-    # ------------------------------------------------------------------
 
     async def discover(
-        self, capabilities: list[str] | None = None
-    ) -> list[dict[str, Any]]:
-        """Discover agents in the world.
+        self,
+        capabilities: list[str] | None = None,
+    ) -> a2a_pb2.DiscoverResponse:
+        """Discover other agents via the Discover RPC (with retry).
 
         Args:
-            capabilities: Optional capability filters.
+            capabilities: Optional capability filter list.
 
         Returns:
-            List of agent info dicts.
+            DiscoverResponse containing found AgentInfo entries.
         """
-        result = await self._rpc_with_retry(
-            "Discover",
-            {"agent_id": self.agent_id, "capabilities": capabilities or []},
+        request = a2a_pb2.DiscoverRequest(
+            agent_id=self._config.agent_id,
+            capabilities=capabilities or [],
         )
-        return result.get("agents", [])
-
-    # ------------------------------------------------------------------
-    # A2AClientProtocol implementation (for SurvivalInstinct)
-    # ------------------------------------------------------------------
-
-    async def broadcast_message(
-        self, payload: dict[str, object]
-    ) -> dict[str, object]:
-        """Broadcast a message to all agents (implements A2AClientProtocol).
-
-        Args:
-            payload: Message payload with ``type`` and ``content``.
-
-        Returns:
-            Server response dict.
-        """
-        result = await self.send_message(
-            {
-                "from_agent": self.agent_id,
-                "to_agent": "",  # empty = broadcast
-                "type": payload.get("type", "INFORM"),
-                "payload": payload.get("payload", {}),
-            }
+        return await self._retry_rpc(
+            lambda: self._stub.Discover(  # type: ignore[union-attr]
+                request, timeout=self._config.timeout
+            )
         )
-        return result  # type: ignore[return-value]
 
     # ------------------------------------------------------------------
-    # Message retrieval (for Perceive phase)
+    # Bidirectional streaming
     # ------------------------------------------------------------------
 
-    async def get_unread_messages(self) -> list[dict[str, Any]]:
-        """Fetch unread messages from the server.
+    async def start_streaming(self) -> None:
+        """Start the bidirectional StreamMessages RPC in the background.
 
-        Called during the Perceive phase of the Think Loop.
-        Drains the internal message queue that the stream receiver
-        populates.
-
-        Returns:
-            List of message dicts.
+        Incoming messages are placed into an internal queue that can be
+        read via ``incoming_messages()``.  If streaming is already active
+        this is a no-op.
         """
-        messages: list[dict[str, Any]] = []
-        while not self._message_queue.empty():
+        if self._streaming:
+            return
+        self._streaming = True
+        self._stream_task = asyncio.create_task(self._stream_loop())
+
+    async def stop_streaming(self) -> None:
+        """Stop the background streaming task."""
+        self._streaming = False
+        if self._stream_task is not None:
+            self._stream_task.cancel()
             try:
-                msg = self._message_queue.get_nowait()
-                messages.append(msg)
+                await self._stream_task
+            except asyncio.CancelledError:
+                pass
+            self._stream_task = None
+
+    async def incoming_messages(self) -> AsyncIterator[a2a_pb2.A2AMessage]:
+        """Yield incoming messages from the streaming queue."""
+        while self._streaming or not self._incoming_queue.empty():
+            try:
+                msg = await asyncio.wait_for(
+                    self._incoming_queue.get(), timeout=1.0
+                )
+                yield msg
+            except asyncio.TimeoutError:
+                continue
+
+    def drain_incoming(self) -> list[a2a_pb2.A2AMessage]:
+        """Drain and return all currently queued incoming messages.
+
+        Returns a list of all messages that have been received via the
+        streaming connection since the last drain.  Returns an empty list
+        if no messages are available or streaming is not active.
+        """
+        messages: list[a2a_pb2.A2AMessage] = []
+        while True:
+            try:
+                messages.append(self._incoming_queue.get_nowait())
             except asyncio.QueueEmpty:
                 break
         return messages
 
-    # ------------------------------------------------------------------
-    # RPC helper with retry
-    # ------------------------------------------------------------------
+    async def stream_send(self, msg: a2a_pb2.A2AMessage) -> None:
+        """Queue a message for sending on the streaming connection.
 
-    async def _rpc_with_retry(
-        self, method: str, payload: dict[str, Any], max_retries: int = 3
-    ) -> dict[str, Any]:
-        """Execute an RPC call with automatic retry on connection failure.
-
-        On each failure, reconnects with backoff and retries.
+        Raises:
+            RuntimeError: If streaming is not active.
         """
-        last_error: str | None = None
+        if not self._streaming:
+            raise RuntimeError("Streaming is not active — call start_streaming() first")
+        await self._send_queue.put(msg)
 
-        for attempt in range(1, max_retries + 1):
+    @property
+    def streaming(self) -> bool:
+        """Return True if the bidirectional stream is active."""
+        return self._streaming
+
+    # ------------------------------------------------------------------
+    # Internal streaming loop
+    # ------------------------------------------------------------------
+
+    async def _stream_loop(self) -> None:
+        """Background task that maintains the bidirectional stream."""
+        while self._streaming:
             try:
-                await self._ensure_connected()
+                await self._run_stream()
+            except Exception:
+                logger.exception("Stream error, reconnecting in %.1fs",
+                                 self._config.stream_reconnect_delay)
+                await asyncio.sleep(self._config.stream_reconnect_delay)
 
-                # Build the gRPC request
-                message = self._build_message(method, payload)
+    async def _run_stream(self) -> None:
+        """One iteration of the bidirectional streaming connection."""
+        if self._stub is None:
+            raise RuntimeError("Cannot stream — call connect() first")
 
-                # In production, this would call the actual gRPC stub.
-                # Since the gRPC server is not yet deployed, we simulate
-                # a successful response for now.
-                result = await asyncio.wait_for(
-                    self._call_stub(method, message),
-                    timeout=self.config.request_timeout,
-                )
-                return result
-
-            except (grpc.RpcError, asyncio.TimeoutError, OSError) as exc:
-                last_error = str(exc)
-                self._connected = False
-                logger.warning(
-                    "RPC %s attempt %d/%d failed: %s",
-                    method,
-                    attempt,
-                    max_retries,
-                    last_error,
-                )
-                if attempt < max_retries:
-                    backoff = min(
-                        self.config.reconnect_backoff_base * (2 ** (attempt - 1)),
-                        self.config.reconnect_backoff_max,
+        async def request_iter() -> AsyncIterator[a2a_pb2.A2AMessage]:
+            while self._streaming:
+                try:
+                    msg = await asyncio.wait_for(
+                        self._send_queue.get(), timeout=1.0
                     )
-                    await asyncio.sleep(backoff)
+                    yield msg
+                except asyncio.TimeoutError:
+                    continue
 
-        logger.error(
-            "RPC %s exhausted retries (%d): %s", method, max_retries, last_error
-        )
-        return {
-            "status": "error",
-            "error": f"RPC {method} failed after {max_retries} attempts: {last_error}",
-        }
+        call = self._stub.StreamMessages(request_iter())
+        async for response in call:
+            if not self._streaming:
+                break
+            await self._incoming_queue.put(response)
 
-    async def _call_stub(
-        self, method: str, message: dict[str, Any]
-    ) -> dict[str, Any]:
-        """Call the actual gRPC stub method.
+    # ------------------------------------------------------------------
+    # Retry logic
+    # ------------------------------------------------------------------
 
-        When the World Engine gRPC server is deployed, this method will
-        use the generated protobuf stubs to make real RPC calls.
-        Currently simulates successful responses for integration testing.
+    async def _retry_rpc(self, rpc_fn):
+        """Execute an RPC call with exponential backoff retry.
+
+        Retries on transient errors (UNAVAILABLE, DEADLINE_EXCEEDED,
+        RESOURCE_EXHAUSTED) up to max_retries times.
         """
-        # Placeholder: in production, this would use generated stubs:
-        #   stub = a2a_pb2_grpc.A2AServiceStub(self._channel)
-        #   request = a2a_pb2.A2AMessage(**message)
-        #   response = await stub.SendMessage(request, timeout=...)
-        #   return {"status": "ok", "received": response.received}
+        policy = self._config.retry_policy
+        last_exc: Exception | None = None
 
-        # Simulate a successful server response
-        await asyncio.sleep(0.001)  # tiny delay to simulate network
-        return {
-            "status": "ok",
-            "action": method.lower(),
-            "agent_id": self.agent_id,
-            "message_id": message.get("id", ""),
-        }
+        for attempt in range(policy.max_retries + 1):
+            try:
+                return await rpc_fn()
+            except grpc.aio.AioRpcError as exc:
+                last_exc = exc
+                code_name = exc.code().name if exc.code() else "UNKNOWN"
+                if code_name not in policy.retryable_codes:
+                    raise
+                if attempt >= policy.max_retries:
+                    raise
+                delay = self._compute_backoff(attempt)
+                logger.warning(
+                    "RPC retry %d/%d (code=%s, delay=%.2fs)",
+                    attempt + 1,
+                    policy.max_retries,
+                    code_name,
+                    delay,
+                )
+                await asyncio.sleep(delay)
 
-    def _build_message(
-        self, method: str, payload: dict[str, Any]
-    ) -> dict[str, Any]:
-        """Build a message dict suitable for gRPC transmission."""
-        return {
-            "id": str(uuid.uuid4()),
-            "from_agent": self.agent_id,
-            "to_agent": payload.get("to_agent", ""),
-            "type": payload.get("type", method.upper()),
-            "payload": json.dumps(payload.get("payload", payload)).encode(),
-            "timestamp": int(time.time()),
-        }
+        # Should not reach here, but just in case
+        raise last_exc  # type: ignore[misc]
+
+    def _compute_backoff(self, attempt: int) -> float:
+        """Compute exponential backoff with jitter for retry attempt."""
+        policy = self._config.retry_policy
+        delay = min(
+            policy.base_delay * (2 ** attempt),
+            policy.max_delay,
+        )
+        jitter_amount = delay * policy.jitter * random.random()
+        return min(delay + jitter_amount, policy.max_delay)

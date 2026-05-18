@@ -1,29 +1,43 @@
-"""Tests for the A2A gRPC client and Think Loop integration.
+"""Tests for the A2A gRPC client module.
 
 Covers:
-- A2AClientConfig creation and defaults
-- A2AClient: construction, start/stop lifecycle
-- A2AClient: WorldClientProtocol methods (send_message, claim_task, etc.)
-- A2AClient: broadcast_message (A2AClientProtocol)
-- A2AClient: get_unread_messages
-- A2AClient: auto-reconnect with exponential backoff
-- GRpcPerceptionProvider: fetches messages via client
-- GRpcPerceptionProvider: graceful fallback on failure
-- ThinkLoop with A2AClient: full cycle integration
-- ThinkLoop with A2AClient: survival bypass uses client
+- A2AClientConfig and RetryPolicy defaults and custom values
+- build_a2a_message: all fields, auto-generated nonce and id
+- a2a_message_to_dict: protobuf → dict conversion, JSON payload decode
+- A2AClient: connect/close lifecycle, connected property
+- A2AClient: send_message and discover with mock stubs
+- A2AClient: retry logic (UNAVAILABLE retries, non-retryable fails immediately)
+- A2AClient: streaming start/stop, stream_send without streaming raises
+- GRPCWorldClient: all WorldClientProtocol methods
+- GRPCWorldClient: error handling returns error dicts
+- GRPCWorldClient: broadcast_message (A2AClientProtocol)
+- GRPCPerceptionProvider: perceive with messages and market state
+- GRPCPerceptionProvider: discover failure returns empty market_state
+- ThinkLoop integration: world_client injection, gRPC calls, error resilience
+- SurvivalInstinct integration: PANIC broadcast via GRPCWorldClient
 """
 
 from __future__ import annotations
 
 import asyncio
+from dataclasses import dataclass
 from typing import Any
-from unittest.mock import AsyncMock, patch
+from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
-from agent_runtime.a2a.client import A2AClient, A2AClientConfig
-from agent_runtime.a2a.perception import GRpcPerceptionProvider
-from agent_runtime.core.act import ActionExecutor, ActionType
+from protocol.gen.python import a2a_pb2
+
+from agent_runtime.a2a.client import A2AClient
+from agent_runtime.a2a.config import A2AClientConfig, RetryPolicy
+from agent_runtime.a2a.message import a2a_message_to_dict, build_a2a_message
+from agent_runtime.a2a.perception import GRPCPerceptionProvider
+from agent_runtime.a2a.world_client import GRPCWorldClient
+from agent_runtime.core.act import (
+    ActionContext,
+    ActionExecutor,
+    ActionType,
+)
 from agent_runtime.core.think_loop import (
     Decision,
     Perception,
@@ -58,6 +72,32 @@ def make_state(
     )
 
 
+def make_config(**kwargs) -> A2AClientConfig:
+    defaults = {"server_address": "localhost:50051", "agent_id": "test-agent"}
+    defaults.update(kwargs)
+    return A2AClientConfig(**defaults)
+
+
+# ---------------------------------------------------------------------------
+# RetryPolicy
+# ---------------------------------------------------------------------------
+
+
+class TestRetryPolicy:
+    def test_defaults(self):
+        rp = RetryPolicy()
+        assert rp.max_retries == 3
+        assert rp.base_delay == 0.5
+        assert rp.max_delay == 10.0
+        assert rp.jitter == 0.2
+        assert "UNAVAILABLE" in rp.retryable_codes
+
+    def test_custom(self):
+        rp = RetryPolicy(max_retries=5, base_delay=1.0)
+        assert rp.max_retries == 5
+        assert rp.base_delay == 1.0
+
+
 # ---------------------------------------------------------------------------
 # A2AClientConfig
 # ---------------------------------------------------------------------------
@@ -67,406 +107,618 @@ class TestA2AClientConfig:
     def test_defaults(self):
         cfg = A2AClientConfig()
         assert cfg.server_address == "localhost:50051"
-        assert cfg.heartbeat_interval == 30.0
-        assert cfg.reconnect_backoff_base == 1.0
-        assert cfg.reconnect_backoff_max == 60.0
-        assert cfg.reconnect_max_retries == 0
-        assert cfg.request_timeout == 10.0
-        assert cfg.streaming_timeout == 30.0
+        assert cfg.agent_id == ""
+        assert cfg.timeout == 5.0
+        assert cfg.enable_streaming is True
+        assert cfg.stream_reconnect_delay == 2.0
 
     def test_custom(self):
         cfg = A2AClientConfig(
-            server_address="engine:50051",
-            heartbeat_interval=15.0,
-            reconnect_backoff_base=0.5,
-            reconnect_max_retries=5,
+            server_address="engine:9999",
+            agent_id="alice",
+            timeout=10.0,
         )
-        assert cfg.server_address == "engine:50051"
-        assert cfg.heartbeat_interval == 15.0
-        assert cfg.reconnect_backoff_base == 0.5
-        assert cfg.reconnect_max_retries == 5
+        assert cfg.server_address == "engine:9999"
+        assert cfg.agent_id == "alice"
+        assert cfg.timeout == 10.0
+
+    def test_nested_retry_policy(self):
+        rp = RetryPolicy(max_retries=7)
+        cfg = A2AClientConfig(retry_policy=rp)
+        assert cfg.retry_policy.max_retries == 7
 
 
 # ---------------------------------------------------------------------------
-# A2AClient — construction & properties
+# build_a2a_message
 # ---------------------------------------------------------------------------
 
 
-class TestA2AClientConstruction:
-    def test_default_config(self):
-        client = A2AClient(agent_id="agent-1")
-        assert client.agent_id == "agent-1"
-        assert client.config.server_address == "localhost:50051"
-        assert client.connected is False
+class TestBuildA2AMessage:
+    def test_basic_message(self):
+        msg = build_a2a_message(
+            from_agent="alice",
+            to_agent="bob",
+            message_type=a2a_pb2.INFORM,
+            payload={"text": "hello"},
+        )
+        assert msg.from_agent == "alice"
+        assert msg.to_agent == "bob"
+        assert msg.type == a2a_pb2.INFORM
+        assert msg.id != ""
+        assert msg.nonce != ""
+        assert msg.timestamp > 0
 
-    def test_custom_config(self):
-        cfg = A2AClientConfig(server_address="engine:1234")
-        client = A2AClient(config=cfg, agent_id="agent-2")
-        assert client.config.server_address == "engine:1234"
+    def test_broadcast_message(self):
+        msg = build_a2a_message(
+            from_agent="alice",
+            message_type=a2a_pb2.PROPOSE,
+        )
+        assert msg.to_agent == ""
+
+    def test_custom_nonce_and_signature(self):
+        msg = build_a2a_message(
+            from_agent="alice",
+            nonce="custom-nonce",
+            signature="deadbeef",
+        )
+        assert msg.nonce == "custom-nonce"
+        assert msg.signature == "deadbeef"
+
+    def test_auto_generated_nonce(self):
+        msg1 = build_a2a_message(from_agent="alice")
+        msg2 = build_a2a_message(from_agent="alice")
+        assert msg1.nonce != msg2.nonce
+
+    def test_empty_payload(self):
+        msg = build_a2a_message(from_agent="alice")
+        assert msg.payload == b"{}"
+
+    def test_all_message_types(self):
+        types = [
+            a2a_pb2.DISCOVER,
+            a2a_pb2.PROPOSE,
+            a2a_pb2.ACCEPT,
+            a2a_pb2.REJECT,
+            a2a_pb2.INFORM,
+            a2a_pb2.TEACH,
+            a2a_pb2.REPRODUCE,
+            a2a_pb2.WILL,
+            a2a_pb2.THREAT,
+        ]
+        for mt in types:
+            msg = build_a2a_message(from_agent="alice", message_type=mt)
+            assert msg.type == mt
 
 
 # ---------------------------------------------------------------------------
-# A2AClient — start / stop lifecycle
+# a2a_message_to_dict
+# ---------------------------------------------------------------------------
+
+
+class TestA2AMessageToDict:
+    def test_round_trip(self):
+        original = build_a2a_message(
+            from_agent="alice",
+            to_agent="bob",
+            message_type=a2a_pb2.INFORM,
+            payload={"key": "value", "num": 42},
+        )
+        d = a2a_message_to_dict(original)
+        assert d["from_agent"] == "alice"
+        assert d["to_agent"] == "bob"
+        assert d["type"] == a2a_pb2.INFORM
+        assert d["payload"] == {"key": "value", "num": 42}
+        assert d["nonce"] == original.nonce
+
+    def test_empty_payload(self):
+        msg = build_a2a_message(from_agent="alice")
+        d = a2a_message_to_dict(msg)
+        assert d["payload"] == {}
+
+    def test_invalid_json_payload(self):
+        msg = a2a_pb2.A2AMessage(
+            from_agent="alice",
+            payload=b"not json",
+        )
+        d = a2a_message_to_dict(msg)
+        assert d["payload"] == {}
+
+
+# ---------------------------------------------------------------------------
+# A2AClient — lifecycle
 # ---------------------------------------------------------------------------
 
 
 class TestA2AClientLifecycle:
     @pytest.mark.asyncio
-    async def test_start_and_stop(self):
-        """Client should start and stop without error."""
-        client = A2AClient(
-            config=A2AClientConfig(
-                heartbeat_interval=0,  # disable heartbeat for test
-            ),
-            agent_id="test-agent",
-        )
+    async def test_connect_and_close(self):
+        client = A2AClient(make_config())
+        assert not client.connected
 
-        # Patch the connection to avoid needing a real server
-        with patch.object(client, "_connect", new_callable=AsyncMock):
-            await client.start()
-            assert client._running is True
-
-        await client.stop()
-        assert client._running is False
-        assert client.connected is False
+        mock_channel = MagicMock()
+        mock_channel.close = AsyncMock()
+        with patch("agent_runtime.a2a.client.grpc.aio.insecure_channel", return_value=mock_channel):
+            await client.connect()
+            assert client.connected
+            await client.close()
+            mock_channel.close.assert_awaited_once()
 
     @pytest.mark.asyncio
-    async def test_stop_cancels_background_tasks(self):
-        """Stop should cancel stream and heartbeat tasks."""
-        client = A2AClient(
-            config=A2AClientConfig(heartbeat_interval=0.01),
-            agent_id="test-agent",
-        )
-
-        with patch.object(client, "_connect", new_callable=AsyncMock):
-            await client.start()
-            assert client._stream_task is not None
-            assert client._heartbeat_task is not None
-
-        await client.stop()
-        assert client._stream_task.done()
-        assert client._heartbeat_task.done()
+    async def test_close_without_connect(self):
+        client = A2AClient(make_config())
+        await client.close()  # should not raise
 
 
 # ---------------------------------------------------------------------------
-# A2AClient — WorldClientProtocol methods
+# A2AClient — synchronous RPCs
 # ---------------------------------------------------------------------------
 
 
-class TestA2AClientMethods:
+class TestA2AClientSyncRPCs:
     @pytest.mark.asyncio
     async def test_send_message(self):
-        client = A2AClient(agent_id="agent-1")
-        result = await client.send_message({"to_agent": "agent-2", "content": "hi"})
-        assert result["status"] == "ok"
+        client = A2AClient(make_config())
+        mock_ack = a2a_pb2.MessageAck(received=True)
+
+        with patch("agent_runtime.a2a.client.grpc.aio"):
+            await client.connect()
+            client._stub = MagicMock()
+            client._stub.SendMessage = AsyncMock(return_value=mock_ack)
+
+            ack = await client.send_message(
+                to_agent="bob",
+                message_type=a2a_pb2.INFORM,
+                payload={"text": "hi"},
+            )
+            assert ack.received is True
 
     @pytest.mark.asyncio
-    async def test_claim_task(self):
-        client = A2AClient(agent_id="agent-1")
-        result = await client.claim_task("task-123")
-        assert result["status"] == "ok"
+    async def test_discover(self):
+        client = A2AClient(make_config())
+        mock_response = a2a_pb2.DiscoverResponse(
+            agents=[
+                a2a_pb2.AgentInfo(agent_id="bob", name="Bob", tokens=500),
+            ]
+        )
 
-    @pytest.mark.asyncio
-    async def test_submit_task(self):
-        client = A2AClient(agent_id="agent-1")
-        result = await client.submit_task("task-123", {"output": "done"})
-        assert result["status"] == "ok"
+        with patch("agent_runtime.a2a.client.grpc.aio"):
+            await client.connect()
+            client._stub = MagicMock()
+            client._stub.Discover = AsyncMock(return_value=mock_response)
 
-    @pytest.mark.asyncio
-    async def test_propose_deal(self):
-        client = A2AClient(agent_id="agent-1")
-        result = await client.propose_deal({"terms": "50 tokens"})
-        assert result["status"] == "ok"
-
-    @pytest.mark.asyncio
-    async def test_teach_skill(self):
-        client = A2AClient(agent_id="agent-1")
-        result = await client.teach_skill("agent-2", "python", 3)
-        assert result["status"] == "ok"
-
-    @pytest.mark.asyncio
-    async def test_explore(self):
-        client = A2AClient(agent_id="agent-1")
-        result = await client.explore({"region": "north"})
-        assert result["status"] == "ok"
+            response = await client.discover()
+            assert len(response.agents) == 1
+            assert response.agents[0].agent_id == "bob"
 
 
 # ---------------------------------------------------------------------------
-# A2AClient — broadcast_message (A2AClientProtocol)
-# ---------------------------------------------------------------------------
-
-
-class TestA2AClientBroadcast:
-    @pytest.mark.asyncio
-    async def test_broadcast_message(self):
-        client = A2AClient(agent_id="agent-1")
-        result = await client.broadcast_message({
-            "type": "INFORM",
-            "payload": {"content": "SOS"},
-        })
-        assert result["status"] == "ok"
-
-
-# ---------------------------------------------------------------------------
-# A2AClient — get_unread_messages
-# ---------------------------------------------------------------------------
-
-
-class TestA2AClientMessages:
-    @pytest.mark.asyncio
-    async def test_get_unread_messages_empty(self):
-        client = A2AClient(agent_id="agent-1")
-        messages = await client.get_unread_messages()
-        assert messages == []
-
-    @pytest.mark.asyncio
-    async def test_get_unread_messages_drains_queue(self):
-        client = A2AClient(agent_id="agent-1")
-        # Manually push messages into the queue
-        await client._message_queue.put({"from": "bob", "text": "hello"})
-        await client._message_queue.put({"from": "alice", "text": "hi"})
-
-        messages = await client.get_unread_messages()
-        assert len(messages) == 2
-        assert messages[0]["from"] == "bob"
-        assert messages[1]["from"] == "alice"
-
-        # Queue should now be empty
-        messages2 = await client.get_unread_messages()
-        assert messages2 == []
-
-
-# ---------------------------------------------------------------------------
-# A2AClient — RPC retry and error handling
+# A2AClient — retry logic
 # ---------------------------------------------------------------------------
 
 
 class TestA2AClientRetry:
     @pytest.mark.asyncio
-    async def test_rpc_returns_error_after_retries(self):
-        """When _call_stub always fails, rpc returns error status."""
-        client = A2AClient(
-            config=A2AClientConfig(reconnect_backoff_base=0.001),
-            agent_id="agent-1",
-        )
+    async def test_retries_on_unavailable(self):
+        import grpc as real_grpc
 
-        async def _failing_stub(method: str, message: dict) -> dict[str, Any]:
-            raise OSError("connection refused")
+        client = A2AClient(make_config(retry_policy=RetryPolicy(max_retries=3, base_delay=0.01)))
 
-        with patch.object(client, "_call_stub", side_effect=_failing_stub):
-            with patch.object(client, "_ensure_connected", new_callable=AsyncMock):
-                result = await client._rpc_with_retry("TestRPC", {}, max_retries=2)
+        with patch("agent_runtime.a2a.client.grpc.aio.insecure_channel"):
+            await client.connect()
+            client._stub = MagicMock()
 
-        assert result["status"] == "error"
-        assert "TestRPC" in result["error"]
-        assert "2 attempts" in result["error"]
+            mock_ack = a2a_pb2.MessageAck(received=True)
+            call_count = 0
 
+            async def fake_send(*args, **kwargs):
+                nonlocal call_count
+                call_count += 1
+                if call_count == 1:
+                    raise real_grpc.aio.AioRpcError(
+                        real_grpc.StatusCode.UNAVAILABLE,
+                        real_grpc.aio.Metadata(),
+                        real_grpc.aio.Metadata(),
+                        details="service unavailable",
+                        debug_error_string="unavailable",
+                    )
+                return mock_ack
 
-# ---------------------------------------------------------------------------
-# GRpcPerceptionProvider
-# ---------------------------------------------------------------------------
+            client._stub.SendMessage = fake_send
 
-
-class TestGRpcPerceptionProvider:
-    @pytest.mark.asyncio
-    async def test_perceive_with_messages(self):
-        """Provider should fetch messages via the A2A client."""
-        client = A2AClient(agent_id="agent-1")
-        await client._message_queue.put({"from": "bob", "content": "hello"})
-
-        provider = GRpcPerceptionProvider(client)
-        state = make_state(tokens=500, max_tokens=1000)
-        perception = await provider.perceive(state, tick=5)
-
-        assert len(perception.messages) == 1
-        assert perception.messages[0]["from"] == "bob"
-        assert perception.token_balance == 500
-        assert perception.token_ratio == 0.5
-        assert perception.tick == 5
+            ack = await client.send_message(to_agent="bob")
+            assert call_count == 2
+            assert ack.received is True
 
     @pytest.mark.asyncio
-    async def test_perceive_empty_messages(self):
-        """Provider should work fine with no messages."""
-        client = A2AClient(agent_id="agent-1")
-        provider = GRpcPerceptionProvider(client)
-        state = make_state()
-        perception = await provider.perceive(state, tick=1)
+    async def test_non_retryable_fails_immediately(self):
+        import grpc as real_grpc
 
-        assert perception.messages == []
-        assert perception.token_balance == 500
+        client = A2AClient(make_config(retry_policy=RetryPolicy(max_retries=3, base_delay=0.01)))
 
-    @pytest.mark.asyncio
-    async def test_perceive_graceful_fallback(self):
-        """If get_unread_messages raises, provider should return empty messages."""
-        client = A2AClient(agent_id="agent-1")
+        with patch("agent_runtime.a2a.client.grpc.aio.insecure_channel"):
+            await client.connect()
+            client._stub = MagicMock()
 
-        async def _broken():
-            raise RuntimeError("gRPC failure")
-
-        with patch.object(client, "get_unread_messages", side_effect=_broken):
-            provider = GRpcPerceptionProvider(client)
-            state = make_state()
-            perception = await provider.perceive(state, tick=1)
-
-        assert perception.messages == []
-        assert perception.token_balance == 500
-
-
-# ---------------------------------------------------------------------------
-# ThinkLoop — A2AClient integration
-# ---------------------------------------------------------------------------
-
-
-class TestThinkLoopWithA2AClient:
-    @pytest.mark.asyncio
-    async def test_single_tick_with_a2a_client(self):
-        """ThinkLoop should work with a real A2A client injected."""
-        state = make_state(tokens=5000, max_tokens=10000)
-        client = A2AClient(agent_id=str(state.id))
-        loop = ThinkLoop(
-            state=state,
-            survival=SurvivalInstinct(),
-            executor=ActionExecutor(),
-            config=ThinkLoopConfig(tick_interval=0.0),
-            a2a_client=client,
-        )
-        await loop.run(max_ticks=1)
-        assert loop.tick == 1
-        assert loop.total_errors == 0
-
-    @pytest.mark.asyncio
-    async def test_ten_ticks_with_a2a_client(self):
-        """ThinkLoop should run stably for 10 ticks with A2AClient."""
-        state = make_state(tokens=5000, max_tokens=10000)
-        client = A2AClient(agent_id=str(state.id))
-        loop = ThinkLoop(
-            state=state,
-            survival=SurvivalInstinct(),
-            executor=ActionExecutor(),
-            config=ThinkLoopConfig(tick_interval=0.0),
-            a2a_client=client,
-        )
-        await loop.run(max_ticks=10)
-        assert loop.tick == 10
-        assert loop.total_errors == 0
-
-    @pytest.mark.asyncio
-    async def test_with_grpc_perception_provider(self):
-        """ThinkLoop with GRpcPerceptionProvider should perceive messages."""
-        state = make_state(tokens=5000, max_tokens=10000)
-        client = A2AClient(agent_id=str(state.id))
-        await client._message_queue.put({"from": "bob", "content": "hello"})
-
-        provider = GRpcPerceptionProvider(client)
-        loop = ThinkLoop(
-            state=state,
-            survival=SurvivalInstinct(),
-            executor=ActionExecutor(),
-            config=ThinkLoopConfig(tick_interval=0.0),
-            a2a_client=client,
-            perception_provider=provider,
-        )
-        await loop.run(max_ticks=5)
-        assert loop.tick == 5
-        assert loop.total_errors == 0
-
-    @pytest.mark.asyncio
-    async def test_survival_bypass_with_a2a_client(self):
-        """PANIC mode should use A2A client for emergency actions."""
-        state = make_state(tokens=5, max_tokens=100)
-        client = A2AClient(agent_id=str(state.id))
-
-        # Track if broadcast was called
-        broadcast_calls: list[dict] = []
-        original_broadcast = client.broadcast_message
-
-        async def tracking_broadcast(payload: dict) -> dict[str, Any]:
-            broadcast_calls.append(payload)
-            return await original_broadcast(payload)
-
-        with patch.object(client, "broadcast_message", side_effect=tracking_broadcast):
-            loop = ThinkLoop(
-                state=state,
-                survival=SurvivalInstinct(),
-                executor=ActionExecutor(),
-                config=ThinkLoopConfig(tick_interval=0.0),
-                a2a_client=client,
-            )
-            await loop.run(max_ticks=3)
-
-        assert loop.tick == 3
-        # Broadcast should have been called for SOS (survival cooldown means
-        # it fires once per cooldown period)
-        assert len(broadcast_calls) >= 1
-
-    @pytest.mark.asyncio
-    async def test_act_phase_uses_a2a_client(self):
-        """Act phase should route through the A2A client."""
-        state = make_state(tokens=5000, max_tokens=10000)
-        client = A2AClient(agent_id=str(state.id))
-
-        # Track send_message calls
-        send_calls: list[dict] = []
-
-        class AlwaysSendMessage:
-            async def decide(self, state_ref, perception, survival):
-                return Decision(
-                    action_type=ActionType.SEND_MESSAGE,
-                    parameters={"payload": {"to_agent": "bob", "content": "hello"}},
+            async def fake_send(*args, **kwargs):
+                raise real_grpc.aio.AioRpcError(
+                    real_grpc.StatusCode.PERMISSION_DENIED,
+                    real_grpc.aio.Metadata(),
+                    real_grpc.aio.Metadata(),
+                    details="permission denied",
+                    debug_error_string="denied",
                 )
 
-        original_send = client.send_message
+            client._stub.SendMessage = fake_send
 
-        async def tracking_send(payload: dict) -> dict[str, Any]:
-            send_calls.append(payload)
-            return await original_send(payload)
-
-        with patch.object(client, "send_message", side_effect=tracking_send):
-            loop = ThinkLoop(
-                state=state,
-                survival=SurvivalInstinct(),
-                executor=ActionExecutor(),
-                config=ThinkLoopConfig(tick_interval=0.0),
-                a2a_client=client,
-                decision_provider=AlwaysSendMessage(),
-            )
-            await loop.run(max_ticks=3)
-
-        assert loop.tick == 3
-        assert len(send_calls) == 3
-        assert send_calls[0]["to_agent"] == "bob"
+            with pytest.raises(Exception):
+                await client.send_message(to_agent="bob")
 
 
 # ---------------------------------------------------------------------------
-# ThinkLoop — backward compatibility (no A2A client)
+# A2AClient — streaming
 # ---------------------------------------------------------------------------
 
 
-class TestThinkLoopBackwardCompat:
+class TestA2AClientStreaming:
     @pytest.mark.asyncio
-    async def test_no_a2a_client_uses_noop(self):
-        """Without A2A client, ThinkLoop should still work with _NoOpWorldClient."""
+    async def test_start_and_stop_streaming(self):
+        client = A2AClient(make_config())
+
+        with patch("agent_runtime.a2a.client.grpc.aio"):
+            await client.connect()
+            assert not client.streaming
+            await client.start_streaming()
+            assert client.streaming
+            await client.stop_streaming()
+            assert not client.streaming
+
+    @pytest.mark.asyncio
+    async def test_stream_send_without_streaming_raises(self):
+        client = A2AClient(make_config())
+        msg = build_a2a_message(from_agent="alice")
+
+        with pytest.raises(RuntimeError, match="Streaming is not active"):
+            await client.stream_send(msg)
+
+    def test_drain_incoming_returns_empty_when_no_messages(self):
+        client = A2AClient(make_config())
+        assert client.drain_incoming() == []
+
+    def test_drain_incoming_returns_queued_messages(self):
+        client = A2AClient(make_config())
+        msg1 = build_a2a_message(from_agent="bob")
+        msg2 = build_a2a_message(from_agent="carol")
+        client._incoming_queue.put_nowait(msg1)
+        client._incoming_queue.put_nowait(msg2)
+
+        drained = client.drain_incoming()
+        assert len(drained) == 2
+        assert drained[0].from_agent == "bob"
+        assert drained[1].from_agent == "carol"
+        # Queue should be empty after drain
+        assert client.drain_incoming() == []
+
+
+# ---------------------------------------------------------------------------
+# GRPCWorldClient — all WorldClientProtocol methods
+# ---------------------------------------------------------------------------
+
+
+class TestGRPCWorldClient:
+    def _make_world_client(self) -> tuple[GRPCWorldClient, MagicMock]:
+        a2a = MagicMock(spec=A2AClient)
+        world = GRPCWorldClient(a2a)
+        return world, a2a
+
+    @pytest.mark.asyncio
+    async def test_send_message_success(self):
+        world, a2a = self._make_world_client()
+        a2a.send_message = AsyncMock(
+            return_value=a2a_pb2.MessageAck(received=True)
+        )
+
+        result = await world.send_message({"to_agent": "bob", "payload": {"text": "hi"}})
+        assert result["status"] == "ok"
+        assert result["received"] is True
+
+    @pytest.mark.asyncio
+    async def test_send_message_failure(self):
+        world, a2a = self._make_world_client()
+        a2a.send_message = AsyncMock(side_effect=ConnectionError("network down"))
+
+        result = await world.send_message({"to_agent": "bob"})
+        assert result["status"] == "error"
+        assert "network down" in result["error"]
+
+    @pytest.mark.asyncio
+    async def test_claim_task(self):
+        world, a2a = self._make_world_client()
+        a2a.send_message = AsyncMock(
+            return_value=a2a_pb2.MessageAck(received=True)
+        )
+
+        result = await world.claim_task("task-123")
+        assert result["status"] == "ok"
+        assert result["task_id"] == "task-123"
+
+    @pytest.mark.asyncio
+    async def test_claim_task_failure(self):
+        world, a2a = self._make_world_client()
+        a2a.send_message = AsyncMock(side_effect=Exception("fail"))
+
+        result = await world.claim_task("task-123")
+        assert result["status"] == "error"
+
+    @pytest.mark.asyncio
+    async def test_submit_task(self):
+        world, a2a = self._make_world_client()
+        a2a.send_message = AsyncMock(
+            return_value=a2a_pb2.MessageAck(received=True)
+        )
+
+        result = await world.submit_task("task-123", {"output": "done"})
+        assert result["status"] == "ok"
+
+    @pytest.mark.asyncio
+    async def test_submit_task_failure(self):
+        world, a2a = self._make_world_client()
+        a2a.send_message = AsyncMock(side_effect=Exception("fail"))
+
+        result = await world.submit_task("task-123", {})
+        assert result["status"] == "error"
+
+    @pytest.mark.asyncio
+    async def test_propose_deal(self):
+        world, a2a = self._make_world_client()
+        a2a.send_message = AsyncMock(
+            return_value=a2a_pb2.MessageAck(received=True)
+        )
+
+        result = await world.propose_deal({"target_agent_id": "bob", "terms": {}})
+        assert result["status"] == "ok"
+
+    @pytest.mark.asyncio
+    async def test_propose_deal_failure(self):
+        world, a2a = self._make_world_client()
+        a2a.send_message = AsyncMock(side_effect=Exception("fail"))
+
+        result = await world.propose_deal({})
+        assert result["status"] == "error"
+
+    @pytest.mark.asyncio
+    async def test_teach_skill(self):
+        world, a2a = self._make_world_client()
+        a2a.send_message = AsyncMock(
+            return_value=a2a_pb2.MessageAck(received=True)
+        )
+
+        result = await world.teach_skill("bob", "python", 3)
+        assert result["status"] == "ok"
+        assert result["target"] == "bob"
+        assert result["skill"] == "python"
+
+    @pytest.mark.asyncio
+    async def test_teach_skill_failure(self):
+        world, a2a = self._make_world_client()
+        a2a.send_message = AsyncMock(side_effect=Exception("fail"))
+
+        result = await world.teach_skill("bob", "python", 3)
+        assert result["status"] == "error"
+
+    @pytest.mark.asyncio
+    async def test_explore(self):
+        world, a2a = self._make_world_client()
+        a2a.discover = AsyncMock(
+            return_value=a2a_pb2.DiscoverResponse(
+                agents=[
+                    a2a_pb2.AgentInfo(
+                        agent_id="bob", name="Bob", tokens=500, reputation=0.9
+                    ),
+                ]
+            )
+        )
+
+        result = await world.explore({})
+        assert result["status"] == "ok"
+        assert len(result["agents"]) == 1
+        assert result["agents"][0]["agent_id"] == "bob"
+
+    @pytest.mark.asyncio
+    async def test_explore_failure(self):
+        world, a2a = self._make_world_client()
+        a2a.discover = AsyncMock(side_effect=Exception("fail"))
+
+        result = await world.explore({})
+        assert result["status"] == "error"
+
+    @pytest.mark.asyncio
+    async def test_broadcast_message(self):
+        world, a2a = self._make_world_client()
+        a2a.send_message = AsyncMock(
+            return_value=a2a_pb2.MessageAck(received=True)
+        )
+
+        result = await world.broadcast_message({
+            "type": "INFORM",
+            "payload": {"category": "personal", "content": "SOS"},
+        })
+        assert result["status"] == "ok"
+
+    @pytest.mark.asyncio
+    async def test_broadcast_message_failure(self):
+        world, a2a = self._make_world_client()
+        a2a.send_message = AsyncMock(side_effect=Exception("fail"))
+
+        result = await world.broadcast_message({"type": "PROPOSE"})
+        assert result["status"] == "error"
+
+
+# ---------------------------------------------------------------------------
+# GRPCPerceptionProvider
+# ---------------------------------------------------------------------------
+
+
+class TestGRPCPerceptionProvider:
+    @pytest.mark.asyncio
+    async def test_perceive_basic(self):
+        a2a = MagicMock(spec=A2AClient)
+        a2a.drain_incoming = MagicMock(return_value=[])
+        a2a.discover = AsyncMock(
+            return_value=a2a_pb2.DiscoverResponse(
+                agents=[
+                    a2a_pb2.AgentInfo(agent_id="bob", name="Bob", tokens=500),
+                ]
+            )
+        )
+
+        provider = GRPCPerceptionProvider(a2a)
+        state = make_state()
+        p = await provider.perceive(state, tick=5)
+
+        assert p.token_balance == 500
+        assert p.token_ratio == 0.5
+        assert p.tick == 5
+        assert p.health == 100.0
+        assert p.market_state["agent_count"] == 1
+
+    @pytest.mark.asyncio
+    async def test_perceive_with_messages(self):
+        msg = build_a2a_message(
+            from_agent="bob",
+            to_agent="alice",
+            message_type=a2a_pb2.INFORM,
+            payload={"text": "hello"},
+        )
+
+        a2a = MagicMock(spec=A2AClient)
+        a2a.drain_incoming = MagicMock(return_value=[msg])
+        a2a.discover = AsyncMock(return_value=a2a_pb2.DiscoverResponse())
+
+        provider = GRPCPerceptionProvider(a2a)
+        state = make_state()
+        p = await provider.perceive(state, tick=1)
+
+        assert len(p.messages) == 1
+        assert p.messages[0]["from_agent"] == "bob"
+
+    @pytest.mark.asyncio
+    async def test_perceive_discover_failure_graceful(self):
+        a2a = MagicMock(spec=A2AClient)
+        a2a.drain_incoming = MagicMock(return_value=[])
+        a2a.discover = AsyncMock(side_effect=ConnectionError("network down"))
+
+        provider = GRPCPerceptionProvider(a2a)
+        state = make_state()
+        p = await provider.perceive(state, tick=1)
+
+        assert p.market_state == {}
+        assert p.token_balance == 500
+
+
+# ---------------------------------------------------------------------------
+# ThinkLoop integration with GRPCWorldClient
+# ---------------------------------------------------------------------------
+
+
+class TestThinkLoopGRPCIntegration:
+    @pytest.mark.asyncio
+    async def test_world_client_injection(self):
+        """ThinkLoop uses the injected world_client for actions."""
+        a2a = MagicMock(spec=A2AClient)
+        world = GRPCWorldClient(a2a)
+        a2a.send_message = AsyncMock(
+            return_value=a2a_pb2.MessageAck(received=True)
+        )
+
+        class AlwaysSendMessage:
+            async def decide(self, state, perception, survival):
+                return Decision(
+                    action_type=ActionType.SEND_MESSAGE,
+                    parameters={"payload": {"to_agent": "bob", "text": "hi"}},
+                )
+
         state = make_state(tokens=5000, max_tokens=10000)
         loop = ThinkLoop(
             state=state,
             survival=SurvivalInstinct(),
             executor=ActionExecutor(),
             config=ThinkLoopConfig(tick_interval=0.0),
+            decision_provider=AlwaysSendMessage(),
+            world_client=world,
         )
-        await loop.run(max_ticks=5)
-        assert loop.tick == 5
+        await loop.run(max_ticks=3)
+        assert loop.tick == 3
         assert loop.total_errors == 0
 
     @pytest.mark.asyncio
-    async def test_100_ticks_no_a2a_client(self):
-        """Stability test: 100 ticks without A2A client still works."""
-        state = make_state(tokens=10000, max_tokens=20000)
+    async def test_network_error_does_not_crash_loop(self):
+        """Network errors from world_client don't crash the ThinkLoop."""
+        a2a = MagicMock(spec=A2AClient)
+        world = GRPCWorldClient(a2a)
+        a2a.send_message = AsyncMock(side_effect=ConnectionError("network down"))
+
+        class AlwaysSendMessage:
+            async def decide(self, state, perception, survival):
+                return Decision(
+                    action_type=ActionType.SEND_MESSAGE,
+                    parameters={"payload": {"to_agent": "bob"}},
+                )
+
+        state = make_state(tokens=5000, max_tokens=10000)
         loop = ThinkLoop(
             state=state,
             survival=SurvivalInstinct(),
             executor=ActionExecutor(),
             config=ThinkLoopConfig(tick_interval=0.0),
+            decision_provider=AlwaysSendMessage(),
+            world_client=world,
         )
-        await loop.run(max_ticks=100)
-        assert loop.tick == 100
+        await loop.run(max_ticks=3)
+        assert loop.tick == 3
+
+    @pytest.mark.asyncio
+    async def test_no_world_client_uses_noop(self):
+        """Without world_client, ThinkLoop falls back to _NoOpWorldClient."""
+        class AlwaysExplore:
+            async def decide(self, state, perception, survival):
+                return Decision(action_type=ActionType.EXPLORE)
+
+        state = make_state(tokens=5000, max_tokens=10000)
+        loop = ThinkLoop(
+            state=state,
+            survival=SurvivalInstinct(),
+            executor=ActionExecutor(),
+            config=ThinkLoopConfig(tick_interval=0.0),
+            decision_provider=AlwaysExplore(),
+        )
+        await loop.run(max_ticks=5)
+        assert loop.tick == 5
         assert loop.total_errors == 0
+
+
+# ---------------------------------------------------------------------------
+# SurvivalInstinct integration with GRPCWorldClient
+# ---------------------------------------------------------------------------
+
+
+class TestSurvivalWithGRPC:
+    @pytest.mark.asyncio
+    async def test_panic_broadcast_via_grpc(self):
+        """PANIC mode triggers broadcast_message on the GRPCWorldClient."""
+        a2a = MagicMock(spec=A2AClient)
+        world = GRPCWorldClient(a2a)
+        a2a.send_message = AsyncMock(
+            return_value=a2a_pb2.MessageAck(received=True)
+        )
+
+        instinct = SurvivalInstinct()
+        state = make_state(tokens=5, max_tokens=100)
+
+        action = instinct.assess(state)
+        assert action.mode == SurvivalMode.PANIC
+
+        results = await instinct.execute(action, state, a2a_client=world)
+        # Should have executed broadcast and loan request
+        assert len(results) >= 1
+        # Verify that broadcast_message was called
+        assert a2a.send_message.call_count >= 1

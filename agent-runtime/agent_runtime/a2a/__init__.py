@@ -1,5 +1,22 @@
-"""A2A gRPC client — connects the Think Loop to the World Engine."""
+"""A2A gRPC client — connects the Think Loop to the World Engine.
 
-from agent_runtime.a2a.client import A2AClient, A2AClientConfig
+Submodules:
+    config      — connection configuration and retry policy
+    message     — A2AMessage builder and converter helpers
+    client      — low-level gRPC client (sync + streaming)
+    world_client — GRPCWorldClient implementing WorldClientProtocol (ACT phase)
+    perception  — GRPCPerceptionProvider implementing PerceptionProvider (SENSE phase)
+"""
 
-__all__ = ["A2AClient", "A2AClientConfig"]
+from .client import A2AClient
+from .config import A2AClientConfig, RetryPolicy
+from .perception import GRPCPerceptionProvider
+from .world_client import GRPCWorldClient
+
+__all__ = [
+    "A2AClient",
+    "A2AClientConfig",
+    "GRPCPerceptionProvider",
+    "GRPCWorldClient",
+    "RetryPolicy",
+]

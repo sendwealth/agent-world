@@ -15,8 +15,10 @@ build/
 .next/
 out/
 
-# Generated
-protocol/gen/
+# Generated — only track Python protobuf output; Rust is regenerated per-build
+protocol/gen/rust/
+protocol/gen/__pycache__/
+protocol/gen/python/__pycache__/
 
 # IDE
 .idea/

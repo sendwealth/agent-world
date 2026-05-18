@@ -1,7 +1,7 @@
 """Think loop — the core Perceive → Decide → Act cycle.
 
 Each tick the agent:
-  1. Perceives its environment (messages, market, own state) via gRPC.
+  1. Perceives its environment (messages, market, own state).
   2. Runs survival assessment (synchronous, no LLM).
      - If PANIC or URGENT: executes emergency actions and skips normal decision.
   3. Makes an LLM-driven decision (or a mock fallback).
@@ -16,20 +16,15 @@ Usage::
     from agent_runtime.models.agent_state import AgentState
     from agent_runtime.survival.instinct import SurvivalInstinct
     from agent_runtime.core.act import ActionExecutor
-    from agent_runtime.a2a import A2AClient, A2AClientConfig
 
     state = AgentState(name="Alice", max_tokens=1000, tokens=500)
-    client = A2AClient(config=A2AClientConfig(), agent_id=str(state.id))
-    await client.start()
     loop = ThinkLoop(
         state=state,
         survival=SurvivalInstinct(),
         executor=ActionExecutor(),
         config=ThinkLoopConfig(tick_interval=0.1),
-        a2a_client=client,
     )
     await loop.run(max_ticks=100)
-    await client.stop()
 """
 
 from __future__ import annotations
@@ -39,7 +34,7 @@ import logging
 import random
 import time
 from dataclasses import dataclass, field
-from typing import TYPE_CHECKING, Any, Protocol
+from typing import Any, Protocol
 
 from agent_runtime.core.act import (
     ActionContext,
@@ -52,9 +47,6 @@ from agent_runtime.survival.instinct import (
     SurvivalInstinct,
     SurvivalMode,
 )
-
-if TYPE_CHECKING:
-    from agent_runtime.a2a.client import A2AClient
 
 logger = logging.getLogger(__name__)
 
@@ -204,7 +196,9 @@ class MockDecisionProvider:
         perception: Perception,
         survival: SurvivalAction,
     ) -> Decision:
-        affordable = [at for at in self._SIMPLE_ACTIONS if self._executor.can_afford(at, state)]
+        affordable = [
+            at for at in self._SIMPLE_ACTIONS if self._executor.can_afford(at, state)
+        ]
 
         if not affordable:
             # Even REST should be free, but guard anyway.
@@ -254,20 +248,20 @@ class ThinkLoop:
         perception_provider: PerceptionProvider | None = None,
         decision_provider: DecisionProvider | None = None,
         reflection_provider: ReflectionProvider | None = None,
-        a2a_client: A2AClient | None = None,
+        world_client: Any | None = None,
     ) -> None:
         self.state = state
         self.survival = survival
         self.executor = executor
         self.config = config or ThinkLoopConfig()
 
-        # A2A gRPC client — if provided, used for Act phase and survival
-        self._a2a_client = a2a_client
-
         # Providers
         self._perception = perception_provider or DefaultPerceptionProvider()
         self._decision = decision_provider or MockDecisionProvider(executor)
         self._reflection = reflection_provider or DefaultReflectionProvider()
+
+        # World client for ACT phase — defaults to no-op for backward compat
+        self._world_client = world_client
 
         # Runtime state
         self._tick: int = 0
@@ -396,9 +390,9 @@ class ThinkLoop:
                 self._tick,
                 survival_action.mode.value,
             )
-            await self.survival.execute(
-                survival_action, self.state, a2a_client=self._a2a_client
-            )
+            # Pass the world_client as the A2A client for emergency broadcasts
+            a2a = self._world_client if self._world_client is not None else None
+            await self.survival.execute(survival_action, self.state, a2a_client=a2a)
             return  # Skip normal decision
 
         # 3. Decide
@@ -427,12 +421,8 @@ class ThinkLoop:
         The ActionExecutor handles token deduction, retry logic, and
         result recording.  We wrap the agent state and world client
         into an ActionContext.
-
-        If an A2A client is provided, it is used for real gRPC
-        communication with the World Engine.  Otherwise, the
-        _NoOpWorldClient placeholder is used.
         """
-        world = self._a2a_client if self._a2a_client is not None else _NoOpWorldClient()
+        world = self._world_client if self._world_client is not None else _NoOpWorldClient()
         context = ActionContext(
             agent=self.state,  # type: ignore[arg-type]
             world=world,  # type: ignore[arg-type]
@@ -469,7 +459,9 @@ class _NoOpWorldClient:
     async def claim_task(self, task_id: str) -> dict[str, Any]:
         return {"status": "ok", "action": "claim_task", "task_id": task_id}
 
-    async def submit_task(self, task_id: str, result: dict[str, Any]) -> dict[str, Any]:
+    async def submit_task(
+        self, task_id: str, result: dict[str, Any]
+    ) -> dict[str, Any]:
         return {"status": "ok", "action": "submit_task", "task_id": task_id}
 
     async def propose_deal(self, proposal: dict[str, Any]) -> dict[str, Any]:

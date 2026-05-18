@@ -1,45 +1,107 @@
 services:
+  # ── World Engine (Rust) ───────────────────────────────────
   world-engine:
     build:
       context: ./world-engine
     ports:
-      - "3000:3000"
+      - "${PORT:-3000}:3000"
     volumes:
       - world-data:/app/data
       - ./config:/app/config:ro
+    env_file:
+      - .env
     environment:
-      - RUST_LOG=info
+      - HOST=0.0.0.0
+      - PORT=3000
+      - RUST_LOG=${RUST_LOG:-info}
+    networks:
+      - agent-world
     restart: unless-stopped
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:3000/tasks"]
       interval: 10s
       timeout: 5s
       retries: 5
+      start_period: 30s
 
-  agent-runtime:
+  # ── Agent Runtime ×2 (Python) ─────────────────────────────
+  agent-runtime-1:
     build:
       context: ./agent-runtime
     depends_on:
       world-engine:
         condition: service_healthy
+    env_file:
+      - .env
     environment:
-      - WORLD_ENGINE_URL=http://world-engine:3000
+      - WORLD_ENGINE_URL=${WORLD_ENGINE_URL:-http://world-engine:3000}
+      - AGENT_COUNT=1
+    volumes:
+      - agent-memory-1:/app/data
+    networks:
+      - agent-world
     restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "python", "-c", "print('ok')"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
 
+  agent-runtime-2:
+    build:
+      context: ./agent-runtime
+    depends_on:
+      world-engine:
+        condition: service_healthy
+    env_file:
+      - .env
+    environment:
+      - WORLD_ENGINE_URL=${WORLD_ENGINE_URL:-http://world-engine:3000}
+      - AGENT_COUNT=1
+    volumes:
+      - agent-memory-2:/app/data
+    networks:
+      - agent-world
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "python", "-c", "print('ok')"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
+
+  # ── Dashboard (Next.js) ───────────────────────────────────
   dashboard:
     build:
       context: ./dashboard
       args:
         WORLD_ENGINE_URL: http://world-engine:3000
     ports:
-      - "3001:3001"
+      - "${DASHBOARD_PORT:-3001}:3001"
     depends_on:
       world-engine:
         condition: service_healthy
+    env_file:
+      - .env
     environment:
       - WORLD_ENGINE_URL=http://world-engine:3000
       - PORT=3001
+    networks:
+      - agent-world
     restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:3001"]
+      interval: 15s
+      timeout: 5s
+      retries: 3
+      start_period: 30s
+
+networks:
+  agent-world:
+    driver: bridge
 
 volumes:
   world-data:
+  agent-memory-1:
+  agent-memory-2:

@@ -85,7 +85,15 @@ async fn main() {
     );
 
     // Start the HTTP server
-    let addr = std::net::SocketAddr::from(([127, 0, 0, 1], 3000));
+    let host: std::net::IpAddr = std::env::var("HOST")
+        .unwrap_or_else(|_| "127.0.0.1".to_string())
+        .parse()
+        .unwrap_or_else(|_| "127.0.0.1".parse().unwrap());
+    let port: u16 = std::env::var("PORT")
+        .ok()
+        .and_then(|s| s.parse().ok())
+        .unwrap_or(3000);
+    let addr = std::net::SocketAddr::from((host, port));
     println!("   API server: http://{}", addr);
     println!("   Endpoints:");
     println!("     GET  /agents           - List agents");

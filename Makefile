@@ -27,16 +27,19 @@ setup-dashboard:
 
 # ── Development ──────────────────────────────────────────
 
-dev: ## Start development environment
-	@echo "🌍 Starting Agent World..."
-	@echo "  Terminal 1: World Engine"
-	@echo "  Terminal 2: Agent Runtime"
-	@echo "  Terminal 3: Dashboard"
-	@echo ""
-	@echo "Run each in a separate terminal:"
-	@echo "  make run-engine"
-	@echo "  make run-agents"
-	@echo "  make run-dashboard"
+dev: ## Start all services with Docker Compose
+	@test -f .env || cp .env.example .env
+	docker compose up --build
+
+dev-detach: ## Start all services in background
+	@test -f .env || cp .env.example .env
+	docker compose up --build -d
+
+dev-down: ## Stop all Docker Compose services
+	docker compose down
+
+dev-logs: ## Tail Docker Compose logs
+	docker compose logs -f
 
 run-engine: ## Start world engine
 	cd world-engine && cargo run --release

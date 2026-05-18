@@ -1,37 +1,56 @@
-"""Agent World — Agent Runtime CLI entry point."""
+"""Agent Runtime entry point.
 
-import argparse
+Usage: python -m agent_runtime
+
+Connects to the World Engine and starts a think loop for one agent.
+"""
+
+from __future__ import annotations
+
 import asyncio
+import logging
 import os
 import sys
 
+from agent_runtime.core.act import ActionExecutor
+from agent_runtime.core.think_loop import ThinkLoop, ThinkLoopConfig
+from agent_runtime.models.agent_state import AgentState
+from agent_runtime.survival.instinct import SurvivalInstinct
 
-def main() -> None:
-    parser = argparse.ArgumentParser(description="Agent World Runtime")
-    sub = parser.add_subparsers(dest="command")
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(asctime)s [%(levelname)s] %(name)s: %(message)s",
+)
+logger = logging.getLogger(__name__)
 
-    spawn_parser = sub.add_parser("spawn", help="Spawn agents")
-    spawn_parser.add_argument("--count", type=int, default=2, help="Number of agents to spawn")
 
-    args = parser.parse_args()
+async def main() -> None:
+    world_engine_url = os.environ.get("WORLD_ENGINE_URL", "http://localhost:8080")
+    agent_name = os.environ.get("AGENT_NAME", "Agent-1")
+    tick_interval = float(os.environ.get("TICK_INTERVAL", "1.0"))
 
-    if args.command == "spawn":
-        world_url = os.environ.get("WORLD_ENGINE_URL", "http://127.0.0.1:3000")
-        count = args.count
-        print(f"Spawning {count} agent(s) connecting to {world_url}")
-        # TODO: implement actual agent spawning once the think loop is wired up
-        for i in range(count):
-            print(f"  Agent {i + 1}/{count}: initialized")
-        print(f"All {count} agent(s) running.")
-        # Keep the process alive
-        try:
-            asyncio.get_event_loop().run_forever()
-        except KeyboardInterrupt:
-            print("\nShutting down agents...")
-    else:
-        parser.print_help()
-        sys.exit(1)
+    logger.info("Agent Runtime starting")
+    logger.info("  World Engine: %s", world_engine_url)
+    logger.info("  Agent name: %s", agent_name)
+
+    state = AgentState(name=agent_name, max_tokens=1000, tokens=500)
+    survival = SurvivalInstinct()
+    executor = ActionExecutor()
+
+    loop = ThinkLoop(
+        state=state,
+        survival=survival,
+        executor=executor,
+        config=ThinkLoopConfig(tick_interval=tick_interval),
+    )
+
+    logger.info("Starting think loop...")
+    await loop.run()
 
 
 if __name__ == "__main__":
-    main()
+    try:
+        asyncio.run(main())
+    except KeyboardInterrupt:
+        logger.info("Agent Runtime stopped")
+        sys.exit(0)

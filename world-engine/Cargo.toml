@@ -22,6 +22,7 @@ thiserror = "1"
 anyhow = "1"
 sha2 = "0.10"
 tempfile = "3"
+dashmap = "6"
 
 [dev-dependencies]
 tower = { version = "0.5", features = ["util"] }

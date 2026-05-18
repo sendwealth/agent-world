@@ -431,6 +431,16 @@ class ThinkLoop:
 
         result = await self.executor.execute(decision.action_type, context)
 
+        # Record action for reflection analysis (if provider supports it)
+        if hasattr(self._reflection, "record_action"):
+            self._reflection.record_action(
+                tick=self._tick,
+                action=decision.action_type.value,
+                status=result.status.value,
+                token_cost=result.token_cost,
+                reasoning=decision.reasoning,
+            )
+
         if result.status.value != "success":
             logger.warning(
                 "Tick %d: action %s failed — status=%s error=%s",

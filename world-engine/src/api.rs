@@ -1,19 +1,21 @@
 use std::sync::Arc;
 
 use axum::{
+    Json,
+    Router,
     extract::{Path, State},
     http::StatusCode,
     response::IntoResponse,
     routing::{delete, get, post},
-    Json, Router,
 };
 use serde::{Deserialize, Serialize};
 use tokio::sync::Mutex;
 use uuid::Uuid;
 
-use crate::economy::task::{Task, TaskBoard};
+use crate::economy::task::{TaskBoard, Task};
+use crate::economy::ledger::MoneyLedger;
 use crate::wal::WAL;
-use crate::world::discovery::{AgentProfile, AgentStatus, DiscoveryError, SharedAgentRegistry};
+use crate::world::enums::Currency;
 
 // ── Shared State ──────────────────────────────────────────
 
@@ -25,7 +27,6 @@ pub type SharedWAL = Arc<Mutex<WAL>>;
 pub struct AppState {
     pub board: SharedTaskBoard,
     pub wal: SharedWAL,
-    pub registry: SharedAgentRegistry,
 }
 
 pub fn create_router(board: SharedTaskBoard) -> Router {
@@ -43,8 +44,8 @@ pub fn create_router(board: SharedTaskBoard) -> Router {
         .with_state(board)
 }
 
-pub fn create_router_with_wal(board: SharedTaskBoard, wal: SharedWAL, registry: SharedAgentRegistry) -> Router {
-    let state = AppState { board, wal, registry };
+pub fn create_router_with_wal(board: SharedTaskBoard, wal: SharedWAL) -> Router {
+    let state = AppState { board, wal };
     Router::new()
         // Task routes
         .route("/tasks", post(create_task_with_wal))
@@ -61,15 +62,6 @@ pub fn create_router_with_wal(board: SharedTaskBoard, wal: SharedWAL, registry: 
         .route("/wal/stats", get(wal_stats))
         .route("/wal/snapshot", post(wal_snapshot))
         .route("/wal/verify", get(wal_verify))
-        // Agent Discovery routes
-        .route("/agents", post(register_agent))
-        .route("/agents", get(list_agents))
-        .route("/agents/search", get(search_agents))
-        .route("/agents/stats", get(agent_stats))
-        .route("/agents/:id", get(get_agent))
-        .route("/agents/:id", delete(deregister_agent))
-        .route("/agents/:id/heartbeat", post(heartbeat_agent))
-        .route("/agents/:id/profile", post(update_agent_profile))
         .with_state(state)
 }
 
@@ -102,12 +94,22 @@ pub struct ReviewTaskRequest {
     pub reviewer_id: String,
 }
 
-#[derive(Debug, Default, Deserialize)]
+#[derive(Debug, Deserialize)]
 #[serde(default)]
 pub struct ListTasksQuery {
     pub status: Option<String>,
     pub publisher_id: Option<String>,
     pub assignee_id: Option<String>,
+}
+
+impl Default for ListTasksQuery {
+    fn default() -> Self {
+        Self {
+            status: None,
+            publisher_id: None,
+            assignee_id: None,
+        }
+    }
 }
 
 // ── Response Types ────────────────────────────────────────
@@ -157,22 +159,10 @@ async fn create_task(
     Json(body): Json<CreateTaskRequest>,
 ) -> impl IntoResponse {
     if body.title.is_empty() {
-        return (
-            StatusCode::BAD_REQUEST,
-            Json(ErrorResponse {
-                error: "title is required".into(),
-            }),
-        )
-            .into_response();
+        return (StatusCode::BAD_REQUEST, Json(ErrorResponse { error: "title is required".into() })).into_response();
     }
     if body.publisher_id.is_empty() {
-        return (
-            StatusCode::BAD_REQUEST,
-            Json(ErrorResponse {
-                error: "publisher_id is required".into(),
-            }),
-        )
-            .into_response();
+        return (StatusCode::BAD_REQUEST, Json(ErrorResponse { error: "publisher_id is required".into() })).into_response();
     }
 
     let mut board = board.lock().await;
@@ -188,17 +178,15 @@ async fn create_task(
             let task = board.get(id).unwrap();
             (StatusCode::CREATED, Json(TaskResponse::from(task))).into_response()
         }
-        Err(e) => (
-            StatusCode::INTERNAL_SERVER_ERROR,
-            Json(ErrorResponse {
-                error: e.to_string(),
-            }),
-        )
-            .into_response(),
+        Err(e) => {
+            (StatusCode::INTERNAL_SERVER_ERROR, Json(ErrorResponse { error: e.to_string() })).into_response()
+        }
     }
 }
 
-async fn list_tasks(State(board): State<SharedTaskBoard>) -> impl IntoResponse {
+async fn list_tasks(
+    State(board): State<SharedTaskBoard>,
+) -> impl IntoResponse {
     let board = board.lock().await;
     let tasks: Vec<TaskResponse> = board.list().into_iter().map(TaskResponse::from).collect();
     Json(tasks).into_response()
@@ -209,25 +197,13 @@ async fn get_task(
     Path(id): Path<String>,
 ) -> impl IntoResponse {
     let Ok(uuid) = Uuid::parse_str(&id) else {
-        return (
-            StatusCode::BAD_REQUEST,
-            Json(ErrorResponse {
-                error: "invalid task id".into(),
-            }),
-        )
-            .into_response();
+        return (StatusCode::BAD_REQUEST, Json(ErrorResponse { error: "invalid task id".into() })).into_response();
     };
 
     let board = board.lock().await;
     match board.get(uuid) {
         Some(task) => Json(TaskResponse::from(task)).into_response(),
-        None => (
-            StatusCode::NOT_FOUND,
-            Json(ErrorResponse {
-                error: "task not found".into(),
-            }),
-        )
-            .into_response(),
+        None => (StatusCode::NOT_FOUND, Json(ErrorResponse { error: "task not found".into() })).into_response(),
     }
 }
 
@@ -237,13 +213,7 @@ async fn claim_task(
     Json(body): Json<ClaimTaskRequest>,
 ) -> impl IntoResponse {
     let Ok(uuid) = Uuid::parse_str(&id) else {
-        return (
-            StatusCode::BAD_REQUEST,
-            Json(ErrorResponse {
-                error: "invalid task id".into(),
-            }),
-        )
-            .into_response();
+        return (StatusCode::BAD_REQUEST, Json(ErrorResponse { error: "invalid task id".into() })).into_response();
     };
 
     let mut board = board.lock().await;
@@ -258,13 +228,7 @@ async fn claim_task(
                 crate::economy::task::TaskError::NotFound(_) => StatusCode::NOT_FOUND,
                 _ => StatusCode::BAD_REQUEST,
             };
-            (
-                status,
-                Json(ErrorResponse {
-                    error: e.to_string(),
-                }),
-            )
-                .into_response()
+            (status, Json(ErrorResponse { error: e.to_string() })).into_response()
         }
     }
 }
@@ -274,13 +238,7 @@ async fn start_task(
     Path(id): Path<String>,
 ) -> impl IntoResponse {
     let Ok(uuid) = Uuid::parse_str(&id) else {
-        return (
-            StatusCode::BAD_REQUEST,
-            Json(ErrorResponse {
-                error: "invalid task id".into(),
-            }),
-        )
-            .into_response();
+        return (StatusCode::BAD_REQUEST, Json(ErrorResponse { error: "invalid task id".into() })).into_response();
     };
 
     let mut board = board.lock().await;
@@ -295,13 +253,7 @@ async fn start_task(
                 crate::economy::task::TaskError::NotFound(_) => StatusCode::NOT_FOUND,
                 _ => StatusCode::BAD_REQUEST,
             };
-            (
-                status,
-                Json(ErrorResponse {
-                    error: e.to_string(),
-                }),
-            )
-                .into_response()
+            (status, Json(ErrorResponse { error: e.to_string() })).into_response()
         }
     }
 }
@@ -312,13 +264,7 @@ async fn submit_task(
     Json(body): Json<SubmitTaskRequest>,
 ) -> impl IntoResponse {
     let Ok(uuid) = Uuid::parse_str(&id) else {
-        return (
-            StatusCode::BAD_REQUEST,
-            Json(ErrorResponse {
-                error: "invalid task id".into(),
-            }),
-        )
-            .into_response();
+        return (StatusCode::BAD_REQUEST, Json(ErrorResponse { error: "invalid task id".into() })).into_response();
     };
 
     let mut board = board.lock().await;
@@ -334,13 +280,7 @@ async fn submit_task(
                 crate::economy::task::TaskError::ResultRequired => StatusCode::BAD_REQUEST,
                 _ => StatusCode::BAD_REQUEST,
             };
-            (
-                status,
-                Json(ErrorResponse {
-                    error: e.to_string(),
-                }),
-            )
-                .into_response()
+            (status, Json(ErrorResponse { error: e.to_string() })).into_response()
         }
     }
 }
@@ -351,13 +291,7 @@ async fn review_task(
     Json(body): Json<ReviewTaskRequest>,
 ) -> impl IntoResponse {
     let Ok(uuid) = Uuid::parse_str(&id) else {
-        return (
-            StatusCode::BAD_REQUEST,
-            Json(ErrorResponse {
-                error: "invalid task id".into(),
-            }),
-        )
-            .into_response();
+        return (StatusCode::BAD_REQUEST, Json(ErrorResponse { error: "invalid task id".into() })).into_response();
     };
 
     let mut board = board.lock().await;
@@ -373,13 +307,7 @@ async fn review_task(
                 crate::economy::task::TaskError::NotPublisher { .. } => StatusCode::FORBIDDEN,
                 _ => StatusCode::BAD_REQUEST,
             };
-            (
-                status,
-                Json(ErrorResponse {
-                    error: e.to_string(),
-                }),
-            )
-                .into_response()
+            (status, Json(ErrorResponse { error: e.to_string() })).into_response()
         }
     }
 }
@@ -389,13 +317,7 @@ async fn complete_task(
     Path(id): Path<String>,
 ) -> impl IntoResponse {
     let Ok(uuid) = Uuid::parse_str(&id) else {
-        return (
-            StatusCode::BAD_REQUEST,
-            Json(ErrorResponse {
-                error: "invalid task id".into(),
-            }),
-        )
-            .into_response();
+        return (StatusCode::BAD_REQUEST, Json(ErrorResponse { error: "invalid task id".into() })).into_response();
     };
 
     let mut board = board.lock().await;
@@ -410,13 +332,7 @@ async fn complete_task(
                 crate::economy::task::TaskError::NotFound(_) => StatusCode::NOT_FOUND,
                 _ => StatusCode::BAD_REQUEST,
             };
-            (
-                status,
-                Json(ErrorResponse {
-                    error: e.to_string(),
-                }),
-            )
-                .into_response()
+            (status, Json(ErrorResponse { error: e.to_string() })).into_response()
         }
     }
 }
@@ -426,13 +342,7 @@ async fn expire_task(
     Path(id): Path<String>,
 ) -> impl IntoResponse {
     let Ok(uuid) = Uuid::parse_str(&id) else {
-        return (
-            StatusCode::BAD_REQUEST,
-            Json(ErrorResponse {
-                error: "invalid task id".into(),
-            }),
-        )
-            .into_response();
+        return (StatusCode::BAD_REQUEST, Json(ErrorResponse { error: "invalid task id".into() })).into_response();
     };
 
     let mut board = board.lock().await;
@@ -447,13 +357,7 @@ async fn expire_task(
                 crate::economy::task::TaskError::NotFound(_) => StatusCode::NOT_FOUND,
                 _ => StatusCode::BAD_REQUEST,
             };
-            (
-                status,
-                Json(ErrorResponse {
-                    error: e.to_string(),
-                }),
-            )
-                .into_response()
+            (status, Json(ErrorResponse { error: e.to_string() })).into_response()
         }
     }
 }
@@ -463,13 +367,7 @@ async fn delete_task(
     Path(id): Path<String>,
 ) -> impl IntoResponse {
     let Ok(uuid) = Uuid::parse_str(&id) else {
-        return (
-            StatusCode::BAD_REQUEST,
-            Json(ErrorResponse {
-                error: "invalid task id".into(),
-            }),
-        )
-            .into_response();
+        return (StatusCode::BAD_REQUEST, Json(ErrorResponse { error: "invalid task id".into() })).into_response();
     };
 
     let mut board = board.lock().await;
@@ -481,13 +379,7 @@ async fn delete_task(
                 crate::economy::task::TaskError::NotFound(_) => StatusCode::NOT_FOUND,
                 _ => StatusCode::BAD_REQUEST,
             };
-            (
-                status,
-                Json(ErrorResponse {
-                    error: e.to_string(),
-                }),
-            )
-                .into_response()
+            (status, Json(ErrorResponse { error: e.to_string() })).into_response()
         }
     }
 }
@@ -501,7 +393,9 @@ async fn create_task_with_wal(
     create_task(State(state.board), Json(body)).await
 }
 
-async fn list_tasks_with_wal(State(state): State<AppState>) -> impl IntoResponse {
+async fn list_tasks_with_wal(
+    State(state): State<AppState>,
+) -> impl IntoResponse {
     list_tasks(State(state.board)).await
 }
 
@@ -566,28 +460,26 @@ async fn delete_task_with_wal(
 
 // ── WAL Handlers ──────────────────────────────────────────
 
-async fn wal_stats(State(state): State<AppState>) -> impl IntoResponse {
+async fn wal_stats(
+    State(state): State<AppState>,
+) -> impl IntoResponse {
     let wal = state.wal.lock().await;
     Json(wal.stats())
 }
 
-async fn wal_snapshot(State(state): State<AppState>) -> impl IntoResponse {
+async fn wal_snapshot(
+    State(state): State<AppState>,
+) -> impl IntoResponse {
     let mut wal = state.wal.lock().await;
     match wal.take_snapshot(&[], 0) {
-        Ok(snapshot_file) => {
-            Json(serde_json::json!({ "ok": true, "snapshot_file": snapshot_file })).into_response()
-        }
-        Err(e) => (
-            StatusCode::INTERNAL_SERVER_ERROR,
-            Json(ErrorResponse {
-                error: e.to_string(),
-            }),
-        )
-            .into_response(),
+        Ok(snapshot_file) => Json(serde_json::json!({ "ok": true, "snapshot_file": snapshot_file })).into_response(),
+        Err(e) => (StatusCode::INTERNAL_SERVER_ERROR, Json(ErrorResponse { error: e.to_string() })).into_response(),
     }
 }
 
-async fn wal_verify(State(state): State<AppState>) -> impl IntoResponse {
+async fn wal_verify(
+    State(state): State<AppState>,
+) -> impl IntoResponse {
     let mut wal = state.wal.lock().await;
     let result = wal.recover();
     match result {
@@ -595,267 +487,370 @@ async fn wal_verify(State(state): State<AppState>) -> impl IntoResponse {
             "consistent": !recovery.corrupted_records,
             "event_count": recovery.event_counter,
             "recovered_from_snapshot": recovery.recovered_from_snapshot,
-        }))
-        .into_response(),
-        Err(e) => (
-            StatusCode::INTERNAL_SERVER_ERROR,
-            Json(ErrorResponse {
-                error: e.to_string(),
-            }),
-        )
-            .into_response(),
+        })).into_response(),
+        Err(e) => (StatusCode::INTERNAL_SERVER_ERROR, Json(ErrorResponse { error: e.to_string() })).into_response(),
     }
 }
 
-// ── Agent Discovery Request Types ─────────────────────────
+// ── Ledger State & Router ────────────────────────────────
+
+pub type SharedLedger = Arc<Mutex<MoneyLedger>>;
+
+/// Create a router for the double-entry ledger API.
+pub fn create_ledger_router(ledger: SharedLedger) -> Router {
+    Router::new()
+        .route("/ledger/balance/:account_id", get(ledger_balance))
+        .route("/ledger/balance/:account_id/:currency", get(ledger_balance_currency))
+        .route("/ledger/transfer", post(ledger_transfer))
+        .route("/ledger/exchange/money-to-tokens", post(ledger_exchange_money_to_tokens))
+        .route("/ledger/exchange/tokens-to-money", post(ledger_exchange_tokens_to_money))
+        .route("/ledger/interest", post(ledger_pay_interest))
+        .route("/ledger/entries", get(ledger_entries))
+        .route("/ledger/audit", get(ledger_audit))
+        .route("/ledger/exchange-rate", get(ledger_exchange_rate))
+        .route("/ledger/verify", get(ledger_verify))
+        .route("/ledger/supply", get(ledger_supply))
+        .route("/ledger/accounts", post(ledger_create_account))
+        .with_state(ledger)
+}
+
+// ── Ledger Request Types ─────────────────────────────────
 
 #[derive(Debug, Deserialize)]
-pub struct RegisterAgentRequest {
-    pub name: String,
-    #[serde(default)]
-    pub traits: Vec<String>,
-    #[serde(default)]
-    pub skills: Vec<String>,
+pub struct LedgerTransferRequest {
+    pub from: String,
+    pub to: String,
+    pub amount: u64,
+    pub currency: String,
+    pub tx_type: String,
+    pub description: String,
+    pub tick: u64,
+    pub reference_id: Option<String>,
 }
 
 #[derive(Debug, Deserialize)]
-pub struct UpdateProfileRequest {
-    pub name: Option<String>,
-    pub traits: Option<Vec<String>>,
-    pub skills: Option<Vec<String>>,
-}
-
-#[derive(Debug, Deserialize)]
-#[serde(default)]
-pub struct ListAgentsQuery {
-    pub status: Option<String>,
-    pub skill: Option<String>,
-}
-
-impl Default for ListAgentsQuery {
-    fn default() -> Self {
-        Self {
-            status: None,
-            skill: None,
-        }
-    }
-}
-
-#[derive(Debug, Deserialize)]
-#[serde(default)]
-pub struct SearchAgentsQuery {
-    pub skills: Option<String>,
-    pub status: Option<String>,
-}
-
-impl Default for SearchAgentsQuery {
-    fn default() -> Self {
-        Self {
-            skills: None,
-            status: None,
-        }
-    }
-}
-
-// ── Agent Discovery Response Types ────────────────────────
-
-#[derive(Debug, Serialize)]
-pub struct AgentResponse {
+pub struct LedgerExchangeRequest {
     pub agent_id: String,
-    pub name: String,
-    pub traits: Vec<String>,
-    pub skills: Vec<String>,
-    pub status: String,
-    pub last_heartbeat_at: u64,
-    pub registered_at: u64,
+    pub amount: u64,
+    pub tick: u64,
 }
 
-impl From<&AgentProfile> for AgentResponse {
-    fn from(p: &AgentProfile) -> Self {
-        AgentResponse {
-            agent_id: p.agent_id.clone(),
-            name: p.name.clone(),
-            traits: p.traits.clone(),
-            skills: p.skills.clone(),
-            status: p.status.to_string(),
-            last_heartbeat_at: p.last_heartbeat_at,
-            registered_at: p.registered_at,
-        }
-    }
+#[derive(Debug, Deserialize)]
+pub struct LedgerInterestRequest {
+    pub agent_id: String,
+    pub rate: f64,
+    pub tick: u64,
+}
+
+#[derive(Debug, Deserialize)]
+pub struct LedgerCreateAccountRequest {
+    pub id: String,
+    pub name: String,
+}
+
+// ── Ledger Response Types ────────────────────────────────
+
+#[derive(Debug, Serialize)]
+pub struct BalanceResponse {
+    pub account_id: String,
+    pub balance: u64,
+    pub currency: String,
 }
 
 #[derive(Debug, Serialize)]
-pub struct AgentStatsResponse {
-    pub total: usize,
-    pub online: usize,
-    pub offline: usize,
+pub struct BalanceSheetResponse {
+    pub account_id: String,
+    pub balances: HashMapResponse,
 }
 
-// ── Agent Discovery Handlers ──────────────────────────────
+#[derive(Debug, Serialize)]
+pub struct HashMapResponse(Vec<(String, u64)>);
 
-async fn register_agent(
-    State(state): State<AppState>,
-    Json(body): Json<RegisterAgentRequest>,
+#[derive(Debug, Serialize)]
+pub struct TransferResponse {
+    pub debit_id: String,
+    pub credit_id: String,
+}
+
+#[derive(Debug, Serialize)]
+pub struct ExchangeResponse {
+    pub pair_id: String,
+    pub from_amount: u64,
+    pub from_currency: String,
+    pub to_amount: u64,
+    pub to_currency: String,
+}
+
+#[derive(Debug, Serialize)]
+pub struct InterestResponse {
+    pub pair_id: String,
+    pub principal: u64,
+    pub interest: u64,
+    pub new_balance: u64,
+}
+
+#[derive(Debug, Serialize)]
+pub struct ExchangeRateResponse {
+    pub tokens_per_money: u64,
+}
+
+#[derive(Debug, Serialize)]
+pub struct VerifyResponse {
+    pub balanced: bool,
+}
+
+#[derive(Debug, Serialize)]
+pub struct SupplyResponse {
+    pub money_supply: u64,
+    pub token_supply: u64,
+}
+
+#[derive(Debug, Serialize)]
+pub struct EntryResponse {
+    pub id: String,
+    pub pair_id: String,
+    pub account_id: String,
+    pub side: String,
+    pub amount: u64,
+    pub currency: String,
+    pub tx_type: String,
+    pub description: String,
+    pub tick: u64,
+    pub reference_id: Option<String>,
+}
+
+#[derive(Debug, Serialize)]
+pub struct AuditResponse {
+    pub id: String,
+    pub tick: u64,
+    pub operation: String,
+    pub actor: String,
+    pub details: serde_json::Value,
+    pub entry_ids: Vec<String>,
+}
+
+// ── Ledger Handlers ──────────────────────────────────────
+
+async fn ledger_balance(
+    State(ledger): State<SharedLedger>,
+    Path(account_id): Path<String>,
 ) -> impl IntoResponse {
-    let mut registry = state.registry.lock().await;
-    match registry.register(body.name, body.traits, body.skills) {
-        Ok(id) => {
-            let profile = registry.get(&id).unwrap();
-            (StatusCode::CREATED, Json(AgentResponse::from(profile))).into_response()
-        }
-        Err(DiscoveryError::NameRequired) => {
-            (StatusCode::BAD_REQUEST, Json(ErrorResponse { error: "name is required".into() })).into_response()
-        }
-        Err(e) => {
-            (StatusCode::INTERNAL_SERVER_ERROR, Json(ErrorResponse { error: e.to_string() })).into_response()
-        }
+    let ledger = ledger.lock().await;
+    if !ledger.account_exists(&account_id) {
+        return (StatusCode::NOT_FOUND, Json(ErrorResponse { error: "account not found".into() })).into_response();
     }
+    let sheet = ledger.get_balance_sheet(&account_id);
+    let balances: Vec<(String, u64)> = sheet.balances.into_iter()
+        .map(|(k, v)| (format!("{:?}", k).to_lowercase(), v))
+        .collect();
+    Json(BalanceSheetResponse {
+        account_id: sheet.account_id,
+        balances: HashMapResponse(balances),
+    }).into_response()
 }
 
-async fn list_agents(
-    State(state): State<AppState>,
-    axum::extract::Query(query): axum::extract::Query<ListAgentsQuery>,
+async fn ledger_balance_currency(
+    State(ledger): State<SharedLedger>,
+    Path((account_id, currency)): Path<(String, String)>,
 ) -> impl IntoResponse {
-    let registry = state.registry.lock().await;
+    let ledger = ledger.lock().await;
+    let curr = match currency.as_str() {
+        "money" => Currency::Money,
+        "token" => Currency::Token,
+        _ => return (StatusCode::BAD_REQUEST, Json(ErrorResponse { error: "currency must be 'money' or 'token'".into() })).into_response(),
+    };
+    if !ledger.account_exists(&account_id) {
+        return (StatusCode::NOT_FOUND, Json(ErrorResponse { error: "account not found".into() })).into_response();
+    }
+    let balance = ledger.get_balance(&account_id, curr);
+    Json(BalanceResponse {
+        account_id,
+        balance,
+        currency,
+    }).into_response()
+}
 
-    let agents: Vec<AgentResponse> = if let Some(ref skill) = query.skill {
-        registry.find_by_skill(skill)
-            .into_iter()
-            .map(AgentResponse::from)
-            .collect()
-    } else if let Some(ref status_str) = query.status {
-        match status_str.as_str() {
-            "online" => registry.list_by_status(AgentStatus::Online)
-                .into_iter()
-                .map(AgentResponse::from)
-                .collect(),
-            "offline" => registry.list_by_status(AgentStatus::Offline)
-                .into_iter()
-                .map(AgentResponse::from)
-                .collect(),
-            _ => registry.list().into_iter().map(AgentResponse::from).collect(),
-        }
-    } else {
-        registry.list().into_iter().map(AgentResponse::from).collect()
+async fn ledger_transfer(
+    State(ledger): State<SharedLedger>,
+    Json(body): Json<LedgerTransferRequest>,
+) -> impl IntoResponse {
+    let currency = match body.currency.as_str() {
+        "money" => Currency::Money,
+        "token" => Currency::Token,
+        _ => return (StatusCode::BAD_REQUEST, Json(ErrorResponse { error: "currency must be 'money' or 'token'".into() })).into_response(),
+    };
+    let tx_type = match body.tx_type.as_str() {
+        "task_reward" => crate::economy::reward::TransactionType::TaskReward,
+        "platform_fee" => crate::economy::reward::TransactionType::PlatformFee,
+        "escrow_refund" => crate::economy::reward::TransactionType::EscrowRefund,
+        "exchange" => crate::economy::reward::TransactionType::Exchange,
+        "interest" => crate::economy::reward::TransactionType::Interest,
+        "knowledge" => crate::economy::reward::TransactionType::Knowledge,
+        "teach" => crate::economy::reward::TransactionType::Teach,
+        _ => return (StatusCode::BAD_REQUEST, Json(ErrorResponse { error: "invalid tx_type".into() })).into_response(),
     };
 
-    Json(agents).into_response()
-}
-
-async fn get_agent(
-    State(state): State<AppState>,
-    Path(id): Path<String>,
-) -> impl IntoResponse {
-    let registry = state.registry.lock().await;
-    match registry.get(&id) {
-        Some(profile) => Json(AgentResponse::from(profile)).into_response(),
-        None => (StatusCode::NOT_FOUND, Json(ErrorResponse { error: "agent not found".into() })).into_response(),
-    }
-}
-
-async fn deregister_agent(
-    State(state): State<AppState>,
-    Path(id): Path<String>,
-) -> impl IntoResponse {
-    let mut registry = state.registry.lock().await;
-    match registry.deregister(&id) {
-        Ok(_) => StatusCode::NO_CONTENT.into_response(),
-        Err(DiscoveryError::NotFound(_)) => {
-            (StatusCode::NOT_FOUND, Json(ErrorResponse { error: "agent not found".into() })).into_response()
-        }
+    let mut ledger = ledger.lock().await;
+    match ledger.transfer(
+        &body.from, &body.to, body.amount, currency,
+        tx_type, body.description, body.tick, body.reference_id,
+    ) {
+        Ok((debit_id, credit_id)) => Json(TransferResponse {
+            debit_id: debit_id.to_string(),
+            credit_id: credit_id.to_string(),
+        }).into_response(),
         Err(e) => {
-            (StatusCode::BAD_REQUEST, Json(ErrorResponse { error: e.to_string() })).into_response()
+            let status = match &e {
+                crate::economy::ledger::LedgerError::InsufficientBalance { .. } => StatusCode::CONFLICT,
+                crate::economy::ledger::LedgerError::AccountNotFound(_) => StatusCode::NOT_FOUND,
+                _ => StatusCode::BAD_REQUEST,
+            };
+            (status, Json(ErrorResponse { error: e.to_string() })).into_response()
         }
     }
 }
 
-async fn heartbeat_agent(
-    State(state): State<AppState>,
-    Path(id): Path<String>,
+async fn ledger_exchange_money_to_tokens(
+    State(ledger): State<SharedLedger>,
+    Json(body): Json<LedgerExchangeRequest>,
 ) -> impl IntoResponse {
-    let mut registry = state.registry.lock().await;
-    match registry.heartbeat(&id) {
-        Ok(()) => {
-            let profile = registry.get(&id).unwrap();
-            Json(AgentResponse::from(profile)).into_response()
-        }
-        Err(DiscoveryError::NotFound(_)) => {
-            (StatusCode::NOT_FOUND, Json(ErrorResponse { error: "agent not found".into() })).into_response()
-        }
+    let mut ledger = ledger.lock().await;
+    match ledger.exchange_money_to_tokens(&body.agent_id, body.amount, body.tick) {
+        Ok(result) => Json(ExchangeResponse {
+            pair_id: result.pair_id.to_string(),
+            from_amount: result.from_amount,
+            from_currency: format!("{:?}", result.from_currency).to_lowercase(),
+            to_amount: result.to_amount,
+            to_currency: format!("{:?}", result.to_currency).to_lowercase(),
+        }).into_response(),
         Err(e) => {
-            (StatusCode::BAD_REQUEST, Json(ErrorResponse { error: e.to_string() })).into_response()
+            let status = match &e {
+                crate::economy::ledger::LedgerError::InsufficientBalance { .. } => StatusCode::CONFLICT,
+                crate::economy::ledger::LedgerError::AccountNotFound(_) => StatusCode::NOT_FOUND,
+                _ => StatusCode::BAD_REQUEST,
+            };
+            (status, Json(ErrorResponse { error: e.to_string() })).into_response()
         }
     }
 }
 
-async fn update_agent_profile(
-    State(state): State<AppState>,
-    Path(id): Path<String>,
-    Json(body): Json<UpdateProfileRequest>,
+async fn ledger_exchange_tokens_to_money(
+    State(ledger): State<SharedLedger>,
+    Json(body): Json<LedgerExchangeRequest>,
 ) -> impl IntoResponse {
-    let mut registry = state.registry.lock().await;
-    match registry.update_profile(&id, body.name, body.traits, body.skills) {
-        Ok(()) => {
-            let profile = registry.get(&id).unwrap();
-            Json(AgentResponse::from(profile)).into_response()
-        }
-        Err(DiscoveryError::NotFound(_)) => {
-            (StatusCode::NOT_FOUND, Json(ErrorResponse { error: "agent not found".into() })).into_response()
-        }
-        Err(DiscoveryError::NameRequired) => {
-            (StatusCode::BAD_REQUEST, Json(ErrorResponse { error: "name is required".into() })).into_response()
-        }
+    let mut ledger = ledger.lock().await;
+    match ledger.exchange_tokens_to_money(&body.agent_id, body.amount, body.tick) {
+        Ok(result) => Json(ExchangeResponse {
+            pair_id: result.pair_id.to_string(),
+            from_amount: result.from_amount,
+            from_currency: format!("{:?}", result.from_currency).to_lowercase(),
+            to_amount: result.to_amount,
+            to_currency: format!("{:?}", result.to_currency).to_lowercase(),
+        }).into_response(),
         Err(e) => {
-            (StatusCode::BAD_REQUEST, Json(ErrorResponse { error: e.to_string() })).into_response()
+            let status = match &e {
+                crate::economy::ledger::LedgerError::InsufficientBalance { .. } => StatusCode::CONFLICT,
+                crate::economy::ledger::LedgerError::AccountNotFound(_) => StatusCode::NOT_FOUND,
+                _ => StatusCode::BAD_REQUEST,
+            };
+            (status, Json(ErrorResponse { error: e.to_string() })).into_response()
         }
     }
 }
 
-async fn search_agents(
-    State(state): State<AppState>,
-    axum::extract::Query(query): axum::extract::Query<SearchAgentsQuery>,
+async fn ledger_pay_interest(
+    State(ledger): State<SharedLedger>,
+    Json(body): Json<LedgerInterestRequest>,
 ) -> impl IntoResponse {
-    let registry = state.registry.lock().await;
-
-    let agents: Vec<AgentResponse> = if let Some(ref skills_str) = query.skills {
-        let skills: Vec<String> = skills_str
-            .split(',')
-            .map(|s| s.trim().to_string())
-            .filter(|s| !s.is_empty())
-            .collect();
-        let results = registry.find_by_skills(&skills);
-
-        results
-            .into_iter()
-            .filter(|p| {
-                if let Some(ref status_str) = query.status {
-                    match status_str.as_str() {
-                        "online" => p.status == AgentStatus::Online,
-                        "offline" => p.status == AgentStatus::Offline,
-                        _ => true,
-                    }
-                } else {
-                    true
-                }
-            })
-            .map(AgentResponse::from)
-            .collect()
-    } else {
-        registry.list().into_iter().map(AgentResponse::from).collect()
-    };
-
-    Json(agents).into_response()
+    let mut ledger = ledger.lock().await;
+    match ledger.pay_interest(&body.agent_id, body.rate, body.tick) {
+        Ok(Some(result)) => Json(InterestResponse {
+            pair_id: result.pair_id.to_string(),
+            principal: result.principal,
+            interest: result.interest,
+            new_balance: result.new_balance,
+        }).into_response(),
+        Ok(None) => Json(serde_json::json!({ "result": "no_interest", "reason": "zero balance or truncated to zero" })).into_response(),
+        Err(e) => {
+            let status = match &e {
+                crate::economy::ledger::LedgerError::AccountNotFound(_) => StatusCode::NOT_FOUND,
+                _ => StatusCode::BAD_REQUEST,
+            };
+            (status, Json(ErrorResponse { error: e.to_string() })).into_response()
+        }
+    }
 }
 
-async fn agent_stats(
-    State(state): State<AppState>,
+async fn ledger_entries(
+    State(ledger): State<SharedLedger>,
 ) -> impl IntoResponse {
-    let registry = state.registry.lock().await;
-    let total = registry.count();
-    let online = registry.count_online();
-    Json(AgentStatsResponse {
-        total,
-        online,
-        offline: total - online,
+    let ledger = ledger.lock().await;
+    let entries: Vec<EntryResponse> = ledger.list_entries().iter().map(|e| EntryResponse {
+        id: e.id.to_string(),
+        pair_id: e.pair_id.to_string(),
+        account_id: e.account_id.clone(),
+        side: format!("{:?}", e.side).to_lowercase(),
+        amount: e.amount,
+        currency: format!("{:?}", e.currency).to_lowercase(),
+        tx_type: format!("{:?}", e.tx_type).to_lowercase(),
+        description: e.description.clone(),
+        tick: e.tick,
+        reference_id: e.reference_id.clone(),
+    }).collect();
+    Json(entries).into_response()
+}
+
+async fn ledger_audit(
+    State(ledger): State<SharedLedger>,
+) -> impl IntoResponse {
+    let ledger = ledger.lock().await;
+    let records: Vec<AuditResponse> = ledger.audit_log().iter().map(|a| AuditResponse {
+        id: a.id.to_string(),
+        tick: a.tick,
+        operation: a.operation.clone(),
+        actor: a.actor.clone(),
+        details: a.details.clone(),
+        entry_ids: a.entry_ids.iter().map(|id| id.to_string()).collect(),
+    }).collect();
+    Json(records).into_response()
+}
+
+async fn ledger_exchange_rate(
+    State(ledger): State<SharedLedger>,
+) -> impl IntoResponse {
+    let ledger = ledger.lock().await;
+    Json(ExchangeRateResponse {
+        tokens_per_money: ledger.exchange_rate().tokens_per_money,
     })
+}
+
+async fn ledger_verify(
+    State(ledger): State<SharedLedger>,
+) -> impl IntoResponse {
+    let ledger = ledger.lock().await;
+    Json(VerifyResponse {
+        balanced: ledger.verify_all(),
+    })
+}
+
+async fn ledger_supply(
+    State(ledger): State<SharedLedger>,
+) -> impl IntoResponse {
+    let ledger = ledger.lock().await;
+    Json(SupplyResponse {
+        money_supply: ledger.total_money_supply(),
+        token_supply: ledger.total_token_supply(),
+    })
+}
+
+async fn ledger_create_account(
+    State(ledger): State<SharedLedger>,
+    Json(body): Json<LedgerCreateAccountRequest>,
+) -> impl IntoResponse {
+    let mut ledger = ledger.lock().await;
+    if ledger.account_exists(&body.id) {
+        return (StatusCode::CONFLICT, Json(ErrorResponse { error: "account already exists".into() })).into_response();
+    }
+    ledger.create_account(crate::economy::ledger::Account::new_agent(&body.id, &body.name));
+    StatusCode::CREATED.into_response()
 }

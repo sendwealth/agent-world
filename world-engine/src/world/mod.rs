@@ -1,4 +1,6 @@
 pub mod agent;
+pub mod discovery;
+pub mod engine;
 pub mod enums;
 pub mod event;
 pub mod genesis;

@@ -16,7 +16,6 @@ from agent_runtime.memory.long_term import (
     LongTermMemory,
     LongTermMemoryEntry,
     LongTermMemoryProtocol,
-    MemoryType,
 )
 from agent_runtime.memory.short_term import (
     ShortTermMemory,
@@ -36,7 +35,6 @@ __all__ = [
     "LongTermMemoryEntry",
     "LongTermMemoryProtocol",
     "MemoryEntry",
-    "MemoryType",
     "OpenAIEmbeddingProvider",
     "ShortTermMemory",
     "ShortTermMemoryEntry",

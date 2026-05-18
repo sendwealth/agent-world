@@ -27,7 +27,7 @@ fn build_app() -> (
     let event_bus = Arc::new(EventBus::new(16));
     let board = Arc::new(Mutex::new(TaskBoard::with_event_bus((*event_bus).clone())));
     let wal = Arc::new(Mutex::new(WAL::new(dir.path())));
-    let app = create_router_with_wal(board.clone(), wal, event_bus.clone());
+    let app = create_router_with_wal(board.clone(), wal);
     (event_bus, board, app)
 }
 

@@ -10,7 +10,7 @@
 use std::collections::HashMap;
 use std::sync::Arc;
 
-use tokio::sync::RwLock;
+use tokio::sync::Mutex;
 use uuid::Uuid;
 
 use agent_world_engine::economy::{
@@ -99,7 +99,7 @@ async fn test_agent_discovery_communication_trade_tasks() {
     let event_bus = Arc::new(EventBus::new(256));
     let mut rx = event_bus.subscribe();
 
-    let task_board = Arc::new(RwLock::new(TaskBoard::new()));
+    let task_board = Arc::new(Mutex::new(TaskBoard::new()));
     // Wire up event emission manually via the task board
     // Since EventBus can't be cloned, we share it via Arc
 
@@ -138,7 +138,7 @@ async fn test_agent_discovery_communication_trade_tasks() {
     // ── Step 3: Set up balances ────────────────────────────────────────
 
     {
-        let mut board = task_board.write().await;
+        let mut board = task_board.lock().await;
         board.set_balance(&alice_id, 10_000);
         board.set_balance(&bob_id, 10_000);
     }
@@ -154,7 +154,7 @@ async fn test_agent_discovery_communication_trade_tasks() {
     for (title, desc, reward) in &tasks_data {
         // Alice creates the task
         let task_id = {
-            let mut board = task_board.write().await;
+            let mut board = task_board.lock().await;
             board
                 .create_task(
                     title.to_string(),
@@ -169,19 +169,19 @@ async fn test_agent_discovery_communication_trade_tasks() {
 
         // Bob claims the task
         {
-            let mut board = task_board.write().await;
+            let mut board = task_board.lock().await;
             board.claim_task(task_id, bob_id.clone()).unwrap();
         }
 
         // Bob starts the task
         {
-            let mut board = task_board.write().await;
+            let mut board = task_board.lock().await;
             board.start_task(task_id).unwrap();
         }
 
         // Bob submits result
         {
-            let mut board = task_board.write().await;
+            let mut board = task_board.lock().await;
             board
                 .submit_result(task_id, format!("Completed: {}", title))
                 .unwrap();
@@ -189,19 +189,19 @@ async fn test_agent_discovery_communication_trade_tasks() {
 
         // Alice reviews and approves
         {
-            let mut board = task_board.write().await;
+            let mut board = task_board.lock().await;
             board.review_task(task_id, &alice_id, true).unwrap();
         }
 
         // Complete the task
         {
-            let mut board = task_board.write().await;
+            let mut board = task_board.lock().await;
             board.complete_task(task_id, 0).unwrap();
         }
 
         // Verify task is in Completed status
         {
-            let board = task_board.read().await;
+            let board = task_board.lock().await;
             let task = board.get(task_id).unwrap();
             assert_eq!(task.status, TaskStatus::Completed);
             assert!(!task.escrow_held);
@@ -212,7 +212,7 @@ async fn test_agent_discovery_communication_trade_tasks() {
     // ── Step 5: Verify balances after 3 task completions ───────────────
 
     {
-        let board = task_board.read().await;
+        let board = task_board.lock().await;
         let alice_balance = board.get_balance(&alice_id);
         let bob_balance = board.get_balance(&bob_id);
         assert_eq!(alice_balance, 10_000 - 500 - 1000 - 750);
@@ -530,7 +530,7 @@ async fn test_snapshot_restore() {
     let event_bus = Arc::new(EventBus::new(1024));
     let mut rx = event_bus.subscribe();
 
-    let task_board = Arc::new(RwLock::new(TaskBoard::new()));
+    let task_board = Arc::new(Mutex::new(TaskBoard::new()));
 
     let alice_id = "agent-alice";
     let bob_id = "agent-bob";
@@ -541,14 +541,14 @@ async fn test_snapshot_restore() {
 
     // Set up initial balances
     {
-        let mut board = task_board.write().await;
+        let mut board = task_board.lock().await;
         board.set_balance(alice_id, 10_000);
         board.set_balance(bob_id, 10_000);
     }
 
     // Create and complete a task before snapshot
     let task1_id = {
-        let mut board = task_board.write().await;
+        let mut board = task_board.lock().await;
         let id = board
             .create_task(
                 "Pre-snapshot task".to_string(),
@@ -625,7 +625,7 @@ async fn test_snapshot_restore() {
     // ── Phase 3: Continue running after restore ────────────────────────
 
     let task2_id = {
-        let mut board = task_board.write().await;
+        let mut board = task_board.lock().await;
         let id = board
             .create_task(
                 "Post-restore task".to_string(),
@@ -672,7 +672,7 @@ async fn test_snapshot_restore() {
 
     // Verify both tasks are completed
     {
-        let board = task_board.read().await;
+        let board = task_board.lock().await;
         let t1 = board.get(task1_id).unwrap();
         let t2 = board.get(task2_id).unwrap();
         assert_eq!(t1.status, TaskStatus::Completed);
@@ -711,7 +711,7 @@ async fn test_full_1000_tick_simulation() {
     let event_bus = Arc::new(EventBus::new(4096));
     let mut event_rx = event_bus.subscribe();
 
-    let task_board = Arc::new(RwLock::new(TaskBoard::new()));
+    let task_board = Arc::new(Mutex::new(TaskBoard::new()));
 
     let mut agents = vec![
         SimAgent::new("Alice", 500_000, 10_000),
@@ -720,7 +720,7 @@ async fn test_full_1000_tick_simulation() {
 
     // Set up task board balances
     {
-        let mut board = task_board.write().await;
+        let mut board = task_board.lock().await;
         board.set_balance(&agents[0].id, 50_000);
         board.set_balance(&agents[1].id, 50_000);
     }
@@ -753,7 +753,7 @@ async fn test_full_1000_tick_simulation() {
             let reward = 500u64;
 
             let task_id = {
-                let mut board = task_board.write().await;
+                let mut board = task_board.lock().await;
                 board
                     .create_task(
                         format!("Task at tick {}", tick),
@@ -773,7 +773,7 @@ async fn test_full_1000_tick_simulation() {
         //    Each task advances through: Published→Claimed→InProgress→Submitted→Reviewed→Completed
         let mut completed_this_tick = Vec::new();
         for (idx, &task_id) in active_tasks.iter().enumerate() {
-            let mut board = task_board.write().await;
+            let mut board = task_board.lock().await;
             if let Some(task) = board.get(task_id).cloned() {
                 let assignee_idx = if task.publisher_id == agents[0].id {
                     1
@@ -839,7 +839,7 @@ async fn test_full_1000_tick_simulation() {
 
         // 5. Process task expiry
         {
-            let mut board = task_board.write().await;
+            let mut board = task_board.lock().await;
             board.process_expiry(tick);
         }
 
@@ -877,7 +877,7 @@ async fn test_full_1000_tick_simulation() {
 
     // Verify no tasks in stuck state
     {
-        let board = task_board.read().await;
+        let board = task_board.lock().await;
         for task in board.list() {
             assert!(
                 matches!(
@@ -902,7 +902,7 @@ async fn test_rest_api_e2e() {
 
     use agent_world_engine::api::create_router;
 
-    let task_board = Arc::new(RwLock::new(TaskBoard::new()));
+    let task_board = Arc::new(Mutex::new(TaskBoard::new()));
     let app = create_router(task_board.clone());
 
     let alice_id = "alice";
@@ -919,7 +919,7 @@ async fn test_rest_api_e2e() {
     let mut task_ids: Vec<Uuid> = Vec::new();
 
     for (title, desc) in &tasks {
-        let mut board = task_board.write().await;
+        let mut board = task_board.lock().await;
         let id = board
             .create_task(
                 title.to_string(),
@@ -936,7 +936,7 @@ async fn test_rest_api_e2e() {
     // ── Full lifecycle via direct calls ────────────────────────────────
 
     for task_id in &task_ids {
-        let mut board = task_board.write().await;
+        let mut board = task_board.lock().await;
         board.claim_task(*task_id, bob_id.to_string()).unwrap();
         board.start_task(*task_id).unwrap();
         board
@@ -949,7 +949,7 @@ async fn test_rest_api_e2e() {
     // ── Verify all tasks completed ─────────────────────────────────────
 
     {
-        let board = task_board.read().await;
+        let board = task_board.lock().await;
         for task_id in &task_ids {
             let task = board.get(*task_id).unwrap();
             assert_eq!(task.status, TaskStatus::Completed);

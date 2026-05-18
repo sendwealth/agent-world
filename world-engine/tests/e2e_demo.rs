@@ -13,14 +13,15 @@
 use std::collections::HashMap;
 use std::time::Instant;
 
-use agent_world_engine::economy::reward::{RewardConfig, RewardDistributor};
-use agent_world_engine::economy::task::{TaskBoard, TaskStatus};
+use agent_world_engine::economy::reward::RewardConfig;
+use agent_world_engine::economy::task::TaskBoard;
 use agent_world_engine::economy::token_burn::{AgentRecord, ConsumptionConfig};
 use agent_world_engine::rules::{
-    custom_registry, RuleContext, RuleRegistry,
+    custom_registry, RuleRegistry,
 };
 use agent_world_engine::world::enums::{AgentPhase, Currency, DeathReason};
-use agent_world_engine::world::event::{EventBus, EventType, WorldEvent};
+use agent_world_engine::world::event::{EventType, WorldEvent};
+use agent_world_engine::world::state::EventBus;
 use uuid::Uuid;
 
 // ═══════════════════════════════════════════════════════════════════════════
@@ -167,6 +168,7 @@ impl WorldSimulation {
 
     /// Process lifecycle phase transitions based on agent age.
     fn process_lifecycle(&mut self) {
+        let mut phase_changes: Vec<(Uuid, AgentPhase, AgentPhase)> = Vec::new();
         for agent in &mut self.agents {
             if !agent.is_alive() {
                 continue;
@@ -204,12 +206,15 @@ impl WorldSimulation {
             if let Some(new_phase) = new_phase {
                 let old_phase = agent.phase;
                 agent.phase = new_phase;
-                self.collect_event(WorldEvent::PhaseChanged {
-                    agent_id: agent.id.to_string(),
-                    old_phase,
-                    new_phase,
-                });
+                phase_changes.push((agent.id, old_phase, new_phase));
             }
+        }
+        for (agent_id, old_phase, new_phase) in phase_changes {
+            self.collect_event(WorldEvent::PhaseChanged {
+                agent_id: agent_id.to_string(),
+                old_phase,
+                new_phase,
+            });
         }
     }
 
@@ -271,9 +276,10 @@ impl WorldSimulation {
     fn process_trading(&mut self) {
         let token_price: u64 = 100; // 1 Money = 100 Tokens
 
-        // Find alive agents
-        let alive: Vec<&SimAgent> = self.agents.iter()
-            .filter(|a| a.is_alive())
+        // Collect alive agent snapshots: (index, id, tokens, money)
+        let alive: Vec<(usize, Uuid, u64, u64)> = self.agents.iter().enumerate()
+            .filter(|(_, a)| a.is_alive())
+            .map(|(i, a)| (i, a.id, a.tokens, a.money))
             .collect();
 
         if alive.len() < 2 {
@@ -285,46 +291,57 @@ impl WorldSimulation {
             return;
         }
 
-        // Find an agent with lots of tokens (seller) and one that wants tokens (buyer)
+        // Collect trades to execute
+        let mut trades: Vec<((usize, u64), (usize, u64))> = Vec::new(); // ((seller_idx, tokens_to_sell), (buyer_idx, money_amount))
+        let mut trade_events: Vec<WorldEvent> = Vec::new();
+
         for i in 0..alive.len() {
             for j in (i + 1)..alive.len() {
-                let a1 = &alive[i];
-                let a2 = &alive[j];
+                let (_, a1_id, a1_tokens, _) = &alive[i];
+                let (_, _, _, a2_money) = &alive[j];
 
                 // Agent 1 sells tokens to Agent 2 for money
-                if a1.tokens > 500 && a2.money > 5 {
+                if *a1_tokens > 500 && *a2_money > 5 {
                     let tokens_to_sell = 500u64;
                     let money_amount = tokens_to_sell / token_price; // 5 money
+                    let a1_id_str = a1_id.to_string();
 
-                    if let (Some(agent1), Some(agent2)) = (
-                        self.agents.iter_mut().find(|a| a.id == a1.id),
-                        self.agents.iter_mut().find(|a| a.id == a2.id),
-                    ) {
-                        agent1.tokens -= tokens_to_sell;
-                        agent1.money += money_amount;
-                        agent1.trades_made += 1;
-                        agent2.tokens += tokens_to_sell;
-                        agent2.money -= money_amount;
-                        agent2.trades_made += 1;
+                    trades.push(((alive[i].0, tokens_to_sell), (alive[j].0, money_amount)));
 
-                        self.total_money_transferred += money_amount;
-                        self.trade_ticks.insert(self.tick);
-
-                        self.collect_event(WorldEvent::TransactionCompleted {
-                            from: agent1.id.to_string(),
-                            to: agent2.id.to_string(),
-                            amount: tokens_to_sell,
-                            currency: Currency::Token,
-                        });
-                        self.collect_event(WorldEvent::TransactionCompleted {
-                            from: agent2.id.to_string(),
-                            to: agent1.id.to_string(),
-                            amount: money_amount,
-                            currency: Currency::Money,
-                        });
-                    }
+                    trade_events.push(WorldEvent::TransactionCompleted {
+                        from: a1_id_str.clone(),
+                        to: self.agents[alive[j].0].id.to_string(),
+                        amount: tokens_to_sell,
+                        currency: Currency::Token,
+                    });
+                    trade_events.push(WorldEvent::TransactionCompleted {
+                        from: self.agents[alive[j].0].id.to_string(),
+                        to: a1_id_str,
+                        amount: money_amount,
+                        currency: Currency::Money,
+                    });
                 }
             }
+        }
+
+        // Execute trades
+        for ((seller_idx, tokens_to_sell), (buyer_idx, money_amount)) in trades {
+            let agent1 = &mut self.agents[seller_idx];
+            agent1.tokens -= tokens_to_sell;
+            agent1.money += money_amount;
+            agent1.trades_made += 1;
+            let agent2 = &mut self.agents[buyer_idx];
+            agent2.tokens += tokens_to_sell;
+            agent2.money -= money_amount;
+            agent2.trades_made += 1;
+
+            self.total_money_transferred += money_amount;
+            self.trade_ticks.insert(self.tick);
+        }
+
+        // Collect events
+        for event in trade_events {
+            self.collect_event(event);
         }
     }
 
@@ -335,8 +352,10 @@ impl WorldSimulation {
             return;
         }
 
-        let alive: Vec<&SimAgent> = self.agents.iter()
-            .filter(|a| a.is_alive() && a.age(self.tick) >= 50) // Past newbie protection
+        // Collect alive agent snapshots: (index, id, tokens)
+        let alive: Vec<(usize, Uuid, u64)> = self.agents.iter().enumerate()
+            .filter(|(_, a)| a.is_alive() && a.age(self.tick) >= 50) // Past newbie protection
+            .map(|(i, a)| (i, a.id, a.tokens))
             .collect();
 
         if alive.len() < 2 {
@@ -344,34 +363,33 @@ impl WorldSimulation {
         }
 
         // Agent 0 creates a task, Agent 1 claims and completes it
-        let publisher = &alive[0];
-        let worker = &alive[1];
+        let (publisher_idx, publisher_id, publisher_tokens) = &alive[0];
+        let (worker_idx, worker_id, _) = &alive[1];
 
         let reward_tokens = 200u64;
 
         // Publisher creates task
-        if publisher.tokens > reward_tokens + 100 {
+        if *publisher_tokens > reward_tokens + 100 {
             let task_title = format!("task-tick-{}", self.tick);
+            let publisher_id_str = publisher_id.to_string();
+            let worker_id_str = worker_id.to_string();
+
             let task_id = self.task_board.create_task(
                 task_title.clone(),
                 format!("Complete work by tick {}", self.tick + 50),
                 reward_tokens,
-                publisher.id.to_string(),
+                publisher_id_str.clone(),
                 self.tick,
                 Some(self.tick + 500),
             );
 
             if let Ok(task_id) = task_id {
                 self.task_ticks.insert(self.tick);
-                if let Some(agent) = self.agents.iter_mut().find(|a| a.id == publisher.id) {
-                    agent.tasks_created += 1;
-                }
+                self.agents[*publisher_idx].tasks_created += 1;
 
                 // Worker claims the task
-                if self.task_board.claim_task(task_id, worker.id.to_string()).is_ok() {
-                    if let Some(agent) = self.agents.iter_mut().find(|a| a.id == worker.id) {
-                        agent.tasks_claimed += 1;
-                    }
+                if self.task_board.claim_task(task_id, worker_id_str.clone()).is_ok() {
+                    self.agents[*worker_idx].tasks_claimed += 1;
 
                     // Start
                     let _ = self.task_board.start_task(task_id);
@@ -380,19 +398,18 @@ impl WorldSimulation {
                     let _ = self.task_board.submit_result(task_id, format!("Completed work at tick {}", self.tick));
 
                     // Review
-                    let _ = self.task_board.review_task(task_id, &publisher.id.to_string(), true);
+                    let _ = self.task_board.review_task(task_id, &publisher_id_str, true);
 
                     // Complete and distribute reward
                     if let Ok(Some(dist)) = self.task_board.complete_task(task_id, self.tick) {
                         self.total_platform_fees += dist.platform_fee;
                         self.task_ticks.insert(self.tick);
 
-                        if let Some(agent) = self.agents.iter_mut().find(|a| a.id == worker.id) {
-                            agent.tasks_completed += 1;
-                            agent.tokens = agent.tokens.saturating_add(dist.net_reward);
-                            agent.reputation += dist.reputation_change;
-                            agent.xp += dist.xp_awarded;
-                        }
+                        let agent = &mut self.agents[*worker_idx];
+                        agent.tasks_completed += 1;
+                        agent.tokens = agent.tokens.saturating_add(dist.net_reward);
+                        agent.reputation += dist.reputation_change;
+                        agent.xp += dist.xp_awarded;
                     }
                 }
             }
@@ -402,6 +419,7 @@ impl WorldSimulation {
     /// Emergency rescue: give an agent tokens if they're critically low.
     /// Simulates "foraging" or "aid" from the environment.
     fn process_survival_aid(&mut self) {
+        let mut rescued_ids: Vec<String> = Vec::new();
         for agent in &mut self.agents {
             if !agent.is_alive() {
                 continue;
@@ -411,10 +429,13 @@ impl WorldSimulation {
             if agent.tokens < 20 && agent.age(self.tick) > 50 && self.tick % 10 == 0 {
                 let aid_amount = 50u64;
                 agent.tokens = agent.tokens.saturating_add(aid_amount);
-                self.collect_event(WorldEvent::AgentRescued {
-                    agent_id: agent.id.to_string(),
-                });
+                rescued_ids.push(agent.id.to_string());
             }
+        }
+        for agent_id in rescued_ids {
+            self.collect_event(WorldEvent::AgentRescued {
+                agent_id,
+            });
         }
     }
 

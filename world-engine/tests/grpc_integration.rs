@@ -140,7 +140,7 @@ async fn grpc_server_starts_and_responds() {
     handle.abort();
 }
 
-#[tokio::test]
+#[tokio::test(flavor = "multi_thread")]
 async fn grpc_stream_messages_bidirectional() {
     let port = find_free_port();
     let addr = SocketAddr::from(([127, 0, 0, 1], port));
@@ -164,51 +164,87 @@ async fn grpc_stream_messages_bidirectional() {
         )
         .await;
 
-    let handle = start_grpc_server_with_registry(addr, event_bus, registry)
-        .await
-        .expect("gRPC server should start");
+    let router = Arc::new(MessageRouter::new(registry.clone()));
+    let service = A2aServiceImpl::new(registry, router.clone());
+
+    let handle = tokio::spawn(async move {
+        tonic::transport::Server::builder()
+            .add_service(A2aServiceServer::new(service))
+            .serve(addr)
+            .await
+            .unwrap();
+    });
 
     tokio::time::sleep(tokio::time::Duration::from_millis(100)).await;
 
     let url = format!("http://127.0.0.1:{}", port);
-    let mut client = A2aServiceClient::connect(url)
+
+    // ---- Open Alice's stream ----
+    let mut alice_client = A2aServiceClient::connect(url.clone())
         .await
-        .expect("Should connect to gRPC server");
+        .expect("Alice should connect");
 
-    // Open a bidirectional stream
-    let (tx, rx) = tokio::sync::mpsc::channel(4);
-    let response = client.stream_messages(tokio_stream::wrappers::ReceiverStream::new(rx)).await.unwrap();
-    let mut response_stream = response.into_inner();
-
-    // Send a message through the stream
-    tx.send(A2aMessage {
-        id: "stream-msg-001".into(),
+    // Pre-load Alice's identifying message into the stream BEFORE calling stream_messages
+    let (alice_tx, alice_rx) = tokio::sync::mpsc::channel(16);
+    alice_tx.send(A2aMessage {
+        id: "alice-init".into(),
         from_agent: "agent-alice".into(),
         to_agent: "agent-bob".into(),
-        r#type: 4, // INFORM
-        payload: b"Hello from stream!".to_vec(),
-        timestamp: 1234567890,
+        r#type: 4,
+        payload: b"Hello Bob".to_vec(),
+        timestamp: 1,
         signature: String::new(),
-        nonce: "nonce-stream-1".into(),
+        nonce: "n1".into(),
     }).await.unwrap();
 
-    // Should receive a response back from the stream
-    let ack_msg = tokio::time::timeout(
-        tokio::time::Duration::from_secs(5),
-        response_stream.message(),
+    // Now open the stream - the first message is already in the channel
+    let alice_response = alice_client
+        .stream_messages(tokio_stream::wrappers::ReceiverStream::new(alice_rx))
+        .await
+        .expect("Alice stream should open");
+    let mut alice_stream = alice_response.into_inner();
+
+    // Verify alice's stream is registered
+    tokio::time::sleep(tokio::time::Duration::from_millis(200)).await;
+    assert_eq!(router.active_stream_count().await, 1, "Alice stream should be registered");
+
+    // Use SendMessage RPC to send a message from bob to alice
+    let mut sender_client = A2aServiceClient::connect(url)
+        .await
+        .expect("Sender should connect");
+
+    let send_resp = sender_client.send_message(tonic::Request::new(A2aMessage {
+        id: "msg-from-bob".into(),
+        from_agent: "agent-bob".into(),
+        to_agent: "agent-alice".into(),
+        r#type: 4,
+        payload: b"Hello Alice".to_vec(),
+        timestamp: 2,
+        signature: String::new(),
+        nonce: "n2".into(),
+    })).await.expect("Send should succeed");
+
+    assert!(send_resp.into_inner().received, "Message should be received");
+
+    // Alice should receive the message on her stream
+    let received = tokio::time::timeout(
+        tokio::time::Duration::from_secs(10),
+        alice_stream.message(),
     )
     .await
-    .expect("Should receive response within timeout")
-    .expect("No error in stream")
-    .expect("Should get a response message");
+    .expect("Timed out waiting for alice to receive message");
 
-    // The current service routes the message and returns inbound messages to the
-    // stream agent. Verify we received a valid response.
-    assert!(ack_msg.r#type == 2 || ack_msg.r#type == 3 || ack_msg.r#type == 4,
-        "Response should be a valid message type, got {}", ack_msg.r#type);
+    match received {
+        Ok(Some(msg)) => {
+            assert_eq!(msg.from_agent, "agent-bob", "Message should be from bob");
+            assert_eq!(msg.to_agent, "agent-alice", "Message should be to alice");
+        }
+        Ok(None) => panic!("Stream ended unexpectedly"),
+        Err(e) => panic!("Stream error: {:?}", e),
+    }
 
-    // Drop sender to close the stream
-    drop(tx);
+    // Cleanup
+    drop(alice_tx);
     handle.abort();
 }
 

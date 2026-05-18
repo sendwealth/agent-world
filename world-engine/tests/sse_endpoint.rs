@@ -12,7 +12,6 @@ use std::sync::Arc;
 
 use tokio::sync::Mutex;
 
-use agent_world_engine::api::create_router_with_wal;
 use agent_world_engine::economy::task::TaskBoard;
 use agent_world_engine::wal::WAL;
 use agent_world_engine::world::event::WorldEvent;
@@ -24,10 +23,17 @@ fn build_app() -> (
     axum::Router,
 ) {
     let dir = tempfile::TempDir::new().unwrap();
-    let event_bus = Arc::new(EventBus::new(16));
+    let event_bus = Arc::new(EventBus::new(256));
     let board = Arc::new(Mutex::new(TaskBoard::with_event_bus((*event_bus).clone())));
     let wal = Arc::new(Mutex::new(WAL::new(dir.path())));
-    let app = create_router_with_wal(board.clone(), wal);
+    let (tick_tx, tick_rx) = tokio::sync::watch::channel(0u64);
+    let app = agent_world_engine::api::create_router_for_test(
+        board.clone(),
+        wal,
+        event_bus.clone(),
+        tick_tx,
+        tick_rx,
+    );
     (event_bus, board, app)
 }
 
@@ -51,9 +57,9 @@ async fn start_server() -> (u16, Arc<EventBus>) {
 /// Returns parsed JSON strings from `data: ` lines.
 async fn collect_sse_events(port: u16, query: &str, event_bus: Arc<EventBus>, events_to_emit: Vec<WorldEvent>) -> Vec<String> {
     let url = if query.is_empty() {
-        format!("http://127.0.0.1:{}/world/events", port)
+        format!("http://127.0.0.1:{}/api/v1/world/events", port)
     } else {
-        format!("http://127.0.0.1:{}/world/events?{}", port, query)
+        format!("http://127.0.0.1:{}/api/v1/world/events?{}", port, query)
     };
 
     let client = reqwest::Client::new();
@@ -206,7 +212,7 @@ async fn sse_multi_client() {
         rx_channels.push(rx);
 
         let client = reqwest::Client::new();
-        let url = format!("http://127.0.0.1:{}/world/events", port);
+        let url = format!("http://127.0.0.1:{}/api/v1/world/events", port);
 
         tokio::spawn(async move {
             let resp = client.get(&url).send().await.unwrap();
@@ -255,7 +261,7 @@ async fn sse_invalid_event_type_returns_400() {
 
     let resp = client
         .get(&format!(
-            "http://127.0.0.1:{}/world/events?types=tick_advanced,invalid_type",
+            "http://127.0.0.1:{}/api/v1/world/events?types=tick_advanced,invalid_type",
             port
         ))
         .send()

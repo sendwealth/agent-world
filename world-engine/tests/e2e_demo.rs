@@ -119,12 +119,16 @@ struct WorldSimulation {
 
 impl WorldSimulation {
     fn new(max_ticks: u64) -> Self {
+        Self::new_with_grace(max_ticks, 10)
+    }
+
+    fn new_with_grace(max_ticks: u64, grace_ticks: u64) -> Self {
         let event_bus = EventBus::new(10_000);
         let mut rx = event_bus.subscribe();
 
         // Build rule registry with genesis-like config
         let consumption_config = ConsumptionConfig::default();
-        let registry = custom_registry(consumption_config, 10, 50);
+        let registry = custom_registry(consumption_config, grace_ticks, 50);
 
         // Task board with reward distribution
         let mut task_board = TaskBoard::with_reward_distributor(RewardConfig::default());
@@ -386,24 +390,55 @@ impl WorldSimulation {
             if let Ok(task_id) = task_id {
                 self.task_ticks.insert(self.tick);
                 self.agents[*publisher_idx].tasks_created += 1;
+                self.collect_event(WorldEvent::TaskCreated {
+                    task_id: task_id.to_string(),
+                    publisher: publisher_id_str.clone(),
+                    reward: reward_tokens,
+                });
 
                 // Worker claims the task
                 if self.task_board.claim_task(task_id, worker_id_str.clone()).is_ok() {
                     self.agents[*worker_idx].tasks_claimed += 1;
+                    self.collect_event(WorldEvent::TaskClaimed {
+                        task_id: task_id.to_string(),
+                        assignee: worker_id_str.clone(),
+                    });
 
                     // Start
                     let _ = self.task_board.start_task(task_id);
+                    self.collect_event(WorldEvent::TaskStarted {
+                        task_id: task_id.to_string(),
+                    });
 
                     // Submit
                     let _ = self.task_board.submit_result(task_id, format!("Completed work at tick {}", self.tick));
+                    self.collect_event(WorldEvent::TaskSubmitted {
+                        task_id: task_id.to_string(),
+                    });
 
                     // Review
                     let _ = self.task_board.review_task(task_id, &publisher_id_str, true);
+                    self.collect_event(WorldEvent::TaskReviewed {
+                        task_id: task_id.to_string(),
+                        approved: true,
+                    });
 
                     // Complete and distribute reward
                     if let Ok(Some(dist)) = self.task_board.complete_task(task_id, self.tick) {
                         self.total_platform_fees += dist.platform_fee;
                         self.task_ticks.insert(self.tick);
+                        self.collect_event(WorldEvent::TaskCompleted {
+                            task_id: task_id.to_string(),
+                        });
+                        self.collect_event(WorldEvent::RewardDistributed {
+                            task_id: task_id.to_string(),
+                            assignee_id: worker_id_str.clone(),
+                            gross_reward: reward_tokens,
+                            net_reward: dist.net_reward,
+                            platform_fee: dist.platform_fee,
+                            xp_awarded: dist.xp_awarded,
+                            reputation_change: dist.reputation_change,
+                        });
 
                         let agent = &mut self.agents[*worker_idx];
                         agent.tasks_completed += 1;
@@ -464,15 +499,19 @@ impl WorldSimulation {
 
     /// Run the full simulation.
     fn run(&mut self) -> PerfMetrics {
-        let start = Instant::now();
-
         // Spawn 2 agents with initial tokens from genesis config
         // genesis.yaml: initial_tokens: 100000
         self.spawn_agent("Alice", 100_000);
         self.spawn_agent("Bob", 100_000);
+        self.run_without_default_agents()
+    }
+
+    /// Run the simulation without spawning default agents.
+    fn run_without_default_agents(&mut self) -> PerfMetrics {
+        let start = Instant::now();
 
         println!("\n╔══════════════════════════════════════════════════════════════╗");
-        println!("║       Agent World — E2E Demo: 2 Agents × 1000 Ticks        ║");
+        println!("║       Agent World — E2E Demo: {} Agents × {} Ticks       ", self.agents.len(), self.max_ticks);
         println!("╚══════════════════════════════════════════════════════════════╝\n");
         println!("  Agents spawned:");
         for a in &self.agents {
@@ -657,12 +696,12 @@ fn test_e2e_two_agents_1000_ticks_survival() {
 #[test]
 fn test_e2e_death_scenario_low_tokens() {
     // Agent with very few tokens should die
-    let mut sim = WorldSimulation::new(100);
+    let mut sim = WorldSimulation::new_with_grace(100, 0);
 
     // Override: spawn agent with very few tokens (only 30, burns 10/tick)
     sim.spawn_agent("Starving", 30);
 
-    let metrics = sim.run();
+    let metrics = sim.run_without_default_agents();
 
     // Agent should die from token depletion
     assert!(metrics.agents_died >= 1, "Agent with 30 tokens should die");

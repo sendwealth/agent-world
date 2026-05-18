@@ -4,7 +4,7 @@ use std::sync::Arc;
 use axum::{
     Json,
     Router,
-    extract::{Path, State},
+    extract::{Path, Query, State},
     http::StatusCode,
     response::{
         sse::{Event as SseEvent, Sse},
@@ -609,13 +609,100 @@ async fn wal_verify(
 
 // ── World SSE Handler ─────────────────────────────────────
 
+/// Query parameters for the SSE endpoint.
+#[derive(Debug, Deserialize, Default)]
+pub struct SseQuery {
+    /// Comma-separated event type filter (e.g., "agent_died,agent_rescued")
+    pub types: Option<String>,
+    /// Filter events for a specific agent ID
+    pub agent_id: Option<String>,
+}
+
+/// Parse a comma-separated string of event type names into `EventType` values.
+/// Returns an error message for any unrecognized names.
+fn parse_event_types(raw: &str) -> Result<Vec<crate::world::event::EventType>, String> {
+    use crate::world::event::EventType;
+    let mut types = Vec::new();
+    for name in raw.split(',') {
+        let name = name.trim();
+        if name.is_empty() {
+            continue;
+        }
+        let et = match name {
+            "tick_advanced" => EventType::TickAdvanced,
+            "agent_spawned" => EventType::AgentSpawned,
+            "agent_dying" => EventType::AgentDying,
+            "agent_died" => EventType::AgentDied,
+            "agent_rescued" => EventType::AgentRescued,
+            "transaction_completed" => EventType::TransactionCompleted,
+            "balance_changed" => EventType::BalanceChanged,
+            "phase_changed" => EventType::PhaseChanged,
+            "rule_violated" => EventType::RuleViolated,
+            "snapshot_taken" => EventType::SnapshotTaken,
+            "escrow_created" => EventType::EscrowCreated,
+            "escrow_claimed" => EventType::EscrowClaimed,
+            "escrow_released" => EventType::EscrowReleased,
+            "escrow_refunded" => EventType::EscrowRefunded,
+            "escrow_frozen" => EventType::EscrowFrozen,
+            "task_created" => EventType::TaskCreated,
+            "task_claimed" => EventType::TaskClaimed,
+            "task_started" => EventType::TaskStarted,
+            "task_submitted" => EventType::TaskSubmitted,
+            "task_reviewed" => EventType::TaskReviewed,
+            "task_completed" => EventType::TaskCompleted,
+            "task_expired" => EventType::TaskExpired,
+            "reward_distributed" => EventType::RewardDistributed,
+            "agent_registered" => EventType::AgentRegistered,
+            "agent_deregistered" => EventType::AgentDeregistered,
+            "agent_heartbeat" => EventType::AgentHeartbeat,
+            "reputation_changed" => EventType::ReputationChanged,
+            "config_reloaded" => EventType::ConfigReloaded,
+            other => return Err(format!("unknown event type: {}", other)),
+        };
+        types.push(et);
+    }
+    Ok(types)
+}
+
 async fn world_events_sse(
     State(state): State<AppState>,
-) -> Sse<impl Stream<Item = Result<SseEvent, Infallible>>> {
+    Query(query): Query<SseQuery>,
+) -> Result<Sse<impl Stream<Item = Result<SseEvent, Infallible>>>, (StatusCode, Json<ErrorResponse>)> {
+    // Parse type filter if provided
+    let type_filter: Option<std::collections::HashSet<crate::world::event::EventType>> = if let Some(ref types_str) = query.types {
+        let parsed = parse_event_types(types_str).map_err(|e| {
+            (StatusCode::BAD_REQUEST, Json(ErrorResponse { error: e }))
+        })?;
+        if parsed.is_empty() {
+            None
+        } else {
+            Some(parsed.into_iter().collect())
+        }
+    } else {
+        None
+    };
+
+    let agent_filter: Option<String> = query.agent_id.filter(|s| !s.is_empty());
+
     let rx = state.event_bus.subscribe();
-    let stream = BroadcastStream::new(rx).filter_map(|result| {
+    let stream = BroadcastStream::new(rx).filter_map(move |result| {
+        let type_filter = type_filter.clone();
+        let agent_filter = agent_filter.clone();
         match result {
             Ok(event) => {
+                // Apply type filter
+                if let Some(ref types) = type_filter {
+                    if !types.contains(&event.event_type()) {
+                        return None;
+                    }
+                }
+                // Apply agent_id filter
+                if let Some(ref filter_id) = agent_filter {
+                    match event.agent_id() {
+                        Some(aid) if aid == filter_id => {}
+                        _ => return None,
+                    }
+                }
                 let data = event.to_json();
                 Some(Ok(SseEvent::default().data(data)))
             }
@@ -623,11 +710,11 @@ async fn world_events_sse(
         }
     });
 
-    Sse::new(stream).keep_alive(
+    Ok(Sse::new(stream).keep_alive(
         axum::response::sse::KeepAlive::new()
             .interval(std::time::Duration::from_secs(15))
             .text("ping"),
-    )
+    ))
 }
 
 // ── World Stats Handler ───────────────────────────────────

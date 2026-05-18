@@ -1,94 +1,70 @@
+use std::convert::Infallible;
 use std::sync::Arc;
-use std::sync::atomic::{AtomicU64, Ordering};
 
 use axum::{
     Json,
     Router,
-    extract::{Path, Query, State},
+    extract::{Path, State},
     http::StatusCode,
-    response::IntoResponse,
+    response::{
+        sse::{Event as SseEvent, Sse},
+        IntoResponse,
+    },
     routing::{delete, get, post},
 };
-use dashmap::DashMap;
+use futures::stream::Stream;
 use serde::{Deserialize, Serialize};
-use tokio::sync::RwLock;
+use tokio::sync::{Mutex, watch};
+use tokio_stream::wrappers::BroadcastStream;
+use tokio_stream::StreamExt;
 use uuid::Uuid;
 
 use crate::economy::task::{TaskBoard, Task};
 use crate::wal::WAL;
+use crate::world::event::WorldEvent;
+use crate::world::state::EventBus;
 
 // ── Shared State ──────────────────────────────────────────
 
-pub type SharedTaskBoard = Arc<RwLock<TaskBoard>>;
-pub type SharedWAL = Arc<RwLock<WAL>>;
+pub type SharedTaskBoard = Arc<Mutex<TaskBoard>>;
+pub type SharedWAL = Arc<Mutex<WAL>>;
 
-/// Read-through cache for task responses, invalidated on any write.
-#[derive(Clone)]
-pub struct TaskCache {
-    /// Cached individual task responses, keyed by task UUID string.
-    entries: Arc<DashMap<String, TaskResponse>>,
-    /// Cached full task list (invalidated on any mutation).
-    cached_list: Arc<parking_lot::RwLock<Option<Vec<TaskResponse>>>>,
-    /// Monotonically increasing version counter — bumped on every write.
-    version: Arc<AtomicU64>,
-    /// Version number at which cached_list was built.
-    list_version: Arc<AtomicU64>,
+/// Agent record tracked by the world engine.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct AgentRecord {
+    pub id: String,
+    pub name: String,
+    pub phase: String,
+    pub tokens: u64,
+    pub money: u64,
+    pub alive: bool,
+    pub ticks_survived: u64,
 }
 
-impl TaskCache {
-    pub fn new() -> Self {
-        Self {
-            entries: Arc::new(DashMap::new()),
-            cached_list: Arc::new(parking_lot::RwLock::new(None)),
-            version: Arc::new(AtomicU64::new(0)),
-            list_version: Arc::new(AtomicU64::new(0)),
-        }
-    }
-
-    /// Bump version and invalidate caches. Call on every write.
-    pub fn invalidate(&self) {
-        self.version.fetch_add(1, Ordering::Release);
-    }
-
-    pub fn get_entry(&self, id: &str) -> Option<TaskResponse> {
-        self.entries.get(id).map(|r| r.value().clone())
-    }
-
-    pub fn insert_entry(&self, id: String, resp: TaskResponse) {
-        self.entries.insert(id, resp);
-    }
-
-    pub fn remove_entry(&self, id: &str) {
-        self.entries.remove(id);
-    }
-
-    pub fn get_cached_list(&self) -> Option<Vec<TaskResponse>> {
-        let cur = self.version.load(Ordering::Acquire);
-        let cached_ver = self.list_version.load(Ordering::Acquire);
-        if cur == cached_ver {
-            self.cached_list.read().clone()
-        } else {
-            None
-        }
-    }
-
-    pub fn set_cached_list(&self, list: Vec<TaskResponse>) {
-        let v = self.version.load(Ordering::Acquire);
-        *self.cached_list.write() = Some(list);
-        self.list_version.store(v, Ordering::Release);
-    }
+/// A2A message record.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct A2AMessage {
+    pub id: String,
+    pub from_agent: String,
+    pub to_agent: String,
+    pub message_type: String,
+    pub payload: String,
+    pub tick: u64,
 }
 
-/// Combined state for the API with WAL support and caching.
+/// Combined state for the API with WAL + EventBus + agents + messages.
 #[derive(Clone)]
 pub struct AppState {
     pub board: SharedTaskBoard,
     pub wal: SharedWAL,
-    pub cache: TaskCache,
+    pub event_bus: Arc<EventBus>,
+    pub agents: Arc<Mutex<Vec<AgentRecord>>>,
+    pub messages: Arc<Mutex<Vec<A2AMessage>>>,
+    pub tick_tx: watch::Sender<u64>,
+    pub tick_rx: watch::Receiver<u64>,
 }
 
 pub fn create_router(board: SharedTaskBoard) -> Router {
-    let cache = TaskCache::new();
     Router::new()
         .route("/tasks", post(create_task))
         .route("/tasks", get(list_tasks))
@@ -100,19 +76,26 @@ pub fn create_router(board: SharedTaskBoard) -> Router {
         .route("/tasks/:id/complete", post(complete_task))
         .route("/tasks/:id/expire", post(expire_task))
         .route("/tasks/:id", delete(delete_task))
-        .with_state(AppState {
-            board,
-            wal: Arc::new(RwLock::new(WAL::new("./data"))),
-            cache,
-        })
+        .with_state(board)
 }
 
 pub fn create_router_with_wal(board: SharedTaskBoard, wal: SharedWAL) -> Router {
+    let event_bus = Arc::new(EventBus::new(256));
+    let (tick_tx, tick_rx) = watch::channel(0u64);
     let state = AppState {
         board,
         wal,
-        cache: TaskCache::new(),
+        event_bus,
+        agents: Arc::new(Mutex::new(Vec::new())),
+        messages: Arc::new(Mutex::new(Vec::new())),
+        tick_tx,
+        tick_rx,
     };
+    build_full_router(state)
+}
+
+/// Build the full router with all endpoints (tasks, WAL, world, agents, A2A).
+pub fn build_full_router(state: AppState) -> Router {
     Router::new()
         // Task routes
         .route("/tasks", post(create_task_with_wal))
@@ -129,7 +112,40 @@ pub fn create_router_with_wal(board: SharedTaskBoard, wal: SharedWAL) -> Router 
         .route("/wal/stats", get(wal_stats))
         .route("/wal/snapshot", post(wal_snapshot))
         .route("/wal/verify", get(wal_verify))
+        // World routes (SSE + stats)
+        .route("/api/v1/world/events", get(world_events_sse))
+        .route("/api/v1/world/stats", get(world_stats))
+        // Agent routes
+        .route("/api/v1/agents", get(list_agents))
+        .route("/api/v1/agents", post(spawn_agent))
+        .route("/api/v1/agents/:id", get(get_agent))
+        // A2A routes
+        .route("/api/v1/messages", post(send_message))
+        .route("/api/v1/messages", get(list_messages))
+        // Tick control
+        .route("/api/v1/tick", post(advance_tick))
+        .route("/api/v1/tick", get(get_tick))
         .with_state(state)
+}
+
+/// Create a router for testing with a provided EventBus and tick channel.
+pub fn create_router_for_test(
+    board: SharedTaskBoard,
+    wal: SharedWAL,
+    event_bus: Arc<EventBus>,
+    tick_tx: watch::Sender<u64>,
+    tick_rx: watch::Receiver<u64>,
+) -> Router {
+    let state = AppState {
+        board,
+        wal,
+        event_bus,
+        agents: Arc::new(Mutex::new(Vec::new())),
+        messages: Arc::new(Mutex::new(Vec::new())),
+        tick_tx,
+        tick_rx,
+    };
+    build_full_router(state)
 }
 
 // ── Request Types ─────────────────────────────────────────
@@ -179,9 +195,30 @@ impl Default for ListTasksQuery {
     }
 }
 
+#[derive(Debug, Deserialize)]
+pub struct SpawnAgentRequest {
+    pub name: String,
+    #[serde(default = "default_tokens")]
+    pub tokens: u64,
+    #[serde(default)]
+    pub money: u64,
+}
+
+fn default_tokens() -> u64 {
+    100_000
+}
+
+#[derive(Debug, Deserialize)]
+pub struct SendMessageRequest {
+    pub from_agent: String,
+    pub to_agent: String,
+    pub message_type: String,
+    pub payload: String,
+}
+
 // ── Response Types ────────────────────────────────────────
 
-#[derive(Debug, Clone, Serialize)]
+#[derive(Debug, Serialize)]
 pub struct TaskResponse {
     pub id: String,
     pub title: String,
@@ -219,10 +256,21 @@ pub struct ErrorResponse {
     pub error: String,
 }
 
-// ── Handlers ──────────────────────────────────────────────
+#[derive(Debug, Serialize)]
+pub struct WorldStatsResponse {
+    pub agent_count: usize,
+    pub alive_count: usize,
+    pub dead_count: usize,
+    pub total_money: u64,
+    pub total_tokens: u64,
+    pub tick: u64,
+    pub task_count: usize,
+}
+
+// ── Task Handlers (no WAL) ────────────────────────────────
 
 async fn create_task(
-    State(state): State<AppState>,
+    State(board): State<SharedTaskBoard>,
     Json(body): Json<CreateTaskRequest>,
 ) -> impl IntoResponse {
     if body.title.is_empty() {
@@ -232,21 +280,18 @@ async fn create_task(
         return (StatusCode::BAD_REQUEST, Json(ErrorResponse { error: "publisher_id is required".into() })).into_response();
     }
 
-    let mut board = state.board.write().await;
+    let mut board = board.lock().await;
     match board.create_task(
         body.title,
         body.description,
         body.reward,
         body.publisher_id,
-        0, // created_tick — would come from world clock in production
+        0,
         body.expires_at,
     ) {
         Ok(id) => {
             let task = board.get(id).unwrap();
-            let resp = TaskResponse::from(task);
-            state.cache.invalidate();
-            state.cache.insert_entry(id.to_string(), resp.clone());
-            (StatusCode::CREATED, Json(resp)).into_response()
+            (StatusCode::CREATED, Json(TaskResponse::from(task))).into_response()
         }
         Err(e) => {
             (StatusCode::INTERNAL_SERVER_ERROR, Json(ErrorResponse { error: e.to_string() })).into_response()
@@ -255,50 +300,30 @@ async fn create_task(
 }
 
 async fn list_tasks(
-    State(state): State<AppState>,
-    _query: Query<ListTasksQuery>,
+    State(board): State<SharedTaskBoard>,
 ) -> impl IntoResponse {
-    // Try read-through cache first (no lock needed)
-    if let Some(cached) = state.cache.get_cached_list() {
-        return Json(cached).into_response();
-    }
-
-    // Cache miss — take a read lock (many concurrent readers allowed)
-    let board = state.board.read().await;
+    let board = board.lock().await;
     let tasks: Vec<TaskResponse> = board.list().into_iter().map(TaskResponse::from).collect();
-    drop(board);
-
-    state.cache.set_cached_list(tasks.clone());
     Json(tasks).into_response()
 }
 
 async fn get_task(
-    State(state): State<AppState>,
+    State(board): State<SharedTaskBoard>,
     Path(id): Path<String>,
 ) -> impl IntoResponse {
-    // Try cache first (lock-free)
-    if let Some(cached) = state.cache.get_entry(&id) {
-        return Json(cached).into_response();
-    }
-
     let Ok(uuid) = Uuid::parse_str(&id) else {
         return (StatusCode::BAD_REQUEST, Json(ErrorResponse { error: "invalid task id".into() })).into_response();
     };
 
-    // Read lock allows concurrent readers
-    let board = state.board.read().await;
+    let board = board.lock().await;
     match board.get(uuid) {
-        Some(task) => {
-            let resp = TaskResponse::from(task);
-            state.cache.insert_entry(id, resp.clone());
-            Json(resp).into_response()
-        }
+        Some(task) => Json(TaskResponse::from(task)).into_response(),
         None => (StatusCode::NOT_FOUND, Json(ErrorResponse { error: "task not found".into() })).into_response(),
     }
 }
 
 async fn claim_task(
-    State(state): State<AppState>,
+    State(board): State<SharedTaskBoard>,
     Path(id): Path<String>,
     Json(body): Json<ClaimTaskRequest>,
 ) -> impl IntoResponse {
@@ -306,14 +331,11 @@ async fn claim_task(
         return (StatusCode::BAD_REQUEST, Json(ErrorResponse { error: "invalid task id".into() })).into_response();
     };
 
-    let mut board = state.board.write().await;
+    let mut board = board.lock().await;
     match board.claim_task(uuid, body.assignee_id) {
         Ok(()) => {
             let task = board.get(uuid).unwrap();
-            let resp = TaskResponse::from(task);
-            state.cache.invalidate();
-            state.cache.insert_entry(id, resp.clone());
-            Json(resp).into_response()
+            Json(TaskResponse::from(task)).into_response()
         }
         Err(e) => {
             let status = match &e {
@@ -327,21 +349,18 @@ async fn claim_task(
 }
 
 async fn start_task(
-    State(state): State<AppState>,
+    State(board): State<SharedTaskBoard>,
     Path(id): Path<String>,
 ) -> impl IntoResponse {
     let Ok(uuid) = Uuid::parse_str(&id) else {
         return (StatusCode::BAD_REQUEST, Json(ErrorResponse { error: "invalid task id".into() })).into_response();
     };
 
-    let mut board = state.board.write().await;
+    let mut board = board.lock().await;
     match board.start_task(uuid) {
         Ok(()) => {
             let task = board.get(uuid).unwrap();
-            let resp = TaskResponse::from(task);
-            state.cache.invalidate();
-            state.cache.insert_entry(id, resp.clone());
-            Json(resp).into_response()
+            Json(TaskResponse::from(task)).into_response()
         }
         Err(e) => {
             let status = match &e {
@@ -355,7 +374,7 @@ async fn start_task(
 }
 
 async fn submit_task(
-    State(state): State<AppState>,
+    State(board): State<SharedTaskBoard>,
     Path(id): Path<String>,
     Json(body): Json<SubmitTaskRequest>,
 ) -> impl IntoResponse {
@@ -363,14 +382,11 @@ async fn submit_task(
         return (StatusCode::BAD_REQUEST, Json(ErrorResponse { error: "invalid task id".into() })).into_response();
     };
 
-    let mut board = state.board.write().await;
+    let mut board = board.lock().await;
     match board.submit_result(uuid, body.result) {
         Ok(()) => {
             let task = board.get(uuid).unwrap();
-            let resp = TaskResponse::from(task);
-            state.cache.invalidate();
-            state.cache.insert_entry(id, resp.clone());
-            Json(resp).into_response()
+            Json(TaskResponse::from(task)).into_response()
         }
         Err(e) => {
             let status = match &e {
@@ -385,7 +401,7 @@ async fn submit_task(
 }
 
 async fn review_task(
-    State(state): State<AppState>,
+    State(board): State<SharedTaskBoard>,
     Path(id): Path<String>,
     Json(body): Json<ReviewTaskRequest>,
 ) -> impl IntoResponse {
@@ -393,14 +409,11 @@ async fn review_task(
         return (StatusCode::BAD_REQUEST, Json(ErrorResponse { error: "invalid task id".into() })).into_response();
     };
 
-    let mut board = state.board.write().await;
+    let mut board = board.lock().await;
     match board.review_task(uuid, &body.reviewer_id, body.approved) {
         Ok(()) => {
             let task = board.get(uuid).unwrap();
-            let resp = TaskResponse::from(task);
-            state.cache.invalidate();
-            state.cache.insert_entry(id, resp.clone());
-            Json(resp).into_response()
+            Json(TaskResponse::from(task)).into_response()
         }
         Err(e) => {
             let status = match &e {
@@ -415,21 +428,18 @@ async fn review_task(
 }
 
 async fn complete_task(
-    State(state): State<AppState>,
+    State(board): State<SharedTaskBoard>,
     Path(id): Path<String>,
 ) -> impl IntoResponse {
     let Ok(uuid) = Uuid::parse_str(&id) else {
         return (StatusCode::BAD_REQUEST, Json(ErrorResponse { error: "invalid task id".into() })).into_response();
     };
 
-    let mut board = state.board.write().await;
+    let mut board = board.lock().await;
     match board.complete_task(uuid, 0) {
         Ok(_) => {
             let task = board.get(uuid).unwrap();
-            let resp = TaskResponse::from(task);
-            state.cache.invalidate();
-            state.cache.insert_entry(id, resp.clone());
-            Json(resp).into_response()
+            Json(TaskResponse::from(task)).into_response()
         }
         Err(e) => {
             let status = match &e {
@@ -443,21 +453,18 @@ async fn complete_task(
 }
 
 async fn expire_task(
-    State(state): State<AppState>,
+    State(board): State<SharedTaskBoard>,
     Path(id): Path<String>,
 ) -> impl IntoResponse {
     let Ok(uuid) = Uuid::parse_str(&id) else {
         return (StatusCode::BAD_REQUEST, Json(ErrorResponse { error: "invalid task id".into() })).into_response();
     };
 
-    let mut board = state.board.write().await;
+    let mut board = board.lock().await;
     match board.expire_task(uuid) {
         Ok(()) => {
             let task = board.get(uuid).unwrap();
-            let resp = TaskResponse::from(task);
-            state.cache.invalidate();
-            state.cache.insert_entry(id, resp.clone());
-            Json(resp).into_response()
+            Json(TaskResponse::from(task)).into_response()
         }
         Err(e) => {
             let status = match &e {
@@ -471,20 +478,16 @@ async fn expire_task(
 }
 
 async fn delete_task(
-    State(state): State<AppState>,
+    State(board): State<SharedTaskBoard>,
     Path(id): Path<String>,
 ) -> impl IntoResponse {
     let Ok(uuid) = Uuid::parse_str(&id) else {
         return (StatusCode::BAD_REQUEST, Json(ErrorResponse { error: "invalid task id".into() })).into_response();
     };
 
-    let mut board = state.board.write().await;
+    let mut board = board.lock().await;
     match board.delete_task(uuid) {
-        Ok(()) => {
-            state.cache.invalidate();
-            state.cache.remove_entry(&id);
-            StatusCode::NO_CONTENT.into_response()
-        }
+        Ok(()) => StatusCode::NO_CONTENT.into_response(),
         Err(e) => {
             let status = match &e {
                 crate::economy::task::TaskError::InvalidTransition { .. } => StatusCode::CONFLICT,
@@ -502,21 +505,20 @@ async fn create_task_with_wal(
     State(state): State<AppState>,
     Json(body): Json<CreateTaskRequest>,
 ) -> impl IntoResponse {
-    create_task(State(state), Json(body)).await
+    create_task(State(state.board), Json(body)).await
 }
 
 async fn list_tasks_with_wal(
     State(state): State<AppState>,
-    query: Query<ListTasksQuery>,
 ) -> impl IntoResponse {
-    list_tasks(State(state), query).await
+    list_tasks(State(state.board)).await
 }
 
 async fn get_task_with_wal(
     State(state): State<AppState>,
     Path(id): Path<String>,
 ) -> impl IntoResponse {
-    get_task(State(state), Path(id)).await
+    get_task(State(state.board), Path(id)).await
 }
 
 async fn claim_task_with_wal(
@@ -524,14 +526,14 @@ async fn claim_task_with_wal(
     Path(id): Path<String>,
     Json(body): Json<ClaimTaskRequest>,
 ) -> impl IntoResponse {
-    claim_task(State(state), Path(id), Json(body)).await
+    claim_task(State(state.board), Path(id), Json(body)).await
 }
 
 async fn start_task_with_wal(
     State(state): State<AppState>,
     Path(id): Path<String>,
 ) -> impl IntoResponse {
-    start_task(State(state), Path(id)).await
+    start_task(State(state.board), Path(id)).await
 }
 
 async fn submit_task_with_wal(
@@ -539,7 +541,7 @@ async fn submit_task_with_wal(
     Path(id): Path<String>,
     Json(body): Json<SubmitTaskRequest>,
 ) -> impl IntoResponse {
-    submit_task(State(state), Path(id), Json(body)).await
+    submit_task(State(state.board), Path(id), Json(body)).await
 }
 
 async fn review_task_with_wal(
@@ -547,28 +549,28 @@ async fn review_task_with_wal(
     Path(id): Path<String>,
     Json(body): Json<ReviewTaskRequest>,
 ) -> impl IntoResponse {
-    review_task(State(state), Path(id), Json(body)).await
+    review_task(State(state.board), Path(id), Json(body)).await
 }
 
 async fn complete_task_with_wal(
     State(state): State<AppState>,
     Path(id): Path<String>,
 ) -> impl IntoResponse {
-    complete_task(State(state), Path(id)).await
+    complete_task(State(state.board), Path(id)).await
 }
 
 async fn expire_task_with_wal(
     State(state): State<AppState>,
     Path(id): Path<String>,
 ) -> impl IntoResponse {
-    expire_task(State(state), Path(id)).await
+    expire_task(State(state.board), Path(id)).await
 }
 
 async fn delete_task_with_wal(
     State(state): State<AppState>,
     Path(id): Path<String>,
 ) -> impl IntoResponse {
-    delete_task(State(state), Path(id)).await
+    delete_task(State(state.board), Path(id)).await
 }
 
 // ── WAL Handlers ──────────────────────────────────────────
@@ -576,14 +578,14 @@ async fn delete_task_with_wal(
 async fn wal_stats(
     State(state): State<AppState>,
 ) -> impl IntoResponse {
-    let wal = state.wal.read().await;
+    let wal = state.wal.lock().await;
     Json(wal.stats())
 }
 
 async fn wal_snapshot(
     State(state): State<AppState>,
 ) -> impl IntoResponse {
-    let mut wal = state.wal.write().await;
+    let mut wal = state.wal.lock().await;
     match wal.take_snapshot(&[], 0) {
         Ok(snapshot_file) => Json(serde_json::json!({ "ok": true, "snapshot_file": snapshot_file })).into_response(),
         Err(e) => (StatusCode::INTERNAL_SERVER_ERROR, Json(ErrorResponse { error: e.to_string() })).into_response(),
@@ -593,7 +595,7 @@ async fn wal_snapshot(
 async fn wal_verify(
     State(state): State<AppState>,
 ) -> impl IntoResponse {
-    let mut wal = state.wal.write().await;
+    let mut wal = state.wal.lock().await;
     let result = wal.recover();
     match result {
         Ok(recovery) => Json(serde_json::json!({
@@ -603,4 +605,174 @@ async fn wal_verify(
         })).into_response(),
         Err(e) => (StatusCode::INTERNAL_SERVER_ERROR, Json(ErrorResponse { error: e.to_string() })).into_response(),
     }
+}
+
+// ── World SSE Handler ─────────────────────────────────────
+
+async fn world_events_sse(
+    State(state): State<AppState>,
+) -> Sse<impl Stream<Item = Result<SseEvent, Infallible>>> {
+    let rx = state.event_bus.subscribe();
+    let stream = BroadcastStream::new(rx).filter_map(|result| {
+        match result {
+            Ok(event) => {
+                let data = event.to_json();
+                Some(Ok(SseEvent::default().data(data)))
+            }
+            Err(_) => None, // Skip lagged/closed errors
+        }
+    });
+
+    Sse::new(stream).keep_alive(
+        axum::response::sse::KeepAlive::new()
+            .interval(std::time::Duration::from_secs(15))
+            .text("ping"),
+    )
+}
+
+// ── World Stats Handler ───────────────────────────────────
+
+async fn world_stats(
+    State(state): State<AppState>,
+) -> impl IntoResponse {
+    let agents = state.agents.lock().await;
+    let board = state.board.lock().await;
+    let tick = *state.tick_rx.borrow();
+
+    let alive_count = agents.iter().filter(|a| a.alive).count();
+    let dead_count = agents.iter().filter(|a| !a.alive).count();
+    let total_tokens: u64 = agents.iter().map(|a| a.tokens).sum();
+    let total_money: u64 = agents.iter().map(|a| a.money).sum();
+    let task_count = board.list().len();
+
+    Json(WorldStatsResponse {
+        agent_count: agents.len(),
+        alive_count,
+        dead_count,
+        total_money,
+        total_tokens,
+        tick,
+        task_count,
+    })
+}
+
+// ── Agent Handlers ────────────────────────────────────────
+
+async fn spawn_agent(
+    State(state): State<AppState>,
+    Json(body): Json<SpawnAgentRequest>,
+) -> impl IntoResponse {
+    let agent = AgentRecord {
+        id: Uuid::new_v4().to_string(),
+        name: body.name.clone(),
+        phase: "adult".to_string(),
+        tokens: body.tokens,
+        money: body.money,
+        alive: true,
+        ticks_survived: 0,
+    };
+
+    state.event_bus.emit(WorldEvent::AgentSpawned {
+        agent_id: agent.id.clone(),
+        name: agent.name.clone(),
+    });
+
+    let mut agents = state.agents.lock().await;
+    agents.push(agent.clone());
+
+    (StatusCode::CREATED, Json(agent)).into_response()
+}
+
+async fn list_agents(
+    State(state): State<AppState>,
+) -> impl IntoResponse {
+    let agents = state.agents.lock().await;
+    Json(&*agents).into_response()
+}
+
+async fn get_agent(
+    State(state): State<AppState>,
+    Path(id): Path<String>,
+) -> impl IntoResponse {
+    let agents = state.agents.lock().await;
+    match agents.iter().find(|a| a.id == id) {
+        Some(agent) => Json(agent.clone()).into_response(),
+        None => (StatusCode::NOT_FOUND, Json(ErrorResponse { error: "agent not found".into() })).into_response(),
+    }
+}
+
+// ── A2A Message Handlers ──────────────────────────────────
+
+async fn send_message(
+    State(state): State<AppState>,
+    Json(body): Json<SendMessageRequest>,
+) -> impl IntoResponse {
+    let tick = *state.tick_rx.borrow();
+
+    let msg = A2AMessage {
+        id: Uuid::new_v4().to_string(),
+        from_agent: body.from_agent.clone(),
+        to_agent: body.to_agent.clone(),
+        message_type: body.message_type.clone(),
+        payload: body.payload.clone(),
+        tick,
+    };
+
+    state.event_bus.emit(WorldEvent::TransactionCompleted {
+        from: msg.from_agent.clone(),
+        to: msg.to_agent.clone(),
+        amount: 0,
+        currency: crate::world::enums::Currency::Token,
+    });
+
+    let mut messages = state.messages.lock().await;
+    messages.push(msg.clone());
+
+    (StatusCode::CREATED, Json(msg)).into_response()
+}
+
+async fn list_messages(
+    State(state): State<AppState>,
+) -> impl IntoResponse {
+    let messages = state.messages.lock().await;
+    Json(&*messages).into_response()
+}
+
+// ── Tick Handlers ─────────────────────────────────────────
+
+#[derive(Debug, Deserialize)]
+pub struct AdvanceTickRequest {
+    #[serde(default = "default_count")]
+    pub count: u64,
+}
+
+fn default_count() -> u64 {
+    1
+}
+
+async fn advance_tick(
+    State(state): State<AppState>,
+    Json(body): Json<AdvanceTickRequest>,
+) -> impl IntoResponse {
+    let count = body.count.max(1);
+    let current = *state.tick_rx.borrow();
+    let new_tick = current + count;
+
+    for t in (current + 1)..=new_tick {
+        state.event_bus.emit(WorldEvent::TickAdvanced { tick: t });
+    }
+
+    let _ = state.tick_tx.send(new_tick);
+
+    Json(serde_json::json!({
+        "tick": new_tick,
+        "advanced": count,
+    }))
+}
+
+async fn get_tick(
+    State(state): State<AppState>,
+) -> impl IntoResponse {
+    let tick = *state.tick_rx.borrow();
+    Json(serde_json::json!({ "tick": tick }))
 }

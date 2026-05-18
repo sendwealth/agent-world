@@ -6,10 +6,9 @@ use uuid::Uuid;
 
 use crate::world::enums::Currency;
 use crate::world::event::WorldEvent;
-use crate::world::state::{EventBus, SharedEventBus};
+use crate::world::state::EventBus;
 
 use super::reward::{RewardConfig, RewardDistributor, RewardDistribution};
-use super::reputation::{ReputationConfig, ReputationSystem};
 
 // ── Task Status ───────────────────────────────────────────
 
@@ -108,7 +107,7 @@ pub struct Task {
 
 // ── Errors ────────────────────────────────────────────────
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub enum TaskError {
     NotFound(String),
     InvalidTransition { from: TaskStatus, to: TaskStatus },
@@ -116,7 +115,6 @@ pub enum TaskError {
     NoAssignee,
     ResultRequired,
     NotPublisher { expected: String, actual: String },
-    InsufficientReputation { agent_id: String, reputation: f64, required: f64, reward: u64 },
     Expired,
 }
 
@@ -137,13 +135,6 @@ impl std::fmt::Display for TaskError {
                     expected, actual
                 )
             }
-            TaskError::InsufficientReputation { agent_id, reputation, required, reward } => {
-                write!(
-                    f,
-                    "agent {} reputation {:.1} below required {:.1} for high-value task (reward: {})",
-                    agent_id, reputation, required, reward
-                )
-            }
             TaskError::Expired => write!(f, "task has expired"),
         }
     }
@@ -159,11 +150,9 @@ pub struct TaskBoard {
     balances: HashMap<String, u64>,
     /// Escrow amounts locked per task.
     escrows: HashMap<Uuid, u64>,
-    event_bus: Option<SharedEventBus>,
+    event_bus: Option<Arc<EventBus>>,
     /// Optional reward distributor for fee deduction, XP, reputation, and ledger.
     reward_distributor: Option<RewardDistributor>,
-    /// Optional reputation system for marketplace-reputation integration.
-    reputation_system: Option<ReputationSystem>,
 }
 
 impl TaskBoard {
@@ -174,23 +163,28 @@ impl TaskBoard {
             escrows: HashMap::new(),
             event_bus: None,
             reward_distributor: None,
-            reputation_system: None,
         }
     }
 
-    pub fn with_shared_event_bus(event_bus: SharedEventBus) -> Self {
+    pub fn with_event_bus(event_bus: EventBus) -> Self {
+        Self {
+            tasks: HashMap::new(),
+            balances: HashMap::new(),
+            escrows: HashMap::new(),
+            event_bus: Some(Arc::new(event_bus)),
+            reward_distributor: None,
+        }
+    }
+
+    /// Create a TaskBoard that shares an existing EventBus via Arc.
+    pub fn with_shared_event_bus(event_bus: Arc<EventBus>) -> Self {
         Self {
             tasks: HashMap::new(),
             balances: HashMap::new(),
             escrows: HashMap::new(),
             event_bus: Some(event_bus),
             reward_distributor: None,
-            reputation_system: None,
         }
-    }
-
-    pub fn with_event_bus(event_bus: EventBus) -> Self {
-        Self::with_shared_event_bus(Arc::new(event_bus))
     }
 
     /// Create a TaskBoard with reward distribution enabled.
@@ -201,31 +195,6 @@ impl TaskBoard {
             escrows: HashMap::new(),
             event_bus: None,
             reward_distributor: Some(RewardDistributor::new(config)),
-            reputation_system: None,
-        }
-    }
-
-    /// Create a TaskBoard with both reward distribution and reputation system.
-    pub fn with_reputation_system(reward_config: RewardConfig, rep_config: ReputationConfig) -> Self {
-        Self {
-            tasks: HashMap::new(),
-            balances: HashMap::new(),
-            escrows: HashMap::new(),
-            event_bus: None,
-            reward_distributor: Some(RewardDistributor::new(reward_config)),
-            reputation_system: Some(ReputationSystem::new(rep_config)),
-        }
-    }
-
-    /// Create a TaskBoard with event bus, reward distribution, and reputation system.
-    pub fn with_all(event_bus: EventBus, reward_config: RewardConfig, rep_config: ReputationConfig) -> Self {
-        Self {
-            tasks: HashMap::new(),
-            balances: HashMap::new(),
-            escrows: HashMap::new(),
-            event_bus: Some(event_bus),
-            reward_distributor: Some(RewardDistributor::new(reward_config)),
-            reputation_system: Some(ReputationSystem::new(rep_config)),
         }
     }
 
@@ -237,16 +206,6 @@ impl TaskBoard {
     /// Get a mutable reference to the reward distributor (if configured).
     pub fn reward_distributor_mut(&mut self) -> Option<&mut RewardDistributor> {
         self.reward_distributor.as_mut()
-    }
-
-    /// Get a reference to the reputation system (if configured).
-    pub fn reputation_system(&self) -> Option<&ReputationSystem> {
-        self.reputation_system.as_ref()
-    }
-
-    /// Get a mutable reference to the reputation system (if configured).
-    pub fn reputation_system_mut(&mut self) -> Option<&mut ReputationSystem> {
-        self.reputation_system.as_mut()
     }
 
     // ── Balance helpers ────────────────────────────────────
@@ -408,11 +367,8 @@ impl TaskBoard {
     // ── Lifecycle ─────────────────────────────────────────
 
     /// Claim a published task.
-    ///
-    /// If a `ReputationSystem` is configured, agents below the reputation threshold
-    /// cannot claim high-value tasks (reward >= configured threshold).
     pub fn claim_task(&mut self, id: Uuid, assignee_id: String) -> Result<(), TaskError> {
-        let task = self.tasks.get(&id)
+        let task = self.tasks.get_mut(&id)
             .ok_or_else(|| TaskError::NotFound(id.to_string()))?;
 
         if !task.status.can_transition_to(&TaskStatus::Claimed) {
@@ -422,22 +378,6 @@ impl TaskBoard {
             });
         }
 
-        // Reputation threshold check for high-value tasks
-        if let Some(ref rep_sys) = self.reputation_system {
-            if let Err(_) = rep_sys.check_claim_eligibility(&assignee_id, task.reward) {
-                let agent_rep = rep_sys.get_reputation(&assignee_id);
-                let required_rep = rep_sys.config().min_reputation_for_high_value;
-                let reward = task.reward;
-                return Err(TaskError::InsufficientReputation {
-                    agent_id: assignee_id,
-                    reputation: agent_rep,
-                    required: required_rep,
-                    reward,
-                });
-            }
-        }
-
-        let task = self.tasks.get_mut(&id).unwrap();
         task.status = TaskStatus::Claimed;
         task.assignee_id = Some(assignee_id.clone());
 
@@ -544,13 +484,10 @@ impl TaskBoard {
     /// - Transactions are recorded in the ledger
     /// - A `RewardDistributed` event is emitted
     ///
-    /// If a `ReputationSystem` is configured:
-    /// - An on-time completion bonus is applied if the task was completed before expiry
-    ///
     /// If no `RewardDistributor`, the full escrow is released directly (legacy behavior).
     pub fn complete_task(&mut self, id: Uuid, tick: u64) -> Result<Option<RewardDistribution>, TaskError> {
         // Validate and extract needed data
-        let (assignee_id, currency, expires_at) = {
+        let (assignee_id, currency) = {
             let task = self.tasks.get(&id)
                 .ok_or_else(|| TaskError::NotFound(id.to_string()))?;
             if !task.status.can_transition_to(&TaskStatus::Completed) {
@@ -559,7 +496,7 @@ impl TaskBoard {
                     to: TaskStatus::Completed,
                 });
             }
-            (task.assignee_id.clone(), task.currency, task.expires_at)
+            (task.assignee_id.clone(), task.currency)
         };
 
         let escrow_amount = self.escrows.remove(&id);
@@ -604,14 +541,6 @@ impl TaskBoard {
             None
         };
 
-        // Apply reputation on-time bonus if ReputationSystem is configured
-        if let (Some(ref assignee), Some(ref mut rep_sys)) = (&assignee_id, self.reputation_system.as_mut()) {
-            let is_on_time = expires_at.map_or(true, |exp| tick <= exp);
-            if is_on_time {
-                rep_sys.on_task_completed_on_time(assignee, tick);
-            }
-        }
-
         let task = self.tasks.get_mut(&id).unwrap();
         task.status = TaskStatus::Completed;
         task.escrow_held = false;
@@ -624,10 +553,6 @@ impl TaskBoard {
     }
 
     /// Expire a published or claimed task. Refunds escrow to publisher.
-    ///
-    /// If a `ReputationSystem` is configured:
-    /// - For claimed tasks: the assignee receives a breach penalty
-    /// - For published tasks: the publisher receives a small expiry penalty
     pub fn expire_task(&mut self, id: Uuid) -> Result<(), TaskError> {
         let task = self.tasks.get(&id)
             .ok_or_else(|| TaskError::NotFound(id.to_string()))?;
@@ -640,26 +565,11 @@ impl TaskBoard {
         }
 
         let publisher_id = task.publisher_id.clone();
-        let assignee_id = task.assignee_id.clone();
-        let was_claimed = task.status == TaskStatus::Claimed;
 
         // Refund escrow to publisher
         if let Some(escrow_amount) = self.escrows.remove(&id) {
             let bal = self.get_balance(&publisher_id);
             self.balances.insert(publisher_id.clone(), bal + escrow_amount);
-        }
-
-        // Apply reputation penalties
-        if let Some(ref mut rep_sys) = self.reputation_system {
-            if was_claimed {
-                // Assignee breached: they claimed but failed to deliver
-                if let Some(ref assignee) = assignee_id {
-                    rep_sys.on_task_breach(assignee, 0);
-                }
-            } else {
-                // Published task expired: small penalty for publisher
-                rep_sys.on_task_expired_published(&publisher_id, 0);
-            }
         }
 
         let task = self.tasks.get_mut(&id).unwrap();

@@ -34,7 +34,6 @@ Usage::
 
 from __future__ import annotations
 
-import json
 import logging
 import math
 import sqlite3
@@ -239,6 +238,12 @@ class LongTermMemory:
             else:
                 self._chroma = chromadb.Client()
 
+            # Delete existing collection to ensure clean dimension match
+            try:
+                self._chroma.delete_collection(name=self._collection_name)
+            except Exception:
+                pass
+
             self._collection = self._chroma.get_or_create_collection(
                 name=self._collection_name,
                 metadata={"hnsw:space": "cosine"},
@@ -320,7 +325,7 @@ class LongTermMemory:
             )
 
         # Store metadata in SQLite
-        tags_json = json.dumps(tags) if tags else None
+        tags_json = ",".join(tags) if tags else None
         self._conn.execute(
             "INSERT INTO memory_metadata "
             "(id, content, memory_type, importance, created_tick, access_count, "
@@ -368,7 +373,6 @@ class LongTermMemory:
         top_k: int = 5,
         tick: int = 0,
         memory_type: str | None = None,
-        _track_access: bool = True,
     ) -> list[LongTermMemoryEntry]:
         """Search memories by semantic similarity.
 
@@ -393,9 +397,7 @@ class LongTermMemory:
         query_embedding = self._provider.embed(query)
 
         if self._use_fallback:
-            return self._search_fallback(
-                query_embedding, top_k, tick, memory_type, _track_access
-            )
+            return self._search_fallback(query_embedding, top_k, tick, memory_type)
 
         # ChromaDB query
         where_filter = None
@@ -449,8 +451,7 @@ class LongTermMemory:
             )
 
         # Update access counts
-        if _track_access:
-            self._increment_access([e.id for e in entries[:top_k]], tick)
+        self._increment_access([e.id for e in entries], tick)
 
         return entries[:top_k]
 
@@ -490,10 +491,7 @@ class LongTermMemory:
         list[LongTermMemoryEntry]
             Top-k matching entries ordered by decay-adjusted relevance.
         """
-        results = self.search(
-            query, top_k=top_k * 2, tick=tick, memory_type=memory_type,
-            _track_access=False,
-        )
+        results = self.search(query, top_k=top_k * 2, tick=tick, memory_type=memory_type)
 
         # Filter by minimum importance
         filtered = [e for e in results if e.importance >= min_importance]
@@ -509,9 +507,7 @@ class LongTermMemory:
             return dist_score + imp_score + access_bonus
 
         filtered.sort(key=rank_score, reverse=True)
-        final = filtered[:top_k]
-        self._increment_access([e.id for e in final], tick)
-        return final
+        return filtered[:top_k]
 
     def delete(self, memory_id: str) -> bool:
         """Delete a memory entry by ID.
@@ -690,7 +686,6 @@ class LongTermMemory:
         top_k: int,
         tick: int,
         memory_type: str | None,
-        _track_access: bool = True,
     ) -> list[LongTermMemoryEntry]:
         """In-memory fallback search using cosine similarity."""
         rows = self._conn.execute(
@@ -747,8 +742,7 @@ class LongTermMemory:
         entries = [e for _, e in scored[:top_k]]
 
         # Update access counts
-        if _track_access:
-            self._increment_access([e.id for e in entries], tick)
+        self._increment_access([e.id for e in entries], tick)
 
         return entries
 
@@ -768,7 +762,7 @@ class LongTermMemory:
         ) = row
         tags: list[str] | None = None
         if tags_str:
-            tags = json.loads(tags_str)
+            tags = [t.strip() for t in tags_str.split(",") if t.strip()]
         return LongTermMemoryEntry(
             id=id_,
             content=content,
@@ -788,12 +782,6 @@ class LongTermMemory:
     def close(self) -> None:
         """Close database connections."""
         self._conn.close()
-
-    def __enter__(self) -> LongTermMemory:
-        return self
-
-    def __exit__(self, *args: Any) -> None:
-        self.close()
 
     def __del__(self) -> None:
         try:

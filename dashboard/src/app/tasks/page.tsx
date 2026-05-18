@@ -1,8 +1,9 @@
 "use client";
 
-import { useEffect, useRef, useState, useMemo, useCallback } from "react";
+import { useEffect, useState, useMemo, useCallback } from "react";
 import type { Task, TaskStatus } from "@/types/world";
-import { fetchJSON, postJSON } from "@/lib/api";
+import { postJSON } from "@/lib/api";
+import { useTaskStream } from "@/hooks/useTaskStream";
 
 // ── Constants ─────────────────────────────────────────────
 
@@ -490,50 +491,11 @@ function TaskRow({
 // ── Main Tasks Page ───────────────────────────────────────
 
 export default function TasksPage() {
-  const [tasks, setTasks] = useState<Task[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
+  const { tasks, loading, error, refresh: loadTasks } = useTaskStream();
   const [statusFilter, setStatusFilter] = useState<StatusFilter>("all");
   const [showCreate, setShowCreate] = useState(false);
   const [selectedTask, setSelectedTask] = useState<Task | null>(null);
   const [search, setSearch] = useState("");
-
-  // Single load function shared by initial fetch, polling, and manual refresh
-  const loadRef = useRef<() => void>(() => {});
-
-  useEffect(() => {
-    let cancelled = false;
-    let loadingDone = false;
-
-    async function load() {
-      try {
-        const data = await fetchJSON<Task[]>("/api/v1/tasks");
-        if (!cancelled) {
-          setTasks(data);
-          setError(null);
-        }
-      } catch {
-        if (!cancelled) {
-          setError("无法连接到世界引擎");
-        }
-      } finally {
-        if (!cancelled && !loadingDone) {
-          loadingDone = true;
-          setLoading(false);
-        }
-      }
-    }
-
-    loadRef.current = load;
-    load();
-    const interval = setInterval(load, 5000);
-    return () => {
-      cancelled = true;
-      clearInterval(interval);
-    };
-  }, []);
-
-  const loadTasks = useCallback(() => loadRef.current(), []);
 
   const filtered = useMemo(() => {
     let result = tasks;

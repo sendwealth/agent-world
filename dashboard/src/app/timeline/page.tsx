@@ -2,10 +2,8 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
-import type { WorldEvent, EventType } from "@/types/world";
-import { fetchJSON, sseEndpoint } from "@/lib/api";
-
-const MAX_EVENTS = 500;
+import type { EventType } from "@/types/world";
+import { useSSEContext } from "@/components/SSEProvider";
 
 // Event type config with icons, colors, and labels
 const eventTypeConfig: Record<
@@ -139,112 +137,16 @@ function formatDate(ts: string): string {
 }
 
 export default function TimelinePage() {
-  const [events, setEvents] = useState<WorldEvent[]>([]);
-  const [connected, setConnected] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  // SSE events via shared context
+  const sse = useSSEContext();
+  const events = sse.events;
+  const connected = sse.connected;
+  const error = sse.error;
+
   const [filter, setFilter] = useState<EventType | "all">("all");
   const [search, setSearch] = useState("");
-  const reconnectTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const abortRef = useRef<AbortController | null>(null);
-  const connectRef = useRef<() => () => void>(() => () => {});
   const scrollRef = useRef<HTMLDivElement>(null);
   const [autoScroll, setAutoScroll] = useState(true);
-
-  // SSE connection with auto-reconnect
-  const connect = useCallback(() => {
-    if (abortRef.current) {
-      abortRef.current.abort();
-    }
-
-    const controller = new AbortController();
-    abortRef.current = controller;
-
-    const url = sseEndpoint("/api/v1/world/events");
-
-    fetch(url, { signal: controller.signal })
-      .then(async (res) => {
-        if (!res.ok) throw new Error(`SSE connect failed: ${res.status}`);
-
-        setConnected(true);
-        setError(null);
-
-        const reader = res.body?.getReader();
-        if (!reader) return;
-
-        const decoder = new TextDecoder();
-        let buffer = "";
-
-        while (true) {
-          const { done, value } = await reader.read();
-          if (done) break;
-
-          buffer += decoder.decode(value, { stream: true });
-          const lines = buffer.split("\n");
-          buffer = lines.pop() ?? "";
-
-          for (const line of lines) {
-            if (line.startsWith("data: ")) {
-              try {
-                const event: WorldEvent = JSON.parse(line.slice(6));
-                setEvents((prev) => [event, ...prev].slice(0, MAX_EVENTS));
-              } catch {
-                // Ignore malformed JSON
-              }
-            }
-          }
-        }
-      })
-      .catch((err) => {
-        if (controller.signal.aborted) return;
-        setConnected(false);
-        setError(err instanceof Error ? err.message : "SSE disconnected");
-        reconnectTimer.current = setTimeout(() => connectRef.current(), 3000);
-      });
-
-    return () => {
-      controller.abort();
-    };
-  }, []);
-
-  useEffect(() => {
-    connectRef.current = connect;
-  }, [connect]);
-
-  useEffect(() => {
-    const cleanup = connect();
-    return () => {
-      cleanup();
-      if (reconnectTimer.current) clearTimeout(reconnectTimer.current);
-    };
-  }, [connect]);
-
-  // Also load initial events from REST API
-  useEffect(() => {
-    let cancelled = false;
-    async function load() {
-      try {
-        const data = await fetchJSON<WorldEvent[]>("/api/v1/world/events");
-        if (!cancelled && Array.isArray(data)) {
-          setEvents((prev) => {
-            const existing = new Set(prev.map((e) => e.id));
-            const merged = [...data.filter((e) => !existing.has(e.id)), ...prev];
-            return merged
-              .sort(
-                (a, b) =>
-                  new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime()
-              )
-              .slice(0, MAX_EVENTS);
-          });
-        }
-      } catch {
-        // Backend may not have REST endpoint for events, SSE will work
-      }
-    }
-    load();
-    return () => {
-      cancelled = true;
-    };
-  }, []);
 
   // Auto-scroll to top on new events
   useEffect(() => {

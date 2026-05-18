@@ -1,9 +1,8 @@
 "use client";
 
-import { useEffect, useState, useMemo } from "react";
+import { useMemo, useState } from "react";
 import Link from "next/link";
-import type { Agent } from "@/types/world";
-import { fetchJSON } from "@/lib/api";
+import { useAgentStream } from "@/hooks/useAgentStream";
 
 type StatusFilter = "all" | "alive" | "dead";
 
@@ -31,39 +30,9 @@ function formatSkills(skills: Record<string, number>): string {
 }
 
 export default function AgentsPage() {
-  const [agents, setAgents] = useState<Agent[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
+  const { agents, loading, error } = useAgentStream();
   const [statusFilter, setStatusFilter] = useState<StatusFilter>("all");
   const [search, setSearch] = useState("");
-
-  useEffect(() => {
-    let cancelled = false;
-
-    async function load() {
-      try {
-        const data = await fetchJSON<Agent[]>("/api/v1/agents");
-        if (!cancelled) {
-          setAgents(data);
-          setError(null);
-        }
-      } catch {
-        if (!cancelled) {
-          setError("无法连接到世界引擎");
-        }
-      } finally {
-        if (!cancelled) setLoading(false);
-      }
-    }
-
-    load();
-
-    const interval = setInterval(load, 5000);
-    return () => {
-      cancelled = true;
-      clearInterval(interval);
-    };
-  }, []);
 
   const filtered = useMemo(() => {
     let result = agents;

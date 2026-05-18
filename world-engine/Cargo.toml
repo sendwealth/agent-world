@@ -7,8 +7,10 @@ license = "MIT"
 
 [dependencies]
 tokio = { version = "1", features = ["full"] }
-axum = "0.7"
+axum = { version = "0.7", features = ["tokio"] }
 tower-http = { version = "0.5", features = ["cors"] }
+tokio-stream = "0.1"
+async-stream = "0.3"
 tonic = "0.12"
 prost = "0.13"
 serde = { version = "1", features = ["derive"] }

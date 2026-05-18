@@ -1,3 +1,4 @@
+use std::convert::Infallible;
 use std::sync::Arc;
 
 use axum::{
@@ -5,15 +6,20 @@ use axum::{
     Router,
     extract::{Path, State},
     http::StatusCode,
-    response::IntoResponse,
+    response::{
+        sse::{Event as SseEvent, KeepAlive, Sse},
+        IntoResponse,
+    },
     routing::{delete, get, post},
 };
 use serde::{Deserialize, Serialize};
 use tokio::sync::Mutex;
+use tower_http::cors::CorsLayer;
 use uuid::Uuid;
 
 use crate::economy::task::{TaskBoard, Task};
 use crate::wal::WAL;
+use crate::world::state::SharedEventBus;
 
 // ── Shared State ──────────────────────────────────────────
 
@@ -25,6 +31,7 @@ pub type SharedWAL = Arc<Mutex<WAL>>;
 pub struct AppState {
     pub board: SharedTaskBoard,
     pub wal: SharedWAL,
+    pub event_bus: Option<SharedEventBus>,
 }
 
 pub fn create_router(board: SharedTaskBoard) -> Router {
@@ -42,8 +49,8 @@ pub fn create_router(board: SharedTaskBoard) -> Router {
         .with_state(board)
 }
 
-pub fn create_router_with_wal(board: SharedTaskBoard, wal: SharedWAL) -> Router {
-    let state = AppState { board, wal };
+pub fn create_router_with_wal(board: SharedTaskBoard, wal: SharedWAL, event_bus: SharedEventBus) -> Router {
+    let state = AppState { board, wal, event_bus: Some(event_bus) };
     Router::new()
         // Task routes
         .route("/tasks", post(create_task_with_wal))
@@ -60,7 +67,10 @@ pub fn create_router_with_wal(board: SharedTaskBoard, wal: SharedWAL) -> Router 
         .route("/wal/stats", get(wal_stats))
         .route("/wal/snapshot", post(wal_snapshot))
         .route("/wal/verify", get(wal_verify))
+        // SSE endpoint
+        .route("/api/v1/world/events", get(world_events_sse))
         .with_state(state)
+        .layer(CorsLayer::permissive())
 }
 
 // ── Request Types ─────────────────────────────────────────
@@ -488,4 +498,41 @@ async fn wal_verify(
         })).into_response(),
         Err(e) => (StatusCode::INTERNAL_SERVER_ERROR, Json(ErrorResponse { error: e.to_string() })).into_response(),
     }
+}
+
+// ── SSE Handler ──────────────────────────────────────────
+
+async fn world_events_sse(
+    State(state): State<AppState>,
+) -> impl IntoResponse {
+    let event_bus = match state.event_bus {
+        Some(ref bus) => bus.clone(),
+        None => {
+            return (StatusCode::SERVICE_UNAVAILABLE, Json(ErrorResponse {
+                error: "event bus not available".into(),
+            })).into_response();
+        }
+    };
+
+    let stream = async_stream::stream! {
+        let mut rx = event_bus.subscribe();
+        loop {
+            match rx.recv().await {
+                Ok(event) => {
+                    let json = event.to_json();
+                    yield Ok::<_, Infallible>(SseEvent::default().data(json));
+                }
+                Err(tokio::sync::broadcast::error::RecvError::Lagged(n)) => {
+                    tracing::warn!("SSE client lagged {} events, skipping", n);
+                    continue;
+                }
+                Err(tokio::sync::broadcast::error::RecvError::Closed) => {
+                    break;
+                }
+            }
+        }
+    };
+
+    let sse = Sse::new(stream).keep_alive(KeepAlive::default());
+    sse.into_response()
 }

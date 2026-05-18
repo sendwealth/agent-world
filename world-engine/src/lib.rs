@@ -1,3 +1,4 @@
+pub mod a2a;
 pub mod api;
 pub mod economy;
 pub mod lifecycle;

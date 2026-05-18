@@ -136,6 +136,7 @@ pub struct BurnResult {
 
 // ── Token Burn Engine ────────────────────────────────────
 
+#[derive(Clone)]
 pub struct TokenBurnEngine {
     config: ConsumptionConfig,
 }

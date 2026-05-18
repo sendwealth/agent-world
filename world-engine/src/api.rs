@@ -3,7 +3,7 @@ use std::sync::Arc;
 use axum::{
     Json,
     Router,
-    extract::{Path, State},
+    extract::{Path, Query, State},
     http::StatusCode,
     response::IntoResponse,
     routing::{delete, get, post},
@@ -12,21 +12,25 @@ use serde::{Deserialize, Serialize};
 use tokio::sync::Mutex;
 use uuid::Uuid;
 
+use crate::economy::marketplace::{
+    Marketplace, KnowledgeListing, KnowledgeCategory,
+    ListingStatus, MarketplaceFilter, MarketplaceSort,
+};
 use crate::economy::task::{TaskBoard, Task};
-use crate::economy::ledger::MoneyLedger;
 use crate::wal::WAL;
-use crate::world::enums::Currency;
 
 // ── Shared State ──────────────────────────────────────────
 
 pub type SharedTaskBoard = Arc<Mutex<TaskBoard>>;
 pub type SharedWAL = Arc<Mutex<WAL>>;
+pub type SharedMarketplace = Arc<Mutex<Marketplace>>;
 
 /// Combined state for the API with WAL support.
 #[derive(Clone)]
 pub struct AppState {
     pub board: SharedTaskBoard,
     pub wal: SharedWAL,
+    pub marketplace: Option<SharedMarketplace>,
 }
 
 pub fn create_router(board: SharedTaskBoard) -> Router {
@@ -45,7 +49,7 @@ pub fn create_router(board: SharedTaskBoard) -> Router {
 }
 
 pub fn create_router_with_wal(board: SharedTaskBoard, wal: SharedWAL) -> Router {
-    let state = AppState { board, wal };
+    let state = AppState { board, wal, marketplace: None };
     Router::new()
         // Task routes
         .route("/tasks", post(create_task_with_wal))
@@ -62,6 +66,36 @@ pub fn create_router_with_wal(board: SharedTaskBoard, wal: SharedWAL) -> Router 
         .route("/wal/stats", get(wal_stats))
         .route("/wal/snapshot", post(wal_snapshot))
         .route("/wal/verify", get(wal_verify))
+        .with_state(state)
+}
+
+pub fn create_router_with_marketplace(board: SharedTaskBoard, wal: SharedWAL, marketplace: SharedMarketplace) -> Router {
+    let state = AppState { board, wal, marketplace: Some(marketplace) };
+    Router::new()
+        // Task routes
+        .route("/tasks", post(create_task_with_wal))
+        .route("/tasks", get(list_tasks_with_wal))
+        .route("/tasks/:id", get(get_task_with_wal))
+        .route("/tasks/:id/claim", post(claim_task_with_wal))
+        .route("/tasks/:id/start", post(start_task_with_wal))
+        .route("/tasks/:id/submit", post(submit_task_with_wal))
+        .route("/tasks/:id/review", post(review_task_with_wal))
+        .route("/tasks/:id/complete", post(complete_task_with_wal))
+        .route("/tasks/:id/expire", post(expire_task_with_wal))
+        .route("/tasks/:id", delete(delete_task_with_wal))
+        // WAL routes
+        .route("/wal/stats", get(wal_stats))
+        .route("/wal/snapshot", post(wal_snapshot))
+        .route("/wal/verify", get(wal_verify))
+        // Marketplace routes
+        .route("/marketplace/listings", post(marketplace_create_listing))
+        .route("/marketplace/listings", get(marketplace_search_listings))
+        .route("/marketplace/listings/:id", get(marketplace_get_listing))
+        .route("/marketplace/listings/:id/purchase", post(marketplace_purchase_listing))
+        .route("/marketplace/listings/:id/rate", post(marketplace_rate_listing))
+        .route("/marketplace/listings/:id/delist", post(marketplace_delist_listing))
+        .route("/marketplace/listings/:id/ratings", get(marketplace_get_ratings))
+        .route("/marketplace/listings/:id/purchases", get(marketplace_get_purchases))
         .with_state(state)
 }
 
@@ -492,217 +526,215 @@ async fn wal_verify(
     }
 }
 
-// ── Ledger State & Router ────────────────────────────────
-
-pub type SharedLedger = Arc<Mutex<MoneyLedger>>;
-
-/// Create a router for the double-entry ledger API.
-pub fn create_ledger_router(ledger: SharedLedger) -> Router {
-    Router::new()
-        .route("/ledger/balance/:account_id", get(ledger_balance))
-        .route("/ledger/balance/:account_id/:currency", get(ledger_balance_currency))
-        .route("/ledger/transfer", post(ledger_transfer))
-        .route("/ledger/exchange/money-to-tokens", post(ledger_exchange_money_to_tokens))
-        .route("/ledger/exchange/tokens-to-money", post(ledger_exchange_tokens_to_money))
-        .route("/ledger/interest", post(ledger_pay_interest))
-        .route("/ledger/entries", get(ledger_entries))
-        .route("/ledger/audit", get(ledger_audit))
-        .route("/ledger/exchange-rate", get(ledger_exchange_rate))
-        .route("/ledger/verify", get(ledger_verify))
-        .route("/ledger/supply", get(ledger_supply))
-        .route("/ledger/accounts", post(ledger_create_account))
-        .with_state(ledger)
-}
-
-// ── Ledger Request Types ─────────────────────────────────
+// ── Marketplace Request Types ─────────────────────────────
 
 #[derive(Debug, Deserialize)]
-pub struct LedgerTransferRequest {
-    pub from: String,
-    pub to: String,
-    pub amount: u64,
-    pub currency: String,
-    pub tx_type: String,
+pub struct CreateListingRequest {
+    pub title: String,
+    #[serde(default)]
     pub description: String,
-    pub tick: u64,
-    pub reference_id: Option<String>,
+    pub category: KnowledgeCategory,
+    pub content_hash: String,
+    pub price: u64,
+    #[serde(default = "default_currency")]
+    pub currency: crate::world::enums::Currency,
+    pub publisher_id: String,
+    #[serde(default)]
+    pub tags: Vec<String>,
+}
+
+fn default_currency() -> crate::world::enums::Currency {
+    crate::world::enums::Currency::Token
 }
 
 #[derive(Debug, Deserialize)]
-pub struct LedgerExchangeRequest {
-    pub agent_id: String,
-    pub amount: u64,
-    pub tick: u64,
+pub struct PurchaseListingRequest {
+    pub buyer_id: String,
 }
 
 #[derive(Debug, Deserialize)]
-pub struct LedgerInterestRequest {
-    pub agent_id: String,
-    pub rate: f64,
-    pub tick: u64,
+pub struct RateListingRequest {
+    pub rater_id: String,
+    pub score: u8,
+    pub review: Option<String>,
 }
 
 #[derive(Debug, Deserialize)]
-pub struct LedgerCreateAccountRequest {
+#[serde(default)]
+pub struct SearchListingsQuery {
+    pub category: Option<KnowledgeCategory>,
+    pub publisher_id: Option<String>,
+    pub min_price: Option<u64>,
+    pub max_price: Option<u64>,
+    pub tag: Option<String>,
+    pub query: Option<String>,
+    pub min_purchases: Option<u64>,
+    pub min_rating: Option<f64>,
+    pub sort: Option<MarketplaceSort>,
+}
+
+impl Default for SearchListingsQuery {
+    fn default() -> Self {
+        Self {
+            category: None,
+            publisher_id: None,
+            min_price: None,
+            max_price: None,
+            tag: None,
+            query: None,
+            min_purchases: None,
+            min_rating: None,
+            sort: None,
+        }
+    }
+}
+
+impl From<SearchListingsQuery> for MarketplaceFilter {
+    fn from(q: SearchListingsQuery) -> Self {
+        MarketplaceFilter {
+            category: q.category,
+            publisher_id: q.publisher_id,
+            min_price: q.min_price,
+            max_price: q.max_price,
+            tag: q.tag,
+            query: q.query,
+            min_purchases: q.min_purchases,
+            min_rating: q.min_rating,
+            sort: q.sort,
+        }
+    }
+}
+
+#[derive(Debug, Deserialize)]
+pub struct DelistListingRequest {
+    pub publisher_id: String,
+}
+
+// ── Marketplace Response Types ────────────────────────────
+
+#[derive(Debug, Serialize)]
+pub struct ListingResponse {
     pub id: String,
-    pub name: String,
-}
-
-// ── Ledger Response Types ────────────────────────────────
-
-#[derive(Debug, Serialize)]
-pub struct BalanceResponse {
-    pub account_id: String,
-    pub balance: u64,
-    pub currency: String,
-}
-
-#[derive(Debug, Serialize)]
-pub struct BalanceSheetResponse {
-    pub account_id: String,
-    pub balances: HashMapResponse,
-}
-
-#[derive(Debug, Serialize)]
-pub struct HashMapResponse(Vec<(String, u64)>);
-
-#[derive(Debug, Serialize)]
-pub struct TransferResponse {
-    pub debit_id: String,
-    pub credit_id: String,
-}
-
-#[derive(Debug, Serialize)]
-pub struct ExchangeResponse {
-    pub pair_id: String,
-    pub from_amount: u64,
-    pub from_currency: String,
-    pub to_amount: u64,
-    pub to_currency: String,
-}
-
-#[derive(Debug, Serialize)]
-pub struct InterestResponse {
-    pub pair_id: String,
-    pub principal: u64,
-    pub interest: u64,
-    pub new_balance: u64,
-}
-
-#[derive(Debug, Serialize)]
-pub struct ExchangeRateResponse {
-    pub tokens_per_money: u64,
-}
-
-#[derive(Debug, Serialize)]
-pub struct VerifyResponse {
-    pub balanced: bool,
-}
-
-#[derive(Debug, Serialize)]
-pub struct SupplyResponse {
-    pub money_supply: u64,
-    pub token_supply: u64,
-}
-
-#[derive(Debug, Serialize)]
-pub struct EntryResponse {
-    pub id: String,
-    pub pair_id: String,
-    pub account_id: String,
-    pub side: String,
-    pub amount: u64,
-    pub currency: String,
-    pub tx_type: String,
+    pub title: String,
     pub description: String,
-    pub tick: u64,
-    pub reference_id: Option<String>,
+    pub category: String,
+    pub content_hash: String,
+    pub price: u64,
+    pub currency: String,
+    pub publisher_id: String,
+    pub status: String,
+    pub purchase_count: u64,
+    pub average_rating: f64,
+    pub rating_count: u64,
+    pub tags: Vec<String>,
+    pub created_tick: u64,
+}
+
+impl From<&KnowledgeListing> for ListingResponse {
+    fn from(l: &KnowledgeListing) -> Self {
+        ListingResponse {
+            id: l.id.to_string(),
+            title: l.title.clone(),
+            description: l.description.clone(),
+            category: format!("{:?}", l.category).to_lowercase(),
+            content_hash: l.content_hash.clone(),
+            price: l.price,
+            currency: format!("{:?}", l.currency).to_lowercase(),
+            publisher_id: l.publisher_id.clone(),
+            status: format!("{:?}", l.status).to_lowercase(),
+            purchase_count: l.purchase_count,
+            average_rating: l.average_rating(),
+            rating_count: l.rating_count,
+            tags: l.tags.clone(),
+            created_tick: l.created_tick,
+        }
+    }
 }
 
 #[derive(Debug, Serialize)]
-pub struct AuditResponse {
+pub struct PurchaseResponse {
     pub id: String,
+    pub listing_id: String,
+    pub buyer_id: String,
+    pub seller_id: String,
+    pub price: u64,
+    pub currency: String,
     pub tick: u64,
-    pub operation: String,
-    pub actor: String,
-    pub details: serde_json::Value,
-    pub entry_ids: Vec<String>,
 }
 
-// ── Ledger Handlers ──────────────────────────────────────
-
-async fn ledger_balance(
-    State(ledger): State<SharedLedger>,
-    Path(account_id): Path<String>,
-) -> impl IntoResponse {
-    let ledger = ledger.lock().await;
-    if !ledger.account_exists(&account_id) {
-        return (StatusCode::NOT_FOUND, Json(ErrorResponse { error: "account not found".into() })).into_response();
+impl From<&crate::economy::marketplace::PurchaseRecord> for PurchaseResponse {
+    fn from(p: &crate::economy::marketplace::PurchaseRecord) -> Self {
+        PurchaseResponse {
+            id: p.id.to_string(),
+            listing_id: p.listing_id.to_string(),
+            buyer_id: p.buyer_id.clone(),
+            seller_id: p.seller_id.clone(),
+            price: p.price,
+            currency: format!("{:?}", p.currency).to_lowercase(),
+            tick: p.tick,
+        }
     }
-    let sheet = ledger.get_balance_sheet(&account_id);
-    let balances: Vec<(String, u64)> = sheet.balances.into_iter()
-        .map(|(k, v)| (format!("{:?}", k).to_lowercase(), v))
-        .collect();
-    Json(BalanceSheetResponse {
-        account_id: sheet.account_id,
-        balances: HashMapResponse(balances),
-    }).into_response()
 }
 
-async fn ledger_balance_currency(
-    State(ledger): State<SharedLedger>,
-    Path((account_id, currency)): Path<(String, String)>,
-) -> impl IntoResponse {
-    let ledger = ledger.lock().await;
-    let curr = match currency.as_str() {
-        "money" => Currency::Money,
-        "token" => Currency::Token,
-        _ => return (StatusCode::BAD_REQUEST, Json(ErrorResponse { error: "currency must be 'money' or 'token'".into() })).into_response(),
-    };
-    if !ledger.account_exists(&account_id) {
-        return (StatusCode::NOT_FOUND, Json(ErrorResponse { error: "account not found".into() })).into_response();
+#[derive(Debug, Serialize)]
+pub struct RatingResponse {
+    pub id: String,
+    pub listing_id: String,
+    pub rater_id: String,
+    pub score: u8,
+    pub review: Option<String>,
+    pub tick: u64,
+}
+
+impl From<&crate::economy::marketplace::Rating> for RatingResponse {
+    fn from(r: &crate::economy::marketplace::Rating) -> Self {
+        RatingResponse {
+            id: r.id.to_string(),
+            listing_id: r.listing_id.to_string(),
+            rater_id: r.rater_id.clone(),
+            score: r.score,
+            review: r.review.clone(),
+            tick: r.tick,
+        }
     }
-    let balance = ledger.get_balance(&account_id, curr);
-    Json(BalanceResponse {
-        account_id,
-        balance,
-        currency,
-    }).into_response()
 }
 
-async fn ledger_transfer(
-    State(ledger): State<SharedLedger>,
-    Json(body): Json<LedgerTransferRequest>,
+// ── Marketplace Handlers ──────────────────────────────────
+
+async fn marketplace_create_listing(
+    State(state): State<AppState>,
+    Json(body): Json<CreateListingRequest>,
 ) -> impl IntoResponse {
-    let currency = match body.currency.as_str() {
-        "money" => Currency::Money,
-        "token" => Currency::Token,
-        _ => return (StatusCode::BAD_REQUEST, Json(ErrorResponse { error: "currency must be 'money' or 'token'".into() })).into_response(),
-    };
-    let tx_type = match body.tx_type.as_str() {
-        "task_reward" => crate::economy::reward::TransactionType::TaskReward,
-        "platform_fee" => crate::economy::reward::TransactionType::PlatformFee,
-        "escrow_refund" => crate::economy::reward::TransactionType::EscrowRefund,
-        "exchange" => crate::economy::reward::TransactionType::Exchange,
-        "interest" => crate::economy::reward::TransactionType::Interest,
-        "knowledge" => crate::economy::reward::TransactionType::Knowledge,
-        "teach" => crate::economy::reward::TransactionType::Teach,
-        _ => return (StatusCode::BAD_REQUEST, Json(ErrorResponse { error: "invalid tx_type".into() })).into_response(),
+    let Some(ref mp) = state.marketplace else {
+        return (StatusCode::NOT_IMPLEMENTED, Json(ErrorResponse { error: "marketplace not configured".into() })).into_response();
     };
 
-    let mut ledger = ledger.lock().await;
-    match ledger.transfer(
-        &body.from, &body.to, body.amount, currency,
-        tx_type, body.description, body.tick, body.reference_id,
+    if body.title.is_empty() {
+        return (StatusCode::BAD_REQUEST, Json(ErrorResponse { error: "title is required".into() })).into_response();
+    }
+    if body.publisher_id.is_empty() {
+        return (StatusCode::BAD_REQUEST, Json(ErrorResponse { error: "publisher_id is required".into() })).into_response();
+    }
+
+    let mut mp = mp.lock().await;
+    match mp.publish_listing(
+        body.title,
+        body.description,
+        body.category,
+        body.content_hash,
+        body.price,
+        body.currency,
+        body.publisher_id,
+        body.tags,
+        0,
     ) {
-        Ok((debit_id, credit_id)) => Json(TransferResponse {
-            debit_id: debit_id.to_string(),
-            credit_id: credit_id.to_string(),
-        }).into_response(),
+        Ok(id) => {
+            let listing = mp.get(id).unwrap();
+            (StatusCode::CREATED, Json(ListingResponse::from(listing))).into_response()
+        }
         Err(e) => {
             let status = match &e {
-                crate::economy::ledger::LedgerError::InsufficientBalance { .. } => StatusCode::CONFLICT,
-                crate::economy::ledger::LedgerError::AccountNotFound(_) => StatusCode::NOT_FOUND,
+                crate::economy::marketplace::MarketplaceError::InvalidPrice => StatusCode::BAD_REQUEST,
                 _ => StatusCode::BAD_REQUEST,
             };
             (status, Json(ErrorResponse { error: e.to_string() })).into_response()
@@ -710,23 +742,65 @@ async fn ledger_transfer(
     }
 }
 
-async fn ledger_exchange_money_to_tokens(
-    State(ledger): State<SharedLedger>,
-    Json(body): Json<LedgerExchangeRequest>,
+async fn marketplace_search_listings(
+    State(state): State<AppState>,
+    Query(params): Query<SearchListingsQuery>,
 ) -> impl IntoResponse {
-    let mut ledger = ledger.lock().await;
-    match ledger.exchange_money_to_tokens(&body.agent_id, body.amount, body.tick) {
-        Ok(result) => Json(ExchangeResponse {
-            pair_id: result.pair_id.to_string(),
-            from_amount: result.from_amount,
-            from_currency: format!("{:?}", result.from_currency).to_lowercase(),
-            to_amount: result.to_amount,
-            to_currency: format!("{:?}", result.to_currency).to_lowercase(),
-        }).into_response(),
+    let Some(ref mp) = state.marketplace else {
+        return (StatusCode::NOT_IMPLEMENTED, Json(ErrorResponse { error: "marketplace not configured".into() })).into_response();
+    };
+
+    let mp = mp.lock().await;
+    let filter: MarketplaceFilter = params.into();
+    let listings: Vec<ListingResponse> = mp.search(&filter)
+        .into_iter()
+        .map(ListingResponse::from)
+        .collect();
+    Json(listings).into_response()
+}
+
+async fn marketplace_get_listing(
+    State(state): State<AppState>,
+    Path(id): Path<String>,
+) -> impl IntoResponse {
+    let Some(ref mp) = state.marketplace else {
+        return (StatusCode::NOT_IMPLEMENTED, Json(ErrorResponse { error: "marketplace not configured".into() })).into_response();
+    };
+
+    let Ok(uuid) = Uuid::parse_str(&id) else {
+        return (StatusCode::BAD_REQUEST, Json(ErrorResponse { error: "invalid listing id".into() })).into_response();
+    };
+
+    let mp = mp.lock().await;
+    match mp.get(uuid) {
+        Some(listing) => Json(ListingResponse::from(listing)).into_response(),
+        None => (StatusCode::NOT_FOUND, Json(ErrorResponse { error: "listing not found".into() })).into_response(),
+    }
+}
+
+async fn marketplace_purchase_listing(
+    State(state): State<AppState>,
+    Path(id): Path<String>,
+    Json(body): Json<PurchaseListingRequest>,
+) -> impl IntoResponse {
+    let Some(ref mp) = state.marketplace else {
+        return (StatusCode::NOT_IMPLEMENTED, Json(ErrorResponse { error: "marketplace not configured".into() })).into_response();
+    };
+
+    let Ok(uuid) = Uuid::parse_str(&id) else {
+        return (StatusCode::BAD_REQUEST, Json(ErrorResponse { error: "invalid listing id".into() })).into_response();
+    };
+
+    let mut mp = mp.lock().await;
+    match mp.purchase_listing(uuid, &body.buyer_id, 0) {
+        Ok(record) => (StatusCode::OK, Json(PurchaseResponse::from(&record))).into_response(),
         Err(e) => {
             let status = match &e {
-                crate::economy::ledger::LedgerError::InsufficientBalance { .. } => StatusCode::CONFLICT,
-                crate::economy::ledger::LedgerError::AccountNotFound(_) => StatusCode::NOT_FOUND,
+                crate::economy::marketplace::MarketplaceError::NotFound(_) => StatusCode::NOT_FOUND,
+                crate::economy::marketplace::MarketplaceError::InsufficientBalance { .. } => StatusCode::PAYMENT_REQUIRED,
+                crate::economy::marketplace::MarketplaceError::SelfPurchase => StatusCode::FORBIDDEN,
+                crate::economy::marketplace::MarketplaceError::ListingInactive => StatusCode::CONFLICT,
+                crate::economy::marketplace::MarketplaceError::ListingDelisted => StatusCode::CONFLICT,
                 _ => StatusCode::BAD_REQUEST,
             };
             (status, Json(ErrorResponse { error: e.to_string() })).into_response()
@@ -734,23 +808,32 @@ async fn ledger_exchange_money_to_tokens(
     }
 }
 
-async fn ledger_exchange_tokens_to_money(
-    State(ledger): State<SharedLedger>,
-    Json(body): Json<LedgerExchangeRequest>,
+async fn marketplace_rate_listing(
+    State(state): State<AppState>,
+    Path(id): Path<String>,
+    Json(body): Json<RateListingRequest>,
 ) -> impl IntoResponse {
-    let mut ledger = ledger.lock().await;
-    match ledger.exchange_tokens_to_money(&body.agent_id, body.amount, body.tick) {
-        Ok(result) => Json(ExchangeResponse {
-            pair_id: result.pair_id.to_string(),
-            from_amount: result.from_amount,
-            from_currency: format!("{:?}", result.from_currency).to_lowercase(),
-            to_amount: result.to_amount,
-            to_currency: format!("{:?}", result.to_currency).to_lowercase(),
-        }).into_response(),
+    let Some(ref mp) = state.marketplace else {
+        return (StatusCode::NOT_IMPLEMENTED, Json(ErrorResponse { error: "marketplace not configured".into() })).into_response();
+    };
+
+    let Ok(uuid) = Uuid::parse_str(&id) else {
+        return (StatusCode::BAD_REQUEST, Json(ErrorResponse { error: "invalid listing id".into() })).into_response();
+    };
+
+    let mut mp = mp.lock().await;
+    match mp.rate_listing(uuid, &body.rater_id, body.score, body.review, 0) {
+        Ok(rating_id) => {
+            let ratings = mp.listing_ratings(uuid);
+            let rating = ratings.into_iter().find(|r| r.id == rating_id).unwrap();
+            (StatusCode::CREATED, Json(RatingResponse::from(rating))).into_response()
+        }
         Err(e) => {
             let status = match &e {
-                crate::economy::ledger::LedgerError::InsufficientBalance { .. } => StatusCode::CONFLICT,
-                crate::economy::ledger::LedgerError::AccountNotFound(_) => StatusCode::NOT_FOUND,
+                crate::economy::marketplace::MarketplaceError::NotFound(_) => StatusCode::NOT_FOUND,
+                crate::economy::marketplace::MarketplaceError::InvalidRating => StatusCode::BAD_REQUEST,
+                crate::economy::marketplace::MarketplaceError::AlreadyRated => StatusCode::CONFLICT,
+                crate::economy::marketplace::MarketplaceError::NotPurchased => StatusCode::FORBIDDEN,
                 _ => StatusCode::BAD_REQUEST,
             };
             (status, Json(ErrorResponse { error: e.to_string() })).into_response()
@@ -758,22 +841,26 @@ async fn ledger_exchange_tokens_to_money(
     }
 }
 
-async fn ledger_pay_interest(
-    State(ledger): State<SharedLedger>,
-    Json(body): Json<LedgerInterestRequest>,
+async fn marketplace_delist_listing(
+    State(state): State<AppState>,
+    Path(id): Path<String>,
+    Json(body): Json<DelistListingRequest>,
 ) -> impl IntoResponse {
-    let mut ledger = ledger.lock().await;
-    match ledger.pay_interest(&body.agent_id, body.rate, body.tick) {
-        Ok(Some(result)) => Json(InterestResponse {
-            pair_id: result.pair_id.to_string(),
-            principal: result.principal,
-            interest: result.interest,
-            new_balance: result.new_balance,
-        }).into_response(),
-        Ok(None) => Json(serde_json::json!({ "result": "no_interest", "reason": "zero balance or truncated to zero" })).into_response(),
+    let Some(ref mp) = state.marketplace else {
+        return (StatusCode::NOT_IMPLEMENTED, Json(ErrorResponse { error: "marketplace not configured".into() })).into_response();
+    };
+
+    let Ok(uuid) = Uuid::parse_str(&id) else {
+        return (StatusCode::BAD_REQUEST, Json(ErrorResponse { error: "invalid listing id".into() })).into_response();
+    };
+
+    let mut mp = mp.lock().await;
+    match mp.delist_listing(uuid, &body.publisher_id) {
+        Ok(()) => StatusCode::NO_CONTENT.into_response(),
         Err(e) => {
             let status = match &e {
-                crate::economy::ledger::LedgerError::AccountNotFound(_) => StatusCode::NOT_FOUND,
+                crate::economy::marketplace::MarketplaceError::NotFound(_) => StatusCode::NOT_FOUND,
+                crate::economy::marketplace::MarketplaceError::Unauthorized(_) => StatusCode::FORBIDDEN,
                 _ => StatusCode::BAD_REQUEST,
             };
             (status, Json(ErrorResponse { error: e.to_string() })).into_response()
@@ -781,76 +868,42 @@ async fn ledger_pay_interest(
     }
 }
 
-async fn ledger_entries(
-    State(ledger): State<SharedLedger>,
+async fn marketplace_get_ratings(
+    State(state): State<AppState>,
+    Path(id): Path<String>,
 ) -> impl IntoResponse {
-    let ledger = ledger.lock().await;
-    let entries: Vec<EntryResponse> = ledger.list_entries().iter().map(|e| EntryResponse {
-        id: e.id.to_string(),
-        pair_id: e.pair_id.to_string(),
-        account_id: e.account_id.clone(),
-        side: format!("{:?}", e.side).to_lowercase(),
-        amount: e.amount,
-        currency: format!("{:?}", e.currency).to_lowercase(),
-        tx_type: format!("{:?}", e.tx_type).to_lowercase(),
-        description: e.description.clone(),
-        tick: e.tick,
-        reference_id: e.reference_id.clone(),
-    }).collect();
-    Json(entries).into_response()
+    let Some(ref mp) = state.marketplace else {
+        return (StatusCode::NOT_IMPLEMENTED, Json(ErrorResponse { error: "marketplace not configured".into() })).into_response();
+    };
+
+    let Ok(uuid) = Uuid::parse_str(&id) else {
+        return (StatusCode::BAD_REQUEST, Json(ErrorResponse { error: "invalid listing id".into() })).into_response();
+    };
+
+    let mp = mp.lock().await;
+    let ratings: Vec<RatingResponse> = mp.listing_ratings(uuid)
+        .into_iter()
+        .map(RatingResponse::from)
+        .collect();
+    Json(ratings).into_response()
 }
 
-async fn ledger_audit(
-    State(ledger): State<SharedLedger>,
+async fn marketplace_get_purchases(
+    State(state): State<AppState>,
+    Path(id): Path<String>,
 ) -> impl IntoResponse {
-    let ledger = ledger.lock().await;
-    let records: Vec<AuditResponse> = ledger.audit_log().iter().map(|a| AuditResponse {
-        id: a.id.to_string(),
-        tick: a.tick,
-        operation: a.operation.clone(),
-        actor: a.actor.clone(),
-        details: a.details.clone(),
-        entry_ids: a.entry_ids.iter().map(|id| id.to_string()).collect(),
-    }).collect();
-    Json(records).into_response()
-}
+    let Some(ref mp) = state.marketplace else {
+        return (StatusCode::NOT_IMPLEMENTED, Json(ErrorResponse { error: "marketplace not configured".into() })).into_response();
+    };
 
-async fn ledger_exchange_rate(
-    State(ledger): State<SharedLedger>,
-) -> impl IntoResponse {
-    let ledger = ledger.lock().await;
-    Json(ExchangeRateResponse {
-        tokens_per_money: ledger.exchange_rate().tokens_per_money,
-    })
-}
+    let Ok(uuid) = Uuid::parse_str(&id) else {
+        return (StatusCode::BAD_REQUEST, Json(ErrorResponse { error: "invalid listing id".into() })).into_response();
+    };
 
-async fn ledger_verify(
-    State(ledger): State<SharedLedger>,
-) -> impl IntoResponse {
-    let ledger = ledger.lock().await;
-    Json(VerifyResponse {
-        balanced: ledger.verify_all(),
-    })
-}
-
-async fn ledger_supply(
-    State(ledger): State<SharedLedger>,
-) -> impl IntoResponse {
-    let ledger = ledger.lock().await;
-    Json(SupplyResponse {
-        money_supply: ledger.total_money_supply(),
-        token_supply: ledger.total_token_supply(),
-    })
-}
-
-async fn ledger_create_account(
-    State(ledger): State<SharedLedger>,
-    Json(body): Json<LedgerCreateAccountRequest>,
-) -> impl IntoResponse {
-    let mut ledger = ledger.lock().await;
-    if ledger.account_exists(&body.id) {
-        return (StatusCode::CONFLICT, Json(ErrorResponse { error: "account already exists".into() })).into_response();
-    }
-    ledger.create_account(crate::economy::ledger::Account::new_agent(&body.id, &body.name));
-    StatusCode::CREATED.into_response()
+    let mp = mp.lock().await;
+    let purchases: Vec<PurchaseResponse> = mp.listing_purchases(uuid)
+        .into_iter()
+        .map(PurchaseResponse::from)
+        .collect();
+    Json(purchases).into_response()
 }

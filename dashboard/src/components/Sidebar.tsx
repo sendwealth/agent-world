@@ -7,6 +7,7 @@ const navItems = [
   { href: "/", label: "世界概览", icon: "🌍" },
   { href: "/agents", label: "Agent 列表", icon: "🤖" },
   { href: "/tasks", label: "任务板", icon: "📋" },
+  { href: "/marketplace", label: "知识市场", icon: "🏪" },
   { href: "/timeline", label: "事件时间线", icon: "📜" },
 ];
 

@@ -7,9 +7,6 @@ use super::enums::{AgentPhase, Currency, DeathReason};
 pub enum EventType {
     TickAdvanced,
     AgentSpawned,
-    AgentRegistered,
-    AgentDeregistered,
-    AgentHeartbeat,
     AgentDying,
     AgentDied,
     AgentRescued,
@@ -31,9 +28,10 @@ pub enum EventType {
     TaskCompleted,
     TaskExpired,
     RewardDistributed,
-    TokenExchanged,
-    InterestPaid,
-    AuditRecordCreated,
+    KnowledgeListed,
+    KnowledgePurchased,
+    KnowledgeRated,
+    KnowledgeDelisted,
 }
 
 /// Events emitted by the world engine.
@@ -43,9 +41,6 @@ pub enum EventType {
 pub enum WorldEvent {
     TickAdvanced { tick: u64 },
     AgentSpawned { agent_id: String, name: String },
-    AgentRegistered { agent_id: String, name: String },
-    AgentDeregistered { agent_id: String, name: String },
-    AgentHeartbeat { agent_id: String, timestamp: u64 },
     AgentDying { agent_id: String, reason: DeathReason, grace_ticks: u64 },
     AgentDied { agent_id: String, reason: DeathReason },
     AgentRescued { agent_id: String },
@@ -75,23 +70,27 @@ pub enum WorldEvent {
         xp_awarded: u64,
         reputation_change: f64,
     },
-    TokenExchanged {
-        agent_id: String,
-        from_currency: Currency,
-        from_amount: u64,
-        to_currency: Currency,
-        to_amount: u64,
+    KnowledgeListed {
+        listing_id: String,
+        publisher: String,
+        price: u64,
+        currency: Currency,
     },
-    InterestPaid {
-        agent_id: String,
-        principal: u64,
-        interest: u64,
-        new_balance: u64,
+    KnowledgePurchased {
+        listing_id: String,
+        buyer: String,
+        seller: String,
+        price: u64,
+        currency: Currency,
     },
-    AuditRecordCreated {
-        operation: String,
-        actor: String,
-        tick: u64,
+    KnowledgeRated {
+        listing_id: String,
+        rater: String,
+        score: u8,
+        average_rating: f64,
+    },
+    KnowledgeDelisted {
+        listing_id: String,
     },
 }
 
@@ -100,9 +99,6 @@ impl WorldEvent {
         match self {
             WorldEvent::TickAdvanced { .. } => EventType::TickAdvanced,
             WorldEvent::AgentSpawned { .. } => EventType::AgentSpawned,
-            WorldEvent::AgentRegistered { .. } => EventType::AgentRegistered,
-            WorldEvent::AgentDeregistered { .. } => EventType::AgentDeregistered,
-            WorldEvent::AgentHeartbeat { .. } => EventType::AgentHeartbeat,
             WorldEvent::AgentDying { .. } => EventType::AgentDying,
             WorldEvent::AgentDied { .. } => EventType::AgentDied,
             WorldEvent::AgentRescued { .. } => EventType::AgentRescued,
@@ -124,9 +120,10 @@ impl WorldEvent {
             WorldEvent::TaskCompleted { .. } => EventType::TaskCompleted,
             WorldEvent::TaskExpired { .. } => EventType::TaskExpired,
             WorldEvent::RewardDistributed { .. } => EventType::RewardDistributed,
-            WorldEvent::TokenExchanged { .. } => EventType::TokenExchanged,
-            WorldEvent::InterestPaid { .. } => EventType::InterestPaid,
-            WorldEvent::AuditRecordCreated { .. } => EventType::AuditRecordCreated,
+            WorldEvent::KnowledgeListed { .. } => EventType::KnowledgeListed,
+            WorldEvent::KnowledgePurchased { .. } => EventType::KnowledgePurchased,
+            WorldEvent::KnowledgeRated { .. } => EventType::KnowledgeRated,
+            WorldEvent::KnowledgeDelisted { .. } => EventType::KnowledgeDelisted,
         }
     }
 
@@ -134,9 +131,6 @@ impl WorldEvent {
         match self {
             WorldEvent::TickAdvanced { .. } => None,
             WorldEvent::AgentSpawned { agent_id, .. } => Some(agent_id),
-            WorldEvent::AgentRegistered { agent_id, .. } => Some(agent_id),
-            WorldEvent::AgentDeregistered { agent_id, .. } => Some(agent_id),
-            WorldEvent::AgentHeartbeat { agent_id, .. } => Some(agent_id),
             WorldEvent::AgentDying { agent_id, .. } => Some(agent_id),
             WorldEvent::AgentDied { agent_id, .. } => Some(agent_id),
             WorldEvent::AgentRescued { agent_id } => Some(agent_id),
@@ -158,9 +152,10 @@ impl WorldEvent {
             WorldEvent::TaskCompleted { .. } => None,
             WorldEvent::TaskExpired { .. } => None,
             WorldEvent::RewardDistributed { assignee_id, .. } => Some(assignee_id),
-            WorldEvent::TokenExchanged { agent_id, .. } => Some(agent_id),
-            WorldEvent::InterestPaid { agent_id, .. } => Some(agent_id),
-            WorldEvent::AuditRecordCreated { actor, .. } => Some(actor),
+            WorldEvent::KnowledgeListed { publisher, .. } => Some(publisher),
+            WorldEvent::KnowledgePurchased { buyer, .. } => Some(buyer),
+            WorldEvent::KnowledgeRated { rater, .. } => Some(rater),
+            WorldEvent::KnowledgeDelisted { .. } => None,
         }
     }
 

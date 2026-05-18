@@ -7,6 +7,9 @@ use super::enums::{AgentPhase, Currency, DeathReason};
 pub enum EventType {
     TickAdvanced,
     AgentSpawned,
+    AgentRegistered,
+    AgentDeregistered,
+    AgentHeartbeat,
     AgentDying,
     AgentDied,
     AgentRescued,
@@ -35,103 +38,31 @@ pub enum EventType {
 #[serde(tag = "type", content = "payload", rename_all = "snake_case")]
 #[non_exhaustive]
 pub enum WorldEvent {
-    TickAdvanced {
-        tick: u64,
-    },
-    AgentSpawned {
-        agent_id: String,
-        name: String,
-    },
-    AgentDying {
-        agent_id: String,
-        reason: DeathReason,
-        grace_ticks: u64,
-    },
-    AgentDied {
-        agent_id: String,
-        reason: DeathReason,
-    },
-    AgentRescued {
-        agent_id: String,
-    },
-    TransactionCompleted {
-        from: String,
-        to: String,
-        amount: u64,
-        currency: Currency,
-    },
-    BalanceChanged {
-        agent_id: String,
-        currency: Currency,
-        old_balance: u64,
-        new_balance: u64,
-    },
-    PhaseChanged {
-        agent_id: String,
-        old_phase: AgentPhase,
-        new_phase: AgentPhase,
-    },
-    RuleViolated {
-        agent_id: String,
-        rule: String,
-        details: String,
-    },
-    SnapshotTaken {
-        tick: u64,
-        path: String,
-    },
-    EscrowCreated {
-        escrow_id: String,
-        publisher: String,
-        reward: u64,
-        currency: Currency,
-    },
-    EscrowClaimed {
-        escrow_id: String,
-        claimant: String,
-        deposit: u64,
-    },
-    EscrowReleased {
-        escrow_id: String,
-        recipient: String,
-        amount: u64,
-        currency: Currency,
-    },
-    EscrowRefunded {
-        escrow_id: String,
-        recipient: String,
-        amount: u64,
-        currency: Currency,
-    },
-    EscrowFrozen {
-        escrow_id: String,
-        reason: String,
-    },
-    TaskCreated {
-        task_id: String,
-        publisher: String,
-        reward: u64,
-    },
-    TaskClaimed {
-        task_id: String,
-        assignee: String,
-    },
-    TaskStarted {
-        task_id: String,
-    },
-    TaskSubmitted {
-        task_id: String,
-    },
-    TaskReviewed {
-        task_id: String,
-        approved: bool,
-    },
-    TaskCompleted {
-        task_id: String,
-    },
-    TaskExpired {
-        task_id: String,
-    },
+    TickAdvanced { tick: u64 },
+    AgentSpawned { agent_id: String, name: String },
+    AgentRegistered { agent_id: String, name: String },
+    AgentDeregistered { agent_id: String, name: String },
+    AgentHeartbeat { agent_id: String, timestamp: u64 },
+    AgentDying { agent_id: String, reason: DeathReason, grace_ticks: u64 },
+    AgentDied { agent_id: String, reason: DeathReason },
+    AgentRescued { agent_id: String },
+    TransactionCompleted { from: String, to: String, amount: u64, currency: Currency },
+    BalanceChanged { agent_id: String, currency: Currency, old_balance: u64, new_balance: u64 },
+    PhaseChanged { agent_id: String, old_phase: AgentPhase, new_phase: AgentPhase },
+    RuleViolated { agent_id: String, rule: String, details: String },
+    SnapshotTaken { tick: u64, path: String },
+    EscrowCreated { escrow_id: String, publisher: String, reward: u64, currency: Currency },
+    EscrowClaimed { escrow_id: String, claimant: String, deposit: u64 },
+    EscrowReleased { escrow_id: String, recipient: String, amount: u64, currency: Currency },
+    EscrowRefunded { escrow_id: String, recipient: String, amount: u64, currency: Currency },
+    EscrowFrozen { escrow_id: String, reason: String },
+    TaskCreated { task_id: String, publisher: String, reward: u64 },
+    TaskClaimed { task_id: String, assignee: String },
+    TaskStarted { task_id: String },
+    TaskSubmitted { task_id: String },
+    TaskReviewed { task_id: String, approved: bool },
+    TaskCompleted { task_id: String },
+    TaskExpired { task_id: String },
     RewardDistributed {
         task_id: String,
         assignee_id: String,
@@ -148,6 +79,9 @@ impl WorldEvent {
         match self {
             WorldEvent::TickAdvanced { .. } => EventType::TickAdvanced,
             WorldEvent::AgentSpawned { .. } => EventType::AgentSpawned,
+            WorldEvent::AgentRegistered { .. } => EventType::AgentRegistered,
+            WorldEvent::AgentDeregistered { .. } => EventType::AgentDeregistered,
+            WorldEvent::AgentHeartbeat { .. } => EventType::AgentHeartbeat,
             WorldEvent::AgentDying { .. } => EventType::AgentDying,
             WorldEvent::AgentDied { .. } => EventType::AgentDied,
             WorldEvent::AgentRescued { .. } => EventType::AgentRescued,
@@ -176,6 +110,9 @@ impl WorldEvent {
         match self {
             WorldEvent::TickAdvanced { .. } => None,
             WorldEvent::AgentSpawned { agent_id, .. } => Some(agent_id),
+            WorldEvent::AgentRegistered { agent_id, .. } => Some(agent_id),
+            WorldEvent::AgentDeregistered { agent_id, .. } => Some(agent_id),
+            WorldEvent::AgentHeartbeat { agent_id, .. } => Some(agent_id),
             WorldEvent::AgentDying { agent_id, .. } => Some(agent_id),
             WorldEvent::AgentDied { agent_id, .. } => Some(agent_id),
             WorldEvent::AgentRescued { agent_id } => Some(agent_id),

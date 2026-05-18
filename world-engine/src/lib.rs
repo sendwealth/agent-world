@@ -23,3 +23,7 @@ pub use rules::{
     ResourceExhaustionRule, ReproductionRunawayRule,
     default_registry, custom_registry, custom_registry_full,
 };
+
+pub use world::discovery::{
+    AgentProfile, AgentRegistry, AgentStatus, DiscoveryError, SharedAgentRegistry,
+};

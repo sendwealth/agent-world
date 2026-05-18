@@ -1,10 +1,9 @@
 use std::sync::Arc;
 use tokio::sync::Mutex;
 
-use agent_world_engine::a2a::{A2aServiceImpl, AgentRegistry, MessageRouter};
-use agent_world_engine::agentworld::a2a::v1::a2a_service_server::A2aServiceServer;
 use agent_world_engine::economy::task::TaskBoard;
 use agent_world_engine::wal::WAL;
+use agent_world_engine::world::discovery::AgentRegistry;
 
 #[tokio::main]
 async fn main() {
@@ -66,51 +65,53 @@ async fn main() {
         }
     });
 
-    // Initialize A2A subsystem (agent registry + message router)
-    // Uses a dedicated event bus for agent lifecycle events
-    let a2a_event_bus = Arc::new(agent_world_engine::world::EventBus::new(256));
-    let registry = Arc::new(AgentRegistry::new(a2a_event_bus));
-    let router = Arc::new(MessageRouter::new(Arc::clone(&registry)));
-
-    // Start liveness monitor to evict stale agents
-    registry.spawn_liveness_monitor();
-
-    let a2a_service = A2aServiceImpl::new(Arc::clone(&registry), Arc::clone(&router));
-    println!("   A2A gRPC: initialized");
-
-    // Initialize task board with event bus
+    // Initialize task board with event bus (takes ownership)
     let task_board = Arc::new(Mutex::new(TaskBoard::with_event_bus(event_bus)));
 
-    // Build the HTTP API router with WAL support
-    let app = agent_world_engine::api::create_router_with_wal(task_board, wal_writer.clone());
+    // Initialize agent registry with its own event bus for discovery events
+    let discovery_bus = agent_world_engine::world::EventBus::new(256);
+    let mut discovery_wal_rx = discovery_bus.subscribe();
+    let discovery_wal_writer = wal_writer.clone();
+    let discovery_wal_handle = tokio::spawn(async move {
+        loop {
+            match discovery_wal_rx.recv().await {
+                Ok(event) => {
+                    let mut wal = discovery_wal_writer.lock().await;
+                    if let Err(e) = wal.append_event(&event) {
+                        eprintln!("[WAL] Failed to write discovery event: {}", e);
+                    }
+                }
+                Err(tokio::sync::broadcast::error::RecvError::Lagged(n)) => {
+                    eprintln!("[WAL] Discovery lagged {} events", n);
+                }
+                Err(tokio::sync::broadcast::error::RecvError::Closed) => {
+                    break;
+                }
+            }
+        }
+    });
+
+    let registry = Arc::new(Mutex::new(AgentRegistry::with_event_bus(discovery_bus)));
+    println!("   AgentRegistry: initialized");
+
+    // Build the HTTP API router with WAL support and agent discovery
+    let app = agent_world_engine::api::create_router_with_wal(task_board, wal_writer.clone(), registry);
 
     // Start the HTTP server
-    let http_addr = std::net::SocketAddr::from(([127, 0, 0, 1], 3000));
-    println!("   HTTP API: http://{}", http_addr);
-
-    // Start the gRPC server
-    let grpc_addr = std::net::SocketAddr::from(([127, 0, 0, 1], 50051));
-    println!("   gRPC A2A: http://{}", grpc_addr);
+    let addr = std::net::SocketAddr::from(([127, 0, 0, 1], 3000));
+    println!("   API server: http://{}", addr);
     println!("   Status: ready");
 
-    let http_listener = tokio::net::TcpListener::bind(http_addr).await.unwrap();
+    let listener = tokio::net::TcpListener::bind(addr).await.unwrap();
 
     // Graceful shutdown on ctrl-c
     let shutdown_wal = wal_writer.clone();
-    let http_server = axum::serve(http_listener, app);
-    let grpc_server = tonic::transport::Server::builder()
-        .add_service(A2aServiceServer::new(a2a_service))
-        .serve(grpc_addr);
+    let server = axum::serve(listener, app);
 
     tokio::select! {
-        result = http_server => {
+        result = server => {
             if let Err(e) = result {
-                eprintln!("HTTP server error: {}", e);
-            }
-        }
-        result = grpc_server => {
-            if let Err(e) = result {
-                eprintln!("gRPC server error: {}", e);
+                eprintln!("Server error: {}", e);
             }
         }
         _ = tokio::signal::ctrl_c() => {
@@ -128,5 +129,6 @@ async fn main() {
     }
 
     wal_handle.abort();
+    discovery_wal_handle.abort();
     println!("[Server] Shutdown complete.");
 }

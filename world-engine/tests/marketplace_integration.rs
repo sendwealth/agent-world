@@ -8,11 +8,12 @@
 
 use std::sync::Arc;
 
-use tokio::sync::Mutex;
+use tokio::sync::RwLock;
 use uuid::Uuid;
 
 use agent_world_engine::economy::{
-    RewardConfig, RewardDistribution, TaskBoard, TaskStatus, TransactionType,
+    RewardConfig, RewardDistribution,
+    TaskBoard, TaskStatus, TransactionType,
 };
 use agent_world_engine::world::enums::Currency;
 
@@ -25,14 +26,8 @@ fn make_marketplace() -> TaskBoard {
     // Publisher balance lives on TaskBoard (used for escrow locking/refund)
     board.set_balance("publisher", 10_000);
     // Worker balances live on RewardDistributor (used for reward payout)
-    board
-        .reward_distributor_mut()
-        .unwrap()
-        .set_balance("worker_a", 1_000);
-    board
-        .reward_distributor_mut()
-        .unwrap()
-        .set_balance("worker_b", 1_000);
+    board.reward_distributor_mut().unwrap().set_balance("worker_a", 1_000);
+    board.reward_distributor_mut().unwrap().set_balance("worker_b", 1_000);
     board
 }
 
@@ -74,25 +69,17 @@ fn complete_task_flow(
 
 #[tokio::test]
 async fn test_full_lifecycle_with_reward_distribution() {
-    let board = Arc::new(Mutex::new(make_marketplace()));
+    let board = Arc::new(RwLock::new(make_marketplace()));
 
     let (task_id, dist) = {
-        let mut b = board.lock().await;
-        complete_task_flow(
-            &mut b,
-            "publisher",
-            "worker_a",
-            "Build Widget",
-            1000,
-            1,
-            None,
-        )
+        let mut b = board.write().await;
+        complete_task_flow(&mut b, "publisher", "worker_a", "Build Widget", 1000, 1, None)
     };
 
     // ── Verify task status ──────────────────────────────────────────────
 
     {
-        let b = board.lock().await;
+        let b = board.read().await;
         let task = b.get(task_id).unwrap();
         assert_eq!(task.status, TaskStatus::Completed);
         assert!(!task.escrow_held);
@@ -115,7 +102,7 @@ async fn test_full_lifecycle_with_reward_distribution() {
     // ── Verify escrow deducted from publisher ───────────────────────────
 
     {
-        let b = board.lock().await;
+        let b = board.read().await;
         // Publisher: 10000 - 1000 (escrow) = 9000
         // Escrow is consumed by reward distribution (paid to worker via RewardDistributor)
         assert_eq!(b.get_balance("publisher"), 9_000);
@@ -124,7 +111,7 @@ async fn test_full_lifecycle_with_reward_distribution() {
     // ── Verify reward paid to worker via RewardDistributor ──────────────
 
     {
-        let b = board.lock().await;
+        let b = board.read().await;
         let rd = b.reward_distributor().unwrap();
         // Worker gets net reward: 1000 + 980 = 1980
         assert_eq!(rd.get_balance("worker_a"), 1_980);
@@ -133,7 +120,7 @@ async fn test_full_lifecycle_with_reward_distribution() {
     // ── Verify XP awarded ───────────────────────────────────────────────
 
     {
-        let b = board.lock().await;
+        let b = board.read().await;
         let rd = b.reward_distributor().unwrap();
         assert_eq!(rd.get_experience("worker_a"), 50);
     }
@@ -141,7 +128,7 @@ async fn test_full_lifecycle_with_reward_distribution() {
     // ── Verify reputation updated ───────────────────────────────────────
 
     {
-        let b = board.lock().await;
+        let b = board.read().await;
         let rd = b.reward_distributor().unwrap();
         assert_eq!(rd.get_reputation("worker_a"), 2.0);
     }
@@ -149,7 +136,7 @@ async fn test_full_lifecycle_with_reward_distribution() {
     // ── Verify ledger entries ───────────────────────────────────────────
 
     {
-        let b = board.lock().await;
+        let b = board.read().await;
         let rd = b.reward_distributor().unwrap();
         let ledger = rd.ledger();
         let all = ledger.list();
@@ -160,10 +147,7 @@ async fn test_full_lifecycle_with_reward_distribution() {
         assert_eq!(reward_entry.tx_type, TransactionType::TaskReward);
         assert_eq!(reward_entry.amount, 980);
         assert_eq!(reward_entry.to_agent.as_deref(), Some("worker_a"));
-        assert_eq!(
-            reward_entry.reference_id.as_deref(),
-            Some(task_id.to_string().as_str())
-        );
+        assert_eq!(reward_entry.reference_id.as_deref(), Some(task_id.to_string().as_str()));
 
         // Fee entry
         let fee_entry = &all[1];
@@ -175,7 +159,7 @@ async fn test_full_lifecycle_with_reward_distribution() {
     // ── Verify central bank collected fees ──────────────────────────────
 
     {
-        let b = board.lock().await;
+        let b = board.read().await;
         let rd = b.reward_distributor().unwrap();
         assert_eq!(rd.central_bank().total_fees(Currency::Money), 20);
     }
@@ -187,7 +171,7 @@ async fn test_full_lifecycle_with_reward_distribution() {
 
 #[tokio::test]
 async fn test_multiple_tasks_accumulate_rewards() {
-    let board = Arc::new(Mutex::new(make_marketplace()));
+    let board = Arc::new(RwLock::new(make_marketplace()));
 
     let tasks = vec![
         ("Gather Resources", "worker_a", 500u64),
@@ -201,7 +185,7 @@ async fn test_multiple_tasks_accumulate_rewards() {
 
     for (title, worker, reward) in &tasks {
         let (id, dist) = {
-            let mut b = board.lock().await;
+            let mut b = board.write().await;
             complete_task_flow(&mut b, "publisher", worker, title, *reward, 1, None)
         };
         task_ids.push(id);
@@ -213,7 +197,7 @@ async fn test_multiple_tasks_accumulate_rewards() {
     // ── Verify publisher balance ────────────────────────────────────────
 
     {
-        let b = board.lock().await;
+        let b = board.read().await;
         // Publisher: 10000 - 500 - 1000 - 750 = 7750
         assert_eq!(b.get_balance("publisher"), 7_750);
     }
@@ -221,7 +205,7 @@ async fn test_multiple_tasks_accumulate_rewards() {
     // ── Verify worker balances in RewardDistributor ─────────────────────
 
     {
-        let b = board.lock().await;
+        let b = board.read().await;
         let rd = b.reward_distributor().unwrap();
         // worker_a: 1000 + (500-10) + (1000-20) = 1000 + 490 + 980 = 2470
         assert_eq!(rd.get_balance("worker_a"), 2_470);
@@ -232,7 +216,7 @@ async fn test_multiple_tasks_accumulate_rewards() {
     // ── Verify XP accumulation ──────────────────────────────────────────
 
     {
-        let b = board.lock().await;
+        let b = board.read().await;
         let rd = b.reward_distributor().unwrap();
         // worker_a completed 2 tasks: 50 + 50 = 100
         assert_eq!(rd.get_experience("worker_a"), 100);
@@ -243,7 +227,7 @@ async fn test_multiple_tasks_accumulate_rewards() {
     // ── Verify reputation accumulation ──────────────────────────────────
 
     {
-        let b = board.lock().await;
+        let b = board.read().await;
         let rd = b.reward_distributor().unwrap();
         // worker_a: 2.0 + 2.0 = 4.0
         assert_eq!(rd.get_reputation("worker_a"), 4.0);
@@ -254,7 +238,7 @@ async fn test_multiple_tasks_accumulate_rewards() {
     // ── Verify ledger entries ───────────────────────────────────────────
 
     {
-        let b = board.lock().await;
+        let b = board.read().await;
         let rd = b.reward_distributor().unwrap();
         let ledger = rd.ledger();
         // 3 tasks × 2 entries = 6
@@ -274,7 +258,7 @@ async fn test_multiple_tasks_accumulate_rewards() {
     // ── Verify central bank ─────────────────────────────────────────────
 
     {
-        let b = board.lock().await;
+        let b = board.read().await;
         let rd = b.reward_distributor().unwrap();
         // 10 + 20 + 15 = 45
         assert_eq!(rd.central_bank().total_fees(Currency::Money), total_fee);
@@ -384,34 +368,13 @@ async fn test_batch_expiry_escrow_consistency() {
         .create_task("T2".into(), "".into(), 200, "publisher".into(), 1, Some(10))
         .unwrap();
     let id3 = board
-        .create_task(
-            "T3".into(),
-            "".into(),
-            300,
-            "publisher".into(),
-            1,
-            Some(100),
-        )
+        .create_task("T3".into(), "".into(), 300, "publisher".into(), 1, Some(100))
         .unwrap();
     let id4 = board
-        .create_task(
-            "T4".into(),
-            "".into(),
-            400,
-            "publisher".into(),
-            1,
-            Some(100),
-        )
+        .create_task("T4".into(), "".into(), 400, "publisher".into(), 1, Some(100))
         .unwrap();
     let id5 = board
-        .create_task(
-            "T5".into(),
-            "".into(),
-            500,
-            "publisher".into(),
-            1,
-            Some(200),
-        )
+        .create_task("T5".into(), "".into(), 500, "publisher".into(), 1, Some(200))
         .unwrap();
 
     // Publisher: 10000 - 100 - 200 - 300 - 400 - 500 = 8500
@@ -549,9 +512,7 @@ async fn test_escrow_consistency_money_in_equals_money_out() {
         total_net + total_fees,
         total_escrowed,
         "Conservation: total_escrowed ({}) must equal total_net ({}) + total_fees ({})",
-        total_escrowed,
-        total_net,
-        total_fees
+        total_escrowed, total_net, total_fees
     );
 
     // ── Per-distribution conservation ───────────────────────────────────
@@ -755,62 +716,27 @@ async fn test_mixed_completed_expired_escrow_reconciliation() {
 
     // ── Task 1: will be completed ───────────────────────────────────────
     let t1 = board
-        .create_task(
-            "Complete 1".into(),
-            "".into(),
-            200,
-            "publisher".into(),
-            1,
-            None,
-        )
+        .create_task("Complete 1".into(), "".into(), 200, "publisher".into(), 1, None)
         .unwrap();
 
     // ── Task 2: will expire while published ─────────────────────────────
     let t2 = board
-        .create_task(
-            "Expire Pub".into(),
-            "".into(),
-            300,
-            "publisher".into(),
-            1,
-            Some(50),
-        )
+        .create_task("Expire Pub".into(), "".into(), 300, "publisher".into(), 1, Some(50))
         .unwrap();
 
     // ── Task 3: will be completed ───────────────────────────────────────
     let t3 = board
-        .create_task(
-            "Complete 2".into(),
-            "".into(),
-            500,
-            "publisher".into(),
-            1,
-            None,
-        )
+        .create_task("Complete 2".into(), "".into(), 500, "publisher".into(), 1, None)
         .unwrap();
 
     // ── Task 4: will be claimed then expired ────────────────────────────
     let t4 = board
-        .create_task(
-            "Expire Claimed".into(),
-            "".into(),
-            400,
-            "publisher".into(),
-            1,
-            Some(50),
-        )
+        .create_task("Expire Claimed".into(), "".into(), 400, "publisher".into(), 1, Some(50))
         .unwrap();
 
     // ── Task 5: will be completed ───────────────────────────────────────
     let t5 = board
-        .create_task(
-            "Complete 3".into(),
-            "".into(),
-            600,
-            "publisher".into(),
-            1,
-            None,
-        )
+        .create_task("Complete 3".into(), "".into(), 600, "publisher".into(), 1, None)
         .unwrap();
 
     // Total escrowed: 2000
@@ -821,7 +747,9 @@ async fn test_mixed_completed_expired_escrow_reconciliation() {
     for &id in &[t1, t3, t5] {
         board.claim_task(id, "worker_a".to_string()).unwrap();
         board.start_task(id).unwrap();
-        board.submit_result(id, "Result".to_string()).unwrap();
+        board
+            .submit_result(id, "Result".to_string())
+            .unwrap();
         board.review_task(id, "publisher", true).unwrap();
         board.complete_task(id, 10).unwrap();
     }

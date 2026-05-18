@@ -9,14 +9,13 @@
 use std::collections::HashMap;
 use std::sync::Arc;
 
-use tokio::sync::Mutex;
+use tokio::sync::RwLock;
 use uuid::Uuid;
 
-use agent_world_engine::economy::token_burn::{
-    AgentRecord, ConsumptionConfig, SkillRecord, TokenBurnEngine,
-};
+use agent_world_engine::economy::token_burn::{AgentRecord, ConsumptionConfig, SkillRecord, TokenBurnEngine};
 use agent_world_engine::economy::{
-    EscrowManager, RewardConfig, RewardDistributor, TaskBoard, TaskStatus, TransactionType,
+    EscrowManager, RewardConfig, RewardDistributor,
+    TaskBoard, TaskStatus, TransactionType,
 };
 use agent_world_engine::world::enums::{AgentPhase, Currency, DeathReason};
 use agent_world_engine::world::event::{EventType, WorldEvent};
@@ -30,7 +29,7 @@ use agent_world_engine::world::state::EventBus;
 /// simulating the production startup path from `main.rs`.
 struct WorldState {
     event_bus: Arc<EventBus>,
-    task_board: Arc<Mutex<TaskBoard>>,
+    task_board: Arc<RwLock<TaskBoard>>,
     token_engine: TokenBurnEngine,
     reward_distributor: RewardDistributor,
     escrow_manager: EscrowManager,
@@ -47,7 +46,7 @@ impl WorldState {
         let config = ConsumptionConfig::from_yaml_value(&value);
 
         let event_bus = Arc::new(EventBus::new(4096));
-        let task_board = Arc::new(Mutex::new(TaskBoard::new()));
+        let task_board = Arc::new(RwLock::new(TaskBoard::new()));
 
         Self {
             event_bus,
@@ -64,7 +63,7 @@ impl WorldState {
     /// Bootstrap with default config (no YAML).
     fn new_default() -> Self {
         let event_bus = Arc::new(EventBus::new(4096));
-        let task_board = Arc::new(Mutex::new(TaskBoard::new()));
+        let task_board = Arc::new(RwLock::new(TaskBoard::new()));
 
         Self {
             event_bus,
@@ -106,13 +105,10 @@ impl WorldState {
         let mut dead_agents = Vec::new();
 
         // Extract just the AgentRecords for batch processing
-        let mut agent_records: Vec<AgentRecord> =
-            self.agents.iter().map(|(_, r)| r.clone()).collect();
+        let mut agent_records: Vec<AgentRecord> = self.agents.iter().map(|(_, r)| r.clone()).collect();
 
         // Process token burn
-        let _burn_result = self
-            .token_engine
-            .process_tick(self.tick, &mut agent_records);
+        let _burn_result = self.token_engine.process_tick(self.tick, &mut agent_records);
 
         // Write back updated token counts
         for (i, (_, ref mut record)) in self.agents.iter_mut().enumerate() {
@@ -146,19 +142,17 @@ impl WorldState {
 
         // Process task expiry
         {
-            let mut board = self.task_board.lock().await;
+            let mut board = self.task_board.write().await;
             board.process_expiry(self.tick);
         }
 
-        self.event_bus
-            .emit(WorldEvent::TickAdvanced { tick: self.tick });
+        self.event_bus.emit(WorldEvent::TickAdvanced { tick: self.tick });
         dead_agents
     }
 
     /// Take a snapshot of current world state.
     fn snapshot(&self) -> WorldSnapshot {
-        let agents_json: HashMap<String, serde_json::Value> = self
-            .agents
+        let agents_json: HashMap<String, serde_json::Value> = self.agents
             .iter()
             .map(|(id, record)| (id.clone(), serde_json::to_value(record).unwrap()))
             .collect();
@@ -172,28 +166,19 @@ impl WorldState {
 
     /// Count living agents.
     fn living_agents(&self) -> usize {
-        self.agents
-            .iter()
+        self.agents.iter()
             .filter(|(_, a)| a.phase != AgentPhase::Dead)
             .count()
     }
 
     /// Get agent record by ID.
     fn get_agent(&self, id: &str) -> &AgentRecord {
-        self.agents
-            .iter()
-            .find(|(aid, _)| aid == id)
-            .map(|(_, r)| r)
-            .unwrap()
+        self.agents.iter().find(|(aid, _)| aid == id).map(|(_, r)| r).unwrap()
     }
 
     /// Get mutable agent record by ID.
     fn get_agent_mut(&mut self, id: &str) -> &mut AgentRecord {
-        self.agents
-            .iter_mut()
-            .find(|(aid, _)| aid == id)
-            .map(|(_, r)| r)
-            .unwrap()
+        self.agents.iter_mut().find(|(aid, _)| aid == id).map(|(_, r)| r).unwrap()
     }
 }
 
@@ -238,21 +223,18 @@ economy:
 
     // TaskBoard should be ready
     {
-        let board = world.task_board.lock().await;
+        let board = world.task_board.read().await;
         assert!(board.list().is_empty(), "TaskBoard should start empty");
     }
 
     // TokenBurnEngine should use config
-    assert_eq!(
-        world.token_engine.calculate_tick_burn(&AgentRecord {
-            id: Uuid::new_v4(),
-            name: "test".to_string(),
-            phase: AgentPhase::Adult,
-            tokens: 1000,
-            skills: HashMap::new(),
-        }),
-        10
-    );
+    assert_eq!(world.token_engine.calculate_tick_burn(&AgentRecord {
+        id: Uuid::new_v4(),
+        name: "test".to_string(),
+        phase: AgentPhase::Adult,
+        tokens: 1000,
+        skills: HashMap::new(),
+    }), 10);
 
     // RewardDistributor should be ready
     assert_eq!(world.reward_distributor.ledger().list().len(), 0);
@@ -332,11 +314,7 @@ async fn test_agent_spawn_consume_die_snapshot() {
 
     for expected_tick in 1..=99u64 {
         let dead = world.tick().await;
-        assert!(
-            dead.is_empty(),
-            "Agent should not die at tick {}",
-            expected_tick
-        );
+        assert!(dead.is_empty(), "Agent should not die at tick {}", expected_tick);
         assert_eq!(world.tick, expected_tick);
 
         let agent = world.get_agent(&agent_id);
@@ -361,11 +339,14 @@ async fn test_agent_spawn_consume_die_snapshot() {
     // Collect events from the death tick — drain all and check for dying/died
     let mut found_dying = false;
     let mut found_died = false;
-    while let Ok(event) = event_rx.try_recv() {
-        match event.event_type() {
-            EventType::AgentDying => found_dying = true,
-            EventType::AgentDied => found_died = true,
-            _ => {} // TickAdvanced or other events
+    loop {
+        match event_rx.try_recv() {
+            Ok(event) => match event.event_type() {
+                EventType::AgentDying => found_dying = true,
+                EventType::AgentDied => found_died = true,
+                _ => {} // TickAdvanced or other events
+            },
+            Err(_) => break,
         }
     }
     assert!(found_dying, "Should have received AgentDying event");
@@ -375,10 +356,7 @@ async fn test_agent_spawn_consume_die_snapshot() {
 
     for _ in 1..=10 {
         let dead = world.tick().await;
-        assert!(
-            dead.is_empty(),
-            "Already dead agent should not trigger death again"
-        );
+        assert!(dead.is_empty(), "Already dead agent should not trigger death again");
     }
 
     let agent = world.get_agent(&agent_id);
@@ -419,25 +397,19 @@ async fn test_100_tick_stability_no_panics_consistent() {
     // ── Setup: spawn 3 agents with varying profiles ───────────────────
 
     let alice_id = world.spawn_agent("Alice", 500_000);
-    world.get_agent_mut(&alice_id).skills.insert(
-        "mining".to_string(),
-        SkillRecord {
-            name: "mining".to_string(),
-            level: 5,
-            experience: 0.0,
-        },
-    );
+    world.get_agent_mut(&alice_id).skills.insert("mining".to_string(), SkillRecord {
+        name: "mining".to_string(),
+        level: 5,
+        experience: 0.0,
+    });
 
     let bob_id = world.spawn_agent("Bob", 300_000);
     let carol_id = world.spawn_agent("Carol", 200_000);
-    world.get_agent_mut(&carol_id).skills.insert(
-        "trading".to_string(),
-        SkillRecord {
-            name: "trading".to_string(),
-            level: 3,
-            experience: 0.0,
-        },
-    );
+    world.get_agent_mut(&carol_id).skills.insert("trading".to_string(), SkillRecord {
+        name: "trading".to_string(),
+        level: 3,
+        experience: 0.0,
+    });
 
     // Drain spawn events
     let _ = event_rx.try_recv().unwrap();
@@ -450,7 +422,7 @@ async fn test_100_tick_stability_no_panics_consistent() {
 
     // Set up task board balances
     {
-        let mut board = world.task_board.lock().await;
+        let mut board = world.task_board.write().await;
         board.set_balance(&alice_id, 50_000);
         board.set_balance(&bob_id, 50_000);
         board.set_balance(&carol_id, 50_000);
@@ -461,45 +433,30 @@ async fn test_100_tick_stability_no_panics_consistent() {
     for tick_num in 1..=100u64 {
         // 1. Tick all agents (token burn)
         let dead = world.tick().await;
-        assert!(
-            dead.is_empty(),
-            "No agents should die in 100 ticks with ample tokens"
-        );
+        assert!(dead.is_empty(), "No agents should die in 100 ticks with ample tokens");
 
         // 2. Create tasks periodically (every 20 ticks)
         if tick_num % 20 == 0 {
-            let publisher = if tick_num % 40 == 0 {
-                &alice_id
-            } else {
-                &bob_id
-            };
+            let publisher = if tick_num % 40 == 0 { &alice_id } else { &bob_id };
             let task_id = {
-                let mut board = world.task_board.lock().await;
-                board
-                    .create_task(
-                        format!("Task @ tick {}", tick_num),
-                        format!("Integration task created at tick {}", tick_num),
-                        500,
-                        publisher.clone(),
-                        tick_num,
-                        Some(tick_num + 200),
-                    )
-                    .unwrap()
+                let mut board = world.task_board.write().await;
+                board.create_task(
+                    format!("Task @ tick {}", tick_num),
+                    format!("Integration task created at tick {}", tick_num),
+                    500,
+                    publisher.clone(),
+                    tick_num,
+                    Some(tick_num + 200),
+                ).unwrap()
             };
             tasks_created += 1;
 
             // Complete the task within the same tick
-            let assignee = if publisher == &alice_id {
-                &bob_id
-            } else {
-                &carol_id
-            };
-            let mut board = world.task_board.lock().await;
+            let assignee = if publisher == &alice_id { &bob_id } else { &carol_id };
+            let mut board = world.task_board.write().await;
             board.claim_task(task_id, assignee.clone()).unwrap();
             board.start_task(task_id).unwrap();
-            board
-                .submit_result(task_id, format!("Done at tick {}", tick_num))
-                .unwrap();
+            board.submit_result(task_id, format!("Done at tick {}", tick_num)).unwrap();
             board.review_task(task_id, publisher, true).unwrap();
             board.complete_task(task_id, tick_num).unwrap();
             tasks_completed += 1;
@@ -507,23 +464,14 @@ async fn test_100_tick_stability_no_panics_consistent() {
 
         // 3. Verify agents are alive and consistent at checkpoints
         if tick_num % 25 == 0 {
-            assert!(
-                world.living_agents() == 3,
-                "All 3 agents should be alive at tick {}",
-                tick_num
-            );
+            assert!(world.living_agents() == 3,
+                "All 3 agents should be alive at tick {}", tick_num);
 
             for (_, agent) in &world.agents {
-                assert!(
-                    agent.tokens > 0,
-                    "Agent should have tokens at tick {}",
-                    tick_num
-                );
-                assert!(
-                    agent.phase != AgentPhase::Dead,
-                    "Agent should not be dead at tick {}",
-                    tick_num
-                );
+                assert!(agent.tokens > 0,
+                    "Agent should have tokens at tick {}", tick_num);
+                assert!(agent.phase != AgentPhase::Dead,
+                    "Agent should not be dead at tick {}", tick_num);
             }
         }
     }
@@ -551,14 +499,10 @@ async fn test_100_tick_stability_no_panics_consistent() {
 
     // Verify task board state
     {
-        let board = world.task_board.lock().await;
+        let board = world.task_board.read().await;
         for task in board.list() {
-            assert_eq!(
-                task.status,
-                TaskStatus::Completed,
-                "All tasks should be completed, found {:?}",
-                task.status
-            );
+            assert_eq!(task.status, TaskStatus::Completed,
+                "All tasks should be completed, found {:?}", task.status);
         }
     }
 
@@ -568,11 +512,7 @@ async fn test_100_tick_stability_no_panics_consistent() {
         total_events += 1;
     }
     // At minimum: 100 tick events + task events
-    assert!(
-        total_events >= 100,
-        "Should have at least 100 events, got {}",
-        total_events
-    );
+    assert!(total_events >= 100, "Should have at least 100 events, got {}", total_events);
 }
 
 // ══════════════════════════════════════════════════════════════════════════
@@ -613,15 +553,9 @@ async fn test_ledger_consistency_100_ticks() {
             );
 
             // Verify conservation: gross = net + fee
-            assert_eq!(
-                result.gross_reward,
-                result.net_reward + result.platform_fee,
+            assert_eq!(result.gross_reward, result.net_reward + result.platform_fee,
                 "Conservation violated at tick {}: gross={}, net={}, fee={}",
-                tick_num,
-                result.gross_reward,
-                result.net_reward,
-                result.platform_fee
-            );
+                tick_num, result.gross_reward, result.net_reward, result.platform_fee);
         }
     }
 
@@ -642,20 +576,12 @@ async fn test_ledger_consistency_100_ticks() {
     let all_entries = ledger.list();
 
     // 4 tasks × 2 entries each (reward + fee) = 8 entries
-    assert_eq!(
-        all_entries.len(),
-        8,
-        "Expected 8 ledger entries, got {}",
-        all_entries.len()
-    );
+    assert_eq!(all_entries.len(), 8, "Expected 8 ledger entries, got {}", all_entries.len());
 
     // Verify all entries have positive amounts
     for entry in all_entries {
-        assert!(
-            entry.amount > 0 || entry.tx_type == TransactionType::PlatformFee,
-            "Ledger entry amount should be positive: {:?}",
-            entry
-        );
+        assert!(entry.amount > 0 || entry.tx_type == TransactionType::PlatformFee,
+            "Ledger entry amount should be positive: {:?}", entry);
     }
 
     // ── Conservation: total money in == total money out ───────────────
@@ -684,38 +610,25 @@ async fn test_ledger_consistency_100_ticks() {
 
     // distribute_reward adds net_reward to assignee and records fee to central bank.
     // Bob's balance: 100_000 + 4 × 980 = 103_920
-    assert_eq!(
-        world.reward_distributor.get_balance(&bob_id),
-        100_000 + 980 * 4
-    );
+    assert_eq!(world.reward_distributor.get_balance(&bob_id), 100_000 + 980 * 4);
 
     // ── Verify per-task entries ────────────────────────────────────────
 
     for tick_num in [25u64, 50, 75, 100] {
         let task_ref = format!("task-{}", tick_num);
         let task_entries = ledger.list_by_reference(&task_ref);
-        assert_eq!(
-            task_entries.len(),
-            2,
-            "Expected 2 entries for task at tick {}",
-            tick_num
-        );
+        assert_eq!(task_entries.len(), 2,
+            "Expected 2 entries for task at tick {}", tick_num);
 
-        let reward_entry = task_entries
-            .iter()
+        let reward_entry = task_entries.iter()
             .find(|e| e.tx_type == TransactionType::TaskReward)
             .unwrap();
-        let fee_entry = task_entries
-            .iter()
+        let fee_entry = task_entries.iter()
             .find(|e| e.tx_type == TransactionType::PlatformFee)
             .unwrap();
 
-        assert_eq!(
-            reward_entry.amount + fee_entry.amount,
-            1000,
-            "Task at tick {} doesn't add up to gross reward",
-            tick_num
-        );
+        assert_eq!(reward_entry.amount + fee_entry.amount, 1000,
+            "Task at tick {} doesn't add up to gross reward", tick_num);
         assert_eq!(reward_entry.tick, tick_num);
         assert_eq!(fee_entry.tick, tick_num);
     }
@@ -753,11 +666,7 @@ async fn test_combined_lifecycle_with_deaths_and_snapshots() {
 
     for tick in 1..=49 {
         let dead = world.tick().await;
-        assert!(
-            dead.is_empty(),
-            "No deaths expected before tick 50, got deaths at tick {}",
-            tick
-        );
+        assert!(dead.is_empty(), "No deaths expected before tick 50, got deaths at tick {}", tick);
     }
 
     // Take pre-death snapshot
@@ -779,11 +688,7 @@ async fn test_combined_lifecycle_with_deaths_and_snapshots() {
 
     for tick in 51..=100 {
         let dead = world.tick().await;
-        assert!(
-            dead.is_empty(),
-            "No more deaths expected after tick 50, got at tick {}",
-            tick
-        );
+        assert!(dead.is_empty(), "No more deaths expected after tick 50, got at tick {}", tick);
     }
 
     // Verify final state
@@ -817,8 +722,5 @@ async fn test_combined_lifecycle_with_deaths_and_snapshots() {
 
     // Verify pre-death snapshot is different from final
     assert_ne!(pre_death_snapshot.tick, final_snapshot.tick);
-    assert_eq!(
-        pre_death_snapshot.agents_json.len(),
-        final_snapshot.agents_json.len()
-    );
+    assert_eq!(pre_death_snapshot.agents_json.len(), final_snapshot.agents_json.len());
 }

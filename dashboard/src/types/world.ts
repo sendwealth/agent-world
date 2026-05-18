@@ -47,6 +47,7 @@ export type EventType =
   | "message"
   | "skill_up"
   | "reputation_change"
+  | "reputation_changed"
   | "inflation"
   | "investment"
   | "tax";
@@ -90,59 +91,16 @@ export interface Task {
   created_tick: number;
 }
 
-// Knowledge Marketplace types
+// Reputation types
 
-export type KnowledgeCategory =
-  | "strategy"
-  | "tactics"
-  | "survival"
-  | "economy"
-  | "social"
-  | "technical"
-  | "general";
-
-export type ListingStatus = "active" | "inactive" | "delisted";
-
-export type MarketplaceSort =
-  | "newest"
-  | "oldest"
-  | "price_asc"
-  | "price_desc"
-  | "rating_desc"
-  | "purchases_desc";
-
-export interface KnowledgeListing {
-  id: string;
-  title: string;
-  description: string;
-  category: KnowledgeCategory;
-  content_hash: string;
-  price: number;
-  currency: string;
-  publisher_id: string;
-  status: ListingStatus;
-  purchase_count: number;
-  average_rating: number;
-  rating_count: number;
-  tags: string[];
-  created_tick: number;
+export interface ReputationRankingEntry {
+  agent_id: string;
+  reputation: number;
+  rank: number;
 }
 
-export interface ListingPurchase {
-  id: string;
-  listing_id: string;
-  buyer_id: string;
-  seller_id: string;
-  price: number;
-  currency: string;
-  tick: number;
-}
-
-export interface ListingRating {
-  id: string;
-  listing_id: string;
-  rater_id: string;
-  score: number;
-  review: string | null;
-  tick: number;
+export interface ReputationResponse {
+  agent_id: string;
+  reputation: number;
+  can_claim_high_value: boolean;
 }

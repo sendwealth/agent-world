@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import type { Leaderboard, LeaderboardEntry } from "@/types/world";
+import type { Leaderboard, LeaderboardEntry, ReputationRankingEntry } from "@/types/world";
 import { fetchJSON } from "@/lib/api";
 
 interface LeaderboardProps {
@@ -65,8 +65,65 @@ function LeaderboardTable({
   );
 }
 
+function ReputationRankingTable({
+  entries,
+}: {
+  entries: ReputationRankingEntry[];
+}) {
+  return (
+    <div className="rounded-xl border border-zinc-800 bg-zinc-900/50 p-4">
+      <h3 className="mb-3 flex items-center gap-2 text-sm font-semibold text-zinc-200">
+        <span>⭐</span>
+        信誉排名（来自任务市场）
+      </h3>
+      {entries.length === 0 ? (
+        <div className="flex h-24 items-center justify-center text-xs text-zinc-600">
+          暂无数据
+        </div>
+      ) : (
+        <div className="space-y-1.5">
+          {entries.map((entry) => (
+            <div
+              key={entry.agent_id}
+              className="flex items-center justify-between rounded-lg bg-zinc-800/40 px-3 py-2"
+            >
+              <div className="flex items-center gap-2.5">
+                <span
+                  className={`flex h-5 w-5 items-center justify-center rounded text-[10px] font-bold ${
+                    entry.rank === 1
+                      ? "bg-yellow-500/20 text-yellow-400"
+                      : entry.rank === 2
+                        ? "bg-zinc-400/20 text-zinc-300"
+                        : entry.rank === 3
+                          ? "bg-amber-600/20 text-amber-500"
+                          : "bg-zinc-700/30 text-zinc-500"
+                  }`}
+                >
+                  {entry.rank}
+                </span>
+                <span className="text-xs font-medium text-zinc-300">
+                  {entry.agent_id}
+                </span>
+              </div>
+              <span
+                className={`text-xs font-semibold ${
+                  entry.reputation >= 0 ? "text-emerald-400" : "text-red-400"
+                }`}
+              >
+                {entry.reputation >= 0 ? "+" : ""}
+                {entry.reputation.toFixed(1)}
+              </span>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
 export function LeaderboardSection({ statsTick }: LeaderboardProps) {
   const [leaderboard, setLeaderboard] = useState<Leaderboard | null>(null);
+  const [reputationRankings, setReputationRankings] = useState<ReputationRankingEntry[]>([]);
 
   useEffect(() => {
     async function load() {
@@ -79,6 +136,20 @@ export function LeaderboardSection({ statsTick }: LeaderboardProps) {
     }
     load();
     const interval = setInterval(load, 10000);
+    return () => clearInterval(interval);
+  }, [statsTick]);
+
+  useEffect(() => {
+    async function loadReputation() {
+      try {
+        const data = await fetchJSON<ReputationRankingEntry[]>("/reputation/rankings");
+        setReputationRankings(data);
+      } catch {
+        // Reputation API may not be configured
+      }
+    }
+    loadReputation();
+    const interval = setInterval(loadReputation, 10000);
     return () => clearInterval(interval);
   }, [statsTick]);
 
@@ -108,6 +179,11 @@ export function LeaderboardSection({ statsTick }: LeaderboardProps) {
         entries={leaderboard?.highestReputation ?? []}
         valueFormatter={(v) => `${v.toFixed(1)}`}
       />
+      {reputationRankings.length > 0 && (
+        <div className="lg:col-span-2">
+          <ReputationRankingTable entries={reputationRankings} />
+        </div>
+      )}
     </div>
   );
 }

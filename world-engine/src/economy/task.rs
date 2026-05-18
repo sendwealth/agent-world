@@ -7,7 +7,8 @@ use crate::world::enums::Currency;
 use crate::world::event::WorldEvent;
 use crate::world::state::EventBus;
 
-use super::reward::{RewardConfig, RewardDistribution, RewardDistributor};
+use super::reward::{RewardConfig, RewardDistributor, RewardDistribution};
+use super::reputation::{ReputationConfig, ReputationSystem};
 
 // ── Task Status ───────────────────────────────────────────
 
@@ -106,7 +107,7 @@ pub struct Task {
 
 // ── Errors ────────────────────────────────────────────────
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq)]
 pub enum TaskError {
     NotFound(String),
     InvalidTransition { from: TaskStatus, to: TaskStatus },
@@ -114,6 +115,7 @@ pub enum TaskError {
     NoAssignee,
     ResultRequired,
     NotPublisher { expected: String, actual: String },
+    InsufficientReputation { agent_id: String, reputation: f64, required: f64, reward: u64 },
     Expired,
 }
 
@@ -134,6 +136,13 @@ impl std::fmt::Display for TaskError {
                     expected, actual
                 )
             }
+            TaskError::InsufficientReputation { agent_id, reputation, required, reward } => {
+                write!(
+                    f,
+                    "agent {} reputation {:.1} below required {:.1} for high-value task (reward: {})",
+                    agent_id, reputation, required, reward
+                )
+            }
             TaskError::Expired => write!(f, "task has expired"),
         }
     }
@@ -152,6 +161,8 @@ pub struct TaskBoard {
     event_bus: Option<EventBus>,
     /// Optional reward distributor for fee deduction, XP, reputation, and ledger.
     reward_distributor: Option<RewardDistributor>,
+    /// Optional reputation system for marketplace-reputation integration.
+    reputation_system: Option<ReputationSystem>,
 }
 
 impl TaskBoard {
@@ -162,6 +173,7 @@ impl TaskBoard {
             escrows: HashMap::new(),
             event_bus: None,
             reward_distributor: None,
+            reputation_system: None,
         }
     }
 
@@ -172,6 +184,7 @@ impl TaskBoard {
             escrows: HashMap::new(),
             event_bus: Some(event_bus),
             reward_distributor: None,
+            reputation_system: None,
         }
     }
 
@@ -183,6 +196,31 @@ impl TaskBoard {
             escrows: HashMap::new(),
             event_bus: None,
             reward_distributor: Some(RewardDistributor::new(config)),
+            reputation_system: None,
+        }
+    }
+
+    /// Create a TaskBoard with both reward distribution and reputation system.
+    pub fn with_reputation_system(reward_config: RewardConfig, rep_config: ReputationConfig) -> Self {
+        Self {
+            tasks: HashMap::new(),
+            balances: HashMap::new(),
+            escrows: HashMap::new(),
+            event_bus: None,
+            reward_distributor: Some(RewardDistributor::new(reward_config)),
+            reputation_system: Some(ReputationSystem::new(rep_config)),
+        }
+    }
+
+    /// Create a TaskBoard with event bus, reward distribution, and reputation system.
+    pub fn with_all(event_bus: EventBus, reward_config: RewardConfig, rep_config: ReputationConfig) -> Self {
+        Self {
+            tasks: HashMap::new(),
+            balances: HashMap::new(),
+            escrows: HashMap::new(),
+            event_bus: Some(event_bus),
+            reward_distributor: Some(RewardDistributor::new(reward_config)),
+            reputation_system: Some(ReputationSystem::new(rep_config)),
         }
     }
 
@@ -194,6 +232,16 @@ impl TaskBoard {
     /// Get a mutable reference to the reward distributor (if configured).
     pub fn reward_distributor_mut(&mut self) -> Option<&mut RewardDistributor> {
         self.reward_distributor.as_mut()
+    }
+
+    /// Get a reference to the reputation system (if configured).
+    pub fn reputation_system(&self) -> Option<&ReputationSystem> {
+        self.reputation_system.as_ref()
+    }
+
+    /// Get a mutable reference to the reputation system (if configured).
+    pub fn reputation_system_mut(&mut self) -> Option<&mut ReputationSystem> {
+        self.reputation_system.as_mut()
     }
 
     // ── Balance helpers ────────────────────────────────────
@@ -247,19 +295,12 @@ impl TaskBoard {
         expires_at: Option<u64>,
     ) -> Result<Uuid, TaskError> {
         self.create_task_with_currency(
-            title,
-            description,
-            reward,
-            publisher_id,
-            created_tick,
-            expires_at,
-            Currency::Money,
+            title, description, reward, publisher_id, created_tick, expires_at, Currency::Money,
         )
     }
 
     /// Create a new task with an explicit currency.
     /// If reward > 0, locks escrow from the publisher.
-    #[allow(clippy::too_many_arguments)]
     pub fn create_task_with_currency(
         &mut self,
         title: String,
@@ -338,9 +379,7 @@ impl TaskBoard {
     /// Delete a task. Only published tasks can be deleted.
     /// Refunds escrow if held.
     pub fn delete_task(&mut self, id: Uuid) -> Result<(), TaskError> {
-        let task = self
-            .tasks
-            .get(&id)
+        let task = self.tasks.get(&id)
             .ok_or_else(|| TaskError::NotFound(id.to_string()))?;
 
         if task.status != TaskStatus::Published {
@@ -364,10 +403,11 @@ impl TaskBoard {
     // ── Lifecycle ─────────────────────────────────────────
 
     /// Claim a published task.
+    ///
+    /// If a `ReputationSystem` is configured, agents below the reputation threshold
+    /// cannot claim high-value tasks (reward >= configured threshold).
     pub fn claim_task(&mut self, id: Uuid, assignee_id: String) -> Result<(), TaskError> {
-        let task = self
-            .tasks
-            .get_mut(&id)
+        let task = self.tasks.get(&id)
             .ok_or_else(|| TaskError::NotFound(id.to_string()))?;
 
         if !task.status.can_transition_to(&TaskStatus::Claimed) {
@@ -377,6 +417,22 @@ impl TaskBoard {
             });
         }
 
+        // Reputation threshold check for high-value tasks
+        if let Some(ref rep_sys) = self.reputation_system {
+            if let Err(_) = rep_sys.check_claim_eligibility(&assignee_id, task.reward) {
+                let agent_rep = rep_sys.get_reputation(&assignee_id);
+                let required_rep = rep_sys.config().min_reputation_for_high_value;
+                let reward = task.reward;
+                return Err(TaskError::InsufficientReputation {
+                    agent_id: assignee_id,
+                    reputation: agent_rep,
+                    required: required_rep,
+                    reward,
+                });
+            }
+        }
+
+        let task = self.tasks.get_mut(&id).unwrap();
         task.status = TaskStatus::Claimed;
         task.assignee_id = Some(assignee_id.clone());
 
@@ -390,9 +446,7 @@ impl TaskBoard {
 
     /// Start working on a claimed task.
     pub fn start_task(&mut self, id: Uuid) -> Result<(), TaskError> {
-        let task = self
-            .tasks
-            .get_mut(&id)
+        let task = self.tasks.get_mut(&id)
             .ok_or_else(|| TaskError::NotFound(id.to_string()))?;
 
         if !task.status.can_transition_to(&TaskStatus::InProgress) {
@@ -417,9 +471,7 @@ impl TaskBoard {
             return Err(TaskError::ResultRequired);
         }
 
-        let task = self
-            .tasks
-            .get_mut(&id)
+        let task = self.tasks.get_mut(&id)
             .ok_or_else(|| TaskError::NotFound(id.to_string()))?;
 
         if !task.status.can_transition_to(&TaskStatus::Submitted) {
@@ -440,15 +492,8 @@ impl TaskBoard {
     }
 
     /// Review a submitted task. Only the publisher can review.
-    pub fn review_task(
-        &mut self,
-        id: Uuid,
-        reviewer_id: &str,
-        approved: bool,
-    ) -> Result<(), TaskError> {
-        let task = self
-            .tasks
-            .get(&id)
+    pub fn review_task(&mut self, id: Uuid, reviewer_id: &str, approved: bool) -> Result<(), TaskError> {
+        let task = self.tasks.get(&id)
             .ok_or_else(|| TaskError::NotFound(id.to_string()))?;
 
         if task.publisher_id != reviewer_id {
@@ -494,17 +539,14 @@ impl TaskBoard {
     /// - Transactions are recorded in the ledger
     /// - A `RewardDistributed` event is emitted
     ///
+    /// If a `ReputationSystem` is configured:
+    /// - An on-time completion bonus is applied if the task was completed before expiry
+    ///
     /// If no `RewardDistributor`, the full escrow is released directly (legacy behavior).
-    pub fn complete_task(
-        &mut self,
-        id: Uuid,
-        tick: u64,
-    ) -> Result<Option<RewardDistribution>, TaskError> {
+    pub fn complete_task(&mut self, id: Uuid, tick: u64) -> Result<Option<RewardDistribution>, TaskError> {
         // Validate and extract needed data
-        let (assignee_id, currency) = {
-            let task = self
-                .tasks
-                .get(&id)
+        let (assignee_id, currency, expires_at) = {
+            let task = self.tasks.get(&id)
                 .ok_or_else(|| TaskError::NotFound(id.to_string()))?;
             if !task.status.can_transition_to(&TaskStatus::Completed) {
                 return Err(TaskError::InvalidTransition {
@@ -512,17 +554,21 @@ impl TaskBoard {
                     to: TaskStatus::Completed,
                 });
             }
-            (task.assignee_id.clone(), task.currency)
+            (task.assignee_id.clone(), task.currency, task.expires_at)
         };
 
         let escrow_amount = self.escrows.remove(&id);
 
-        let distribution = if let (Some(ref assignee), Some(ref mut dist)) =
-            (&assignee_id, self.reward_distributor.as_mut())
-        {
+        let distribution = if let (Some(ref assignee), Some(ref mut dist)) = (&assignee_id, self.reward_distributor.as_mut()) {
             // Use reward distributor for fee + XP + reputation + ledger
             let gross = escrow_amount.unwrap_or(0);
-            let result = dist.distribute_reward(&id.to_string(), assignee, gross, currency, tick);
+            let result = dist.distribute_reward(
+                &id.to_string(),
+                assignee,
+                gross,
+                currency,
+                tick,
+            );
 
             // Update TaskBoard balance to stay consistent with distributor
             self.balances.insert(
@@ -547,12 +593,19 @@ impl TaskBoard {
             if let Some(escrow_amount) = escrow_amount {
                 if let Some(ref assignee) = assignee_id {
                     let bal = self.get_balance(assignee);
-                    self.balances
-                        .insert(assignee.clone(), bal.saturating_add(escrow_amount));
+                    self.balances.insert(assignee.clone(), bal.saturating_add(escrow_amount));
                 }
             }
             None
         };
+
+        // Apply reputation on-time bonus if ReputationSystem is configured
+        if let (Some(ref assignee), Some(ref mut rep_sys)) = (&assignee_id, self.reputation_system.as_mut()) {
+            let is_on_time = expires_at.map_or(true, |exp| tick <= exp);
+            if is_on_time {
+                rep_sys.on_task_completed_on_time(assignee, tick);
+            }
+        }
 
         let task = self.tasks.get_mut(&id).unwrap();
         task.status = TaskStatus::Completed;
@@ -566,10 +619,12 @@ impl TaskBoard {
     }
 
     /// Expire a published or claimed task. Refunds escrow to publisher.
+    ///
+    /// If a `ReputationSystem` is configured:
+    /// - For claimed tasks: the assignee receives a breach penalty
+    /// - For published tasks: the publisher receives a small expiry penalty
     pub fn expire_task(&mut self, id: Uuid) -> Result<(), TaskError> {
-        let task = self
-            .tasks
-            .get(&id)
+        let task = self.tasks.get(&id)
             .ok_or_else(|| TaskError::NotFound(id.to_string()))?;
 
         if !task.status.can_transition_to(&TaskStatus::Expired) {
@@ -580,12 +635,26 @@ impl TaskBoard {
         }
 
         let publisher_id = task.publisher_id.clone();
+        let assignee_id = task.assignee_id.clone();
+        let was_claimed = task.status == TaskStatus::Claimed;
 
         // Refund escrow to publisher
         if let Some(escrow_amount) = self.escrows.remove(&id) {
             let bal = self.get_balance(&publisher_id);
-            self.balances
-                .insert(publisher_id.clone(), bal + escrow_amount);
+            self.balances.insert(publisher_id.clone(), bal + escrow_amount);
+        }
+
+        // Apply reputation penalties
+        if let Some(ref mut rep_sys) = self.reputation_system {
+            if was_claimed {
+                // Assignee breached: they claimed but failed to deliver
+                if let Some(ref assignee) = assignee_id {
+                    rep_sys.on_task_breach(assignee, 0);
+                }
+            } else {
+                // Published task expired: small penalty for publisher
+                rep_sys.on_task_expired_published(&publisher_id, 0);
+            }
         }
 
         let task = self.tasks.get_mut(&id).unwrap();
@@ -601,12 +670,10 @@ impl TaskBoard {
 
     /// Batch-expire tasks whose expires_at <= current_tick.
     pub fn process_expiry(&mut self, current_tick: u64) -> Vec<Uuid> {
-        let expired_ids: Vec<Uuid> = self
-            .tasks
-            .iter()
+        let expired_ids: Vec<Uuid> = self.tasks.iter()
             .filter(|(_, task)| {
                 matches!(task.status, TaskStatus::Published | TaskStatus::Claimed)
-                    && task.expires_at.is_some_and(|exp| exp <= current_tick)
+                    && task.expires_at.map_or(false, |exp| exp <= current_tick)
             })
             .map(|(id, _)| *id)
             .collect();
@@ -647,16 +714,14 @@ mod tests {
     }
 
     fn create_default_task(board: &mut TaskBoard) -> Uuid {
-        board
-            .create_task(
-                "Test Task".to_string(),
-                "A test task".to_string(),
-                100,
-                "publisher".to_string(),
-                1,
-                None,
-            )
-            .unwrap()
+        board.create_task(
+            "Test Task".to_string(),
+            "A test task".to_string(),
+            100,
+            "publisher".to_string(),
+            1,
+            None,
+        ).unwrap()
     }
 
     // ── State Machine ──────────────────────────────────────
@@ -712,16 +777,14 @@ mod tests {
     #[test]
     fn test_create_task_no_reward() {
         let mut board = make_board();
-        let id = board
-            .create_task(
-                "Free Task".to_string(),
-                "No reward".to_string(),
-                0,
-                "publisher".to_string(),
-                1,
-                None,
-            )
-            .unwrap();
+        let id = board.create_task(
+            "Free Task".to_string(),
+            "No reward".to_string(),
+            0,
+            "publisher".to_string(),
+            1,
+            None,
+        ).unwrap();
         let task = board.get(id).unwrap();
         assert!(!task.escrow_held);
     }
@@ -736,22 +799,14 @@ mod tests {
 
         board.claim_task(id, "worker".to_string()).unwrap();
         assert_eq!(board.get(id).unwrap().status, TaskStatus::Claimed);
-        assert_eq!(
-            board.get(id).unwrap().assignee_id.as_deref(),
-            Some("worker")
-        );
+        assert_eq!(board.get(id).unwrap().assignee_id.as_deref(), Some("worker"));
 
         board.start_task(id).unwrap();
         assert_eq!(board.get(id).unwrap().status, TaskStatus::InProgress);
 
-        board
-            .submit_result(id, "Work is done!".to_string())
-            .unwrap();
+        board.submit_result(id, "Work is done!".to_string()).unwrap();
         assert_eq!(board.get(id).unwrap().status, TaskStatus::Submitted);
-        assert_eq!(
-            board.get(id).unwrap().result.as_deref(),
-            Some("Work is done!")
-        );
+        assert_eq!(board.get(id).unwrap().result.as_deref(), Some("Work is done!"));
 
         board.review_task(id, "publisher", true).unwrap();
         assert_eq!(board.get(id).unwrap().status, TaskStatus::Reviewed);
@@ -834,15 +889,9 @@ mod tests {
     #[test]
     fn test_batch_expiry() {
         let mut board = make_board();
-        let id1 = board
-            .create_task("T1".into(), "".into(), 50, "publisher".into(), 1, Some(10))
-            .unwrap();
-        let id2 = board
-            .create_task("T2".into(), "".into(), 50, "publisher".into(), 1, Some(100))
-            .unwrap();
-        let id3 = board
-            .create_task("T3".into(), "".into(), 50, "publisher".into(), 1, Some(10))
-            .unwrap();
+        let id1 = board.create_task("T1".into(), "".into(), 50, "publisher".into(), 1, Some(10)).unwrap();
+        let id2 = board.create_task("T2".into(), "".into(), 50, "publisher".into(), 1, Some(100)).unwrap();
+        let id3 = board.create_task("T3".into(), "".into(), 50, "publisher".into(), 1, Some(10)).unwrap();
 
         let expired = board.process_expiry(50);
         assert_eq!(expired.len(), 2);
@@ -877,12 +926,8 @@ mod tests {
     #[test]
     fn test_list_by_status() {
         let mut board = make_board();
-        let id1 = board
-            .create_task("T1".into(), "".into(), 0, "p1".into(), 1, None)
-            .unwrap();
-        let _id2 = board
-            .create_task("T2".into(), "".into(), 0, "p1".into(), 1, None)
-            .unwrap();
+        let id1 = board.create_task("T1".into(), "".into(), 0, "p1".into(), 1, None).unwrap();
+        let id2 = board.create_task("T2".into(), "".into(), 0, "p1".into(), 1, None).unwrap();
         board.claim_task(id1, "w1".to_string()).unwrap();
 
         assert_eq!(board.list_by_status(TaskStatus::Published).len(), 1);
@@ -893,12 +938,8 @@ mod tests {
     fn test_list_by_publisher() {
         let mut board = make_board();
         board.set_balance("p2", 1000);
-        board
-            .create_task("T1".into(), "".into(), 0, "publisher".into(), 1, None)
-            .unwrap();
-        board
-            .create_task("T2".into(), "".into(), 0, "p2".into(), 1, None)
-            .unwrap();
+        board.create_task("T1".into(), "".into(), 0, "publisher".into(), 1, None).unwrap();
+        board.create_task("T2".into(), "".into(), 0, "p2".into(), 1, None).unwrap();
 
         assert_eq!(board.list_by_publisher("publisher").len(), 1);
         assert_eq!(board.list_by_publisher("p2").len(), 1);
@@ -923,16 +964,9 @@ mod tests {
         let mut board = TaskBoard::with_event_bus(bus);
         board.set_balance("publisher", 10_000);
 
-        let id = board
-            .create_task(
-                "Lifecycle".into(),
-                "desc".into(),
-                200,
-                "publisher".into(),
-                1,
-                None,
-            )
-            .unwrap();
+        let id = board.create_task(
+            "Lifecycle".into(), "desc".into(), 200, "publisher".into(), 1, None
+        ).unwrap();
         let _ = rx.try_recv().unwrap(); // TaskCreated
 
         board.claim_task(id, "worker".to_string()).unwrap();
@@ -949,10 +983,7 @@ mod tests {
 
         board.review_task(id, "publisher", true).unwrap();
         let reviewed = rx.try_recv().unwrap();
-        assert!(matches!(
-            reviewed,
-            WorldEvent::TaskReviewed { approved: true, .. }
-        ));
+        assert!(matches!(reviewed, WorldEvent::TaskReviewed { approved: true, .. }));
 
         board.complete_task(id, 10).unwrap();
         let completed = rx.try_recv().unwrap();
@@ -1018,21 +1049,11 @@ mod tests {
     fn test_complete_task_with_reward_distributor() {
         let mut board = TaskBoard::with_reward_distributor(RewardConfig::default());
         board.set_balance("publisher", 10_000);
-        board
-            .reward_distributor_mut()
-            .unwrap()
-            .set_balance("worker", 0);
+        board.reward_distributor_mut().unwrap().set_balance("worker", 0);
 
-        let id = board
-            .create_task(
-                "Reward Task".into(),
-                "desc".into(),
-                1000,
-                "publisher".into(),
-                1,
-                None,
-            )
-            .unwrap();
+        let id = board.create_task(
+            "Reward Task".into(), "desc".into(), 1000, "publisher".into(), 1, None,
+        ).unwrap();
         board.claim_task(id, "worker".to_string()).unwrap();
         board.start_task(id).unwrap();
         board.submit_result(id, "Done".into()).unwrap();
@@ -1063,22 +1084,11 @@ mod tests {
     fn test_complete_task_with_token_currency() {
         let mut board = TaskBoard::with_reward_distributor(RewardConfig::default());
         board.set_balance("publisher", 10_000);
-        board
-            .reward_distributor_mut()
-            .unwrap()
-            .set_balance("worker", 0);
+        board.reward_distributor_mut().unwrap().set_balance("worker", 0);
 
-        let id = board
-            .create_task_with_currency(
-                "Token Task".into(),
-                "desc".into(),
-                5000,
-                "publisher".into(),
-                1,
-                None,
-                Currency::Token,
-            )
-            .unwrap();
+        let id = board.create_task_with_currency(
+            "Token Task".into(), "desc".into(), 5000, "publisher".into(), 1, None, Currency::Token,
+        ).unwrap();
         board.claim_task(id, "worker".to_string()).unwrap();
         board.start_task(id).unwrap();
         board.submit_result(id, "Done".into()).unwrap();
@@ -1104,21 +1114,11 @@ mod tests {
         let mut board = TaskBoard::with_event_bus(bus);
         board.reward_distributor = Some(RewardDistributor::new(RewardConfig::default()));
         board.set_balance("publisher", 10_000);
-        board
-            .reward_distributor_mut()
-            .unwrap()
-            .set_balance("worker", 0);
+        board.reward_distributor_mut().unwrap().set_balance("worker", 0);
 
-        let id = board
-            .create_task(
-                "Event Task".into(),
-                "desc".into(),
-                500,
-                "publisher".into(),
-                1,
-                None,
-            )
-            .unwrap();
+        let id = board.create_task(
+            "Event Task".into(), "desc".into(), 500, "publisher".into(), 1, None,
+        ).unwrap();
         let _ = rx.try_recv().unwrap(); // TaskCreated
 
         board.claim_task(id, "worker".to_string()).unwrap();
@@ -1138,16 +1138,7 @@ mod tests {
         // Should get RewardDistributed then TaskCompleted
         let reward_evt = rx.try_recv().unwrap();
         assert!(matches!(reward_evt, WorldEvent::RewardDistributed { .. }));
-        if let WorldEvent::RewardDistributed {
-            task_id,
-            assignee_id,
-            gross_reward,
-            net_reward,
-            platform_fee,
-            xp_awarded,
-            reputation_change,
-        } = reward_evt
-        {
+        if let WorldEvent::RewardDistributed { task_id, assignee_id, gross_reward, net_reward, platform_fee, xp_awarded, reputation_change } = reward_evt {
             assert_eq!(task_id, id.to_string());
             assert_eq!(assignee_id, "worker");
             assert_eq!(gross_reward, 500);
@@ -1166,16 +1157,9 @@ mod tests {
         let mut board = TaskBoard::new();
         board.set_balance("publisher", 10_000);
 
-        let id = board
-            .create_task(
-                "Legacy Task".into(),
-                "desc".into(),
-                100,
-                "publisher".into(),
-                1,
-                None,
-            )
-            .unwrap();
+        let id = board.create_task(
+            "Legacy Task".into(), "desc".into(), 100, "publisher".into(), 1, None,
+        ).unwrap();
         board.claim_task(id, "worker".to_string()).unwrap();
         board.start_task(id).unwrap();
         board.submit_result(id, "Done".into()).unwrap();

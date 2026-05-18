@@ -1,9 +1,13 @@
+use std::fmt;
+use std::str::FromStr;
+
 use serde::{Deserialize, Serialize};
 
 use super::enums::{AgentPhase, Currency, DeathReason};
 
 /// Discriminant for filtering events by kind.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
 pub enum EventType {
     TickAdvanced,
     AgentSpawned,
@@ -29,6 +33,70 @@ pub enum EventType {
     TaskExpired,
     RewardDistributed,
     ReputationChanged,
+}
+
+impl fmt::Display for EventType {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        let s = match self {
+            EventType::TickAdvanced => "tick_advanced",
+            EventType::AgentSpawned => "agent_spawned",
+            EventType::AgentDying => "agent_dying",
+            EventType::AgentDied => "agent_died",
+            EventType::AgentRescued => "agent_rescued",
+            EventType::TransactionCompleted => "transaction_completed",
+            EventType::BalanceChanged => "balance_changed",
+            EventType::PhaseChanged => "phase_changed",
+            EventType::RuleViolated => "rule_violated",
+            EventType::SnapshotTaken => "snapshot_taken",
+            EventType::EscrowCreated => "escrow_created",
+            EventType::EscrowClaimed => "escrow_claimed",
+            EventType::EscrowReleased => "escrow_released",
+            EventType::EscrowRefunded => "escrow_refunded",
+            EventType::EscrowFrozen => "escrow_frozen",
+            EventType::TaskCreated => "task_created",
+            EventType::TaskClaimed => "task_claimed",
+            EventType::TaskStarted => "task_started",
+            EventType::TaskSubmitted => "task_submitted",
+            EventType::TaskReviewed => "task_reviewed",
+            EventType::TaskCompleted => "task_completed",
+            EventType::TaskExpired => "task_expired",
+            EventType::RewardDistributed => "reward_distributed",
+        };
+        write!(f, "{}", s)
+    }
+}
+
+impl FromStr for EventType {
+    type Err = String;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        match s {
+            "tick_advanced" => Ok(EventType::TickAdvanced),
+            "agent_spawned" => Ok(EventType::AgentSpawned),
+            "agent_dying" => Ok(EventType::AgentDying),
+            "agent_died" => Ok(EventType::AgentDied),
+            "agent_rescued" => Ok(EventType::AgentRescued),
+            "transaction_completed" => Ok(EventType::TransactionCompleted),
+            "balance_changed" => Ok(EventType::BalanceChanged),
+            "phase_changed" => Ok(EventType::PhaseChanged),
+            "rule_violated" => Ok(EventType::RuleViolated),
+            "snapshot_taken" => Ok(EventType::SnapshotTaken),
+            "escrow_created" => Ok(EventType::EscrowCreated),
+            "escrow_claimed" => Ok(EventType::EscrowClaimed),
+            "escrow_released" => Ok(EventType::EscrowReleased),
+            "escrow_refunded" => Ok(EventType::EscrowRefunded),
+            "escrow_frozen" => Ok(EventType::EscrowFrozen),
+            "task_created" => Ok(EventType::TaskCreated),
+            "task_claimed" => Ok(EventType::TaskClaimed),
+            "task_started" => Ok(EventType::TaskStarted),
+            "task_submitted" => Ok(EventType::TaskSubmitted),
+            "task_reviewed" => Ok(EventType::TaskReviewed),
+            "task_completed" => Ok(EventType::TaskCompleted),
+            "task_expired" => Ok(EventType::TaskExpired),
+            "reward_distributed" => Ok(EventType::RewardDistributed),
+            _ => Err(format!("unknown event type: {:?}", s)),
+        }
+    }
 }
 
 /// Events emitted by the world engine.

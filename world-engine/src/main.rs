@@ -3,7 +3,6 @@ use tokio::sync::Mutex;
 
 use agent_world_engine::economy::task::TaskBoard;
 use agent_world_engine::wal::WAL;
-use agent_world_engine::world::discovery::AgentRegistry;
 
 #[tokio::main]
 async fn main() {
@@ -65,37 +64,13 @@ async fn main() {
         }
     });
 
-    // Initialize task board with event bus (takes ownership)
+    // Initialize task board with event bus
+    // Clone the EventBus for the task board — both share the same broadcast channel.
+    let shared_event_bus = Arc::new(event_bus.clone());
     let task_board = Arc::new(Mutex::new(TaskBoard::with_event_bus(event_bus)));
 
-    // Initialize agent registry with its own event bus for discovery events
-    let discovery_bus = agent_world_engine::world::EventBus::new(256);
-    let mut discovery_wal_rx = discovery_bus.subscribe();
-    let discovery_wal_writer = wal_writer.clone();
-    let discovery_wal_handle = tokio::spawn(async move {
-        loop {
-            match discovery_wal_rx.recv().await {
-                Ok(event) => {
-                    let mut wal = discovery_wal_writer.lock().await;
-                    if let Err(e) = wal.append_event(&event) {
-                        eprintln!("[WAL] Failed to write discovery event: {}", e);
-                    }
-                }
-                Err(tokio::sync::broadcast::error::RecvError::Lagged(n)) => {
-                    eprintln!("[WAL] Discovery lagged {} events", n);
-                }
-                Err(tokio::sync::broadcast::error::RecvError::Closed) => {
-                    break;
-                }
-            }
-        }
-    });
-
-    let registry = Arc::new(Mutex::new(AgentRegistry::with_event_bus(discovery_bus)));
-    println!("   AgentRegistry: initialized");
-
-    // Build the HTTP API router with WAL support and agent discovery
-    let app = agent_world_engine::api::create_router_with_wal(task_board, wal_writer.clone(), registry);
+    // Build the HTTP API router with WAL and EventBus support
+    let app = agent_world_engine::api::create_router_with_wal(task_board, wal_writer.clone(), shared_event_bus);
 
     // Start the HTTP server
     let addr = std::net::SocketAddr::from(([127, 0, 0, 1], 3000));
@@ -129,6 +104,5 @@ async fn main() {
     }
 
     wal_handle.abort();
-    discovery_wal_handle.abort();
     println!("[Server] Shutdown complete.");
 }

@@ -7,9 +7,6 @@ use super::event::{EventType, WorldEvent};
 ///
 /// Uses `tokio::sync::broadcast` for async-friendly fan-out.
 /// Each subscriber gets its own receiver, allowing independent consumption.
-///
-/// Cloning an `EventBus` creates a new handle to the same broadcast channel,
-/// so all clones share the same subscriber set.
 #[derive(Clone)]
 pub struct EventBus {
     sender: tokio::sync::broadcast::Sender<WorldEvent>,

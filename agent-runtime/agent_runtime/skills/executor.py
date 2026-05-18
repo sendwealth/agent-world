@@ -134,7 +134,10 @@ class SkillExecutor:
             leveled_up = skill.add_experience(total_xp)
             logger.info(
                 "Skill '%s' earned %d XP (total: %d, level: %d)%s",
-                skill_name, total_xp, skill.experience, skill.level,
+                skill_name,
+                total_xp,
+                skill.experience,
+                skill.level,
                 " — LEVELED UP!" if leveled_up else "",
             )
 

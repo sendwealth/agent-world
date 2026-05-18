@@ -13,7 +13,6 @@ Covers:
 from __future__ import annotations
 
 import json
-from typing import Any
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
@@ -24,16 +23,13 @@ from agent_runtime.llm import (
     LLMConfig,
     LLMError,
     LLMMessage,
-    LLMProvider,
     LLMResponse,
-    LLMStreamChunk,
     OllamaProvider,
     OpenAIProvider,
     TokenUsage,
     create_provider,
 )
 from agent_runtime.llm.base import ProviderType
-
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -222,7 +218,7 @@ class TestOpenAIProvider:
                 LLMMessage(role="system", content="You are helpful."),
                 LLMMessage(role="user", content="Hi"),
             ]
-            result = await provider.chat(messages)
+            await provider.chat(messages)
 
         body = mock_post.call_args.kwargs["json"]
         assert len(body["messages"]) == 2
@@ -300,7 +296,9 @@ class TestOpenAIProvider:
 
 class TestAnthropicProvider:
     def _make_config(self, **kwargs) -> LLMConfig:
-        defaults = dict(provider=ProviderType.ANTHROPIC, model="claude-3-sonnet", api_key="sk-ant-test")
+        defaults = dict(
+            provider=ProviderType.ANTHROPIC, model="claude-3-sonnet", api_key="sk-ant-test"
+        )
         defaults.update(kwargs)
         return LLMConfig(**defaults)
 
@@ -397,19 +395,23 @@ class TestAnthropicProvider:
         assert result.usage.total_tokens == 30
 
     def test_parse_sse_content_delta(self):
-        line = json.dumps({
-            "type": "content_block_delta",
-            "delta": {"type": "text_delta", "text": "Hello"},
-        })
+        line = json.dumps(
+            {
+                "type": "content_block_delta",
+                "delta": {"type": "text_delta", "text": "Hello"},
+            }
+        )
         chunk = AnthropicProvider._parse_sse_line(f"data: {line}")
         assert chunk is not None
         assert chunk.content == "Hello"
 
     def test_parse_sse_message_start(self):
-        line = json.dumps({
-            "type": "message_start",
-            "message": {"model": "claude-3-sonnet"},
-        })
+        line = json.dumps(
+            {
+                "type": "message_start",
+                "message": {"model": "claude-3-sonnet"},
+            }
+        )
         chunk = AnthropicProvider._parse_sse_line(f"data: {line}")
         assert chunk is not None
         assert chunk.model == "claude-3-sonnet"
@@ -540,7 +542,9 @@ class TestFactory:
         assert isinstance(provider, OpenAIProvider)
 
     def test_create_anthropic(self):
-        config = LLMConfig(provider=ProviderType.ANTHROPIC, model="claude-3-sonnet", api_key="sk-ant")
+        config = LLMConfig(
+            provider=ProviderType.ANTHROPIC, model="claude-3-sonnet", api_key="sk-ant"
+        )
         provider = create_provider(config)
         assert isinstance(provider, AnthropicProvider)
 
@@ -595,14 +599,20 @@ class TestCostTracker:
     @pytest.mark.asyncio
     async def test_total_properties(self):
         tracker = CostTracker()
-        await tracker.record(LLMResponse(
-            content="A", model="gpt-4",
-            usage=TokenUsage(prompt_tokens=100, completion_tokens=50, total_tokens=150),
-        ))
-        await tracker.record(LLMResponse(
-            content="B", model="gpt-4",
-            usage=TokenUsage(prompt_tokens=200, completion_tokens=100, total_tokens=300),
-        ))
+        await tracker.record(
+            LLMResponse(
+                content="A",
+                model="gpt-4",
+                usage=TokenUsage(prompt_tokens=100, completion_tokens=50, total_tokens=150),
+            )
+        )
+        await tracker.record(
+            LLMResponse(
+                content="B",
+                model="gpt-4",
+                usage=TokenUsage(prompt_tokens=200, completion_tokens=100, total_tokens=300),
+            )
+        )
         assert tracker.total_prompt_tokens == 300
         assert tracker.total_completion_tokens == 150
         assert tracker.total_tokens == 450
@@ -611,10 +621,13 @@ class TestCostTracker:
     @pytest.mark.asyncio
     async def test_summary(self):
         tracker = CostTracker()
-        await tracker.record(LLMResponse(
-            content="A", model="gpt-4",
-            usage=TokenUsage(prompt_tokens=100, completion_tokens=50, total_tokens=150),
-        ))
+        await tracker.record(
+            LLMResponse(
+                content="A",
+                model="gpt-4",
+                usage=TokenUsage(prompt_tokens=100, completion_tokens=50, total_tokens=150),
+            )
+        )
         s = tracker.summary()
         assert s["calls"] == 1
         assert s["total_prompt_tokens"] == 100
@@ -625,14 +638,20 @@ class TestCostTracker:
     @pytest.mark.asyncio
     async def test_by_model(self):
         tracker = CostTracker()
-        await tracker.record(LLMResponse(
-            content="A", model="gpt-4",
-            usage=TokenUsage(prompt_tokens=100, completion_tokens=50, total_tokens=150),
-        ))
-        await tracker.record(LLMResponse(
-            content="B", model="claude-3-sonnet",
-            usage=TokenUsage(prompt_tokens=200, completion_tokens=100, total_tokens=300),
-        ))
+        await tracker.record(
+            LLMResponse(
+                content="A",
+                model="gpt-4",
+                usage=TokenUsage(prompt_tokens=100, completion_tokens=50, total_tokens=150),
+            )
+        )
+        await tracker.record(
+            LLMResponse(
+                content="B",
+                model="claude-3-sonnet",
+                usage=TokenUsage(prompt_tokens=200, completion_tokens=100, total_tokens=300),
+            )
+        )
         by_model = tracker.by_model()
         assert "gpt-4" in by_model
         assert "claude-3-sonnet" in by_model
@@ -642,10 +661,13 @@ class TestCostTracker:
     @pytest.mark.asyncio
     async def test_reset(self):
         tracker = CostTracker()
-        await tracker.record(LLMResponse(
-            content="A", model="gpt-4",
-            usage=TokenUsage(prompt_tokens=100, completion_tokens=50, total_tokens=150),
-        ))
+        await tracker.record(
+            LLMResponse(
+                content="A",
+                model="gpt-4",
+                usage=TokenUsage(prompt_tokens=100, completion_tokens=50, total_tokens=150),
+            )
+        )
         await tracker.reset()
         assert tracker.total_tokens == 0
         assert tracker.total_cost_usd == 0.0
@@ -653,6 +675,7 @@ class TestCostTracker:
     def test_pricing_prefix_match(self):
         """gpt-4-0613 should use gpt-4 pricing via prefix match."""
         from agent_runtime.llm.cost import _get_pricing
+
         pricing = _get_pricing("gpt-4-0613")
         assert pricing["prompt"] == 0.03
         assert pricing["completion"] == 0.06
@@ -660,12 +683,14 @@ class TestCostTracker:
     def test_pricing_prefix_longest_first(self):
         """gpt-4o-mini should match gpt-4o-mini, not gpt-4o."""
         from agent_runtime.llm.cost import _get_pricing
+
         pricing = _get_pricing("gpt-4o-mini")
         assert pricing["prompt"] == 0.00015
         assert pricing["completion"] == 0.0006
 
     def test_pricing_unknown_model(self):
-        from agent_runtime.llm.cost import _get_pricing, _DEFAULT_PRICING
+        from agent_runtime.llm.cost import _DEFAULT_PRICING, _get_pricing
+
         pricing = _get_pricing("unknown-model-xyz")
         assert pricing == _DEFAULT_PRICING
 
@@ -673,10 +698,13 @@ class TestCostTracker:
     async def test_ollama_zero_cost(self):
         """Ollama models use default pricing but can be tracked."""
         tracker = CostTracker()
-        await tracker.record(LLMResponse(
-            content="Local", model="llama3",
-            usage=TokenUsage(prompt_tokens=50, completion_tokens=25, total_tokens=75),
-        ))
+        await tracker.record(
+            LLMResponse(
+                content="Local",
+                model="llama3",
+                usage=TokenUsage(prompt_tokens=50, completion_tokens=25, total_tokens=75),
+            )
+        )
         # Should still track tokens
         assert tracker.total_tokens == 75
         # Cost is based on default pricing (not zero, but that's fine for tracking)
@@ -719,6 +747,7 @@ class TestLLMError:
     @pytest.mark.asyncio
     async def test_openai_http_error_wrapped(self):
         import httpx
+
         config = LLMConfig(provider=ProviderType.OPENAI, model="gpt-4", api_key="sk-test")
         provider = OpenAIProvider(config)
         with patch.object(provider._client, "post", new_callable=AsyncMock) as mock_post:
@@ -730,7 +759,10 @@ class TestLLMError:
     @pytest.mark.asyncio
     async def test_anthropic_http_error_wrapped(self):
         import httpx
-        config = LLMConfig(provider=ProviderType.ANTHROPIC, model="claude-3-sonnet", api_key="sk-ant")
+
+        config = LLMConfig(
+            provider=ProviderType.ANTHROPIC, model="claude-3-sonnet", api_key="sk-ant"
+        )
         provider = AnthropicProvider(config)
         with patch.object(provider._client, "post", new_callable=AsyncMock) as mock_post:
             mock_post.side_effect = httpx.ConnectError("refused")
@@ -741,6 +773,7 @@ class TestLLMError:
     @pytest.mark.asyncio
     async def test_ollama_http_error_wrapped(self):
         import httpx
+
         config = LLMConfig(provider=ProviderType.OLLAMA, model="llama3")
         provider = OllamaProvider(config)
         with patch.object(provider._client, "post", new_callable=AsyncMock) as mock_post:

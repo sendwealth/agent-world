@@ -23,7 +23,6 @@ from agent_runtime.skills import (
     create_registry_with_builtins,
 )
 
-
 # ============================================================
 # Helpers
 # ============================================================
@@ -49,7 +48,8 @@ class TestSkillDefinition:
         assert defn.category == "general"
 
     def test_create_full(self):
-        fn = lambda skills, **kw: {"ok": True}
+        def fn(skills, **kw):
+            return {"ok": True}
         defn = SkillDefinition(
             name="custom",
             description="A custom skill",
@@ -287,7 +287,10 @@ class TestTeachingSkill:
     def test_execute_basic(self):
         skills = {"teaching": Skill(name="teaching", level=5)}
         result = TEACHING_SKILL.execute_fn(
-            skills, subject="coding", target_skill="coding", target_level=3,
+            skills,
+            subject="coding",
+            target_skill="coding",
+            target_level=3,
         )
         assert result["skill"] == "teaching"
         assert result["subject"] == "coding"
@@ -314,13 +317,15 @@ class TestSkillExecutorXP:
         agent_skills = {"coding": Skill(name="coding", level=1)}
 
         # Override execute_fn to return failure
-        registry.upgrade(SkillDefinition(
-            name="coding",
-            description=CODING_SKILL.description,
-            max_level=CODING_SKILL.max_level,
-            execute_fn=lambda skills, **kw: {"success": False},
-            category=CODING_SKILL.category,
-        ))
+        registry.upgrade(
+            SkillDefinition(
+                name="coding",
+                description=CODING_SKILL.description,
+                max_level=CODING_SKILL.max_level,
+                execute_fn=lambda skills, **kw: {"success": False},
+                category=CODING_SKILL.category,
+            )
+        )
 
         result = executor.execute("coding", agent_skills)
         assert result.xp_earned == XPReward.USE.value  # 10
@@ -355,13 +360,15 @@ class TestSkillExecutorXP:
         executor = SkillExecutor(registry)
         agent_skills = {"teaching": Skill(name="teaching", level=1)}
 
-        registry.upgrade(SkillDefinition(
-            name="teaching",
-            description=TEACHING_SKILL.description,
-            max_level=TEACHING_SKILL.max_level,
-            execute_fn=lambda skills, **kw: {"success": False},
-            category=TEACHING_SKILL.category,
-        ))
+        registry.upgrade(
+            SkillDefinition(
+                name="teaching",
+                description=TEACHING_SKILL.description,
+                max_level=TEACHING_SKILL.max_level,
+                execute_fn=lambda skills, **kw: {"success": False},
+                category=TEACHING_SKILL.category,
+            )
+        )
 
         result = executor.execute("teaching", agent_skills)
         assert result.xp_earned == 60  # 10 use + 50 teaching
@@ -541,13 +548,15 @@ class TestIntegration:
                 "level_used": level,
             }
 
-        registry.register(SkillDefinition(
-            name="mining",
-            description="Extract resources from the environment",
-            max_level=20,
-            execute_fn=execute_mining,
-            category="gathering",
-        ))
+        registry.register(
+            SkillDefinition(
+                name="mining",
+                description="Extract resources from the environment",
+                max_level=20,
+                execute_fn=execute_mining,
+                category="gathering",
+            )
+        )
 
         executor = SkillExecutor(registry)
         agent_skills = {"mining": Skill(name="mining", level=5, max_level=20)}
@@ -560,17 +569,25 @@ class TestIntegration:
     def test_upgrade_skill_preserves_data(self):
         """Upgrading a skill definition doesn't affect existing agent skills."""
         registry = SkillRegistry()
-        registry.register(SkillDefinition(
-            name="crafting", description="v1", max_level=10,
-        ))
+        registry.register(
+            SkillDefinition(
+                name="crafting",
+                description="v1",
+                max_level=10,
+            )
+        )
 
         agent_skills = {"crafting": registry.create_skill("crafting", level=5)}
         assert agent_skills["crafting"].level == 5
 
         # Upgrade the definition
-        registry.upgrade(SkillDefinition(
-            name="crafting", description="v2", max_level=15,
-        ))
+        registry.upgrade(
+            SkillDefinition(
+                name="crafting",
+                description="v2",
+                max_level=15,
+            )
+        )
 
         # Existing skill instance is unchanged
         assert agent_skills["crafting"].level == 5

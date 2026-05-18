@@ -19,7 +19,6 @@ import pytest
 
 from agent_runtime.memory.working_memory import MemoryEntry, WorkingMemory
 
-
 # ---------------------------------------------------------------------------
 # Fixtures
 # ---------------------------------------------------------------------------

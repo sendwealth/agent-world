@@ -11,7 +11,7 @@ import logging
 from dataclasses import dataclass, field
 from typing import Dict
 
-from .base import LLMResponse, ProviderType
+from .base import LLMResponse
 
 logger = logging.getLogger(__name__)
 

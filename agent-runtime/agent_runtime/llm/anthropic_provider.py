@@ -171,16 +171,12 @@ class AnthropicProvider(LLMProvider):
     @staticmethod
     def _parse_response(data: dict) -> LLMResponse:
         content_blocks = data.get("content", [])
-        text = "".join(
-            block["text"] for block in content_blocks if block.get("type") == "text"
-        )
+        text = "".join(block["text"] for block in content_blocks if block.get("type") == "text")
         usage_data = data.get("usage", {})
         usage = TokenUsage(
             prompt_tokens=usage_data.get("input_tokens", 0),
             completion_tokens=usage_data.get("output_tokens", 0),
-            total_tokens=(
-                usage_data.get("input_tokens", 0) + usage_data.get("output_tokens", 0)
-            ),
+            total_tokens=(usage_data.get("input_tokens", 0) + usage_data.get("output_tokens", 0)),
         )
         return LLMResponse(
             content=text,
@@ -194,7 +190,7 @@ class AnthropicProvider(LLMProvider):
         """Parse a single SSE line from the Anthropic streaming response."""
         if not line.startswith("data: "):
             return None
-        payload = line[len("data: "):]
+        payload = line[len("data: ") :]
         try:
             data = json.loads(payload)
         except json.JSONDecodeError:

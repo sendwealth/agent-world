@@ -1,6 +1,5 @@
 /// CRC32 implementation for WAL data integrity verification.
 /// Uses the standard CRC-32 (ISO 3309) polynomial 0xEDB88320.
-
 pub fn crc32(data: &[u8]) -> u32 {
     let mut crc: u32 = 0xFFFFFFFF;
     for &byte in data {

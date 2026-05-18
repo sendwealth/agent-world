@@ -14,24 +14,22 @@ async fn main() {
     // Initialize WAL and recover from crash
     let mut wal = WAL::new("./data");
     match wal.open() {
-        Ok(()) => {
-            match wal.recover() {
-                Ok(result) => {
-                    if result.recovered_from_snapshot || result.wal_entries_replayed > 0 {
-                        println!(
-                            "   WAL recovery: snapshot={}, replayed={}, corrupted={}",
-                            result.recovered_from_snapshot,
-                            result.wal_entries_replayed,
-                            result.corrupted_records
-                        );
-                    }
-                    println!("   WAL: opened ({} events recovered)", result.event_counter);
+        Ok(()) => match wal.recover() {
+            Ok(result) => {
+                if result.recovered_from_snapshot || result.wal_entries_replayed > 0 {
+                    println!(
+                        "   WAL recovery: snapshot={}, replayed={}, corrupted={}",
+                        result.recovered_from_snapshot,
+                        result.wal_entries_replayed,
+                        result.corrupted_records
+                    );
                 }
-                Err(e) => {
-                    eprintln!("   WAL recovery failed: {}", e);
-                }
+                println!("   WAL: opened ({} events recovered)", result.event_counter);
             }
-        }
+            Err(e) => {
+                eprintln!("   WAL recovery failed: {}", e);
+            }
+        },
         Err(e) => {
             eprintln!("   WAL open failed: {}", e);
         }

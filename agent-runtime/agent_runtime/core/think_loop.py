@@ -196,9 +196,7 @@ class MockDecisionProvider:
         perception: Perception,
         survival: SurvivalAction,
     ) -> Decision:
-        affordable = [
-            at for at in self._SIMPLE_ACTIONS if self._executor.can_afford(at, state)
-        ]
+        affordable = [at for at in self._SIMPLE_ACTIONS if self._executor.can_afford(at, state)]
 
         if not affordable:
             # Even REST should be free, but guard anyway.
@@ -455,9 +453,7 @@ class _NoOpWorldClient:
     async def claim_task(self, task_id: str) -> dict[str, Any]:
         return {"status": "ok", "action": "claim_task", "task_id": task_id}
 
-    async def submit_task(
-        self, task_id: str, result: dict[str, Any]
-    ) -> dict[str, Any]:
+    async def submit_task(self, task_id: str, result: dict[str, Any]) -> dict[str, Any]:
         return {"status": "ok", "action": "submit_task", "task_id": task_id}
 
     async def propose_deal(self, proposal: dict[str, Any]) -> dict[str, Any]:

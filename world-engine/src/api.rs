@@ -1,18 +1,17 @@
 use std::sync::Arc;
 
 use axum::{
-    Json,
-    Router,
     extract::{Path, State},
     http::StatusCode,
     response::IntoResponse,
     routing::{delete, get, post},
+    Json, Router,
 };
 use serde::{Deserialize, Serialize};
 use tokio::sync::Mutex;
 use uuid::Uuid;
 
-use crate::economy::task::{TaskBoard, Task};
+use crate::economy::task::{Task, TaskBoard};
 use crate::wal::WAL;
 
 // ── Shared State ──────────────────────────────────────────
@@ -92,22 +91,12 @@ pub struct ReviewTaskRequest {
     pub reviewer_id: String,
 }
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Default, Deserialize)]
 #[serde(default)]
 pub struct ListTasksQuery {
     pub status: Option<String>,
     pub publisher_id: Option<String>,
     pub assignee_id: Option<String>,
-}
-
-impl Default for ListTasksQuery {
-    fn default() -> Self {
-        Self {
-            status: None,
-            publisher_id: None,
-            assignee_id: None,
-        }
-    }
 }
 
 // ── Response Types ────────────────────────────────────────
@@ -157,10 +146,22 @@ async fn create_task(
     Json(body): Json<CreateTaskRequest>,
 ) -> impl IntoResponse {
     if body.title.is_empty() {
-        return (StatusCode::BAD_REQUEST, Json(ErrorResponse { error: "title is required".into() })).into_response();
+        return (
+            StatusCode::BAD_REQUEST,
+            Json(ErrorResponse {
+                error: "title is required".into(),
+            }),
+        )
+            .into_response();
     }
     if body.publisher_id.is_empty() {
-        return (StatusCode::BAD_REQUEST, Json(ErrorResponse { error: "publisher_id is required".into() })).into_response();
+        return (
+            StatusCode::BAD_REQUEST,
+            Json(ErrorResponse {
+                error: "publisher_id is required".into(),
+            }),
+        )
+            .into_response();
     }
 
     let mut board = board.lock().await;
@@ -176,15 +177,17 @@ async fn create_task(
             let task = board.get(id).unwrap();
             (StatusCode::CREATED, Json(TaskResponse::from(task))).into_response()
         }
-        Err(e) => {
-            (StatusCode::INTERNAL_SERVER_ERROR, Json(ErrorResponse { error: e.to_string() })).into_response()
-        }
+        Err(e) => (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            Json(ErrorResponse {
+                error: e.to_string(),
+            }),
+        )
+            .into_response(),
     }
 }
 
-async fn list_tasks(
-    State(board): State<SharedTaskBoard>,
-) -> impl IntoResponse {
+async fn list_tasks(State(board): State<SharedTaskBoard>) -> impl IntoResponse {
     let board = board.lock().await;
     let tasks: Vec<TaskResponse> = board.list().into_iter().map(TaskResponse::from).collect();
     Json(tasks).into_response()
@@ -195,13 +198,25 @@ async fn get_task(
     Path(id): Path<String>,
 ) -> impl IntoResponse {
     let Ok(uuid) = Uuid::parse_str(&id) else {
-        return (StatusCode::BAD_REQUEST, Json(ErrorResponse { error: "invalid task id".into() })).into_response();
+        return (
+            StatusCode::BAD_REQUEST,
+            Json(ErrorResponse {
+                error: "invalid task id".into(),
+            }),
+        )
+            .into_response();
     };
 
     let board = board.lock().await;
     match board.get(uuid) {
         Some(task) => Json(TaskResponse::from(task)).into_response(),
-        None => (StatusCode::NOT_FOUND, Json(ErrorResponse { error: "task not found".into() })).into_response(),
+        None => (
+            StatusCode::NOT_FOUND,
+            Json(ErrorResponse {
+                error: "task not found".into(),
+            }),
+        )
+            .into_response(),
     }
 }
 
@@ -211,7 +226,13 @@ async fn claim_task(
     Json(body): Json<ClaimTaskRequest>,
 ) -> impl IntoResponse {
     let Ok(uuid) = Uuid::parse_str(&id) else {
-        return (StatusCode::BAD_REQUEST, Json(ErrorResponse { error: "invalid task id".into() })).into_response();
+        return (
+            StatusCode::BAD_REQUEST,
+            Json(ErrorResponse {
+                error: "invalid task id".into(),
+            }),
+        )
+            .into_response();
     };
 
     let mut board = board.lock().await;
@@ -226,7 +247,13 @@ async fn claim_task(
                 crate::economy::task::TaskError::NotFound(_) => StatusCode::NOT_FOUND,
                 _ => StatusCode::BAD_REQUEST,
             };
-            (status, Json(ErrorResponse { error: e.to_string() })).into_response()
+            (
+                status,
+                Json(ErrorResponse {
+                    error: e.to_string(),
+                }),
+            )
+                .into_response()
         }
     }
 }
@@ -236,7 +263,13 @@ async fn start_task(
     Path(id): Path<String>,
 ) -> impl IntoResponse {
     let Ok(uuid) = Uuid::parse_str(&id) else {
-        return (StatusCode::BAD_REQUEST, Json(ErrorResponse { error: "invalid task id".into() })).into_response();
+        return (
+            StatusCode::BAD_REQUEST,
+            Json(ErrorResponse {
+                error: "invalid task id".into(),
+            }),
+        )
+            .into_response();
     };
 
     let mut board = board.lock().await;
@@ -251,7 +284,13 @@ async fn start_task(
                 crate::economy::task::TaskError::NotFound(_) => StatusCode::NOT_FOUND,
                 _ => StatusCode::BAD_REQUEST,
             };
-            (status, Json(ErrorResponse { error: e.to_string() })).into_response()
+            (
+                status,
+                Json(ErrorResponse {
+                    error: e.to_string(),
+                }),
+            )
+                .into_response()
         }
     }
 }
@@ -262,7 +301,13 @@ async fn submit_task(
     Json(body): Json<SubmitTaskRequest>,
 ) -> impl IntoResponse {
     let Ok(uuid) = Uuid::parse_str(&id) else {
-        return (StatusCode::BAD_REQUEST, Json(ErrorResponse { error: "invalid task id".into() })).into_response();
+        return (
+            StatusCode::BAD_REQUEST,
+            Json(ErrorResponse {
+                error: "invalid task id".into(),
+            }),
+        )
+            .into_response();
     };
 
     let mut board = board.lock().await;
@@ -278,7 +323,13 @@ async fn submit_task(
                 crate::economy::task::TaskError::ResultRequired => StatusCode::BAD_REQUEST,
                 _ => StatusCode::BAD_REQUEST,
             };
-            (status, Json(ErrorResponse { error: e.to_string() })).into_response()
+            (
+                status,
+                Json(ErrorResponse {
+                    error: e.to_string(),
+                }),
+            )
+                .into_response()
         }
     }
 }
@@ -289,7 +340,13 @@ async fn review_task(
     Json(body): Json<ReviewTaskRequest>,
 ) -> impl IntoResponse {
     let Ok(uuid) = Uuid::parse_str(&id) else {
-        return (StatusCode::BAD_REQUEST, Json(ErrorResponse { error: "invalid task id".into() })).into_response();
+        return (
+            StatusCode::BAD_REQUEST,
+            Json(ErrorResponse {
+                error: "invalid task id".into(),
+            }),
+        )
+            .into_response();
     };
 
     let mut board = board.lock().await;
@@ -305,7 +362,13 @@ async fn review_task(
                 crate::economy::task::TaskError::NotPublisher { .. } => StatusCode::FORBIDDEN,
                 _ => StatusCode::BAD_REQUEST,
             };
-            (status, Json(ErrorResponse { error: e.to_string() })).into_response()
+            (
+                status,
+                Json(ErrorResponse {
+                    error: e.to_string(),
+                }),
+            )
+                .into_response()
         }
     }
 }
@@ -315,7 +378,13 @@ async fn complete_task(
     Path(id): Path<String>,
 ) -> impl IntoResponse {
     let Ok(uuid) = Uuid::parse_str(&id) else {
-        return (StatusCode::BAD_REQUEST, Json(ErrorResponse { error: "invalid task id".into() })).into_response();
+        return (
+            StatusCode::BAD_REQUEST,
+            Json(ErrorResponse {
+                error: "invalid task id".into(),
+            }),
+        )
+            .into_response();
     };
 
     let mut board = board.lock().await;
@@ -330,7 +399,13 @@ async fn complete_task(
                 crate::economy::task::TaskError::NotFound(_) => StatusCode::NOT_FOUND,
                 _ => StatusCode::BAD_REQUEST,
             };
-            (status, Json(ErrorResponse { error: e.to_string() })).into_response()
+            (
+                status,
+                Json(ErrorResponse {
+                    error: e.to_string(),
+                }),
+            )
+                .into_response()
         }
     }
 }
@@ -340,7 +415,13 @@ async fn expire_task(
     Path(id): Path<String>,
 ) -> impl IntoResponse {
     let Ok(uuid) = Uuid::parse_str(&id) else {
-        return (StatusCode::BAD_REQUEST, Json(ErrorResponse { error: "invalid task id".into() })).into_response();
+        return (
+            StatusCode::BAD_REQUEST,
+            Json(ErrorResponse {
+                error: "invalid task id".into(),
+            }),
+        )
+            .into_response();
     };
 
     let mut board = board.lock().await;
@@ -355,7 +436,13 @@ async fn expire_task(
                 crate::economy::task::TaskError::NotFound(_) => StatusCode::NOT_FOUND,
                 _ => StatusCode::BAD_REQUEST,
             };
-            (status, Json(ErrorResponse { error: e.to_string() })).into_response()
+            (
+                status,
+                Json(ErrorResponse {
+                    error: e.to_string(),
+                }),
+            )
+                .into_response()
         }
     }
 }
@@ -365,7 +452,13 @@ async fn delete_task(
     Path(id): Path<String>,
 ) -> impl IntoResponse {
     let Ok(uuid) = Uuid::parse_str(&id) else {
-        return (StatusCode::BAD_REQUEST, Json(ErrorResponse { error: "invalid task id".into() })).into_response();
+        return (
+            StatusCode::BAD_REQUEST,
+            Json(ErrorResponse {
+                error: "invalid task id".into(),
+            }),
+        )
+            .into_response();
     };
 
     let mut board = board.lock().await;
@@ -377,7 +470,13 @@ async fn delete_task(
                 crate::economy::task::TaskError::NotFound(_) => StatusCode::NOT_FOUND,
                 _ => StatusCode::BAD_REQUEST,
             };
-            (status, Json(ErrorResponse { error: e.to_string() })).into_response()
+            (
+                status,
+                Json(ErrorResponse {
+                    error: e.to_string(),
+                }),
+            )
+                .into_response()
         }
     }
 }
@@ -391,9 +490,7 @@ async fn create_task_with_wal(
     create_task(State(state.board), Json(body)).await
 }
 
-async fn list_tasks_with_wal(
-    State(state): State<AppState>,
-) -> impl IntoResponse {
+async fn list_tasks_with_wal(State(state): State<AppState>) -> impl IntoResponse {
     list_tasks(State(state.board)).await
 }
 
@@ -458,26 +555,28 @@ async fn delete_task_with_wal(
 
 // ── WAL Handlers ──────────────────────────────────────────
 
-async fn wal_stats(
-    State(state): State<AppState>,
-) -> impl IntoResponse {
+async fn wal_stats(State(state): State<AppState>) -> impl IntoResponse {
     let wal = state.wal.lock().await;
     Json(wal.stats())
 }
 
-async fn wal_snapshot(
-    State(state): State<AppState>,
-) -> impl IntoResponse {
+async fn wal_snapshot(State(state): State<AppState>) -> impl IntoResponse {
     let mut wal = state.wal.lock().await;
     match wal.take_snapshot(&[], 0) {
-        Ok(snapshot_file) => Json(serde_json::json!({ "ok": true, "snapshot_file": snapshot_file })).into_response(),
-        Err(e) => (StatusCode::INTERNAL_SERVER_ERROR, Json(ErrorResponse { error: e.to_string() })).into_response(),
+        Ok(snapshot_file) => {
+            Json(serde_json::json!({ "ok": true, "snapshot_file": snapshot_file })).into_response()
+        }
+        Err(e) => (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            Json(ErrorResponse {
+                error: e.to_string(),
+            }),
+        )
+            .into_response(),
     }
 }
 
-async fn wal_verify(
-    State(state): State<AppState>,
-) -> impl IntoResponse {
+async fn wal_verify(State(state): State<AppState>) -> impl IntoResponse {
     let mut wal = state.wal.lock().await;
     let result = wal.recover();
     match result {
@@ -485,7 +584,14 @@ async fn wal_verify(
             "consistent": !recovery.corrupted_records,
             "event_count": recovery.event_counter,
             "recovered_from_snapshot": recovery.recovered_from_snapshot,
-        })).into_response(),
-        Err(e) => (StatusCode::INTERNAL_SERVER_ERROR, Json(ErrorResponse { error: e.to_string() })).into_response(),
+        }))
+        .into_response(),
+        Err(e) => (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            Json(ErrorResponse {
+                error: e.to_string(),
+            }),
+        )
+            .into_response(),
     }
 }

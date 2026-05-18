@@ -45,16 +45,16 @@ class DecisionAction(str, Enum):
     Token costs are aligned with the issue spec and genesis.yaml.
     """
 
-    RESPOND_MESSAGE = "respond_message"    # 5 tokens
-    CLAIM_TASK = "claim_task"              # 10 tokens
-    REST = "rest"                          # 0 tokens (free)
-    EXPLORE = "explore"                    # 15 tokens
-    TRADE = "trade"                        # 10 tokens
-    PRACTICE_SKILL = "practice_skill"      # 8 tokens
-    MOVE = "move"                          # 12 tokens
-    GATHER = "gather"                      # 8 tokens
-    BUILD = "build"                        # 20 tokens
-    SOCIALIZE = "socialize"                # 5 tokens
+    RESPOND_MESSAGE = "respond_message"  # 5 tokens
+    CLAIM_TASK = "claim_task"  # 10 tokens
+    REST = "rest"  # 0 tokens (free)
+    EXPLORE = "explore"  # 15 tokens
+    TRADE = "trade"  # 10 tokens
+    PRACTICE_SKILL = "practice_skill"  # 8 tokens
+    MOVE = "move"  # 12 tokens
+    GATHER = "gather"  # 8 tokens
+    BUILD = "build"  # 20 tokens
+    SOCIALIZE = "socialize"  # 5 tokens
 
     @classmethod
     def all(cls) -> list[DecisionAction]:
@@ -255,9 +255,7 @@ def build_prompt(
     skills = state.skills
     if skills and len(skills) > 0:
         if isinstance(skills, dict):
-            skills_section = "\n".join(
-                f"  - {name}: level {s.level}" for name, s in skills.items()
-            )
+            skills_section = "\n".join(f"  - {name}: level {s.level}" for name, s in skills.items())
         else:
             skills_section = "  (skills present but not in dict form)"
     else:
@@ -275,9 +273,7 @@ def build_prompt(
 
     # Resources
     resources = (
-        ", ".join(perception.visible_resources)
-        if perception.visible_resources
-        else "None visible"
+        ", ".join(perception.visible_resources) if perception.visible_resources else "None visible"
     )
 
     # Events
@@ -358,9 +354,7 @@ def parse_llm_response(raw: str) -> dict[str, Any]:
         raise JsonParseError(f"Failed to parse LLM response as JSON: {e}") from e
 
     if not isinstance(data, dict) or "action" not in data:
-        raise JsonParseError(
-            "LLM response must be a JSON object with an 'action' field"
-        )
+        raise JsonParseError("LLM response must be a JSON object with an 'action' field")
 
     # Validate action name
     action_name = data["action"]
@@ -421,8 +415,7 @@ def validate_decision(
     if decision.action not in available_actions:
         available_names = [a.value for a in available_actions]
         raise ValidationError(
-            f"Action '{decision.action.value}' not available "
-            f"(available: {available_names})"
+            f"Action '{decision.action.value}' not available (available: {available_names})"
         )
 
     # Token budget check
@@ -435,9 +428,7 @@ def validate_decision(
 
     # Confidence range
     if not 0 <= decision.confidence <= 100:
-        raise ValidationError(
-            f"Invalid confidence: {decision.confidence} (must be 0-100)"
-        )
+        raise ValidationError(f"Invalid confidence: {decision.confidence} (must be 0-100)")
 
 
 # ---------------------------------------------------------------------------
@@ -454,9 +445,7 @@ def fallback_decision(
     Picks a random affordable action from the available actions.
     If no action is affordable, defaults to REST (which is always free).
     """
-    affordable = [
-        a for a in available_actions if a.token_cost() <= state.tokens
-    ]
+    affordable = [a for a in available_actions if a.token_cost() <= state.tokens]
 
     if not affordable:
         # REST is always free, use as ultimate fallback
@@ -567,9 +556,7 @@ class DecisionEngine:
 
         # Call LLM provider
         try:
-            response = await self._provider.chat(
-                [LLMMessage(role="user", content=prompt)]
-            )
+            response = await self._provider.chat([LLMMessage(role="user", content=prompt)])
         except Exception as e:
             raise LlmCallError(f"LLM request failed: {e}") from e
 

@@ -2,10 +2,10 @@
 
 from __future__ import annotations
 
-from .base import LLMConfig, LLMProvider, ProviderType
-from .openai_provider import OpenAIProvider
 from .anthropic_provider import AnthropicProvider
+from .base import LLMConfig, LLMProvider, ProviderType
 from .ollama_provider import OllamaProvider
+from .openai_provider import OpenAIProvider
 
 _PROVIDERS: dict[ProviderType, type[LLMProvider]] = {
     ProviderType.OPENAI: OpenAIProvider,
@@ -29,7 +29,6 @@ def create_provider(config: LLMConfig) -> LLMProvider:
     provider_cls = _PROVIDERS.get(config.provider)
     if provider_cls is None:
         raise ValueError(
-            f"Unknown provider: {config.provider!r}. "
-            f"Supported: {list(_PROVIDERS.keys())}"
+            f"Unknown provider: {config.provider!r}. Supported: {list(_PROVIDERS.keys())}"
         )
     return provider_cls(config)

@@ -14,8 +14,8 @@ use tokio::sync::Mutex;
 use uuid::Uuid;
 
 use agent_world_engine::economy::{
-    EscrowManager, EscrowStatus, RewardConfig, RewardDistributor,
-    TaskBoard, TaskStatus, TokenBurnEngine,
+    EscrowManager, EscrowStatus, RewardConfig, RewardDistributor, TaskBoard, TaskStatus,
+    TokenBurnEngine,
 };
 use agent_world_engine::world::enums::{AgentPhase, Currency};
 use agent_world_engine::world::event::{EventType, WorldEvent};
@@ -25,6 +25,7 @@ use agent_world_engine::world::state::EventBus;
 
 /// A simulated agent with state tracked by the world engine.
 #[derive(Debug, Clone)]
+#[allow(dead_code)]
 struct SimAgent {
     id: String,
     name: String,
@@ -313,8 +314,10 @@ async fn test_ledger_consistency() {
     assert_eq!(all_entries.len(), 6);
 
     // Verify by type
-    let reward_entries = ledger.list_by_type(agent_world_engine::economy::TransactionType::TaskReward);
-    let fee_entries = ledger.list_by_type(agent_world_engine::economy::TransactionType::PlatformFee);
+    let reward_entries =
+        ledger.list_by_type(agent_world_engine::economy::TransactionType::TaskReward);
+    let fee_entries =
+        ledger.list_by_type(agent_world_engine::economy::TransactionType::PlatformFee);
     assert_eq!(reward_entries.len(), 3);
     assert_eq!(fee_entries.len(), 3);
 
@@ -611,8 +614,7 @@ async fn test_snapshot_restore() {
 
     // ── Phase 2: "Restore" — deserialize and verify state ──────────────
 
-    let restored_events: Vec<WorldEvent> =
-        serde_json::from_str(&snapshot_json).unwrap();
+    let restored_events: Vec<WorldEvent> = serde_json::from_str(&snapshot_json).unwrap();
     assert_eq!(restored_events.len(), captured_events.len());
 
     // Verify each event round-trips correctly
@@ -686,7 +688,7 @@ async fn test_snapshot_restore() {
 
     assert_eq!(post_restore_events.len(), 6);
 
-    let expected_sequence = vec![
+    let expected_sequence = [
         EventType::TaskCreated,
         EventType::TaskClaimed,
         EventType::TaskStarted,
@@ -773,14 +775,21 @@ async fn test_full_1000_tick_simulation() {
         for (idx, &task_id) in active_tasks.iter().enumerate() {
             let mut board = task_board.lock().await;
             if let Some(task) = board.get(task_id).cloned() {
-                let assignee_idx = if task.publisher_id == agents[0].id { 1 } else { 0 };
+                let assignee_idx = if task.publisher_id == agents[0].id {
+                    1
+                } else {
+                    0
+                };
 
                 // Run through as many transitions as possible in one tick
                 let mut current_status = task.status;
                 loop {
                     match current_status {
                         TaskStatus::Published => {
-                            if board.claim_task(task_id, agents[assignee_idx].id.clone()).is_ok() {
+                            if board
+                                .claim_task(task_id, agents[assignee_idx].id.clone())
+                                .is_ok()
+                            {
                                 current_status = TaskStatus::Claimed;
                             } else {
                                 break;
@@ -794,7 +803,10 @@ async fn test_full_1000_tick_simulation() {
                             }
                         }
                         TaskStatus::InProgress => {
-                            if board.submit_result(task_id, format!("Result at tick {}", tick)).is_ok() {
+                            if board
+                                .submit_result(task_id, format!("Result at tick {}", tick))
+                                .is_ok()
+                            {
                                 current_status = TaskStatus::Submitted;
                             } else {
                                 break;
@@ -838,7 +850,11 @@ async fn test_full_1000_tick_simulation() {
     // ── Final assertions ───────────────────────────────────────────────
 
     for agent in &agents {
-        assert!(agent.is_alive, "{} should be alive after 1000 ticks", agent.name);
+        assert!(
+            agent.is_alive,
+            "{} should be alive after 1000 ticks",
+            agent.name
+        );
         assert_eq!(agent.ticks_survived, 1000);
     }
 
@@ -854,7 +870,10 @@ async fn test_full_1000_tick_simulation() {
         event_count += 1;
     }
 
-    assert!(event_count > 0, "Should have accumulated events over 1000 ticks");
+    assert!(
+        event_count > 0,
+        "Should have accumulated events over 1000 ticks"
+    );
 
     // Verify no tasks in stuck state
     {
@@ -955,7 +974,7 @@ async fn test_rest_api_e2e() {
     // ── GET /tasks (list) ──────────────────────────────────────────────
 
     let resp = client
-        .get(&format!("http://127.0.0.1:{}/tasks", port))
+        .get(format!("http://127.0.0.1:{}/tasks", port))
         .send()
         .await
         .unwrap();
@@ -979,7 +998,7 @@ async fn test_rest_api_e2e() {
     });
 
     let resp = client
-        .post(&format!("http://127.0.0.1:{}/tasks", port))
+        .post(format!("http://127.0.0.1:{}/tasks", port))
         .json(&create_body)
         .send()
         .await
@@ -995,7 +1014,7 @@ async fn test_rest_api_e2e() {
 
     // Claim
     let resp = client
-        .post(&format!(
+        .post(format!(
             "http://127.0.0.1:{}/tasks/{}/claim",
             port, new_task_id
         ))
@@ -1007,7 +1026,7 @@ async fn test_rest_api_e2e() {
 
     // Start
     let resp = client
-        .post(&format!(
+        .post(format!(
             "http://127.0.0.1:{}/tasks/{}/start",
             port, new_task_id
         ))
@@ -1018,7 +1037,7 @@ async fn test_rest_api_e2e() {
 
     // Submit
     let resp = client
-        .post(&format!(
+        .post(format!(
             "http://127.0.0.1:{}/tasks/{}/submit",
             port, new_task_id
         ))
@@ -1030,7 +1049,7 @@ async fn test_rest_api_e2e() {
 
     // Review
     let resp = client
-        .post(&format!(
+        .post(format!(
             "http://127.0.0.1:{}/tasks/{}/review",
             port, new_task_id
         ))
@@ -1042,7 +1061,7 @@ async fn test_rest_api_e2e() {
 
     // Complete
     let resp = client
-        .post(&format!(
+        .post(format!(
             "http://127.0.0.1:{}/tasks/{}/complete",
             port, new_task_id
         ))
@@ -1054,10 +1073,7 @@ async fn test_rest_api_e2e() {
     // ── GET /tasks/{id} — verify final state ───────────────────────────
 
     let resp = client
-        .get(&format!(
-            "http://127.0.0.1:{}/tasks/{}",
-            port, new_task_id
-        ))
+        .get(format!("http://127.0.0.1:{}/tasks/{}", port, new_task_id))
         .send()
         .await
         .unwrap();
@@ -1069,7 +1085,7 @@ async fn test_rest_api_e2e() {
 
     // Verify the list now has 4 tasks
     let resp = client
-        .get(&format!("http://127.0.0.1:{}/tasks", port))
+        .get(format!("http://127.0.0.1:{}/tasks", port))
         .send()
         .await
         .unwrap();

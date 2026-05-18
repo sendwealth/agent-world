@@ -47,9 +47,7 @@ class KeyPair:
     def from_private_bytes(cls, raw: bytes) -> KeyPair:
         """Reconstruct a KeyPair from the 32-byte private key seed."""
         priv = Ed25519PrivateKey.from_private_bytes(raw)
-        pub_bytes = priv.public_key().public_bytes(
-            Encoding.Raw, PublicFormat.Raw
-        )
+        pub_bytes = priv.public_key().public_bytes(Encoding.Raw, PublicFormat.Raw)
         return cls(private_key_bytes=raw, public_key_bytes=pub_bytes)
 
     @classmethod

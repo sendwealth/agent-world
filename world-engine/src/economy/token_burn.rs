@@ -1,5 +1,5 @@
-use std::collections::HashMap;
 use serde::{Deserialize, Serialize};
+use std::collections::HashMap;
 use uuid::Uuid;
 
 use crate::world::enums::AgentPhase;
@@ -237,7 +237,11 @@ mod tests {
         }
     }
 
-    fn make_agent_with_skills(phase: AgentPhase, tokens: u64, skills: Vec<(&str, u32)>) -> AgentRecord {
+    fn make_agent_with_skills(
+        phase: AgentPhase,
+        tokens: u64,
+        skills: Vec<(&str, u32)>,
+    ) -> AgentRecord {
         AgentRecord {
             id: Uuid::new_v4(),
             name: "test-agent".to_string(),

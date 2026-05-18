@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import time
-from unittest.mock import patch
 
 import pytest
 
@@ -16,7 +15,6 @@ from agent_runtime.crypto import (
     verify_message,
 )
 from agent_runtime.crypto.signing import canonicalize
-
 
 # ── Key Pair Generation ─────────────────────────────────────────────────────
 

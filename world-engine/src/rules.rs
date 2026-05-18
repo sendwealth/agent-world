@@ -29,7 +29,10 @@ pub struct RuleContext {
 impl RuleContext {
     /// Create a new context for the given tick and agent spawn tick.
     pub fn new(tick: u64, agent_spawn_tick: u64) -> Self {
-        Self { tick, agent_spawn_tick }
+        Self {
+            tick,
+            agent_spawn_tick,
+        }
     }
 }
 
@@ -146,11 +149,7 @@ impl RuleRegistry {
     /// Execute all registered rules against a single agent, in priority order.
     ///
     /// Returns all results produced by all rules.
-    pub fn evaluate_agent(
-        &self,
-        ctx: &RuleContext,
-        agent: &mut AgentRecord,
-    ) -> Vec<RuleResult> {
+    pub fn evaluate_agent(&self, ctx: &RuleContext, agent: &mut AgentRecord) -> Vec<RuleResult> {
         let mut results = Vec::with_capacity(self.rules.len());
         for rule in &self.rules {
             let result = rule.evaluate(ctx, agent);
@@ -484,9 +483,13 @@ pub fn custom_registry(
     protection_ticks: u64,
 ) -> RuleRegistry {
     let mut registry = RuleRegistry::new();
-    registry.register(Box::new(TokenConsumptionRule::with_config(consumption_config)));
+    registry.register(Box::new(TokenConsumptionRule::with_config(
+        consumption_config,
+    )));
     registry.register(Box::new(DeathJudgmentRule::with_grace_ticks(grace_ticks)));
-    registry.register(Box::new(NewbieProtectionRule::with_protection_ticks(protection_ticks)));
+    registry.register(Box::new(NewbieProtectionRule::with_protection_ticks(
+        protection_ticks,
+    )));
     registry
 }
 
@@ -581,7 +584,12 @@ mod tests {
         assert_eq!(result.events.len(), 1);
 
         match &result.events[0] {
-            WorldEvent::BalanceChanged { agent_id, currency, old_balance, new_balance } => {
+            WorldEvent::BalanceChanged {
+                agent_id,
+                currency,
+                old_balance,
+                new_balance,
+            } => {
                 assert_eq!(*agent_id, agent.id.to_string());
                 assert_eq!(*currency, crate::world::enums::Currency::Token);
                 assert_eq!(*old_balance, 100);
@@ -678,7 +686,13 @@ mod tests {
         // Should emit AgentDying and AgentDied
         assert_eq!(result.events.len(), 2);
         assert!(matches!(&result.events[0], WorldEvent::AgentDying { .. }));
-        assert!(matches!(&result.events[1], WorldEvent::AgentDied { reason: DeathReason::TokenDepleted, .. }));
+        assert!(matches!(
+            &result.events[1],
+            WorldEvent::AgentDied {
+                reason: DeathReason::TokenDepleted,
+                ..
+            }
+        ));
     }
 
     #[test]
@@ -726,7 +740,13 @@ mod tests {
 
         // Should emit AgentDying but NOT AgentDied (grace period)
         assert_eq!(result.events.len(), 1);
-        assert!(matches!(&result.events[0], WorldEvent::AgentDying { grace_ticks: 10, .. }));
+        assert!(matches!(
+            &result.events[0],
+            WorldEvent::AgentDying {
+                grace_ticks: 10,
+                ..
+            }
+        ));
         assert_ne!(agent.phase, AgentPhase::Dead); // Not yet dead
     }
 
@@ -738,7 +758,10 @@ mod tests {
 
         let result = rule.evaluate(&ctx, &mut agent);
 
-        let died_event = result.events.iter().find(|e| matches!(e, WorldEvent::AgentDied { .. }));
+        let died_event = result
+            .events
+            .iter()
+            .find(|e| matches!(e, WorldEvent::AgentDied { .. }));
         assert!(died_event.is_some());
         if let Some(WorldEvent::AgentDied { reason, .. }) = died_event {
             assert_eq!(*reason, DeathReason::TokenDepleted);
@@ -795,7 +818,12 @@ mod tests {
         let result = rule.check_attack(&attacker_id, &target, 10, 0, "attack");
         assert!(result.is_some());
 
-        if let Some(WorldEvent::RuleViolated { agent_id, rule: rule_id, details }) = &result {
+        if let Some(WorldEvent::RuleViolated {
+            agent_id,
+            rule: rule_id,
+            details,
+        }) = &result
+        {
             assert_eq!(*agent_id, attacker_id.to_string());
             assert_eq!(rule_id, "R003");
             assert!(details.contains("protected"));
@@ -827,7 +855,11 @@ mod tests {
         assert_eq!(result.events.len(), 1);
 
         match &result.events[0] {
-            WorldEvent::PhaseChanged { old_phase, new_phase, .. } => {
+            WorldEvent::PhaseChanged {
+                old_phase,
+                new_phase,
+                ..
+            } => {
                 assert_eq!(*old_phase, AgentPhase::Birth);
                 assert_eq!(*new_phase, AgentPhase::Childhood);
             }
@@ -1014,9 +1046,16 @@ mod tests {
             name: "skilled".to_string(),
             phase: AgentPhase::Adult,
             tokens: 100,
-            skills: vec![
-                ("mining".to_string(), SkillRecord { name: "mining".to_string(), level: 5, experience: 0.0 }),
-            ].into_iter().collect(),
+            skills: vec![(
+                "mining".to_string(),
+                SkillRecord {
+                    name: "mining".to_string(),
+                    level: 5,
+                    experience: 0.0,
+                },
+            )]
+            .into_iter()
+            .collect(),
         };
 
         let ctx = RuleContext::new(1, 0);
@@ -1036,7 +1075,7 @@ mod tests {
         let results = registry.evaluate_agent(&ctx, &mut agent);
 
         assert_eq!(agent.phase, AgentPhase::Childhood); // R003 transitioned
-        // Childhood burn: base=10 * 0.5 = 5
+                                                        // Childhood burn: base=10 * 0.5 = 5
         assert_eq!(agent.tokens, 495);
         assert_eq!(agent.phase, AgentPhase::Childhood); // Still alive
 

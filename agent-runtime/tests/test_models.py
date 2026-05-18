@@ -11,7 +11,6 @@ from pydantic import ValidationError
 
 from agent_runtime.models import AgentPhase, AgentState, Skill, SurvivalMode
 
-
 # ============================================================
 # Enum tests
 # ============================================================

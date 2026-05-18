@@ -3,8 +3,8 @@
 use std::fs;
 
 use agent_world_engine::wal::WAL;
-use agent_world_engine::world::WorldEvent;
 use agent_world_engine::world::enums::{Currency, DeathReason};
+use agent_world_engine::world::WorldEvent;
 
 use tempfile::TempDir;
 
@@ -124,7 +124,11 @@ fn wal_take_and_load_snapshot() {
     let mut wal = WAL::new(dir.path());
     wal.open().unwrap();
 
-    let events = vec![create_test_event(1), create_test_event(2), create_test_event(3)];
+    let events = vec![
+        create_test_event(1),
+        create_test_event(2),
+        create_test_event(3),
+    ];
     let snapshot_file = wal.take_snapshot(&events, 3).unwrap();
     wal.close();
 
@@ -149,7 +153,10 @@ fn wal_detect_corrupted_snapshot() {
     let raw = fs::read_to_string(&path).unwrap();
     let mut snapshot: serde_json::Value = serde_json::from_str(&raw).unwrap();
     // Add a fake event to break checksum
-    snapshot["events"].as_array_mut().unwrap().push(serde_json::json!({"type": "tick_advanced", "payload": {"tick": 999}}));
+    snapshot["events"]
+        .as_array_mut()
+        .unwrap()
+        .push(serde_json::json!({"type": "tick_advanced", "payload": {"tick": 999}}));
     fs::write(&path, serde_json::to_string_pretty(&snapshot).unwrap()).unwrap();
 
     let wal2 = WAL::new(dir.path());
@@ -164,7 +171,8 @@ fn wal_find_latest_snapshot() {
     wal.open().unwrap();
 
     wal.take_snapshot(&[create_test_event(1)], 1).unwrap();
-    wal.take_snapshot(&[create_test_event(1), create_test_event(2)], 2).unwrap();
+    wal.take_snapshot(&[create_test_event(1), create_test_event(2)], 2)
+        .unwrap();
     wal.close();
 
     let wal2 = WAL::new(dir.path());
@@ -181,7 +189,7 @@ fn wal_cleanup_old_snapshots() {
 
     // Take 5 snapshots
     for i in 0..5 {
-        wal.take_snapshot(&[create_test_event(i as u64)], i + 1).unwrap();
+        wal.take_snapshot(&[create_test_event(i)], i + 1).unwrap();
     }
     wal.close();
 
@@ -224,7 +232,11 @@ fn wal_recover_snapshot_plus_wal() {
     wal.append_event(&create_test_event(2)).unwrap();
     wal.append_event(&create_test_event(3)).unwrap();
     wal.take_snapshot(
-        &[create_test_event(1), create_test_event(2), create_test_event(3)],
+        &[
+            create_test_event(1),
+            create_test_event(2),
+            create_test_event(3),
+        ],
         3,
     )
     .unwrap();
@@ -249,8 +261,10 @@ fn wal_simulate_crash_and_recover() {
     // Phase 1: Start, emit events, simulate crash (no graceful shutdown)
     let mut wal1 = WAL::new(dir.path());
     wal1.open().unwrap();
-    wal1.append_event(&create_agent_event("agent-001", "Alice")).unwrap();
-    wal1.append_event(&create_agent_event("agent-002", "Bob")).unwrap();
+    wal1.append_event(&create_agent_event("agent-001", "Alice"))
+        .unwrap();
+    wal1.append_event(&create_agent_event("agent-002", "Bob"))
+        .unwrap();
     wal1.append_event(&WorldEvent::TransactionCompleted {
         from: "agent-001".into(),
         to: "agent-002".into(),
@@ -402,7 +416,8 @@ fn wal_stats_report() {
 
     wal.append_event(&create_test_event(1)).unwrap();
     wal.append_event(&create_test_event(2)).unwrap();
-    wal.take_snapshot(&[create_test_event(1), create_test_event(2)], 2).unwrap();
+    wal.take_snapshot(&[create_test_event(1), create_test_event(2)], 2)
+        .unwrap();
     wal.close();
 
     let stats = wal.stats();
@@ -422,13 +437,37 @@ fn wal_all_event_types_roundtrip() {
 
     let events = vec![
         WorldEvent::TickAdvanced { tick: 1 },
-        WorldEvent::AgentSpawned { agent_id: "a1".into(), name: "Alice".into() },
-        WorldEvent::AgentDying { agent_id: "a1".into(), reason: DeathReason::TokenDepleted, grace_ticks: 10 },
-        WorldEvent::AgentDied { agent_id: "a1".into(), reason: DeathReason::TokenDepleted },
-        WorldEvent::AgentRescued { agent_id: "a1".into() },
-        WorldEvent::TransactionCompleted { from: "a1".into(), to: "a2".into(), amount: 100, currency: Currency::Token },
-        WorldEvent::TaskCreated { task_id: "t1".into(), publisher: "a1".into(), reward: 50 },
-        WorldEvent::TaskClaimed { task_id: "t1".into(), assignee: "a2".into() },
+        WorldEvent::AgentSpawned {
+            agent_id: "a1".into(),
+            name: "Alice".into(),
+        },
+        WorldEvent::AgentDying {
+            agent_id: "a1".into(),
+            reason: DeathReason::TokenDepleted,
+            grace_ticks: 10,
+        },
+        WorldEvent::AgentDied {
+            agent_id: "a1".into(),
+            reason: DeathReason::TokenDepleted,
+        },
+        WorldEvent::AgentRescued {
+            agent_id: "a1".into(),
+        },
+        WorldEvent::TransactionCompleted {
+            from: "a1".into(),
+            to: "a2".into(),
+            amount: 100,
+            currency: Currency::Token,
+        },
+        WorldEvent::TaskCreated {
+            task_id: "t1".into(),
+            publisher: "a1".into(),
+            reward: 50,
+        },
+        WorldEvent::TaskClaimed {
+            task_id: "t1".into(),
+            assignee: "a2".into(),
+        },
     ];
 
     for event in &events {

@@ -25,9 +25,9 @@ import json
 import logging
 import math
 import sqlite3
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from pathlib import Path
-from typing import Any, Protocol, Sequence, runtime_checkable
+from typing import Any, Protocol, runtime_checkable
 
 logger = logging.getLogger(__name__)
 
@@ -178,7 +178,8 @@ class ShortTermMemory:
         emb_json: str | None = json.dumps(embedding) if embedding is not None else None
 
         cursor = self._conn.execute(
-            "INSERT INTO memories (content, importance, created_tick, embedding) VALUES (?, ?, ?, ?)",
+            "INSERT INTO memories "
+            "(content, importance, created_tick, embedding) VALUES (?, ?, ?, ?)",
             (content, importance, tick, emb_json),
         )
         self._conn.commit()
@@ -203,9 +204,7 @@ class ShortTermMemory:
         )
         return entry
 
-    def search(
-        self, query: str, *, top_k: int = 5, tick: int = 0
-    ) -> list[ShortTermMemoryEntry]:
+    def search(self, query: str, *, top_k: int = 5, tick: int = 0) -> list[ShortTermMemoryEntry]:
         """Search memories by keyword (case-insensitive LIKE match).
 
         Costs **5 Tokens** per query.
@@ -235,9 +234,7 @@ class ShortTermMemory:
         ).fetchall()
         return [self._row_to_entry(r) for r in rows]
 
-    def recall(
-        self, query: str, *, top_k: int = 5, tick: int = 0
-    ) -> list[ShortTermMemoryEntry]:
+    def recall(self, query: str, *, top_k: int = 5, tick: int = 0) -> list[ShortTermMemoryEntry]:
         """Retrieve memories using semantic search (cosine similarity) with
         keyword fallback.
 
@@ -290,9 +287,7 @@ class ShortTermMemory:
 
         Returns True if a row was deleted, False otherwise.
         """
-        cursor = self._conn.execute(
-            "DELETE FROM memories WHERE id = ?", (memory_id,)
-        )
+        cursor = self._conn.execute("DELETE FROM memories WHERE id = ?", (memory_id,))
         self._conn.commit()
         return cursor.rowcount > 0
 
@@ -354,17 +349,14 @@ class ShortTermMemory:
         self._conn.commit()
         deleted = cursor.rowcount
         if deleted:
-            logger.debug(
-                "Cleaned up %d old memories (tick threshold=%d)", deleted, threshold
-            )
+            logger.debug("Cleaned up %d old memories (tick threshold=%d)", deleted, threshold)
         return deleted
 
     def _evict_one(self) -> None:
         """Evict the oldest low-importance entry, or the absolute oldest."""
         # First: oldest non-important entry
         cursor = self._conn.execute(
-            "SELECT id FROM memories WHERE importance < 0.5 "
-            "ORDER BY created_tick ASC LIMIT 1"
+            "SELECT id FROM memories WHERE importance < 0.5 ORDER BY created_tick ASC LIMIT 1"
         )
         row = cursor.fetchone()
         if row is not None:

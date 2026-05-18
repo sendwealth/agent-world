@@ -22,16 +22,13 @@ from typing import Any
 import pytest
 
 from agent_runtime.survival.instinct import (
-    A2AClientProtocol,
-    EmergencyAction,
     EmergencyActionType,
+    LoanTerms,
     SurvivalAction,
     SurvivalInstinct,
     SurvivalMode,
     SurvivalThresholds,
-    LoanTerms,
 )
-
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -321,19 +318,13 @@ class TestPanicVerification:
         instinct = SurvivalInstinct()
         agent = FakeAgentState(tokens=1_000, max_tokens=100_000)
         result = instinct.assess(agent)
-        assert any(
-            a.action_type == EmergencyActionType.BROADCAST_SOS
-            for a in result.actions
-        )
+        assert any(a.action_type == EmergencyActionType.BROADCAST_SOS for a in result.actions)
 
     def test_panic_actions_include_loan_request(self) -> None:
         instinct = SurvivalInstinct()
         agent = FakeAgentState(tokens=1_000, max_tokens=100_000)
         result = instinct.assess(agent)
-        assert any(
-            a.action_type == EmergencyActionType.REQUEST_LOAN
-            for a in result.actions
-        )
+        assert any(a.action_type == EmergencyActionType.REQUEST_LOAN for a in result.actions)
 
     def test_panic_at_1_percent(self) -> None:
         instinct = SurvivalInstinct()
@@ -364,12 +355,11 @@ class TestExecute:
         a2a = FakeA2AClient()
 
         action = instinct.assess(agent)
-        results = await instinct.execute(action, agent, a2a)
+        await instinct.execute(action, agent, a2a)
 
         assert len(a2a.broadcasts) >= 1
         sos_broadcasts = [
-            b for b in a2a.broadcasts
-            if b.get("payload", {}).get("category") == "personal"
+            b for b in a2a.broadcasts if b.get("payload", {}).get("category") == "personal"
         ]
         assert len(sos_broadcasts) >= 1
 
@@ -383,8 +373,7 @@ class TestExecute:
         await instinct.execute(action, agent, a2a)
 
         loan_broadcasts = [
-            b for b in a2a.broadcasts
-            if b.get("payload", {}).get("action") == "loan_request"
+            b for b in a2a.broadcasts if b.get("payload", {}).get("action") == "loan_request"
         ]
         assert len(loan_broadcasts) >= 1
 
@@ -691,8 +680,7 @@ class TestLoanTerms:
         await instinct.execute(action, agent, a2a)
 
         loan_broadcasts = [
-            b for b in a2a.broadcasts
-            if b.get("payload", {}).get("action") == "loan_request"
+            b for b in a2a.broadcasts if b.get("payload", {}).get("action") == "loan_request"
         ]
         assert len(loan_broadcasts) >= 1
         loan_terms = loan_broadcasts[0]["payload"]["terms"]

@@ -48,7 +48,10 @@ class OpenAIProvider(LLMProvider):
         temperature: float | None = None,
     ) -> LLMResponse:
         payload = self._build_payload(
-            messages, stream=False, max_tokens=max_tokens, temperature=temperature,
+            messages,
+            stream=False,
+            max_tokens=max_tokens,
+            temperature=temperature,
         )
         try:
             resp = await self._client.post(
@@ -78,7 +81,10 @@ class OpenAIProvider(LLMProvider):
         temperature: float | None = None,
     ) -> AsyncIterator[LLMStreamChunk]:
         payload = self._build_payload(
-            messages, stream=True, max_tokens=max_tokens, temperature=temperature,
+            messages,
+            stream=True,
+            max_tokens=max_tokens,
+            temperature=temperature,
         )
         try:
             async with self._client.stream(
@@ -123,7 +129,9 @@ class OpenAIProvider(LLMProvider):
             "model": self._config.model,
             "messages": [{"role": m.role, "content": m.content} for m in messages],
             "max_tokens": max_tokens if max_tokens is not None else self._config.max_tokens,
-            "temperature": temperature if temperature is not None else (self._config.temperature if self._config.temperature is not None else 0.7),
+            "temperature": temperature
+            if temperature is not None
+            else (self._config.temperature if self._config.temperature is not None else 0.7),
             "stream": stream,
         }
 
@@ -148,7 +156,7 @@ class OpenAIProvider(LLMProvider):
         """Parse a single SSE line from the OpenAI streaming response."""
         if not line.startswith("data: "):
             return None
-        payload = line[len("data: "):]
+        payload = line[len("data: ") :]
         if payload.strip() == "[DONE]":
             return None
         try:

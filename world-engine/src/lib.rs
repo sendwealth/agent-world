@@ -6,7 +6,6 @@ pub mod wal;
 pub mod world;
 
 pub use rules::{
-    Rule, RuleContext, RuleRegistry, RuleResult,
-    TokenConsumptionRule, DeathJudgmentRule, NewbieProtectionRule,
-    default_registry, custom_registry,
+    custom_registry, default_registry, DeathJudgmentRule, NewbieProtectionRule, Rule, RuleContext,
+    RuleRegistry, RuleResult, TokenConsumptionRule,
 };

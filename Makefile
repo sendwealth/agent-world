@@ -1,4 +1,4 @@
-.PHONY: help setup dev test lint fmt proto clean build run
+.PHONY: help setup dev test lint fmt proto clean build run demo demo-json demo-death
 
 help: ## Show this help
 	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) | sort | awk 'BEGIN {FS = ":.*?## "}; {printf "\033[36m%-20s\033[0m %s\n", $$1, $$2}'
@@ -27,16 +27,19 @@ setup-dashboard:
 
 # ── Development ──────────────────────────────────────────
 
-dev: ## Start development environment
-	@echo "🌍 Starting Agent World..."
-	@echo "  Terminal 1: World Engine"
-	@echo "  Terminal 2: Agent Runtime"
-	@echo "  Terminal 3: Dashboard"
-	@echo ""
-	@echo "Run each in a separate terminal:"
-	@echo "  make run-engine"
-	@echo "  make run-agents"
-	@echo "  make run-dashboard"
+dev: ## Start all services with Docker Compose
+	@test -f .env || cp .env.example .env
+	docker compose up --build
+
+dev-detach: ## Start all services in background
+	@test -f .env || cp .env.example .env
+	docker compose up --build -d
+
+dev-down: ## Stop all Docker Compose services
+	docker compose down
+
+dev-logs: ## Tail Docker Compose logs
+	docker compose logs -f
 
 run-engine: ## Start world engine
 	cd world-engine && cargo run --release
@@ -66,6 +69,15 @@ test-integration: ## Run integration tests
 
 test-e2e: ## Run end-to-end tests
 	cd world-engine && cargo test --test e2e_full_flow
+
+demo: ## Run E2E demo: 2 agents survive 1000 ticks with trading, tasks, death
+	python3 scripts/e2e_demo.py
+
+demo-json: ## Run E2E demo with JSON metrics output
+	python3 scripts/e2e_demo.py --json
+
+demo-death: ## Run death scenario (agent with 30 tokens)
+	python3 scripts/e2e_demo.py --death-scenario
 
 # ── Code Quality ─────────────────────────────────────────
 

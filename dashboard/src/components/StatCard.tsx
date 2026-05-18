@@ -43,12 +43,12 @@ export function StatCard({ title, value, icon, subtitle, color }: StatCardProps)
 
   return (
     <div
-      className={`relative overflow-hidden rounded-xl border ${c.border} ${c.bg} p-5 shadow-lg ${c.glow} transition-all hover:scale-[1.02]`}
+      className={`relative overflow-hidden rounded-xl border ${c.border} ${c.bg} p-4 md:p-5 shadow-lg ${c.glow} transition-all hover:scale-[1.02]`}
     >
       <div className="flex items-start justify-between">
         <div className="space-y-1">
           <p className="text-sm font-medium text-zinc-400">{title}</p>
-          <p className="text-3xl font-bold tracking-tight text-zinc-100">
+          <p className="text-2xl md:text-3xl font-bold tracking-tight text-zinc-100">
             {typeof value === "number" ? value.toLocaleString() : value}
           </p>
           {subtitle && (

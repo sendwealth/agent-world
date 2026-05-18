@@ -4,15 +4,60 @@ package agentworld.a2a.v1;
 
 // A2A Protocol — Agent-to-Agent communication
 service A2AService {
+  // Register an agent with the world engine
+  rpc RegisterAgent(RegisterAgentRequest) returns (RegisterAgentResponse);
+
+  // Heartbeat — agents must send periodically to stay registered
+  rpc Heartbeat(HeartbeatRequest) returns (HeartbeatResponse);
+
+  // Deregister an agent (graceful shutdown)
+  rpc DeregisterAgent(DeregisterAgentRequest) returns (DeregisterAgentResponse);
+
   // Discover agents in the world
   rpc Discover(DiscoverRequest) returns (DiscoverResponse);
-  
+
   // Send a message to another agent
   rpc SendMessage(A2AMessage) returns (MessageAck);
-  
+
   // Stream messages (bidirectional)
   rpc StreamMessages(stream A2AMessage) returns (stream A2AMessage);
 }
+
+// ── Registration ──────────────────────────────────────────
+
+message RegisterAgentRequest {
+  string agent_id = 1;
+  string name = 2;
+  repeated string capabilities = 3;  // Skills/capabilities this agent offers
+  string public_key = 4;              // Ed25519 public key for message verification
+}
+
+message RegisterAgentResponse {
+  bool success = 1;
+  string error = 2;                   // Error message if registration failed
+  int64 timestamp = 3;                // Server timestamp at registration
+}
+
+message HeartbeatRequest {
+  string agent_id = 1;
+}
+
+message HeartbeatResponse {
+  bool alive = 1;                     // false if agent was considered offline
+  int64 server_time = 2;
+}
+
+message DeregisterAgentRequest {
+  string agent_id = 1;
+  string signature = 2;               // Proof of identity
+}
+
+message DeregisterAgentResponse {
+  bool success = 1;
+  string error = 2;
+}
+
+// ── Discovery ─────────────────────────────────────────────
 
 message DiscoverRequest {
   string agent_id = 1;
@@ -31,6 +76,7 @@ message AgentInfo {
   repeated string skills = 5;
   float reputation = 6;
   AgentPhase phase = 7;
+  int64 last_seen = 8;       // Unix timestamp of last heartbeat
 }
 
 enum AgentPhase {
@@ -40,6 +86,8 @@ enum AgentPhase {
   ELDER = 3;
   DEAD = 4;
 }
+
+// ── Messaging ─────────────────────────────────────────────
 
 message A2AMessage {
   string id = 1;              // Unique message ID

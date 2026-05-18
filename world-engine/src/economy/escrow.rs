@@ -47,11 +47,20 @@ pub struct EscrowRecord {
 pub enum EscrowError {
     NotFound(String),
     /// The escrow is not in the required state for this operation.
-    InvalidStatus { expected: EscrowStatus, actual: EscrowStatus },
+    InvalidStatus {
+        expected: EscrowStatus,
+        actual: EscrowStatus,
+    },
     /// The publisher does not have enough balance.
-    InsufficientBalance { required: u64, available: u64 },
+    InsufficientBalance {
+        required: u64,
+        available: u64,
+    },
     /// The claimant does not have enough balance for the deposit.
-    InsufficientDeposit { required: u64, available: u64 },
+    InsufficientDeposit {
+        required: u64,
+        available: u64,
+    },
     /// A claimant is already assigned.
     AlreadyClaimed,
     /// The escrow has expired.
@@ -63,13 +72,31 @@ impl std::fmt::Display for EscrowError {
         match self {
             EscrowError::NotFound(id) => write!(f, "escrow not found: {}", id),
             EscrowError::InvalidStatus { expected, actual } => {
-                write!(f, "invalid escrow status: expected {:?}, got {:?}", expected, actual)
+                write!(
+                    f,
+                    "invalid escrow status: expected {:?}, got {:?}",
+                    expected, actual
+                )
             }
-            EscrowError::InsufficientBalance { required, available } => {
-                write!(f, "insufficient balance: required {}, available {}", required, available)
+            EscrowError::InsufficientBalance {
+                required,
+                available,
+            } => {
+                write!(
+                    f,
+                    "insufficient balance: required {}, available {}",
+                    required, available
+                )
             }
-            EscrowError::InsufficientDeposit { required, available } => {
-                write!(f, "insufficient deposit: required {}, available {}", required, available)
+            EscrowError::InsufficientDeposit {
+                required,
+                available,
+            } => {
+                write!(
+                    f,
+                    "insufficient deposit: required {}, available {}",
+                    required, available
+                )
             }
             EscrowError::AlreadyClaimed => write!(f, "escrow already claimed"),
             EscrowError::Expired => write!(f, "escrow has expired"),
@@ -148,7 +175,8 @@ impl EscrowManager {
         }
 
         // Lock the reward
-        self.balances.insert(publisher.to_string(), available - reward);
+        self.balances
+            .insert(publisher.to_string(), available - reward);
 
         let id = Uuid::new_v4();
         let record = EscrowRecord {
@@ -178,7 +206,9 @@ impl EscrowManager {
     pub fn claim_escrow(&mut self, escrow_id: Uuid, claimant: &str) -> Result<(), EscrowError> {
         // Validate status first
         let deposit = {
-            let record = self.escrows.get(&escrow_id)
+            let record = self
+                .escrows
+                .get(&escrow_id)
                 .ok_or_else(|| EscrowError::NotFound(escrow_id.to_string()))?;
             if record.status != EscrowStatus::Open {
                 return Err(EscrowError::InvalidStatus {
@@ -199,7 +229,8 @@ impl EscrowManager {
         }
 
         // Lock the deposit
-        self.balances.insert(claimant.to_string(), available - deposit);
+        self.balances
+            .insert(claimant.to_string(), available - deposit);
 
         // Update the record
         let record = self.escrows.get_mut(&escrow_id).unwrap();
@@ -219,7 +250,9 @@ impl EscrowManager {
     pub fn complete_escrow(&mut self, escrow_id: Uuid) -> Result<(), EscrowError> {
         // Extract needed data
         let (claimant, total, currency) = {
-            let record = self.escrows.get(&escrow_id)
+            let record = self
+                .escrows
+                .get(&escrow_id)
                 .ok_or_else(|| EscrowError::NotFound(escrow_id.to_string()))?;
             if record.status != EscrowStatus::Claimed {
                 return Err(EscrowError::InvalidStatus {
@@ -227,8 +260,7 @@ impl EscrowManager {
                     actual: record.status,
                 });
             }
-            let claimant = record.claimant.clone()
-                .ok_or(EscrowError::AlreadyClaimed)?;
+            let claimant = record.claimant.clone().ok_or(EscrowError::AlreadyClaimed)?;
             (claimant, record.reward + record.deposit, record.currency)
         };
 
@@ -253,7 +285,9 @@ impl EscrowManager {
     pub fn refund_escrow(&mut self, escrow_id: Uuid) -> Result<(), EscrowError> {
         // Extract needed data
         let (publisher, reward, claimant, deposit, currency) = {
-            let record = self.escrows.get(&escrow_id)
+            let record = self
+                .escrows
+                .get(&escrow_id)
                 .ok_or_else(|| EscrowError::NotFound(escrow_id.to_string()))?;
             match record.status {
                 EscrowStatus::Open | EscrowStatus::Claimed => {}
@@ -298,7 +332,9 @@ impl EscrowManager {
 
     /// Dispute an escrow: freezes funds pending arbitration.
     pub fn dispute_escrow(&mut self, escrow_id: Uuid, reason: &str) -> Result<(), EscrowError> {
-        let record = self.escrows.get_mut(&escrow_id)
+        let record = self
+            .escrows
+            .get_mut(&escrow_id)
             .ok_or_else(|| EscrowError::NotFound(escrow_id.to_string()))?;
 
         if record.status != EscrowStatus::Claimed {
@@ -319,10 +355,16 @@ impl EscrowManager {
     }
 
     /// Resolve a dispute: release funds to claimant (true) or refund to publisher (false).
-    pub fn resolve_dispute(&mut self, escrow_id: Uuid, favor_claimant: bool) -> Result<(), EscrowError> {
+    pub fn resolve_dispute(
+        &mut self,
+        escrow_id: Uuid,
+        favor_claimant: bool,
+    ) -> Result<(), EscrowError> {
         // Validate and extract data
         let (publisher, claimant, reward, deposit, currency) = {
-            let record = self.escrows.get(&escrow_id)
+            let record = self
+                .escrows
+                .get(&escrow_id)
                 .ok_or_else(|| EscrowError::NotFound(escrow_id.to_string()))?;
             if record.status != EscrowStatus::Disputed {
                 return Err(EscrowError::InvalidStatus {
@@ -380,10 +422,12 @@ impl EscrowManager {
     /// Process expired escrows for a given tick.
     /// Refunds all escrows whose expires_at <= current_tick and are still Open or Claimed.
     pub fn process_expiry(&mut self, current_tick: u64) -> Vec<Uuid> {
-        let expired_ids: Vec<Uuid> = self.escrows.iter()
+        let expired_ids: Vec<Uuid> = self
+            .escrows
+            .iter()
             .filter(|(_, record)| {
                 matches!(record.status, EscrowStatus::Open | EscrowStatus::Claimed)
-                    && record.expires_at.map_or(false, |exp| exp <= current_tick)
+                    && record.expires_at.is_some_and(|exp| exp <= current_tick)
             })
             .map(|(id, _)| *id)
             .collect();
@@ -429,7 +473,9 @@ mod tests {
     #[test]
     fn test_create_escrow_locks_reward() {
         let mut mgr = make_manager();
-        let id = mgr.create_escrow("publisher", 1000, 200, Currency::Token, 1, None).unwrap();
+        let id = mgr
+            .create_escrow("publisher", 1000, 200, Currency::Token, 1, None)
+            .unwrap();
         assert_eq!(mgr.get_balance("publisher"), 9_000);
         let record = mgr.get(id).unwrap();
         assert_eq!(record.reward, 1000);
@@ -450,7 +496,9 @@ mod tests {
     #[test]
     fn test_create_escrow_with_expiry() {
         let mut mgr = make_manager();
-        let id = mgr.create_escrow("publisher", 500, 100, Currency::Money, 10, Some(100)).unwrap();
+        let id = mgr
+            .create_escrow("publisher", 500, 100, Currency::Money, 10, Some(100))
+            .unwrap();
         let record = mgr.get(id).unwrap();
         assert_eq!(record.expires_at, Some(100));
     }
@@ -460,7 +508,9 @@ mod tests {
     #[test]
     fn test_claim_escrow_locks_deposit() {
         let mut mgr = make_manager();
-        let id = mgr.create_escrow("publisher", 1000, 200, Currency::Token, 1, None).unwrap();
+        let id = mgr
+            .create_escrow("publisher", 1000, 200, Currency::Token, 1, None)
+            .unwrap();
         mgr.claim_escrow(id, "claimant").unwrap();
         assert_eq!(mgr.get_balance("claimant"), 4_800);
         let record = mgr.get(id).unwrap();
@@ -472,7 +522,9 @@ mod tests {
     fn test_claim_escrow_insufficient_deposit() {
         let mut mgr = make_manager();
         mgr.set_balance("poor_claimant", 50);
-        let id = mgr.create_escrow("publisher", 1000, 200, Currency::Token, 1, None).unwrap();
+        let id = mgr
+            .create_escrow("publisher", 1000, 200, Currency::Token, 1, None)
+            .unwrap();
         let result = mgr.claim_escrow(id, "poor_claimant");
         assert!(result.is_err());
         assert_eq!(mgr.get(id).unwrap().status, EscrowStatus::Open);
@@ -481,7 +533,9 @@ mod tests {
     #[test]
     fn test_claim_escrow_already_claimed() {
         let mut mgr = make_manager();
-        let id = mgr.create_escrow("publisher", 1000, 200, Currency::Token, 1, None).unwrap();
+        let id = mgr
+            .create_escrow("publisher", 1000, 200, Currency::Token, 1, None)
+            .unwrap();
         mgr.claim_escrow(id, "claimant").unwrap();
         mgr.set_balance("other_claimant", 5_000);
         let result = mgr.claim_escrow(id, "other_claimant");
@@ -491,7 +545,9 @@ mod tests {
     #[test]
     fn test_claim_escrow_wrong_status_completed() {
         let mut mgr = make_manager();
-        let id = mgr.create_escrow("publisher", 1000, 200, Currency::Token, 1, None).unwrap();
+        let id = mgr
+            .create_escrow("publisher", 1000, 200, Currency::Token, 1, None)
+            .unwrap();
         mgr.claim_escrow(id, "claimant").unwrap();
         mgr.complete_escrow(id).unwrap();
         let result = mgr.claim_escrow(id, "new_claimant");
@@ -503,7 +559,9 @@ mod tests {
     #[test]
     fn test_complete_escrow_releases_to_claimant() {
         let mut mgr = make_manager();
-        let id = mgr.create_escrow("publisher", 1000, 200, Currency::Token, 1, None).unwrap();
+        let id = mgr
+            .create_escrow("publisher", 1000, 200, Currency::Token, 1, None)
+            .unwrap();
         mgr.claim_escrow(id, "claimant").unwrap();
         mgr.complete_escrow(id).unwrap();
         // claimant gets reward (1000) + deposit back (200) = 1200 added to remaining 4800
@@ -514,7 +572,9 @@ mod tests {
     #[test]
     fn test_complete_escrow_wrong_status_open() {
         let mut mgr = make_manager();
-        let id = mgr.create_escrow("publisher", 1000, 200, Currency::Token, 1, None).unwrap();
+        let id = mgr
+            .create_escrow("publisher", 1000, 200, Currency::Token, 1, None)
+            .unwrap();
         let result = mgr.complete_escrow(id);
         assert!(result.is_err());
     }
@@ -524,7 +584,9 @@ mod tests {
     #[test]
     fn test_refund_open_escrow_returns_reward() {
         let mut mgr = make_manager();
-        let id = mgr.create_escrow("publisher", 1000, 200, Currency::Token, 1, None).unwrap();
+        let id = mgr
+            .create_escrow("publisher", 1000, 200, Currency::Token, 1, None)
+            .unwrap();
         mgr.refund_escrow(id).unwrap();
         assert_eq!(mgr.get_balance("publisher"), 10_000);
         assert_eq!(mgr.get(id).unwrap().status, EscrowStatus::Refunded);
@@ -533,7 +595,9 @@ mod tests {
     #[test]
     fn test_refund_claimed_escrow_returns_both() {
         let mut mgr = make_manager();
-        let id = mgr.create_escrow("publisher", 1000, 200, Currency::Token, 1, None).unwrap();
+        let id = mgr
+            .create_escrow("publisher", 1000, 200, Currency::Token, 1, None)
+            .unwrap();
         mgr.claim_escrow(id, "claimant").unwrap();
         mgr.refund_escrow(id).unwrap();
         // publisher gets reward back
@@ -545,7 +609,9 @@ mod tests {
     #[test]
     fn test_refund_completed_escrow_fails() {
         let mut mgr = make_manager();
-        let id = mgr.create_escrow("publisher", 1000, 200, Currency::Token, 1, None).unwrap();
+        let id = mgr
+            .create_escrow("publisher", 1000, 200, Currency::Token, 1, None)
+            .unwrap();
         mgr.claim_escrow(id, "claimant").unwrap();
         mgr.complete_escrow(id).unwrap();
         let result = mgr.refund_escrow(id);
@@ -557,7 +623,9 @@ mod tests {
     #[test]
     fn test_dispute_freezes_funds() {
         let mut mgr = make_manager();
-        let id = mgr.create_escrow("publisher", 1000, 200, Currency::Token, 1, None).unwrap();
+        let id = mgr
+            .create_escrow("publisher", 1000, 200, Currency::Token, 1, None)
+            .unwrap();
         mgr.claim_escrow(id, "claimant").unwrap();
         mgr.dispute_escrow(id, "quality issue").unwrap();
         assert_eq!(mgr.get(id).unwrap().status, EscrowStatus::Disputed);
@@ -569,7 +637,9 @@ mod tests {
     #[test]
     fn test_dispute_open_escrow_fails() {
         let mut mgr = make_manager();
-        let id = mgr.create_escrow("publisher", 1000, 200, Currency::Token, 1, None).unwrap();
+        let id = mgr
+            .create_escrow("publisher", 1000, 200, Currency::Token, 1, None)
+            .unwrap();
         let result = mgr.dispute_escrow(id, "bad");
         assert!(result.is_err());
     }
@@ -577,7 +647,9 @@ mod tests {
     #[test]
     fn test_dispute_completed_escrow_fails() {
         let mut mgr = make_manager();
-        let id = mgr.create_escrow("publisher", 1000, 200, Currency::Token, 1, None).unwrap();
+        let id = mgr
+            .create_escrow("publisher", 1000, 200, Currency::Token, 1, None)
+            .unwrap();
         mgr.claim_escrow(id, "claimant").unwrap();
         mgr.complete_escrow(id).unwrap();
         let result = mgr.dispute_escrow(id, "bad");
@@ -589,7 +661,9 @@ mod tests {
     #[test]
     fn test_resolve_dispute_favor_claimant() {
         let mut mgr = make_manager();
-        let id = mgr.create_escrow("publisher", 1000, 200, Currency::Token, 1, None).unwrap();
+        let id = mgr
+            .create_escrow("publisher", 1000, 200, Currency::Token, 1, None)
+            .unwrap();
         mgr.claim_escrow(id, "claimant").unwrap();
         mgr.dispute_escrow(id, "quality issue").unwrap();
         mgr.resolve_dispute(id, true).unwrap();
@@ -601,7 +675,9 @@ mod tests {
     #[test]
     fn test_resolve_dispute_favor_publisher() {
         let mut mgr = make_manager();
-        let id = mgr.create_escrow("publisher", 1000, 200, Currency::Token, 1, None).unwrap();
+        let id = mgr
+            .create_escrow("publisher", 1000, 200, Currency::Token, 1, None)
+            .unwrap();
         mgr.claim_escrow(id, "claimant").unwrap();
         mgr.dispute_escrow(id, "quality issue").unwrap();
         mgr.resolve_dispute(id, false).unwrap();
@@ -615,7 +691,9 @@ mod tests {
     #[test]
     fn test_resolve_non_disputed_escrow_fails() {
         let mut mgr = make_manager();
-        let id = mgr.create_escrow("publisher", 1000, 200, Currency::Token, 1, None).unwrap();
+        let id = mgr
+            .create_escrow("publisher", 1000, 200, Currency::Token, 1, None)
+            .unwrap();
         mgr.claim_escrow(id, "claimant").unwrap();
         let result = mgr.resolve_dispute(id, true);
         assert!(result.is_err());
@@ -626,7 +704,9 @@ mod tests {
     #[test]
     fn test_process_expiry_refunds_expired_open() {
         let mut mgr = make_manager();
-        let id = mgr.create_escrow("publisher", 1000, 200, Currency::Token, 1, Some(50)).unwrap();
+        let id = mgr
+            .create_escrow("publisher", 1000, 200, Currency::Token, 1, Some(50))
+            .unwrap();
         let expired = mgr.process_expiry(100);
         assert_eq!(expired.len(), 1);
         assert_eq!(expired[0], id);
@@ -637,7 +717,9 @@ mod tests {
     #[test]
     fn test_process_expiry_refunds_expired_claimed() {
         let mut mgr = make_manager();
-        let id = mgr.create_escrow("publisher", 1000, 200, Currency::Token, 1, Some(50)).unwrap();
+        let id = mgr
+            .create_escrow("publisher", 1000, 200, Currency::Token, 1, Some(50))
+            .unwrap();
         mgr.claim_escrow(id, "claimant").unwrap();
         let expired = mgr.process_expiry(100);
         assert_eq!(expired.len(), 1);
@@ -649,7 +731,9 @@ mod tests {
     #[test]
     fn test_process_expiry_skips_not_yet_expired() {
         let mut mgr = make_manager();
-        let id = mgr.create_escrow("publisher", 1000, 200, Currency::Token, 1, Some(200)).unwrap();
+        let id = mgr
+            .create_escrow("publisher", 1000, 200, Currency::Token, 1, Some(200))
+            .unwrap();
         let expired = mgr.process_expiry(100);
         assert!(expired.is_empty());
         assert_eq!(mgr.get(id).unwrap().status, EscrowStatus::Open);
@@ -658,7 +742,9 @@ mod tests {
     #[test]
     fn test_process_expiry_no_expiry_set() {
         let mut mgr = make_manager();
-        let _id = mgr.create_escrow("publisher", 1000, 200, Currency::Token, 1, None).unwrap();
+        let _id = mgr
+            .create_escrow("publisher", 1000, 200, Currency::Token, 1, None)
+            .unwrap();
         let expired = mgr.process_expiry(10_000);
         assert!(expired.is_empty());
     }
@@ -666,9 +752,15 @@ mod tests {
     #[test]
     fn test_process_expiry_multiple_mixed() {
         let mut mgr = make_manager();
-        let id1 = mgr.create_escrow("publisher", 100, 20, Currency::Token, 1, Some(50)).unwrap();
-        let id2 = mgr.create_escrow("publisher", 200, 40, Currency::Token, 1, Some(200)).unwrap();
-        let id3 = mgr.create_escrow("publisher", 300, 60, Currency::Token, 1, Some(50)).unwrap();
+        let id1 = mgr
+            .create_escrow("publisher", 100, 20, Currency::Token, 1, Some(50))
+            .unwrap();
+        let id2 = mgr
+            .create_escrow("publisher", 200, 40, Currency::Token, 1, Some(200))
+            .unwrap();
+        let id3 = mgr
+            .create_escrow("publisher", 300, 60, Currency::Token, 1, Some(50))
+            .unwrap();
 
         let expired = mgr.process_expiry(100);
         assert_eq!(expired.len(), 2);
@@ -692,7 +784,9 @@ mod tests {
     #[test]
     fn test_full_lifecycle_create_claim_complete() {
         let mut mgr = make_manager();
-        let id = mgr.create_escrow("publisher", 1000, 200, Currency::Token, 1, None).unwrap();
+        let id = mgr
+            .create_escrow("publisher", 1000, 200, Currency::Token, 1, None)
+            .unwrap();
         assert_eq!(mgr.get_balance("publisher"), 9_000);
         mgr.claim_escrow(id, "claimant").unwrap();
         assert_eq!(mgr.get_balance("claimant"), 4_800);
@@ -704,7 +798,9 @@ mod tests {
     #[test]
     fn test_full_lifecycle_create_claim_refund() {
         let mut mgr = make_manager();
-        let id = mgr.create_escrow("publisher", 1000, 200, Currency::Token, 1, None).unwrap();
+        let id = mgr
+            .create_escrow("publisher", 1000, 200, Currency::Token, 1, None)
+            .unwrap();
         mgr.claim_escrow(id, "claimant").unwrap();
         mgr.refund_escrow(id).unwrap();
         assert_eq!(mgr.get_balance("publisher"), 10_000);
@@ -714,7 +810,9 @@ mod tests {
     #[test]
     fn test_full_lifecycle_create_claim_dispute_resolve_claimant() {
         let mut mgr = make_manager();
-        let id = mgr.create_escrow("publisher", 1000, 200, Currency::Token, 1, None).unwrap();
+        let id = mgr
+            .create_escrow("publisher", 1000, 200, Currency::Token, 1, None)
+            .unwrap();
         mgr.claim_escrow(id, "claimant").unwrap();
         mgr.dispute_escrow(id, "bad work").unwrap();
         mgr.resolve_dispute(id, true).unwrap();
@@ -725,7 +823,9 @@ mod tests {
     #[test]
     fn test_full_lifecycle_create_claim_dispute_resolve_publisher() {
         let mut mgr = make_manager();
-        let id = mgr.create_escrow("publisher", 1000, 200, Currency::Token, 1, None).unwrap();
+        let id = mgr
+            .create_escrow("publisher", 1000, 200, Currency::Token, 1, None)
+            .unwrap();
         mgr.claim_escrow(id, "claimant").unwrap();
         mgr.dispute_escrow(id, "bad work").unwrap();
         mgr.resolve_dispute(id, false).unwrap();
@@ -763,7 +863,13 @@ mod tests {
 
     #[test]
     fn test_escrow_status_serialization() {
-        for status in [EscrowStatus::Open, EscrowStatus::Claimed, EscrowStatus::Completed, EscrowStatus::Refunded, EscrowStatus::Disputed] {
+        for status in [
+            EscrowStatus::Open,
+            EscrowStatus::Claimed,
+            EscrowStatus::Completed,
+            EscrowStatus::Refunded,
+            EscrowStatus::Disputed,
+        ] {
             let json = serde_json::to_string(&status).unwrap();
             let back: EscrowStatus = serde_json::from_str(&json).unwrap();
             assert_eq!(status, back);
@@ -776,8 +882,10 @@ mod tests {
     fn test_list_escrows() {
         let mut mgr = make_manager();
         assert!(mgr.list().is_empty());
-        mgr.create_escrow("publisher", 100, 20, Currency::Token, 1, None).unwrap();
-        mgr.create_escrow("publisher", 200, 40, Currency::Token, 1, None).unwrap();
+        mgr.create_escrow("publisher", 100, 20, Currency::Token, 1, None)
+            .unwrap();
+        mgr.create_escrow("publisher", 200, 40, Currency::Token, 1, None)
+            .unwrap();
         assert_eq!(mgr.list().len(), 2);
     }
 
@@ -786,7 +894,9 @@ mod tests {
     #[test]
     fn test_zero_deposit_claim() {
         let mut mgr = make_manager();
-        let id = mgr.create_escrow("publisher", 1000, 0, Currency::Token, 1, None).unwrap();
+        let id = mgr
+            .create_escrow("publisher", 1000, 0, Currency::Token, 1, None)
+            .unwrap();
         mgr.set_balance("free_claimant", 0);
         mgr.claim_escrow(id, "free_claimant").unwrap();
         assert_eq!(mgr.get_balance("free_claimant"), 0);
@@ -799,7 +909,9 @@ mod tests {
     #[test]
     fn test_escrow_with_money_currency() {
         let mut mgr = make_manager();
-        let id = mgr.create_escrow("publisher", 500, 100, Currency::Money, 1, None).unwrap();
+        let id = mgr
+            .create_escrow("publisher", 500, 100, Currency::Money, 1, None)
+            .unwrap();
         mgr.claim_escrow(id, "claimant").unwrap();
         mgr.complete_escrow(id).unwrap();
         let record = mgr.get(id).unwrap();
@@ -810,9 +922,13 @@ mod tests {
 
     #[test]
     fn test_error_display() {
-        assert!(EscrowError::NotFound("test".into()).to_string().contains("test"));
+        assert!(EscrowError::NotFound("test".into())
+            .to_string()
+            .contains("test"));
         assert!(EscrowError::Expired.to_string().contains("expired"));
-        assert!(EscrowError::AlreadyClaimed.to_string().contains("already claimed"));
+        assert!(EscrowError::AlreadyClaimed
+            .to_string()
+            .contains("already claimed"));
     }
 
     // ── Event bus integration ──────────────────────────────
@@ -823,11 +939,18 @@ mod tests {
         let mut rx = bus.subscribe();
         let mut mgr = EscrowManager::with_event_bus(bus);
         mgr.set_balance("publisher", 1000);
-        let id = mgr.create_escrow("publisher", 100, 20, Currency::Token, 1, None).unwrap();
+        let id = mgr
+            .create_escrow("publisher", 100, 20, Currency::Token, 1, None)
+            .unwrap();
 
         let event = rx.try_recv().unwrap();
         match event {
-            WorldEvent::EscrowCreated { escrow_id, publisher, reward, currency } => {
+            WorldEvent::EscrowCreated {
+                escrow_id,
+                publisher,
+                reward,
+                currency,
+            } => {
                 assert_eq!(escrow_id, id.to_string());
                 assert_eq!(publisher, "publisher");
                 assert_eq!(reward, 100);
@@ -845,7 +968,9 @@ mod tests {
         mgr.set_balance("publisher", 10_000);
         mgr.set_balance("claimant", 5_000);
 
-        let id = mgr.create_escrow("publisher", 1000, 200, Currency::Token, 1, None).unwrap();
+        let id = mgr
+            .create_escrow("publisher", 1000, 200, Currency::Token, 1, None)
+            .unwrap();
         let _ = rx.try_recv().unwrap(); // EscrowCreated
 
         mgr.claim_escrow(id, "claimant").unwrap();

@@ -16,6 +16,27 @@ body {
   background: var(--background);
   color: var(--foreground);
   font-family: var(--font-sans), system-ui, -apple-system, sans-serif;
+  overscroll-behavior: none;
+  -webkit-tap-highlight-color: transparent;
+}
+
+/* Prevent iOS input zoom */
+input[type="text"],
+input[type="search"],
+input[type="number"],
+input[type="email"],
+input[type="tel"],
+input[type="url"],
+textarea,
+select {
+  font-size: 16px;
+}
+
+/* Touch-friendly minimum tap target */
+button,
+a[role="button"],
+[tabindex="0"] {
+  min-height: 44px;
 }
 
 /* Custom scrollbar */

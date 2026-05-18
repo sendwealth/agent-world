@@ -296,9 +296,7 @@ class ActionExecutor:
         ActionType.EXPLORE: "_handle_explore",
     }
 
-    async def _dispatch(
-        self, action_type: ActionType, context: ActionContext
-    ) -> dict[str, Any]:
+    async def _dispatch(self, action_type: ActionType, context: ActionContext) -> dict[str, Any]:
         """Route an action type to its handler."""
         handler_name = self._HANDLER_NAMES.get(action_type)
         if handler_name is None:

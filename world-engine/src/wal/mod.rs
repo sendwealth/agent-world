@@ -18,7 +18,7 @@ use std::io::{BufWriter, Write};
 use std::path::{Path, PathBuf};
 
 use serde::{Deserialize, Serialize};
-use sha2::{Sha256, Digest};
+use sha2::{Digest, Sha256};
 
 use crate::world::WorldEvent;
 
@@ -237,7 +237,8 @@ impl WAL {
             }
 
             let stored_crc = u32::from_be_bytes(buf[offset + 7..offset + 11].try_into().unwrap());
-            let payload_len = u32::from_be_bytes(buf[offset + 11..offset + 15].try_into().unwrap()) as usize;
+            let payload_len =
+                u32::from_be_bytes(buf[offset + 11..offset + 15].try_into().unwrap()) as usize;
 
             // Check full record available
             if offset + HEADER_SIZE + payload_len + 1 > buf.len() {
@@ -374,7 +375,11 @@ impl WAL {
             return Ok(None);
         }
 
-        Ok(Some((snapshot.events, snapshot.event_counter, snapshot.checksum)))
+        Ok(Some((
+            snapshot.events,
+            snapshot.event_counter,
+            snapshot.checksum,
+        )))
     }
 
     /// Find the latest snapshot file.
@@ -395,7 +400,9 @@ impl WAL {
             .collect();
 
         files.sort_by_key(|e| e.file_name());
-        files.last().map(|e| e.file_name().to_str().unwrap().to_string())
+        files
+            .last()
+            .map(|e| e.file_name().to_str().unwrap().to_string())
     }
 
     /// Full recovery: load latest snapshot → replay WAL.

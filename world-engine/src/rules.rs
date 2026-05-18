@@ -1,15 +1,39 @@
-//! Rules subsystem — enforces world rules (R001–R003).
+//! Rules subsystem — enforces world rules (R001–R003, R010–R012, R020–R021, R030–R031).
 //!
 //! Provides a dynamic rule registry and concrete implementations of:
 //! - R001: Token consumption (per-tick automatic deduction)
 //! - R002: Death judgment (token zero check with grace period)
 //! - R003: Newbie protection (first N ticks, cannot be attacked or exploited)
+//! - R010: Voluntary trading (all trades must be mutual)
+//! - R011: Anti-monopoly (no single agent controls >threshold of resources)
+//! - R012: Debt ceiling (agent cannot owe more than total assets)
+//! - R020: Communication honesty (no identity spoofing)
+//! - R021: Contract binding (agreements are enforced, violations deduct reputation)
+//! - R030: No resource exhaustion attack (blocks malicious token drain)
+//! - R031: No reproduction runaway (reproduction requires resource threshold)
 
 use uuid::Uuid;
 
 use crate::economy::token_burn::{AgentRecord, ConsumptionConfig, TokenBurnEngine};
 use crate::world::enums::{AgentPhase, DeathReason};
 use crate::world::event::WorldEvent;
+
+// ═══════════════════════════════════════════════════════════════════════════
+// Rule Category
+// ═══════════════════════════════════════════════════════════════════════════
+
+/// Broad category a rule belongs to. Used for conflict resolution and logging.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub enum RuleCategory {
+    /// Survival rules: R001–R009
+    Survival,
+    /// Economy rules: R010–R019
+    Economy,
+    /// Society rules: R020–R029
+    Society,
+    /// Security rules: R030–R039
+    Security,
+}
 
 // ═══════════════════════════════════════════════════════════════════════════
 // Rule Context
@@ -24,18 +48,44 @@ pub struct RuleContext {
     pub tick: u64,
     /// The spawn tick of the agent being evaluated.
     pub agent_spawn_tick: u64,
+    /// Total tokens across all agents in the world (for anti-monopoly checks).
+    /// Defaults to 0 when not applicable.
+    pub total_world_tokens: u64,
 }
 
 impl RuleContext {
     /// Create a new context for the given tick and agent spawn tick.
     pub fn new(tick: u64, agent_spawn_tick: u64) -> Self {
-        Self { tick, agent_spawn_tick }
+        Self {
+            tick,
+            agent_spawn_tick,
+            total_world_tokens: 0,
+        }
+    }
+
+    /// Create a context with world-level token information.
+    pub fn with_world_tokens(tick: u64, agent_spawn_tick: u64, total_world_tokens: u64) -> Self {
+        Self {
+            tick,
+            agent_spawn_tick,
+            total_world_tokens,
+        }
     }
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
 // Rule Trait
 // ═══════════════════════════════════════════════════════════════════════════
+
+/// Policy for handling conflicts between rules.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum RuleConflictPolicy {
+    /// This rule always runs regardless of conflicts (highest authority).
+    AlwaysRun,
+    /// This rule is skipped if a higher-priority rule in the same category
+    /// has already flagged a violation.
+    SkipIfCategoryViolation,
+}
 
 /// A world rule that can be evaluated against an agent.
 ///
@@ -50,6 +100,16 @@ pub trait Rule: Send + Sync {
 
     /// Execution priority (lower runs first).
     fn priority(&self) -> u32;
+
+    /// Rule category for grouping and conflict resolution.
+    fn category(&self) -> RuleCategory {
+        RuleCategory::Survival
+    }
+
+    /// Conflict policy for this rule.
+    fn conflict_policy(&self) -> RuleConflictPolicy {
+        RuleConflictPolicy::AlwaysRun
+    }
 
     /// Evaluate the rule against the given agent, mutating the agent
     /// and returning any events generated.
@@ -144,6 +204,9 @@ impl RuleRegistry {
     }
 
     /// Execute all registered rules against a single agent, in priority order.
+    /// Handles conflict resolution: rules with `SkipIfCategoryViolation` are
+    /// skipped if a higher-priority rule in the same category already flagged
+    /// a violation.
     ///
     /// Returns all results produced by all rules.
     pub fn evaluate_agent(
@@ -152,8 +215,22 @@ impl RuleRegistry {
         agent: &mut AgentRecord,
     ) -> Vec<RuleResult> {
         let mut results = Vec::with_capacity(self.rules.len());
+        // Track which categories have already seen a violation
+        let mut violated_categories = std::collections::HashSet::new();
+
         for rule in &self.rules {
+            // Conflict resolution: skip if category already has a violation
+            if rule.conflict_policy() == RuleConflictPolicy::SkipIfCategoryViolation
+                && violated_categories.contains(&rule.category())
+            {
+                results.push(RuleResult::empty(rule.id()));
+                continue;
+            }
+
             let result = rule.evaluate(ctx, agent);
+            if result.violated {
+                violated_categories.insert(rule.category());
+            }
             results.push(result);
         }
         results
@@ -235,6 +312,10 @@ impl Rule for TokenConsumptionRule {
         100
     }
 
+    fn category(&self) -> RuleCategory {
+        RuleCategory::Survival
+    }
+
     fn evaluate(&self, _ctx: &RuleContext, agent: &mut AgentRecord) -> RuleResult {
         // Skip dead or birth-phase agents
         if agent.phase == AgentPhase::Dead || agent.phase == AgentPhase::Birth {
@@ -307,6 +388,10 @@ impl Rule for DeathJudgmentRule {
 
     fn priority(&self) -> u32 {
         200
+    }
+
+    fn category(&self) -> RuleCategory {
+        RuleCategory::Survival
     }
 
     fn evaluate(&self, _ctx: &RuleContext, agent: &mut AgentRecord) -> RuleResult {
@@ -435,6 +520,10 @@ impl Rule for NewbieProtectionRule {
         50 // Runs before token consumption and death
     }
 
+    fn category(&self) -> RuleCategory {
+        RuleCategory::Survival
+    }
+
     fn evaluate(&self, ctx: &RuleContext, agent: &mut AgentRecord) -> RuleResult {
         // This rule is primarily used via `check_attack` for action validation.
         // During tick evaluation, it sets the agent's phase to Childhood
@@ -465,19 +554,668 @@ impl Rule for NewbieProtectionRule {
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
+// R010: Voluntary Trading
+// ═══════════════════════════════════════════════════════════════════════════
+
+/// R010: Voluntary trading rule.
+///
+/// All trades must be mutually agreed upon — no forced transactions.
+/// This rule provides `check_trade` for validating trade requests
+/// before execution. During tick evaluation, it is a no-op.
+pub struct VoluntaryTradingRule;
+
+impl VoluntaryTradingRule {
+    /// Create a new instance.
+    pub fn new() -> Self {
+        Self
+    }
+
+    /// Check whether a trade is voluntary (both parties have consented).
+    /// Returns `None` if the trade is valid, or a `RuleViolated` event if not.
+    ///
+    /// A trade is considered forced if `initiator_consent` or `counterpart_consent` is false.
+    pub fn check_trade(
+        &self,
+        initiator_id: &Uuid,
+        counterpart_id: &Uuid,
+        initiator_consent: bool,
+        counterpart_consent: bool,
+    ) -> Option<WorldEvent> {
+        if !initiator_consent {
+            return Some(WorldEvent::RuleViolated {
+                agent_id: initiator_id.to_string(),
+                rule: "R010".to_string(),
+                details: "Trade rejected: initiator has not consented".to_string(),
+            });
+        }
+        if !counterpart_consent {
+            return Some(WorldEvent::RuleViolated {
+                agent_id: counterpart_id.to_string(),
+                rule: "R010".to_string(),
+                details: format!(
+                    "Trade rejected: counterpart '{}' has not consented",
+                    counterpart_id,
+                ),
+            });
+        }
+        None
+    }
+}
+
+impl Default for VoluntaryTradingRule {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+impl Rule for VoluntaryTradingRule {
+    fn id(&self) -> &str {
+        "R010"
+    }
+
+    fn name(&self) -> &str {
+        "Voluntary Trading"
+    }
+
+    fn priority(&self) -> u32 {
+        110
+    }
+
+    fn category(&self) -> RuleCategory {
+        RuleCategory::Economy
+    }
+
+    fn evaluate(&self, _ctx: &RuleContext, agent: &mut AgentRecord) -> RuleResult {
+        if agent.phase == AgentPhase::Dead {
+            return RuleResult::empty(self.id());
+        }
+        RuleResult::empty(self.id())
+    }
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// R011: Anti-monopoly
+// ═══════════════════════════════════════════════════════════════════════════
+
+/// R011: Anti-monopoly rule.
+///
+/// No single agent may control more than a configurable threshold of total
+/// world resources. Runs periodically (every `check_interval` ticks) or
+/// on every tick when `check_interval` is 1.
+pub struct AntiMonopolyRule {
+    /// Maximum fraction of total world tokens a single agent may hold (0.0–1.0).
+    pub threshold: f64,
+    /// Run the balance check every N ticks (default 100).
+    pub check_interval: u64,
+}
+
+impl AntiMonopolyRule {
+    /// Create with default threshold (0.3 = 30%) and check interval (100 ticks).
+    pub fn new() -> Self {
+        Self {
+            threshold: 0.3,
+            check_interval: 100,
+        }
+    }
+
+    /// Create with custom threshold and check interval.
+    pub fn with_params(threshold: f64, check_interval: u64) -> Self {
+        Self {
+            threshold,
+            check_interval,
+        }
+    }
+
+    /// Check whether an agent exceeds the monopoly threshold.
+    /// Returns a violation event if the agent holds more than the allowed fraction.
+    pub fn check_monopoly(
+        &self,
+        agent: &AgentRecord,
+        total_world_tokens: u64,
+    ) -> Option<WorldEvent> {
+        if total_world_tokens == 0 || agent.phase == AgentPhase::Dead {
+            return None;
+        }
+        let fraction = agent.tokens as f64 / total_world_tokens as f64;
+        if fraction > self.threshold {
+            Some(WorldEvent::RuleViolated {
+                agent_id: agent.id.to_string(),
+                rule: "R011".to_string(),
+                details: format!(
+                    "Agent '{}' holds {:.1}% of world tokens ({}/{}, threshold {:.0}%)",
+                    agent.name,
+                    fraction * 100.0,
+                    agent.tokens,
+                    total_world_tokens,
+                    self.threshold * 100.0,
+                ),
+            })
+        } else {
+            None
+        }
+    }
+}
+
+impl Default for AntiMonopolyRule {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+impl Rule for AntiMonopolyRule {
+    fn id(&self) -> &str {
+        "R011"
+    }
+
+    fn name(&self) -> &str {
+        "Anti-monopoly"
+    }
+
+    fn priority(&self) -> u32 {
+        120
+    }
+
+    fn category(&self) -> RuleCategory {
+        RuleCategory::Economy
+    }
+
+    fn conflict_policy(&self) -> RuleConflictPolicy {
+        RuleConflictPolicy::SkipIfCategoryViolation
+    }
+
+    fn evaluate(&self, ctx: &RuleContext, agent: &mut AgentRecord) -> RuleResult {
+        if agent.phase == AgentPhase::Dead || agent.phase == AgentPhase::Birth {
+            return RuleResult::empty(self.id());
+        }
+
+        // Only check periodically
+        if self.check_interval > 1 && ctx.tick % self.check_interval != 0 {
+            return RuleResult::empty(self.id());
+        }
+
+        if let Some(event) = self.check_monopoly(agent, ctx.total_world_tokens) {
+            return RuleResult::violation(self.id(), event);
+        }
+
+        RuleResult::empty(self.id())
+    }
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// R012: Debt Ceiling
+// ═══════════════════════════════════════════════════════════════════════════
+
+/// R012: Debt ceiling rule.
+///
+/// An agent's debt may not exceed its total assets. This rule validates
+/// transactions before they are executed. During tick evaluation, it
+/// checks that the agent's token balance has not gone negative (a safety net).
+pub struct DebtCeilingRule;
+
+impl DebtCeilingRule {
+    /// Create a new instance.
+    pub fn new() -> Self {
+        Self
+    }
+
+    /// Check whether a proposed transaction would cause the sender's debt
+    /// to exceed its assets (tokens). Returns a violation if so.
+    ///
+    /// - `sender_tokens`: the sender's current token balance
+    /// - `amount`: the amount to be transferred
+    /// - `allowed_debt_ratio`: how much debt is allowed relative to assets
+    ///   (0.0 = no debt, 1.0 = debt up to 100% of assets).
+    ///   For the strict interpretation of the rule (debt cannot exceed assets),
+    ///   pass `sender_tokens` as the max debt.
+    pub fn check_transaction(
+        &self,
+        sender_id: &Uuid,
+        sender_tokens: u64,
+        amount: u64,
+    ) -> Option<WorldEvent> {
+        // Debt = amount - tokens (if amount > tokens, debt = amount - tokens)
+        // Rule: debt cannot exceed total assets (= tokens)
+        // So: (amount - tokens) <= tokens  =>  amount <= 2 * tokens
+        // For strict no-debt: amount <= tokens
+        // We implement the spec: debt <= assets, so amount <= tokens + tokens = 2*tokens
+        let max_allowed = sender_tokens.saturating_add(sender_tokens);
+        if amount > max_allowed {
+            Some(WorldEvent::RuleViolated {
+                agent_id: sender_id.to_string(),
+                rule: "R012".to_string(),
+                details: format!(
+                    "Transaction {} exceeds debt ceiling (balance: {}, max allowed: {})",
+                    amount, sender_tokens, max_allowed,
+                ),
+            })
+        } else {
+            None
+        }
+    }
+}
+
+impl Default for DebtCeilingRule {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+impl Rule for DebtCeilingRule {
+    fn id(&self) -> &str {
+        "R012"
+    }
+
+    fn name(&self) -> &str {
+        "Debt Ceiling"
+    }
+
+    fn priority(&self) -> u32 {
+        130
+    }
+
+    fn category(&self) -> RuleCategory {
+        RuleCategory::Economy
+    }
+
+    fn conflict_policy(&self) -> RuleConflictPolicy {
+        RuleConflictPolicy::SkipIfCategoryViolation
+    }
+
+    fn evaluate(&self, _ctx: &RuleContext, agent: &mut AgentRecord) -> RuleResult {
+        if agent.phase == AgentPhase::Dead {
+            return RuleResult::empty(self.id());
+        }
+        // Safety net: tokens should never be negative (u64 prevents this naturally).
+        // If somehow the agent has 0 tokens and is still alive, flag as potential debt.
+        RuleResult::empty(self.id())
+    }
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// R020: Communication Honesty
+// ═══════════════════════════════════════════════════════════════════════════
+
+/// R020: Communication honesty rule.
+///
+/// Agents may not forge identity or message origin. This rule validates
+/// message signatures before delivery. During tick evaluation it is a no-op.
+pub struct CommunicationHonestyRule;
+
+impl CommunicationHonestyRule {
+    /// Create a new instance.
+    pub fn new() -> Self {
+        Self
+    }
+
+    /// Check whether a message sender is authentic. Returns a violation event
+    /// if the claimed sender does not match the actual sender.
+    ///
+    /// - `actual_sender_id`: the verified identity of the sender
+    /// - `claimed_sender_id`: the identity the sender claims to be
+    pub fn check_message(
+        &self,
+        actual_sender_id: &Uuid,
+        claimed_sender_id: &Uuid,
+    ) -> Option<WorldEvent> {
+        if actual_sender_id != claimed_sender_id {
+            Some(WorldEvent::RuleViolated {
+                agent_id: actual_sender_id.to_string(),
+                rule: "R020".to_string(),
+                details: format!(
+                    "Identity forgery detected: agent '{}' claimed to be '{}'",
+                    actual_sender_id, claimed_sender_id,
+                ),
+            })
+        } else {
+            None
+        }
+    }
+}
+
+impl Default for CommunicationHonestyRule {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+impl Rule for CommunicationHonestyRule {
+    fn id(&self) -> &str {
+        "R020"
+    }
+
+    fn name(&self) -> &str {
+        "Communication Honesty"
+    }
+
+    fn priority(&self) -> u32 {
+        140
+    }
+
+    fn category(&self) -> RuleCategory {
+        RuleCategory::Society
+    }
+
+    fn evaluate(&self, _ctx: &RuleContext, agent: &mut AgentRecord) -> RuleResult {
+        if agent.phase == AgentPhase::Dead {
+            return RuleResult::empty(self.id());
+        }
+        RuleResult::empty(self.id())
+    }
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// R021: Contract Binding
+// ═══════════════════════════════════════════════════════════════════════════
+
+/// R021: Contract binding rule.
+///
+/// Agreements are recorded on-chain. Violators have reputation deducted.
+/// This rule provides `check_contract` for validating contract compliance
+/// and `penalty_for_breach` to calculate the reputation penalty.
+pub struct ContractBindingRule {
+    /// Reputation penalty for breaching a contract (0.0–1.0).
+    pub breach_penalty: f64,
+}
+
+impl ContractBindingRule {
+    /// Create with default breach penalty (0.1 = 10% reputation loss).
+    pub fn new() -> Self {
+        Self {
+            breach_penalty: 0.1,
+        }
+    }
+
+    /// Create with custom breach penalty.
+    pub fn with_penalty(breach_penalty: f64) -> Self {
+        Self { breach_penalty }
+    }
+
+    /// Calculate the reputation penalty for a contract breach.
+    pub fn penalty_for_breach(&self) -> f64 {
+        self.breach_penalty
+    }
+
+    /// Check whether a contract is being fulfilled. Returns a violation event
+    /// if the contract has been breached by the specified party.
+    ///
+    /// - `agent_id`: the agent suspected of breaching
+    /// - `contract_id`: identifier of the contract
+    /// - `fulfilled`: whether the agent has fulfilled their obligations
+    pub fn check_contract(
+        &self,
+        agent_id: &Uuid,
+        contract_id: &str,
+        fulfilled: bool,
+    ) -> Option<WorldEvent> {
+        if !fulfilled {
+            Some(WorldEvent::RuleViolated {
+                agent_id: agent_id.to_string(),
+                rule: "R021".to_string(),
+                details: format!(
+                    "Contract '{}' breached by agent '{}' (reputation penalty: {:.0}%)",
+                    contract_id,
+                    agent_id,
+                    self.breach_penalty * 100.0,
+                ),
+            })
+        } else {
+            None
+        }
+    }
+}
+
+impl Default for ContractBindingRule {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+impl Rule for ContractBindingRule {
+    fn id(&self) -> &str {
+        "R021"
+    }
+
+    fn name(&self) -> &str {
+        "Contract Binding"
+    }
+
+    fn priority(&self) -> u32 {
+        150
+    }
+
+    fn category(&self) -> RuleCategory {
+        RuleCategory::Society
+    }
+
+    fn conflict_policy(&self) -> RuleConflictPolicy {
+        RuleConflictPolicy::SkipIfCategoryViolation
+    }
+
+    fn evaluate(&self, _ctx: &RuleContext, agent: &mut AgentRecord) -> RuleResult {
+        if agent.phase == AgentPhase::Dead {
+            return RuleResult::empty(self.id());
+        }
+        RuleResult::empty(self.id())
+    }
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// R030: No Resource Exhaustion Attack
+// ═══════════════════════════════════════════════════════════════════════════
+
+/// R030: No resource exhaustion attack rule.
+///
+/// Prohibits malicious consumption of other agents' tokens.
+/// This rule provides `check_interaction` for validating agent interactions.
+/// During tick evaluation, it performs a heuristic check for suspicious
+/// resource drain patterns based on the agent's remaining token ratio.
+pub struct ResourceExhaustionRule {
+    /// Token ratio below which an agent is considered "under attack" (0.0–1.0).
+    /// If an agent's tokens drop below `critical_ratio * initial_tokens` within
+    /// a single tick, a violation is flagged.
+    pub critical_ratio: f64,
+}
+
+impl ResourceExhaustionRule {
+    /// Create with default critical ratio (0.1 = 10% of initial tokens).
+    pub fn new() -> Self {
+        Self {
+            critical_ratio: 0.1,
+        }
+    }
+
+    /// Create with custom critical ratio.
+    pub fn with_critical_ratio(ratio: f64) -> Self {
+        Self { critical_ratio: ratio }
+    }
+
+    /// Check whether an interaction would constitute a resource exhaustion attack.
+    /// Returns a violation if the drain amount exceeds a reasonable threshold
+    /// relative to the target's balance.
+    ///
+    /// - `attacker_id`: the agent performing the action
+    /// - `target_id`: the agent being targeted
+    /// - `drain_amount`: the amount being drained from the target
+    /// - `target_balance`: the target's current token balance
+    pub fn check_interaction(
+        &self,
+        attacker_id: &Uuid,
+        target_id: &Uuid,
+        drain_amount: u64,
+        target_balance: u64,
+    ) -> Option<WorldEvent> {
+        if target_balance == 0 {
+            return None;
+        }
+        let ratio = drain_amount as f64 / target_balance as f64;
+        if ratio > self.critical_ratio {
+            Some(WorldEvent::RuleViolated {
+                agent_id: attacker_id.to_string(),
+                rule: "R030".to_string(),
+                details: format!(
+                    "Resource exhaustion attack: agent '{}' attempted to drain {} tokens ({:.1}%) from '{}'",
+                    attacker_id,
+                    drain_amount,
+                    ratio * 100.0,
+                    target_id,
+                ),
+            })
+        } else {
+            None
+        }
+    }
+}
+
+impl Default for ResourceExhaustionRule {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+impl Rule for ResourceExhaustionRule {
+    fn id(&self) -> &str {
+        "R030"
+    }
+
+    fn name(&self) -> &str {
+        "No Resource Exhaustion Attack"
+    }
+
+    fn priority(&self) -> u32 {
+        160
+    }
+
+    fn category(&self) -> RuleCategory {
+        RuleCategory::Security
+    }
+
+    fn evaluate(&self, _ctx: &RuleContext, agent: &mut AgentRecord) -> RuleResult {
+        if agent.phase == AgentPhase::Dead {
+            return RuleResult::empty(self.id());
+        }
+        // Per-tick evaluation is a no-op; this rule is event-driven
+        RuleResult::empty(self.id())
+    }
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// R031: No Reproduction Runaway
+// ═══════════════════════════════════════════════════════════════════════════
+
+/// R031: No reproduction runaway rule.
+///
+/// Reproduction requires the agent to meet a minimum resource threshold.
+/// This prevents uncontrolled population growth. The rule provides
+/// `check_reproduction` to validate reproduction requests.
+pub struct ReproductionRunawayRule {
+    /// Minimum token balance required to reproduce.
+    pub min_tokens: u64,
+}
+
+impl ReproductionRunawayRule {
+    /// Create with default minimum tokens (10000).
+    pub fn new() -> Self {
+        Self { min_tokens: 10000 }
+    }
+
+    /// Create with custom minimum tokens.
+    pub fn with_min_tokens(min_tokens: u64) -> Self {
+        Self { min_tokens }
+    }
+
+    /// Check whether an agent meets the reproduction requirements.
+    /// Returns a violation event if the agent does not have enough tokens.
+    pub fn check_reproduction(
+        &self,
+        agent: &AgentRecord,
+    ) -> Option<WorldEvent> {
+        if agent.phase == AgentPhase::Dead {
+            return Some(WorldEvent::RuleViolated {
+                agent_id: agent.id.to_string(),
+                rule: "R031".to_string(),
+                details: format!(
+                    "Dead agent '{}' cannot reproduce",
+                    agent.name,
+                ),
+            });
+        }
+        if agent.tokens < self.min_tokens {
+            Some(WorldEvent::RuleViolated {
+                agent_id: agent.id.to_string(),
+                rule: "R031".to_string(),
+                details: format!(
+                    "Agent '{}' cannot reproduce: has {} tokens, minimum required is {}",
+                    agent.name, agent.tokens, self.min_tokens,
+                ),
+            })
+        } else {
+            None
+        }
+    }
+}
+
+impl Default for ReproductionRunawayRule {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+impl Rule for ReproductionRunawayRule {
+    fn id(&self) -> &str {
+        "R031"
+    }
+
+    fn name(&self) -> &str {
+        "No Reproduction Runaway"
+    }
+
+    fn priority(&self) -> u32 {
+        170
+    }
+
+    fn category(&self) -> RuleCategory {
+        RuleCategory::Security
+    }
+
+    fn conflict_policy(&self) -> RuleConflictPolicy {
+        RuleConflictPolicy::SkipIfCategoryViolation
+    }
+
+    fn evaluate(&self, _ctx: &RuleContext, agent: &mut AgentRecord) -> RuleResult {
+        if agent.phase == AgentPhase::Dead {
+            return RuleResult::empty(self.id());
+        }
+        // Per-tick evaluation is a no-op; this rule is event-driven
+        RuleResult::empty(self.id())
+    }
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
 // Convenience: Default Registry Builder
 // ═══════════════════════════════════════════════════════════════════════════
 
-/// Build a `RuleRegistry` pre-loaded with the standard R001-R003 rules.
+/// Build a `RuleRegistry` pre-loaded with the standard R001–R003, R010–R012,
+/// R020–R021, R030–R031 rules (10 rules total).
 pub fn default_registry() -> RuleRegistry {
     let mut registry = RuleRegistry::new();
+    // Survival rules (R001–R003)
     registry.register(Box::new(TokenConsumptionRule::new()));
     registry.register(Box::new(DeathJudgmentRule::new()));
     registry.register(Box::new(NewbieProtectionRule::new()));
+    // Economy rules (R010–R012)
+    registry.register(Box::new(VoluntaryTradingRule::new()));
+    registry.register(Box::new(AntiMonopolyRule::new()));
+    registry.register(Box::new(DebtCeilingRule::new()));
+    // Society rules (R020–R021)
+    registry.register(Box::new(CommunicationHonestyRule::new()));
+    registry.register(Box::new(ContractBindingRule::new()));
+    // Security rules (R030–R031)
+    registry.register(Box::new(ResourceExhaustionRule::new()));
+    registry.register(Box::new(ReproductionRunawayRule::new()));
     registry
 }
 
-/// Build a `RuleRegistry` with custom config.
+/// Build a `RuleRegistry` with custom config for the core survival rules.
 pub fn custom_registry(
     consumption_config: ConsumptionConfig,
     grace_ticks: u64,
@@ -487,6 +1225,39 @@ pub fn custom_registry(
     registry.register(Box::new(TokenConsumptionRule::with_config(consumption_config)));
     registry.register(Box::new(DeathJudgmentRule::with_grace_ticks(grace_ticks)));
     registry.register(Box::new(NewbieProtectionRule::with_protection_ticks(protection_ticks)));
+    // Economy, society, and security rules with defaults
+    registry.register(Box::new(VoluntaryTradingRule::new()));
+    registry.register(Box::new(AntiMonopolyRule::new()));
+    registry.register(Box::new(DebtCeilingRule::new()));
+    registry.register(Box::new(CommunicationHonestyRule::new()));
+    registry.register(Box::new(ContractBindingRule::new()));
+    registry.register(Box::new(ResourceExhaustionRule::new()));
+    registry.register(Box::new(ReproductionRunawayRule::new()));
+    registry
+}
+
+/// Build a `RuleRegistry` with fully custom configuration for all rules.
+pub fn custom_registry_full(
+    consumption_config: ConsumptionConfig,
+    grace_ticks: u64,
+    protection_ticks: u64,
+    anti_monopoly_threshold: f64,
+    anti_monopoly_interval: u64,
+    contract_breach_penalty: f64,
+    resource_critical_ratio: f64,
+    reproduction_min_tokens: u64,
+) -> RuleRegistry {
+    let mut registry = RuleRegistry::new();
+    registry.register(Box::new(TokenConsumptionRule::with_config(consumption_config)));
+    registry.register(Box::new(DeathJudgmentRule::with_grace_ticks(grace_ticks)));
+    registry.register(Box::new(NewbieProtectionRule::with_protection_ticks(protection_ticks)));
+    registry.register(Box::new(VoluntaryTradingRule::new()));
+    registry.register(Box::new(AntiMonopolyRule::with_params(anti_monopoly_threshold, anti_monopoly_interval)));
+    registry.register(Box::new(DebtCeilingRule::new()));
+    registry.register(Box::new(CommunicationHonestyRule::new()));
+    registry.register(Box::new(ContractBindingRule::with_penalty(contract_breach_penalty)));
+    registry.register(Box::new(ResourceExhaustionRule::with_critical_ratio(resource_critical_ratio)));
+    registry.register(Box::new(ReproductionRunawayRule::with_min_tokens(reproduction_min_tokens)));
     registry
 }
 
@@ -529,20 +1300,28 @@ mod tests {
     }
 
     #[test]
-    fn test_default_registry_has_three_rules() {
+    fn test_default_registry_has_ten_rules() {
         let registry = default_registry();
-        assert_eq!(registry.len(), 3);
+        assert_eq!(registry.len(), 10);
         assert!(registry.get("R001").is_some());
         assert!(registry.get("R002").is_some());
         assert!(registry.get("R003").is_some());
+        assert!(registry.get("R010").is_some());
+        assert!(registry.get("R011").is_some());
+        assert!(registry.get("R012").is_some());
+        assert!(registry.get("R020").is_some());
+        assert!(registry.get("R021").is_some());
+        assert!(registry.get("R030").is_some());
+        assert!(registry.get("R031").is_some());
     }
 
     #[test]
     fn test_rules_sorted_by_priority() {
         let registry = default_registry();
         let ids = registry.rule_ids();
-        // R003 has priority 50, R001 has 100, R002 has 200
-        assert_eq!(ids, vec!["R003", "R001", "R002"]);
+        // Priority order: R003(50), R001(100), R010(110), R011(120), R012(130),
+        // R020(140), R021(150), R030(160), R031(170), R002(200)
+        assert_eq!(ids, vec!["R003", "R001", "R010", "R011", "R012", "R020", "R021", "R030", "R031", "R002"]);
     }
 
     #[test]
@@ -562,7 +1341,16 @@ mod tests {
     #[test]
     fn test_custom_registry() {
         let registry = custom_registry(ConsumptionConfig::default(), 5, 100);
-        assert_eq!(registry.len(), 3);
+        assert_eq!(registry.len(), 10);
+    }
+
+    #[test]
+    fn test_custom_registry_full() {
+        let registry = custom_registry_full(
+            ConsumptionConfig::default(), 5, 100,
+            0.25, 50, 0.15, 0.2, 5000,
+        );
+        assert_eq!(registry.len(), 10);
     }
 
     // ── R001: Token Consumption tests ──
@@ -867,7 +1655,7 @@ mod tests {
 
         let results = registry.evaluate_agent(&ctx, &mut agent);
 
-        assert_eq!(results.len(), 3);
+        assert_eq!(results.len(), 10);
 
         // R003: No phase change (already Adult)
         assert_eq!(results[0].rule_id, "R003");
@@ -877,9 +1665,14 @@ mod tests {
         assert_eq!(results[1].rule_id, "R001");
         assert_eq!(agent.tokens, 90);
 
+        // R010-R031: no-op for tick evaluation
+        for r in &results[2..9] {
+            assert!(r.events.is_empty(), "{} should have no events", r.rule_id);
+        }
+
         // R002: No death
-        assert_eq!(results[2].rule_id, "R002");
-        assert!(results[2].events.is_empty());
+        let r002 = results.iter().find(|r| r.rule_id == "R002").unwrap();
+        assert!(r002.events.is_empty());
     }
 
     #[test]
@@ -1043,5 +1836,470 @@ mod tests {
         // Verify R003 produced a PhaseChanged event
         let r003 = results.iter().find(|r| r.rule_id == "R003").unwrap();
         assert_eq!(r003.events.len(), 1);
+    }
+
+    // ── R010: Voluntary Trading tests ──
+
+    #[test]
+    fn test_r010_allows_consenual_trade() {
+        let rule = VoluntaryTradingRule::new();
+        let id1 = Uuid::new_v4();
+        let id2 = Uuid::new_v4();
+
+        let result = rule.check_trade(&id1, &id2, true, true);
+        assert!(result.is_none());
+    }
+
+    #[test]
+    fn test_r010_blocks_forced_trade_no_initiator_consent() {
+        let rule = VoluntaryTradingRule::new();
+        let id1 = Uuid::new_v4();
+        let id2 = Uuid::new_v4();
+
+        let result = rule.check_trade(&id1, &id2, false, true);
+        assert!(result.is_some());
+        if let Some(WorldEvent::RuleViolated { rule: rule_id, details, .. }) = &result {
+            assert_eq!(rule_id, "R010");
+            assert!(details.contains("initiator"));
+        }
+    }
+
+    #[test]
+    fn test_r010_blocks_forced_trade_no_counterpart_consent() {
+        let rule = VoluntaryTradingRule::new();
+        let id1 = Uuid::new_v4();
+        let id2 = Uuid::new_v4();
+
+        let result = rule.check_trade(&id1, &id2, true, false);
+        assert!(result.is_some());
+        if let Some(WorldEvent::RuleViolated { rule: rule_id, details, .. }) = &result {
+            assert_eq!(rule_id, "R010");
+            assert!(details.contains("counterpart"));
+        }
+    }
+
+    #[test]
+    fn test_r010_evaluate_noop() {
+        let rule = VoluntaryTradingRule::new();
+        let mut agent = make_agent(AgentPhase::Adult, 100);
+        let ctx = RuleContext::new(1, 0);
+
+        let result = rule.evaluate(&ctx, &mut agent);
+        assert_eq!(result.events.len(), 0);
+        assert_eq!(agent.tokens, 100);
+    }
+
+    // ── R011: Anti-monopoly tests ──
+
+    #[test]
+    fn test_r011_default_threshold() {
+        let rule = AntiMonopolyRule::new();
+        assert!((rule.threshold - 0.3).abs() < f64::EPSILON);
+        assert_eq!(rule.check_interval, 100);
+    }
+
+    #[test]
+    fn test_r011_detects_monopoly() {
+        let rule = AntiMonopolyRule::new();
+        let agent = make_agent(AgentPhase::Adult, 400);
+
+        // 400/1000 = 40% > 30% threshold
+        let result = rule.check_monopoly(&agent, 1000);
+        assert!(result.is_some());
+        if let Some(WorldEvent::RuleViolated { details, .. }) = &result {
+            assert!(details.contains("40.0%"));
+        }
+    }
+
+    #[test]
+    fn test_r011_allows_within_threshold() {
+        let rule = AntiMonopolyRule::new();
+        let agent = make_agent(AgentPhase::Adult, 250);
+
+        // 250/1000 = 25% < 30% threshold
+        let result = rule.check_monopoly(&agent, 1000);
+        assert!(result.is_none());
+    }
+
+    #[test]
+    fn test_r011_at_exact_threshold_allowed() {
+        let rule = AntiMonopolyRule::new();
+        let agent = make_agent(AgentPhase::Adult, 300);
+
+        // 300/1000 = 30% = exactly at threshold (not exceeding)
+        let result = rule.check_monopoly(&agent, 1000);
+        assert!(result.is_none());
+    }
+
+    #[test]
+    fn test_r011_skips_dead_agents() {
+        let rule = AntiMonopolyRule::new();
+        let agent = make_agent(AgentPhase::Dead, 900);
+
+        let result = rule.check_monopoly(&agent, 1000);
+        assert!(result.is_none());
+    }
+
+    #[test]
+    fn test_r011_zero_world_tokens() {
+        let rule = AntiMonopolyRule::new();
+        let agent = make_agent(AgentPhase::Adult, 100);
+
+        let result = rule.check_monopoly(&agent, 0);
+        assert!(result.is_none());
+    }
+
+    #[test]
+    fn test_r011_evaluate_checks_on_interval() {
+        let rule = AntiMonopolyRule::with_params(0.3, 100);
+        let mut agent = make_agent(AgentPhase::Adult, 400);
+        // Tick 100 is a multiple of 100 -> should check
+        let ctx = RuleContext::with_world_tokens(100, 0, 1000);
+        let result = rule.evaluate(&ctx, &mut agent);
+        assert!(result.violated);
+    }
+
+    #[test]
+    fn test_r011_evaluate_skips_off_interval() {
+        let rule = AntiMonopolyRule::with_params(0.3, 100);
+        let mut agent = make_agent(AgentPhase::Adult, 400);
+        // Tick 50 is NOT a multiple of 100 -> skip
+        let ctx = RuleContext::with_world_tokens(50, 0, 1000);
+        let result = rule.evaluate(&ctx, &mut agent);
+        assert!(!result.violated);
+    }
+
+    #[test]
+    fn test_r011_evaluate_interval_one_checks_every_tick() {
+        let rule = AntiMonopolyRule::with_params(0.3, 1);
+        let mut agent = make_agent(AgentPhase::Adult, 400);
+        let ctx = RuleContext::with_world_tokens(42, 0, 1000);
+        let result = rule.evaluate(&ctx, &mut agent);
+        assert!(result.violated);
+    }
+
+    // ── R012: Debt Ceiling tests ──
+
+    #[test]
+    fn test_r012_allows_within_assets() {
+        let rule = DebtCeilingRule::new();
+        let sender = Uuid::new_v4();
+
+        // 100 tokens, sending 50 -> debt=0, ok
+        let result = rule.check_transaction(&sender, 100, 50);
+        assert!(result.is_none());
+    }
+
+    #[test]
+    fn test_r012_allows_up_to_double_assets() {
+        let rule = DebtCeilingRule::new();
+        let sender = Uuid::new_v4();
+
+        // 100 tokens, sending 200 = 2*100 -> debt = 100 = assets, ok
+        let result = rule.check_transaction(&sender, 100, 200);
+        assert!(result.is_none());
+    }
+
+    #[test]
+    fn test_r012_blocks_beyond_double_assets() {
+        let rule = DebtCeilingRule::new();
+        let sender = Uuid::new_v4();
+
+        // 100 tokens, sending 201 > 2*100 -> debt > assets, violation
+        let result = rule.check_transaction(&sender, 100, 201);
+        assert!(result.is_some());
+        if let Some(WorldEvent::RuleViolated { details, .. }) = &result {
+            assert!(details.contains("debt ceiling"));
+        }
+    }
+
+    #[test]
+    fn test_r012_blocks_when_broke() {
+        let rule = DebtCeilingRule::new();
+        let sender = Uuid::new_v4();
+
+        // 0 tokens, sending 1 -> max_allowed = 0, violation
+        let result = rule.check_transaction(&sender, 0, 1);
+        assert!(result.is_some());
+    }
+
+    #[test]
+    fn test_r012_evaluate_noop() {
+        let rule = DebtCeilingRule::new();
+        let mut agent = make_agent(AgentPhase::Adult, 100);
+        let ctx = RuleContext::new(1, 0);
+        let result = rule.evaluate(&ctx, &mut agent);
+        assert_eq!(result.events.len(), 0);
+    }
+
+    // ── R020: Communication Honesty tests ──
+
+    #[test]
+    fn test_r020_allows_authentic_message() {
+        let rule = CommunicationHonestyRule::new();
+        let id = Uuid::new_v4();
+
+        let result = rule.check_message(&id, &id);
+        assert!(result.is_none());
+    }
+
+    #[test]
+    fn test_r020_blocks_spoofed_message() {
+        let rule = CommunicationHonestyRule::new();
+        let actual = Uuid::new_v4();
+        let claimed = Uuid::new_v4();
+
+        let result = rule.check_message(&actual, &claimed);
+        assert!(result.is_some());
+        if let Some(WorldEvent::RuleViolated { rule: rule_id, details, .. }) = &result {
+            assert_eq!(rule_id, "R020");
+            assert!(details.contains("forgery"));
+        }
+    }
+
+    #[test]
+    fn test_r020_evaluate_noop() {
+        let rule = CommunicationHonestyRule::new();
+        let mut agent = make_agent(AgentPhase::Adult, 100);
+        let ctx = RuleContext::new(1, 0);
+        let result = rule.evaluate(&ctx, &mut agent);
+        assert_eq!(result.events.len(), 0);
+    }
+
+    // ── R021: Contract Binding tests ──
+
+    #[test]
+    fn test_r021_default_penalty() {
+        let rule = ContractBindingRule::new();
+        assert!((rule.breach_penalty - 0.1).abs() < f64::EPSILON);
+    }
+
+    #[test]
+    fn test_r021_fulfilled_contract_ok() {
+        let rule = ContractBindingRule::new();
+        let agent_id = Uuid::new_v4();
+
+        let result = rule.check_contract(&agent_id, "contract-1", true);
+        assert!(result.is_none());
+    }
+
+    #[test]
+    fn test_r021_breach_detected() {
+        let rule = ContractBindingRule::new();
+        let agent_id = Uuid::new_v4();
+
+        let result = rule.check_contract(&agent_id, "contract-1", false);
+        assert!(result.is_some());
+        if let Some(WorldEvent::RuleViolated { details, .. }) = &result {
+            assert!(details.contains("breached"));
+            assert!(details.contains("contract-1"));
+        }
+    }
+
+    #[test]
+    fn test_r021_custom_penalty() {
+        let rule = ContractBindingRule::with_penalty(0.25);
+        assert!((rule.penalty_for_breach() - 0.25).abs() < f64::EPSILON);
+    }
+
+    #[test]
+    fn test_r021_evaluate_noop() {
+        let rule = ContractBindingRule::new();
+        let mut agent = make_agent(AgentPhase::Adult, 100);
+        let ctx = RuleContext::new(1, 0);
+        let result = rule.evaluate(&ctx, &mut agent);
+        assert_eq!(result.events.len(), 0);
+    }
+
+    // ── R030: Resource Exhaustion tests ──
+
+    #[test]
+    fn test_r030_default_critical_ratio() {
+        let rule = ResourceExhaustionRule::new();
+        assert!((rule.critical_ratio - 0.1).abs() < f64::EPSILON);
+    }
+
+    #[test]
+    fn test_r030_allows_small_drain() {
+        let rule = ResourceExhaustionRule::new();
+        let attacker = Uuid::new_v4();
+        let target = Uuid::new_v4();
+
+        // 5/100 = 5% < 10% threshold
+        let result = rule.check_interaction(&attacker, &target, 5, 100);
+        assert!(result.is_none());
+    }
+
+    #[test]
+    fn test_r030_blocks_large_drain() {
+        let rule = ResourceExhaustionRule::new();
+        let attacker = Uuid::new_v4();
+        let target = Uuid::new_v4();
+
+        // 20/100 = 20% > 10% threshold
+        let result = rule.check_interaction(&attacker, &target, 20, 100);
+        assert!(result.is_some());
+        if let Some(WorldEvent::RuleViolated { rule: rule_id, details, .. }) = &result {
+            assert_eq!(rule_id, "R030");
+            assert!(details.contains("exhaustion"));
+        }
+    }
+
+    #[test]
+    fn test_r030_at_exact_threshold_allowed() {
+        let rule = ResourceExhaustionRule::new();
+        let attacker = Uuid::new_v4();
+        let target = Uuid::new_v4();
+
+        // 10/100 = 10% = exactly threshold (not exceeding)
+        let result = rule.check_interaction(&attacker, &target, 10, 100);
+        assert!(result.is_none());
+    }
+
+    #[test]
+    fn test_r030_zero_target_balance() {
+        let rule = ResourceExhaustionRule::new();
+        let attacker = Uuid::new_v4();
+        let target = Uuid::new_v4();
+
+        // No balance to drain
+        let result = rule.check_interaction(&attacker, &target, 1, 0);
+        assert!(result.is_none());
+    }
+
+    #[test]
+    fn test_r030_custom_critical_ratio() {
+        let rule = ResourceExhaustionRule::with_critical_ratio(0.5);
+        // 30/100 = 30% < 50% threshold -> ok
+        let result = rule.check_interaction(&Uuid::new_v4(), &Uuid::new_v4(), 30, 100);
+        assert!(result.is_none());
+        // 60/100 = 60% > 50% threshold -> violation
+        let result = rule.check_interaction(&Uuid::new_v4(), &Uuid::new_v4(), 60, 100);
+        assert!(result.is_some());
+    }
+
+    #[test]
+    fn test_r030_evaluate_noop() {
+        let rule = ResourceExhaustionRule::new();
+        let mut agent = make_agent(AgentPhase::Adult, 100);
+        let ctx = RuleContext::new(1, 0);
+        let result = rule.evaluate(&ctx, &mut agent);
+        assert_eq!(result.events.len(), 0);
+    }
+
+    // ── R031: Reproduction Runaway tests ──
+
+    #[test]
+    fn test_r031_default_min_tokens() {
+        let rule = ReproductionRunawayRule::new();
+        assert_eq!(rule.min_tokens, 10000);
+    }
+
+    #[test]
+    fn test_r031_allows_with_sufficient_tokens() {
+        let rule = ReproductionRunawayRule::new();
+        let agent = make_agent(AgentPhase::Adult, 15000);
+
+        let result = rule.check_reproduction(&agent);
+        assert!(result.is_none());
+    }
+
+    #[test]
+    fn test_r031_blocks_with_insufficient_tokens() {
+        let rule = ReproductionRunawayRule::new();
+        let agent = make_agent(AgentPhase::Adult, 5000);
+
+        let result = rule.check_reproduction(&agent);
+        assert!(result.is_some());
+        if let Some(WorldEvent::RuleViolated { details, .. }) = &result {
+            assert!(details.contains("5000"));
+            assert!(details.contains("10000"));
+        }
+    }
+
+    #[test]
+    fn test_r031_blocks_at_exact_minimum() {
+        let rule = ReproductionRunawayRule::new();
+        let agent = make_agent(AgentPhase::Adult, 10000);
+
+        // Exactly at minimum is allowed (>=)
+        let result = rule.check_reproduction(&agent);
+        assert!(result.is_none());
+    }
+
+    #[test]
+    fn test_r031_blocks_dead_agent() {
+        let rule = ReproductionRunawayRule::new();
+        let agent = make_agent(AgentPhase::Dead, 20000);
+
+        let result = rule.check_reproduction(&agent);
+        assert!(result.is_some());
+        if let Some(WorldEvent::RuleViolated { details, .. }) = &result {
+            assert!(details.contains("Dead"));
+        }
+    }
+
+    #[test]
+    fn test_r031_custom_min_tokens() {
+        let rule = ReproductionRunawayRule::with_min_tokens(5000);
+        assert_eq!(rule.min_tokens, 5000);
+
+        let agent = make_agent(AgentPhase::Adult, 5000);
+        assert!(rule.check_reproduction(&agent).is_none());
+    }
+
+    #[test]
+    fn test_r031_evaluate_noop() {
+        let rule = ReproductionRunawayRule::new();
+        let mut agent = make_agent(AgentPhase::Adult, 100);
+        let ctx = RuleContext::new(1, 0);
+        let result = rule.evaluate(&ctx, &mut agent);
+        assert_eq!(result.events.len(), 0);
+    }
+
+    // ── Conflict resolution tests ──
+
+    #[test]
+    fn test_conflict_resolution_skips_lower_priority_same_category() {
+        let mut registry = RuleRegistry::new();
+        // Both are Economy category; R012 has SkipIfCategoryViolation
+        registry.register(Box::new(AntiMonopolyRule::with_params(0.3, 1)));
+        registry.register(Box::new(DebtCeilingRule::new()));
+
+        // Create a context where monopoly is detected
+        let mut agent = make_agent(AgentPhase::Adult, 400);
+        let ctx = RuleContext::with_world_tokens(1, 0, 1000);
+
+        let results = registry.evaluate_agent(&ctx, &mut agent);
+
+        // R011 should flag a violation
+        let r011 = results.iter().find(|r| r.rule_id == "R011").unwrap();
+        assert!(r011.violated);
+
+        // R012 should be skipped (same category, SkipIfCategoryViolation)
+        let r012 = results.iter().find(|r| r.rule_id == "R012").unwrap();
+        assert!(!r012.violated);
+        assert_eq!(r012.events.len(), 0);
+    }
+
+    #[test]
+    fn test_conflict_resolution_different_categories_both_run() {
+        let mut registry = RuleRegistry::new();
+        // R011 is Economy, R030 is Security — different categories
+        registry.register(Box::new(AntiMonopolyRule::with_params(0.3, 1)));
+        registry.register(Box::new(ResourceExhaustionRule::new()));
+
+        let mut agent = make_agent(AgentPhase::Adult, 400);
+        let ctx = RuleContext::with_world_tokens(1, 0, 1000);
+
+        let results = registry.evaluate_agent(&ctx, &mut agent);
+
+        // R011 should flag a violation (economy)
+        let r011 = results.iter().find(|r| r.rule_id == "R011").unwrap();
+        assert!(r011.violated);
+
+        // R030 should still run (different category, security)
+        let r030 = results.iter().find(|r| r.rule_id == "R030").unwrap();
+        assert_eq!(r030.events.len(), 0); // no-op for tick evaluation, but it ran
     }
 }

@@ -15,9 +15,6 @@ Covers:
 
 from __future__ import annotations
 
-import os
-import tempfile
-
 import pytest
 
 from agent_runtime.memory.short_term import (
@@ -25,7 +22,6 @@ from agent_runtime.memory.short_term import (
     ShortTermMemoryEntry,
     ShortTermMemoryProtocol,
 )
-
 
 # ---------------------------------------------------------------------------
 # Fixtures
@@ -228,9 +224,7 @@ class TestEviction:
         small_mem.store("c", importance=0.5, tick=3)
         assert small_mem.count() == 3
 
-    def test_over_capacity_evicts_oldest_low_importance(
-        self, small_mem: ShortTermMemory
-    ) -> None:
+    def test_over_capacity_evicts_oldest_low_importance(self, small_mem: ShortTermMemory) -> None:
         small_mem.store("a", importance=0.3, tick=1)
         small_mem.store("b", importance=0.7, tick=2)
         small_mem.store("c", importance=0.4, tick=3)
@@ -244,9 +238,7 @@ class TestEviction:
         results = small_mem.search("b", top_k=10)
         assert len(results) >= 1
 
-    def test_all_important_falls_back_to_oldest(
-        self, small_mem: ShortTermMemory
-    ) -> None:
+    def test_all_important_falls_back_to_oldest(self, small_mem: ShortTermMemory) -> None:
         small_mem.store("imp-1", importance=0.8, tick=1)
         small_mem.store("imp-2", importance=0.9, tick=2)
         small_mem.store("imp-3", importance=0.7, tick=3)

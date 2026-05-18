@@ -17,7 +17,6 @@ Covers:
 
 from __future__ import annotations
 
-import asyncio
 from dataclasses import dataclass
 from typing import Any
 
@@ -30,7 +29,6 @@ from agent_runtime.core.act import (
     ActionStatus,
     ActionType,
 )
-
 
 # ---------------------------------------------------------------------------
 # Helpers: Fake agent state and world client
@@ -75,9 +73,7 @@ class FakeWorldClient:
             raise RuntimeError("Task already claimed")
         return {"status": "claimed", "task_id": task_id}
 
-    async def submit_task(
-        self, task_id: str, result: dict[str, Any]
-    ) -> dict[str, Any]:
+    async def submit_task(self, task_id: str, result: dict[str, Any]) -> dict[str, Any]:
         self._call_count += 1
         self.calls.append(("submit_task", {"task_id": task_id, "result": result}))
         if self._should_fail or self._call_count <= self._fail_times:
@@ -773,11 +769,14 @@ class TestEdgeCases:
             (ActionType.CLAIM_TASK, {"task_id": "t1"}),
             (ActionType.SUBMIT_TASK, {"task_id": "t1", "result": {"done": True}}),
             (ActionType.PROPOSE_DEAL, {"proposal": {"deal": "trade"}}),
-            (ActionType.TEACH_SKILL, {
-                "target_agent_id": "a2",
-                "skill_name": "coding",
-                "level": 3,
-            }),
+            (
+                ActionType.TEACH_SKILL,
+                {
+                    "target_agent_id": "a2",
+                    "skill_name": "coding",
+                    "level": 3,
+                },
+            ),
             (ActionType.REST, {}),
             (ActionType.EXPLORE, {"explore_params": {"radius": 1}}),
         ]

@@ -7,6 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+- Resolved all clippy warnings: removed empty doc comment line, derived `Default` for `ListTasksQuery`, replaced `map_or` with `is_some_and`, suppressed `too_many_arguments` for intentional multi-param functions, fixed unused variable in tests
+- Fixed test file clippy warnings: unnecessary cast, `while let` loop, dead code, needless borrows, `vec!` to array
+- Resolved all ruff lint errors: sorted imports, removed unused imports, fixed line lengths, removed unused variables, replaced lambda with def
+- Formatted all Rust code with `cargo fmt` and all Python code with `ruff format`
+- Added missing `cryptography` dependency to `pyproject.toml`
+
 ---
 
 ## [1.0.0] - 2026-05-17

@@ -1,12 +1,40 @@
+pub mod a2a;
 pub mod api;
+pub mod config;
 pub mod economy;
+pub mod grpc_pool;
 pub mod lifecycle;
 pub mod rules;
 pub mod wal;
 pub mod world;
 
+/// Generated protobuf types for the A2A protocol.
+pub mod agentworld {
+    pub mod a2a {
+        pub mod v1 {
+            tonic::include_proto!("agentworld.a2a.v1");
+        }
+    }
+}
+
 pub use rules::{
-    Rule, RuleContext, RuleRegistry, RuleResult,
+    Rule, RuleCategory, RuleConflictPolicy, RuleContext, RuleRegistry, RuleResult,
     TokenConsumptionRule, DeathJudgmentRule, NewbieProtectionRule,
-    default_registry, custom_registry,
+    VoluntaryTradingRule, AntiMonopolyRule, DebtCeilingRule,
+    CommunicationHonestyRule, ContractBindingRule,
+    ResourceExhaustionRule, ReproductionRunawayRule,
+    default_registry, custom_registry, custom_registry_full,
+};
+
+pub use world::discovery::{
+    AgentProfile, AgentRegistry, AgentStatus, DiscoveryError, SharedAgentRegistry,
+};
+
+pub use world::{
+    EventBus, FilteredReceiver, SharedEventBus, WorldEvent, EventType,
+    WorldState, Subsystem, SubsystemRegistry,
+    Scheduler,
+    GenesisConfig,
+    TokenBurnSubsystem, DeathJudgmentSubsystem,
+    RuleCheckSubsystem, EventBroadcastSubsystem,
 };

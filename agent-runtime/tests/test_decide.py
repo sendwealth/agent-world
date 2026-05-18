@@ -25,19 +25,17 @@ from agent_runtime.core.decide import (
     DecisionAction,
     DecisionEngine,
     DecisionPerception,
+    JsonParseError,
     SurvivalAssessment,
+    ValidationError,
     build_prompt,
     fallback_decision,
     get_available_actions,
     parse_llm_response,
     strip_code_fences,
     validate_decision,
-    JsonParseError,
-    LlmCallError,
-    ValidationError,
 )
 from agent_runtime.llm.base import LLMResponse, TokenUsage
-
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -46,6 +44,7 @@ from agent_runtime.llm.base import LLMResponse, TokenUsage
 
 class MockPhase(str, Enum):
     """Mock phase enum matching the shape of AgentPhase."""
+
     INITIALIZATION = "initialization"
     EXPLORATION = "exploration"
     SURVIVAL = "survival"
@@ -58,6 +57,7 @@ class MockPhase(str, Enum):
 @dataclass
 class MockSkill:
     """Mock skill matching Skill protocol."""
+
     name: str
     level: int = 1
 
@@ -65,6 +65,7 @@ class MockSkill:
 @dataclass
 class MockAgentState:
     """Mock agent state for testing."""
+
     name: str = "TestAgent"
     id: str = "agent-001"
     phase: MockPhase = MockPhase.EXPLORATION
@@ -133,10 +134,12 @@ class TestDecisionAction:
     def test_action_from_name_valid(self):
         for action in DecisionAction.all():
             from agent_runtime.core.decide import _action_from_name
+
             assert _action_from_name(action.value) == action
 
     def test_action_from_name_invalid(self):
         from agent_runtime.core.decide import _action_from_name
+
         assert _action_from_name("fly_to_moon") is None
         assert _action_from_name("") is None
 
@@ -267,12 +270,14 @@ class TestParseLlmResponse:
     """Tests for parse_llm_response()."""
 
     def test_parse_valid_json(self):
-        raw = json.dumps({
-            "action": "rest",
-            "parameters": {},
-            "reasoning": "low on tokens",
-            "confidence": 90,
-        })
+        raw = json.dumps(
+            {
+                "action": "rest",
+                "parameters": {},
+                "reasoning": "low on tokens",
+                "confidence": 90,
+            }
+        )
         result = parse_llm_response(raw)
 
         assert result["action"] == "rest"
@@ -281,12 +286,14 @@ class TestParseLlmResponse:
         assert result["confidence"] == 90
 
     def test_parse_json_with_parameters(self):
-        raw = json.dumps({
-            "action": "respond_message",
-            "parameters": {"target": "agent-2", "message": "hello"},
-            "reasoning": "greet neighbor",
-            "confidence": 75,
-        })
+        raw = json.dumps(
+            {
+                "action": "respond_message",
+                "parameters": {"target": "agent-2", "message": "hello"},
+                "reasoning": "greet neighbor",
+                "confidence": 75,
+            }
+        )
         result = parse_llm_response(raw)
 
         assert result["action"] == "respond_message"
@@ -294,13 +301,18 @@ class TestParseLlmResponse:
         assert result["parameters"]["message"] == "hello"
 
     def test_parse_json_with_code_fences(self):
-        raw = '```json\n{"action": "rest", "parameters": {}, "reasoning": "test", "confidence": 50}\n```'
+        raw = (
+            '```json\n{"action": "rest", "parameters": {},'
+            ' "reasoning": "test", "confidence": 50}\n```'
+        )
         result = parse_llm_response(raw)
 
         assert result["action"] == "rest"
 
     def test_parse_json_with_plain_code_fences(self):
-        raw = '```\n{"action": "rest", "parameters": {}, "reasoning": "test", "confidence": 50}\n```'
+        raw = (
+            '```\n{"action": "rest", "parameters": {}, "reasoning": "test", "confidence": 50}\n```'
+        )
         result = parse_llm_response(raw)
 
         assert result["action"] == "rest"
@@ -527,12 +539,16 @@ class TestDecisionEngine:
 
     @pytest.mark.asyncio
     async def test_decide_returns_llm_result(self):
-        engine = self._make_engine(json.dumps({
-            "action": "rest",
-            "parameters": {},
-            "reasoning": "conserving tokens",
-            "confidence": 90,
-        }))
+        engine = self._make_engine(
+            json.dumps(
+                {
+                    "action": "rest",
+                    "parameters": {},
+                    "reasoning": "conserving tokens",
+                    "confidence": 90,
+                }
+            )
+        )
         state = _make_state(tokens=500)
         perception = _make_perception()
         survival = _make_survival()
@@ -545,12 +561,16 @@ class TestDecisionEngine:
 
     @pytest.mark.asyncio
     async def test_decide_with_parameters(self):
-        engine = self._make_engine(json.dumps({
-            "action": "respond_message",
-            "parameters": {"target": "agent-2"},
-            "reasoning": "greeting",
-            "confidence": 75,
-        }))
+        engine = self._make_engine(
+            json.dumps(
+                {
+                    "action": "respond_message",
+                    "parameters": {"target": "agent-2"},
+                    "reasoning": "greeting",
+                    "confidence": 75,
+                }
+            )
+        )
         state = _make_state(tokens=500)
         perception = _make_perception()
         survival = _make_survival()
@@ -587,12 +607,16 @@ class TestDecisionEngine:
 
     @pytest.mark.asyncio
     async def test_decide_falls_back_on_invalid_action(self):
-        engine = self._make_engine(json.dumps({
-            "action": "fly_to_moon",
-            "parameters": {},
-            "reasoning": "escape!",
-            "confidence": 50,
-        }))
+        engine = self._make_engine(
+            json.dumps(
+                {
+                    "action": "fly_to_moon",
+                    "parameters": {},
+                    "reasoning": "escape!",
+                    "confidence": 50,
+                }
+            )
+        )
         state = _make_state(tokens=500)
         perception = _make_perception()
         survival = _make_survival()
@@ -666,12 +690,14 @@ class TestAcceptance:
         # Mock LLM returning a gather decision
         mock_provider = AsyncMock()
         mock_provider.chat.return_value = LLMResponse(
-            content=json.dumps({
-                "action": "gather",
-                "parameters": {"resource": "gold_ore"},
-                "reasoning": "Gold ore is visible and I have mining skill",
-                "confidence": 85,
-            }),
+            content=json.dumps(
+                {
+                    "action": "gather",
+                    "parameters": {"resource": "gold_ore"},
+                    "reasoning": "Gold ore is visible and I have mining skill",
+                    "confidence": 85,
+                }
+            ),
             model="test-model",
             usage=TokenUsage(prompt_tokens=100, completion_tokens=50, total_tokens=150),
         )

@@ -50,7 +50,10 @@ class OllamaProvider(LLMProvider):
         temperature: float | None = None,
     ) -> LLMResponse:
         payload = self._build_payload(
-            messages, stream=False, max_tokens=max_tokens, temperature=temperature,
+            messages,
+            stream=False,
+            max_tokens=max_tokens,
+            temperature=temperature,
         )
         try:
             resp = await self._client.post(
@@ -79,7 +82,10 @@ class OllamaProvider(LLMProvider):
         temperature: float | None = None,
     ) -> AsyncIterator[LLMStreamChunk]:
         payload = self._build_payload(
-            messages, stream=True, max_tokens=max_tokens, temperature=temperature,
+            messages,
+            stream=True,
+            max_tokens=max_tokens,
+            temperature=temperature,
         )
         try:
             async with self._client.stream(

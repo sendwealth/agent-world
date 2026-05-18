@@ -1,7 +1,6 @@
 from __future__ import annotations
 
-import json
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, Optional
 from uuid import UUID, uuid4
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator
@@ -29,9 +28,7 @@ class AgentState(BaseModel):
     )
     tokens: int = Field(default=100, ge=0, description="Token resource balance")
     money: float = Field(default=50.0, ge=0.0, description="Monetary balance")
-    health: float = Field(
-        default=100.0, ge=0.0, le=100.0, description="Health percentage (0-100)"
-    )
+    health: float = Field(default=100.0, ge=0.0, le=100.0, description="Health percentage (0-100)")
     reputation: float = Field(
         default=0.0, ge=-100.0, le=100.0, description="Reputation score (-100 to 100)"
     )
@@ -41,12 +38,8 @@ class AgentState(BaseModel):
     personality: Dict[str, Any] = Field(
         default_factory=dict, description="Flexible personality traits"
     )
-    max_tokens: int = Field(
-        default=1000, gt=0, description="Maximum token capacity"
-    )
-    current_task: Optional[str] = Field(
-        default=None, description="Currently claimed task ID"
-    )
+    max_tokens: int = Field(default=1000, gt=0, description="Maximum token capacity")
+    current_task: Optional[str] = Field(default=None, description="Currently claimed task ID")
     tick: int = Field(default=0, ge=0, description="Current tick counter")
     world_sync_version: int = Field(
         default=0, description="Monotonic version counter for World Engine sync"
@@ -88,9 +81,7 @@ class AgentState(BaseModel):
         """Adjust money balance (positive or negative)."""
         new_balance = self.money + delta
         if new_balance < 0:
-            raise ValueError(
-                f"Cannot reduce money below 0 (current: {self.money}, delta: {delta})"
-            )
+            raise ValueError(f"Cannot reduce money below 0 (current: {self.money}, delta: {delta})")
         self.money = round(new_balance, 2)
         self._bump_version()
 
@@ -103,6 +94,15 @@ class AgentState(BaseModel):
         """Adjust reputation, clamped to [-100, 100]."""
         self.reputation = max(-100.0, min(100.0, self.reputation + delta))
         self._bump_version()
+
+    def can_claim_task(self, reward: float, high_value_threshold: float = 500.0, min_reputation: float = 10.0) -> bool:
+        """Check if the agent can claim a task with the given reward.
+
+        Agents below the minimum reputation cannot claim high-value tasks.
+        """
+        if reward >= high_value_threshold:
+            return self.reputation >= min_reputation
+        return True
 
     def transition_phase(self, new_phase: AgentPhase) -> None:
         """Transition to a new lifecycle phase."""
@@ -125,9 +125,7 @@ class AgentState(BaseModel):
         payload["id"] = str(payload["id"])
         payload["phase"] = self.phase.value
         payload["survival_mode"] = self.survival_mode.value
-        payload["skills"] = {
-            name: skill.model_dump() for name, skill in self.skills.items()
-        }
+        payload["skills"] = {name: skill.model_dump() for name, skill in self.skills.items()}
         return payload
 
     @classmethod

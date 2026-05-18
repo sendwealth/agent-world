@@ -7,12 +7,12 @@ Provides:
 - Built-in skills: coding, trading, research, teaching.
 """
 
-from .registry import SkillDefinition, SkillRegistry
-from .executor import SkillExecutor, SkillExecutionResult, XPReward
 from .coding import CODING_SKILL
-from .trading import TRADING_SKILL
+from .executor import SkillExecutionResult, SkillExecutor, XPReward
+from .registry import SkillDefinition, SkillRegistry
 from .research import RESEARCH_SKILL
 from .teaching import TEACHING_SKILL
+from .trading import TRADING_SKILL
 
 # Convenience: all built-in skill definitions as a list.
 BUILTIN_SKILLS = [CODING_SKILL, TRADING_SKILL, RESEARCH_SKILL, TEACHING_SKILL]

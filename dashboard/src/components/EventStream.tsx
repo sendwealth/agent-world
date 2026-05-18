@@ -70,7 +70,7 @@ export function EventStream({ events, connected }: EventStreamProps) {
               >
                 <span className="mt-0.5 text-sm leading-none">{config.icon}</span>
                 <div className="min-w-0 flex-1">
-                  <div className="flex items-center gap-2">
+                  <div className="flex flex-wrap items-center gap-2">
                     <span
                       className={`inline-block rounded px-1.5 py-0.5 text-[10px] font-medium text-white ${config.color}`}
                     >
@@ -80,11 +80,11 @@ export function EventStream({ events, connected }: EventStreamProps) {
                       Tick #{event.tick}
                     </span>
                   </div>
-                  <p className="mt-0.5 text-xs text-zinc-300">
+                  <p className="mt-0.5 text-xs text-zinc-300 break-words">
                     {event.description}
                   </p>
                 </div>
-                <span className="shrink-0 text-[10px] text-zinc-600">
+                <span className="hidden sm:shrink-0 sm:inline text-[10px] text-zinc-600">
                   {formatTime(event.timestamp)}
                 </span>
               </div>

@@ -1,0 +1,200 @@
+"""GRPCWorldClient — implements WorldClientProtocol for the ACT phase.
+
+Translates high-level action calls (claim_task, submit_task, etc.) into
+A2A protobuf messages and sends them via the low-level A2AClient.
+
+Also satisfies A2AClientProtocol (broadcast_message) so the same client
+can be injected into SurvivalInstinct.
+"""
+
+from __future__ import annotations
+
+import logging
+from typing import Any
+
+from protocol.gen.python import a2a_pb2
+
+from .client import A2AClient
+
+logger = logging.getLogger(__name__)
+
+
+class GRPCWorldClient:
+    """gRPC-backed WorldClient for the ACT phase of the Think Loop.
+
+    Implements both ``WorldClientProtocol`` (from ``core.act``) and
+    ``A2AClientProtocol`` (from ``survival.instinct``).
+
+    Usage::
+
+        a2a = A2AClient(config)
+        await a2a.connect()
+        world = GRPCWorldClient(a2a)
+
+        # Via WorldClientProtocol (used by ActionExecutor)
+        result = await world.send_message({"text": "hello"})
+        result = await world.claim_task("task-123")
+
+        # Via A2AClientProtocol (used by SurvivalInstinct)
+        result = await world.broadcast_message({"type": "SOS"})
+    """
+
+    def __init__(self, a2a_client: A2AClient) -> None:
+        self._client = a2a_client
+
+    # ------------------------------------------------------------------
+    # WorldClientProtocol methods (ACT phase)
+    # ------------------------------------------------------------------
+
+    async def send_message(self, payload: dict[str, Any]) -> dict[str, Any]:
+        """Send a generic A2A message to another agent."""
+        to_agent = payload.get("to_agent", "")
+        msg_type = _payload_type_to_proto(payload.get("type", "INFORM"))
+        try:
+            ack = await self._client.send_message(
+                to_agent=to_agent,
+                message_type=msg_type,
+                payload=payload.get("payload", payload),
+            )
+            return {"status": "ok", "received": ack.received}
+        except Exception as exc:
+            logger.exception("send_message failed")
+            return {"status": "error", "error": str(exc)}
+
+    async def claim_task(self, task_id: str) -> dict[str, Any]:
+        """Claim an available task — sent as a PROPOSE message."""
+        try:
+            ack = await self._client.send_message(
+                message_type=a2a_pb2.PROPOSE,
+                payload={"action": "claim_task", "task_id": task_id},
+            )
+            return {"status": "ok", "task_id": task_id, "received": ack.received}
+        except Exception as exc:
+            logger.exception("claim_task failed")
+            return {"status": "error", "error": str(exc)}
+
+    async def submit_task(
+        self, task_id: str, result: dict[str, Any]
+    ) -> dict[str, Any]:
+        """Submit completed task work — sent as an INFORM message."""
+        try:
+            ack = await self._client.send_message(
+                message_type=a2a_pb2.INFORM,
+                payload={
+                    "action": "submit_task",
+                    "task_id": task_id,
+                    "result": result,
+                },
+            )
+            return {"status": "ok", "task_id": task_id, "received": ack.received}
+        except Exception as exc:
+            logger.exception("submit_task failed")
+            return {"status": "error", "error": str(exc)}
+
+    async def propose_deal(self, proposal: dict[str, Any]) -> dict[str, Any]:
+        """Propose a deal/contract — sent as a PROPOSE message."""
+        try:
+            to_agent = proposal.get("target_agent_id", "")
+            ack = await self._client.send_message(
+                to_agent=to_agent,
+                message_type=a2a_pb2.PROPOSE,
+                payload={"action": "propose_deal", "proposal": proposal},
+            )
+            return {"status": "ok", "received": ack.received}
+        except Exception as exc:
+            logger.exception("propose_deal failed")
+            return {"status": "error", "error": str(exc)}
+
+    async def teach_skill(
+        self, target_agent_id: str, skill_name: str, level: int
+    ) -> dict[str, Any]:
+        """Teach a skill to another agent — sent as a TEACH message."""
+        try:
+            ack = await self._client.send_message(
+                to_agent=target_agent_id,
+                message_type=a2a_pb2.TEACH,
+                payload={
+                    "action": "teach_skill",
+                    "skill_name": skill_name,
+                    "level": level,
+                },
+            )
+            return {
+                "status": "ok",
+                "target": target_agent_id,
+                "skill": skill_name,
+                "received": ack.received,
+            }
+        except Exception as exc:
+            logger.exception("teach_skill failed")
+            return {"status": "error", "error": str(exc)}
+
+    async def explore(self, parameters: dict[str, Any]) -> dict[str, Any]:
+        """Explore the world via Discover RPC."""
+        try:
+            response = await self._client.discover(
+                capabilities=parameters.get("capabilities", []),
+            )
+            agents = [
+                {
+                    "agent_id": a.agent_id,
+                    "name": a.name,
+                    "tokens": a.tokens,
+                    "money": a.money,
+                    "skills": list(a.skills),
+                    "reputation": a.reputation,
+                    "phase": a.phase,
+                }
+                for a in response.agents
+            ]
+            return {"status": "ok", "agents": agents}
+        except Exception as exc:
+            logger.exception("explore failed")
+            return {"status": "error", "error": str(exc)}
+
+    # ------------------------------------------------------------------
+    # A2AClientProtocol method (SurvivalInstinct integration)
+    # ------------------------------------------------------------------
+
+    async def broadcast_message(
+        self, payload: dict[str, object]
+    ) -> dict[str, object]:
+        """Broadcast a message to all agents (empty to_agent).
+
+        Satisfies ``A2AClientProtocol`` from ``survival.instinct``.
+        """
+        msg_type = _payload_type_to_proto(
+            str(payload.get("type", "INFORM"))
+        )
+        try:
+            ack = await self._client.send_message(
+                to_agent="",
+                message_type=msg_type,
+                payload=payload.get("payload", {}),
+            )
+            return {"status": "ok", "received": ack.received}
+        except Exception as exc:
+            logger.exception("broadcast_message failed")
+            return {"status": "error", "error": str(exc)}
+
+
+# ---------------------------------------------------------------------------
+# Helpers
+# ---------------------------------------------------------------------------
+
+_PROTO_TYPE_MAP: dict[str, int] = {
+    "DISCOVER": a2a_pb2.DISCOVER,
+    "PROPOSE": a2a_pb2.PROPOSE,
+    "ACCEPT": a2a_pb2.ACCEPT,
+    "REJECT": a2a_pb2.REJECT,
+    "INFORM": a2a_pb2.INFORM,
+    "TEACH": a2a_pb2.TEACH,
+    "REPRODUCE": a2a_pb2.REPRODUCE,
+    "WILL": a2a_pb2.WILL,
+    "THREAT": a2a_pb2.THREAT,
+}
+
+
+def _payload_type_to_proto(type_str: str) -> int:
+    """Convert a string message type to the protobuf enum value."""
+    return _PROTO_TYPE_MAP.get(type_str.upper(), a2a_pb2.INFORM)

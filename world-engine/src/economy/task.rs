@@ -1,4 +1,5 @@
 use std::collections::HashMap;
+use std::sync::Arc;
 
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
@@ -149,7 +150,7 @@ pub struct TaskBoard {
     balances: HashMap<String, u64>,
     /// Escrow amounts locked per task.
     escrows: HashMap<Uuid, u64>,
-    event_bus: Option<EventBus>,
+    event_bus: Option<Arc<EventBus>>,
     /// Optional reward distributor for fee deduction, XP, reputation, and ledger.
     reward_distributor: Option<RewardDistributor>,
 }
@@ -166,6 +167,17 @@ impl TaskBoard {
     }
 
     pub fn with_event_bus(event_bus: EventBus) -> Self {
+        Self {
+            tasks: HashMap::new(),
+            balances: HashMap::new(),
+            escrows: HashMap::new(),
+            event_bus: Some(Arc::new(event_bus)),
+            reward_distributor: None,
+        }
+    }
+
+    /// Create a TaskBoard that shares an existing EventBus via Arc.
+    pub fn with_shared_event_bus(event_bus: Arc<EventBus>) -> Self {
         Self {
             tasks: HashMap::new(),
             balances: HashMap::new(),

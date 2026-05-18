@@ -47,6 +47,7 @@ export type EventType =
   | "message"
   | "skill_up"
   | "reputation_change"
+  | "reputation_changed"
   | "inflation"
   | "investment"
   | "tax";
@@ -88,4 +89,18 @@ export interface Task {
   result: string | null;
   expires_at: number | null;
   created_tick: number;
+}
+
+// Reputation types
+
+export interface ReputationRankingEntry {
+  agent_id: string;
+  reputation: number;
+  rank: number;
+}
+
+export interface ReputationResponse {
+  agent_id: string;
+  reputation: number;
+  can_claim_high_value: boolean;
 }

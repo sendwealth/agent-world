@@ -1,21 +1,29 @@
 services:
+  # ── World Engine (Rust) ──────────────────────────────────────
+  # REST API on 8080, gRPC placeholder on 50051
   world-engine:
     build:
       context: ./world-engine
     ports:
-      - "3000:3000"
+      - "8080:8080"   # REST API
+      - "50051:50051" # gRPC (reserved for A2A protocol)
     volumes:
       - world-data:/app/data
       - ./config:/app/config:ro
     environment:
+      - HOST=0.0.0.0
+      - PORT=8080
       - RUST_LOG=info
     restart: unless-stopped
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:3000/tasks"]
+      test: ["CMD", "curl", "-f", "http://localhost:8080/tasks"]
       interval: 10s
       timeout: 5s
       retries: 5
+    networks:
+      - agent-world
 
+  # ── Agent Runtime (Python) ───────────────────────────────────
   agent-runtime:
     build:
       context: ./agent-runtime
@@ -23,23 +31,37 @@ services:
       world-engine:
         condition: service_healthy
     environment:
-      - WORLD_ENGINE_URL=http://world-engine:3000
+      - WORLD_ENGINE_URL=http://world-engine:8080
+      - AGENT_NAME=Agent-1
+      - TICK_INTERVAL=1.0
+    volumes:
+      - agent-data:/app/data
     restart: unless-stopped
+    networks:
+      - agent-world
 
+  # ── Dashboard (Next.js) ──────────────────────────────────────
   dashboard:
     build:
       context: ./dashboard
       args:
-        WORLD_ENGINE_URL: http://world-engine:3000
+        WORLD_ENGINE_URL: http://world-engine:8080
     ports:
-      - "3001:3001"
+      - "3000:3000"
     depends_on:
       world-engine:
         condition: service_healthy
     environment:
-      - WORLD_ENGINE_URL=http://world-engine:3000
-      - PORT=3001
+      - WORLD_ENGINE_URL=http://world-engine:8080
+      - PORT=3000
     restart: unless-stopped
+    networks:
+      - agent-world
 
 volumes:
   world-data:
+  agent-data:
+
+networks:
+  agent-world:
+    driver: bridge

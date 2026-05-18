@@ -60,6 +60,7 @@ impl Ledger {
     }
 
     /// Record a new transaction in the ledger.
+    #[allow(clippy::too_many_arguments)]
     pub fn record(
         &mut self,
         from_agent: Option<String>,
@@ -97,8 +98,7 @@ impl Ledger {
         self.entries
             .iter()
             .filter(|e| {
-                e.from_agent.as_deref() == Some(agent_id)
-                    || e.to_agent.as_deref() == Some(agent_id)
+                e.from_agent.as_deref() == Some(agent_id) || e.to_agent.as_deref() == Some(agent_id)
             })
             .collect()
     }
@@ -306,14 +306,20 @@ impl RewardDistributor {
 
         // 1. Pay net reward to assignee
         let assignee_bal = self.get_balance(assignee_id);
-        self.balances.insert(assignee_id.to_string(), assignee_bal.saturating_add(net_reward));
+        self.balances.insert(
+            assignee_id.to_string(),
+            assignee_bal.saturating_add(net_reward),
+        );
 
         // 2. Collect platform fee
         self.central_bank.collect_fee(platform_fee, currency);
 
         // 3. Award XP
         let current_xp = self.get_experience(assignee_id);
-        self.experience.insert(assignee_id.to_string(), current_xp.saturating_add(self.config.base_xp));
+        self.experience.insert(
+            assignee_id.to_string(),
+            current_xp.saturating_add(self.config.base_xp),
+        );
 
         // 4. Update reputation
         let current_rep = self.get_reputation(assignee_id);
@@ -341,7 +347,10 @@ impl RewardDistributor {
             platform_fee,
             currency,
             TransactionType::PlatformFee,
-            format!("Task {} platform fee ({}bps)", task_id, self.config.platform_fee_bps),
+            format!(
+                "Task {} platform fee ({}bps)",
+                task_id, self.config.platform_fee_bps
+            ),
             tick,
             Some(task_id.to_string()),
         );
@@ -443,9 +452,36 @@ mod tests {
     #[test]
     fn test_ledger_list_by_agent() {
         let mut ledger = Ledger::new();
-        ledger.record(Some("alice".into()), Some("bob".into()), 100, Currency::Money, TransactionType::TaskReward, "t1".into(), 1, None);
-        ledger.record(Some("carol".into()), Some("alice".into()), 200, Currency::Money, TransactionType::TaskReward, "t2".into(), 1, None);
-        ledger.record(Some("bob".into()), Some("carol".into()), 50, Currency::Token, TransactionType::Teach, "t3".into(), 1, None);
+        ledger.record(
+            Some("alice".into()),
+            Some("bob".into()),
+            100,
+            Currency::Money,
+            TransactionType::TaskReward,
+            "t1".into(),
+            1,
+            None,
+        );
+        ledger.record(
+            Some("carol".into()),
+            Some("alice".into()),
+            200,
+            Currency::Money,
+            TransactionType::TaskReward,
+            "t2".into(),
+            1,
+            None,
+        );
+        ledger.record(
+            Some("bob".into()),
+            Some("carol".into()),
+            50,
+            Currency::Token,
+            TransactionType::Teach,
+            "t3".into(),
+            1,
+            None,
+        );
 
         let alice_entries = ledger.list_by_agent("alice");
         assert_eq!(alice_entries.len(), 2);
@@ -456,9 +492,36 @@ mod tests {
     #[test]
     fn test_ledger_list_by_reference() {
         let mut ledger = Ledger::new();
-        ledger.record(Some("a".into()), Some("b".into()), 100, Currency::Money, TransactionType::TaskReward, "r1".into(), 1, Some("task-1".into()));
-        ledger.record(Some("b".into()), None, 2, Currency::Money, TransactionType::PlatformFee, "r1-fee".into(), 1, Some("task-1".into()));
-        ledger.record(Some("c".into()), Some("d".into()), 50, Currency::Money, TransactionType::TaskReward, "r2".into(), 1, Some("task-2".into()));
+        ledger.record(
+            Some("a".into()),
+            Some("b".into()),
+            100,
+            Currency::Money,
+            TransactionType::TaskReward,
+            "r1".into(),
+            1,
+            Some("task-1".into()),
+        );
+        ledger.record(
+            Some("b".into()),
+            None,
+            2,
+            Currency::Money,
+            TransactionType::PlatformFee,
+            "r1-fee".into(),
+            1,
+            Some("task-1".into()),
+        );
+        ledger.record(
+            Some("c".into()),
+            Some("d".into()),
+            50,
+            Currency::Money,
+            TransactionType::TaskReward,
+            "r2".into(),
+            1,
+            Some("task-2".into()),
+        );
 
         let task1_entries = ledger.list_by_reference("task-1");
         assert_eq!(task1_entries.len(), 2);
@@ -469,9 +532,36 @@ mod tests {
     #[test]
     fn test_ledger_list_by_type() {
         let mut ledger = Ledger::new();
-        ledger.record(Some("a".into()), Some("b".into()), 100, Currency::Money, TransactionType::TaskReward, "r1".into(), 1, None);
-        ledger.record(Some("b".into()), None, 2, Currency::Money, TransactionType::PlatformFee, "r2".into(), 1, None);
-        ledger.record(Some("c".into()), Some("d".into()), 50, Currency::Money, TransactionType::TaskReward, "r3".into(), 1, None);
+        ledger.record(
+            Some("a".into()),
+            Some("b".into()),
+            100,
+            Currency::Money,
+            TransactionType::TaskReward,
+            "r1".into(),
+            1,
+            None,
+        );
+        ledger.record(
+            Some("b".into()),
+            None,
+            2,
+            Currency::Money,
+            TransactionType::PlatformFee,
+            "r2".into(),
+            1,
+            None,
+        );
+        ledger.record(
+            Some("c".into()),
+            Some("d".into()),
+            50,
+            Currency::Money,
+            TransactionType::TaskReward,
+            "r3".into(),
+            1,
+            None,
+        );
 
         assert_eq!(ledger.list_by_type(TransactionType::TaskReward).len(), 2);
         assert_eq!(ledger.list_by_type(TransactionType::PlatformFee).len(), 1);

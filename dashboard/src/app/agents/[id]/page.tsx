@@ -1,10 +1,11 @@
 "use client";
 
-import { useEffect, useState, useMemo } from "react";
+import { useEffect, useState, useMemo, useRef, useCallback } from "react";
 import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";
 import type { Agent, WorldEvent } from "@/types/world";
 import { fetchJSON } from "@/lib/api";
+import { useSSEContext } from "@/components/SSEProvider";
 
 const phaseLabels: Record<string, string> = {
   newborn: "新生",
@@ -92,52 +93,83 @@ export default function AgentDetailPage() {
   const agentId = params.id as string;
 
   const [agent, setAgent] = useState<Agent | null>(null);
-  const [events, setEvents] = useState<WorldEvent[]>([]);
   const [allAgents, setAllAgents] = useState<Agent[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
-  useEffect(() => {
-    let cancelled = false;
+  const sse = useSSEContext();
 
-    async function load() {
-      try {
-        const [agentData, eventsData, agentsData] = await Promise.all([
-          fetchJSON<Agent>(`/api/v1/agents/${agentId}`),
-          fetchJSON<WorldEvent[]>("/api/v1/world/events").catch(() => []),
-          fetchJSON<Agent[]>("/api/v1/agents").catch(() => []),
-        ]);
-        if (!cancelled) {
-          setAgent(agentData);
-          setEvents(eventsData);
-          setAllAgents(agentsData);
-          setError(null);
-        }
-      } catch {
-        if (!cancelled) {
-          setError("无法加载 Agent 数据");
-        }
-      } finally {
-        if (!cancelled) setLoading(false);
-      }
+  const refreshPending = useRef(false);
+  const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const loadAgent = useCallback(async () => {
+    try {
+      const [agentData, agentsData] = await Promise.all([
+        fetchJSON<Agent>(`/api/v1/agents/${agentId}`),
+        fetchJSON<Agent[]>("/api/v1/agents").catch(() => []),
+      ]);
+      setAgent(agentData);
+      setAllAgents(agentsData);
+      setError(null);
+    } catch {
+      setError("无法加载 Agent 数据");
+    } finally {
+      setLoading(false);
+    }
+  }, [agentId]);
+
+  // Initial load — use IIFE pattern to avoid set-state-in-effect lint
+  useEffect(() => {
+    (async () => {
+      await loadAgent();
+    })();
+  }, [loadAgent]);
+
+  // SSE-driven refresh via subscribe: each event is processed individually
+  useEffect(() => {
+    function onEvent(event: WorldEvent) {
+      const isRelevant =
+        event.agentId === agentId ||
+        event.targetId === agentId ||
+        event.type === "agent_spawn" ||
+        event.type === "agent_death";
+
+      if (!isRelevant || refreshPending.current) return;
+
+      refreshPending.current = true;
+      debounceRef.current = setTimeout(() => {
+        loadAgent();
+        refreshPending.current = false;
+      }, 500);
     }
 
-    load();
-    const interval = setInterval(load, 5000);
+    const unsubscribe = sse.subscribe(onEvent);
     return () => {
-      cancelled = true;
-      clearInterval(interval);
+      unsubscribe();
+      if (debounceRef.current) {
+        clearTimeout(debounceRef.current);
+        debounceRef.current = null;
+      }
+      refreshPending.current = false;
     };
-  }, [agentId]);
+  }, [sse, agentId, loadAgent]);
+
+  // Fallback polling when SSE is not connected
+  useEffect(() => {
+    if (sse.connected) return;
+
+    const interval = setInterval(loadAgent, 5000);
+    return () => clearInterval(interval);
+  }, [sse, loadAgent]);
 
   // Filter events for this agent
   const agentEvents = useMemo(
     () =>
-      events
+      sse.events
         .filter((e) => e.agentId === agentId || e.targetId === agentId)
         .sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime())
         .slice(0, 50),
-    [events, agentId]
+    [sse.events, agentId]
   );
 
   // Related agents from events
@@ -181,7 +213,7 @@ export default function AgentDetailPage() {
 
   if (error || !agent) {
     return (
-      <div className="p-6 space-y-4">
+      <div className="p-4 md:p-6 space-y-4">
         <button
           onClick={() => router.back()}
           className="text-sm text-zinc-400 hover:text-zinc-200 transition-colors"
@@ -196,10 +228,10 @@ export default function AgentDetailPage() {
   }
 
   return (
-    <div className="p-6 space-y-6">
+    <div className="p-4 md:p-6 space-y-6">
       {/* Header */}
       <div className="flex items-center justify-between">
-        <div className="flex items-center gap-4">
+        <div className="flex items-center gap-2 sm:gap-4">
           <button
             onClick={() => router.push("/agents")}
             className="rounded-lg p-1.5 text-zinc-400 hover:bg-zinc-800 hover:text-zinc-200 transition-colors"
@@ -209,8 +241,8 @@ export default function AgentDetailPage() {
             </svg>
           </button>
           <div>
-            <div className="flex items-center gap-3">
-              <h1 className="text-2xl font-bold text-zinc-100">{agent.name}</h1>
+            <div className="flex flex-wrap items-center gap-2 sm:gap-3">
+              <h1 className="text-xl sm:text-2xl font-bold text-zinc-100">{agent.name}</h1>
               <span
                 className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-medium ${
                   agent.alive

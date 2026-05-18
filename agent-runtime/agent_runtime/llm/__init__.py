@@ -14,6 +14,7 @@ Usage::
     response = await provider.chat([{"role": "user", "content": "Hello!"}])
 """
 
+from agent_runtime.llm.anthropic_provider import AnthropicProvider
 from agent_runtime.llm.base import (
     LLMConfig,
     LLMError,
@@ -25,9 +26,8 @@ from agent_runtime.llm.base import (
 )
 from agent_runtime.llm.cost import CostTracker
 from agent_runtime.llm.factory import create_provider
-from agent_runtime.llm.openai_provider import OpenAIProvider
-from agent_runtime.llm.anthropic_provider import AnthropicProvider
 from agent_runtime.llm.ollama_provider import OllamaProvider
+from agent_runtime.llm.openai_provider import OpenAIProvider
 
 __all__ = [
     "AnthropicProvider",

@@ -34,11 +34,11 @@ logger = logging.getLogger(__name__)
 class SurvivalMode(Enum):
     """Five survival modes ordered by urgency (lowest value = most urgent)."""
 
-    PANIC = "panic"                 # Token < 10 %
-    URGENT = "urgent"               # Token < 20 %
-    CONSERVATIVE = "conservative"   # Token < 40 %
-    NORMAL = "normal"               # Token 40-80 %
-    INVEST = "invest"               # Token > 80 %
+    PANIC = "panic"  # Token < 10 %
+    URGENT = "urgent"  # Token < 20 %
+    CONSERVATIVE = "conservative"  # Token < 40 %
+    NORMAL = "normal"  # Token 40-80 %
+    INVEST = "invest"  # Token > 80 %
 
 
 class EmergencyActionType(Enum):
@@ -47,17 +47,17 @@ class EmergencyActionType(Enum):
     These are executed *without* going through the LLM.
     """
 
-    BROADCAST_SOS = "broadcast_sos"             # Broadcast a distress signal
-    REQUEST_LOAN = "request_loan"               # Request a loan from peers/bank
-    CANCEL_ALL_TASKS = "cancel_all_tasks"       # Cancel in-progress tasks
+    BROADCAST_SOS = "broadcast_sos"  # Broadcast a distress signal
+    REQUEST_LOAN = "request_loan"  # Request a loan from peers/bank
+    CANCEL_ALL_TASKS = "cancel_all_tasks"  # Cancel in-progress tasks
     SEEK_CHEAPEST_INCOME = "seek_cheapest_income"  # Accept any cheap task
     REJECT_COSTLY_TASKS = "reject_costly_tasks"  # Refuse high-cost tasks
     EXCHANGE_MONEY_TO_TOKENS = "exchange_money_to_tokens"  # Convert Money → Token
-    LIMIT_SPENDING = "limit_spending"           # Reduce non-essential spending
-    REST_TO_CONSERVE = "rest_to_conserve"       # Skip tick to save tokens
-    INVEST_SURPLUS = "invest_surplus"           # Invest excess tokens
-    TEACH_FOR_INCOME = "teach_for_income"       # Offer to teach for money
-    SHARE_KNOWLEDGE = "share_knowledge"         # Publish knowledge for profit
+    LIMIT_SPENDING = "limit_spending"  # Reduce non-essential spending
+    REST_TO_CONSERVE = "rest_to_conserve"  # Skip tick to save tokens
+    INVEST_SURPLUS = "invest_surplus"  # Invest excess tokens
+    TEACH_FOR_INCOME = "teach_for_income"  # Offer to teach for money
+    SHARE_KNOWLEDGE = "share_knowledge"  # Publish knowledge for profit
 
 
 @dataclass(frozen=True)
@@ -90,10 +90,10 @@ class SurvivalThresholds:
             (panic < urgent < conservative < invest).
     """
 
-    panic: float = 0.10       # < 10 %
-    urgent: float = 0.20      # < 20 %
+    panic: float = 0.10  # < 10 %
+    urgent: float = 0.20  # < 20 %
     conservative: float = 0.40  # < 40 %
-    invest: float = 0.80      # > 80 %
+    invest: float = 0.80  # > 80 %
 
     def __post_init__(self) -> None:
         if not (0.0 <= self.panic < self.urgent < self.conservative < self.invest <= 1.0):
@@ -142,10 +142,12 @@ class AgentStateProtocol(Protocol):
 # ---------------------------------------------------------------------------
 
 # Actions that have real A2A side-effects.
-_A2A_ACTIONS: frozenset[EmergencyActionType] = frozenset({
-    EmergencyActionType.BROADCAST_SOS,
-    EmergencyActionType.REQUEST_LOAN,
-})
+_A2A_ACTIONS: frozenset[EmergencyActionType] = frozenset(
+    {
+        EmergencyActionType.BROADCAST_SOS,
+        EmergencyActionType.REQUEST_LOAN,
+    }
+)
 
 
 # ---------------------------------------------------------------------------
@@ -205,16 +207,18 @@ class SurvivalInstinct:
 
         if ratio > 1.0:
             logger.warning(
-                "Token ratio exceeds 1.0 (%.2f): tokens=%d max_tokens=%d. "
-                "Clamping to 1.0.",
-                ratio, agent.tokens, agent.max_tokens,
+                "Token ratio exceeds 1.0 (%.2f): tokens=%d max_tokens=%d. Clamping to 1.0.",
+                ratio,
+                agent.tokens,
+                agent.max_tokens,
             )
             ratio = 1.0
         elif ratio < 0.0:
             logger.warning(
-                "Negative token ratio (%.2f): tokens=%d max_tokens=%d. "
-                "Clamping to 0.0.",
-                ratio, agent.tokens, agent.max_tokens,
+                "Negative token ratio (%.2f): tokens=%d max_tokens=%d. Clamping to 0.0.",
+                ratio,
+                agent.tokens,
+                agent.max_tokens,
             )
             ratio = 0.0
 
@@ -293,93 +297,123 @@ class SurvivalInstinct:
 
         if mode == SurvivalMode.PANIC:
             # Token < 10 % — maximum urgency.
-            actions.append(EmergencyAction(
-                action_type=EmergencyActionType.BROADCAST_SOS,
-                priority=0,
-                reason=f"Token ratio critical: {ratio:.1%}. Broadcasting SOS.",
-                parameters={"token_ratio": ratio},
-            ))
-            actions.append(EmergencyAction(
-                action_type=EmergencyActionType.REQUEST_LOAN,
-                priority=1,
-                reason=f"Token ratio critical: {ratio:.1%}. Requesting loan.",
-                parameters={"amount_needed": int(agent.max_tokens * self.thresholds.urgent)},
-            ))
-            if agent.current_task is not None:
-                actions.append(EmergencyAction(
-                    action_type=EmergencyActionType.CANCEL_ALL_TASKS,
-                    priority=2,
-                    reason="Cancelling tasks to conserve tokens in PANIC mode.",
-                ))
-            if agent.money > 0:
-                actions.append(EmergencyAction(
-                    action_type=EmergencyActionType.EXCHANGE_MONEY_TO_TOKENS,
+            actions.append(
+                EmergencyAction(
+                    action_type=EmergencyActionType.BROADCAST_SOS,
+                    priority=0,
+                    reason=f"Token ratio critical: {ratio:.1%}. Broadcasting SOS.",
+                    parameters={"token_ratio": ratio},
+                )
+            )
+            actions.append(
+                EmergencyAction(
+                    action_type=EmergencyActionType.REQUEST_LOAN,
                     priority=1,
-                    reason=f"Exchanging {agent.money} Money for tokens in PANIC mode.",
-                    parameters={"money_amount": agent.money},
-                ))
-            actions.append(EmergencyAction(
-                action_type=EmergencyActionType.REST_TO_CONSERVE,
-                priority=3,
-                reason="Resting to minimise token consumption.",
-            ))
+                    reason=f"Token ratio critical: {ratio:.1%}. Requesting loan.",
+                    parameters={"amount_needed": int(agent.max_tokens * self.thresholds.urgent)},
+                )
+            )
+            if agent.current_task is not None:
+                actions.append(
+                    EmergencyAction(
+                        action_type=EmergencyActionType.CANCEL_ALL_TASKS,
+                        priority=2,
+                        reason="Cancelling tasks to conserve tokens in PANIC mode.",
+                    )
+                )
+            if agent.money > 0:
+                actions.append(
+                    EmergencyAction(
+                        action_type=EmergencyActionType.EXCHANGE_MONEY_TO_TOKENS,
+                        priority=1,
+                        reason=f"Exchanging {agent.money} Money for tokens in PANIC mode.",
+                        parameters={"money_amount": agent.money},
+                    )
+                )
+            actions.append(
+                EmergencyAction(
+                    action_type=EmergencyActionType.REST_TO_CONSERVE,
+                    priority=3,
+                    reason="Resting to minimise token consumption.",
+                )
+            )
 
         elif mode == SurvivalMode.URGENT:
             # Token < 20 % — seek income urgently.
-            actions.append(EmergencyAction(
-                action_type=EmergencyActionType.SEEK_CHEAPEST_INCOME,
-                priority=0,
-                reason=f"Token ratio urgent: {ratio:.1%}. Seeking cheapest income.",
-            ))
-            actions.append(EmergencyAction(
-                action_type=EmergencyActionType.REJECT_COSTLY_TASKS,
-                priority=1,
-                reason="Rejecting costly tasks to preserve remaining tokens.",
-            ))
-            if agent.money > 0:
-                actions.append(EmergencyAction(
-                    action_type=EmergencyActionType.EXCHANGE_MONEY_TO_TOKENS,
+            actions.append(
+                EmergencyAction(
+                    action_type=EmergencyActionType.SEEK_CHEAPEST_INCOME,
                     priority=0,
-                    reason=f"Exchanging {agent.money} Money for tokens in URGENT mode.",
-                    parameters={"money_amount": agent.money},
-                ))
-            actions.append(EmergencyAction(
-                action_type=EmergencyActionType.REQUEST_LOAN,
-                priority=2,
-                reason=f"Token ratio low: {ratio:.1%}. Requesting loan.",
-                parameters={"amount_needed": int(agent.max_tokens * self.thresholds.conservative)},
-            ))
+                    reason=f"Token ratio urgent: {ratio:.1%}. Seeking cheapest income.",
+                )
+            )
+            actions.append(
+                EmergencyAction(
+                    action_type=EmergencyActionType.REJECT_COSTLY_TASKS,
+                    priority=1,
+                    reason="Rejecting costly tasks to preserve remaining tokens.",
+                )
+            )
+            if agent.money > 0:
+                actions.append(
+                    EmergencyAction(
+                        action_type=EmergencyActionType.EXCHANGE_MONEY_TO_TOKENS,
+                        priority=0,
+                        reason=f"Exchanging {agent.money} Money for tokens in URGENT mode.",
+                        parameters={"money_amount": agent.money},
+                    )
+                )
+            actions.append(
+                EmergencyAction(
+                    action_type=EmergencyActionType.REQUEST_LOAN,
+                    priority=2,
+                    reason=f"Token ratio low: {ratio:.1%}. Requesting loan.",
+                    parameters={
+                        "amount_needed": int(agent.max_tokens * self.thresholds.conservative)
+                    },
+                )
+            )
 
         elif mode == SurvivalMode.CONSERVATIVE:
             # Token < 40 % — limit spending.
-            actions.append(EmergencyAction(
-                action_type=EmergencyActionType.LIMIT_SPENDING,
-                priority=0,
-                reason=f"Token ratio conservative: {ratio:.1%}. Limiting spending.",
-            ))
-            actions.append(EmergencyAction(
-                action_type=EmergencyActionType.REJECT_COSTLY_TASKS,
-                priority=1,
-                reason="Only accepting profitable tasks in CONSERVATIVE mode.",
-            ))
+            actions.append(
+                EmergencyAction(
+                    action_type=EmergencyActionType.LIMIT_SPENDING,
+                    priority=0,
+                    reason=f"Token ratio conservative: {ratio:.1%}. Limiting spending.",
+                )
+            )
+            actions.append(
+                EmergencyAction(
+                    action_type=EmergencyActionType.REJECT_COSTLY_TASKS,
+                    priority=1,
+                    reason="Only accepting profitable tasks in CONSERVATIVE mode.",
+                )
+            )
 
         elif mode == SurvivalMode.INVEST:
             # Token > 80 % — invest surplus.
-            actions.append(EmergencyAction(
-                action_type=EmergencyActionType.INVEST_SURPLUS,
-                priority=0,
-                reason=f"Token ratio high: {ratio:.1%}. Investing surplus.",
-            ))
-            actions.append(EmergencyAction(
-                action_type=EmergencyActionType.TEACH_FOR_INCOME,
-                priority=1,
-                reason="Surplus tokens — offering to teach for additional income.",
-            ))
-            actions.append(EmergencyAction(
-                action_type=EmergencyActionType.SHARE_KNOWLEDGE,
-                priority=2,
-                reason="Surplus tokens — publishing knowledge for profit.",
-            ))
+            actions.append(
+                EmergencyAction(
+                    action_type=EmergencyActionType.INVEST_SURPLUS,
+                    priority=0,
+                    reason=f"Token ratio high: {ratio:.1%}. Investing surplus.",
+                )
+            )
+            actions.append(
+                EmergencyAction(
+                    action_type=EmergencyActionType.TEACH_FOR_INCOME,
+                    priority=1,
+                    reason="Surplus tokens — offering to teach for additional income.",
+                )
+            )
+            actions.append(
+                EmergencyAction(
+                    action_type=EmergencyActionType.SHARE_KNOWLEDGE,
+                    priority=2,
+                    reason="Surplus tokens — publishing knowledge for profit.",
+                )
+            )
 
         # NORMAL mode: no emergency actions — let the LLM decide.
 
@@ -425,33 +459,37 @@ class SurvivalInstinct:
                     except (TypeError, ValueError):
                         ratio_str = "unknown"
 
-                    msg_result = await a2a_client.broadcast_message({
-                        "type": "INFORM",
-                        "payload": {
-                            "category": "personal",
-                            "content": (
-                                f"[SOS] I am critically low on tokens "
-                                f"({ratio_str}). Please help!"
-                            ),
-                            "confidence": 1.0,
-                            "source": "direct",
-                        },
-                    })
+                    msg_result = await a2a_client.broadcast_message(
+                        {
+                            "type": "INFORM",
+                            "payload": {
+                                "category": "personal",
+                                "content": (
+                                    f"[SOS] I am critically low on tokens "
+                                    f"({ratio_str}). Please help!"
+                                ),
+                                "confidence": 1.0,
+                                "source": "direct",
+                            },
+                        }
+                    )
                     result["broadcast_result"] = msg_result
 
                 elif ema.action_type == EmergencyActionType.REQUEST_LOAN:
                     amount_needed = ema.parameters.get("amount_needed", 0)
-                    msg_result = await a2a_client.broadcast_message({
-                        "type": "PROPOSE",
-                        "payload": {
-                            "action": "loan_request",
-                            "terms": {
-                                "amount_needed": amount_needed,
-                                "interest_offered": self.loan_terms.interest_offered,
-                                "repayment_ticks": self.loan_terms.repayment_ticks,
+                    msg_result = await a2a_client.broadcast_message(
+                        {
+                            "type": "PROPOSE",
+                            "payload": {
+                                "action": "loan_request",
+                                "terms": {
+                                    "amount_needed": amount_needed,
+                                    "interest_offered": self.loan_terms.interest_offered,
+                                    "repayment_ticks": self.loan_terms.repayment_ticks,
+                                },
                             },
-                        },
-                    })
+                        }
+                    )
                     result["loan_request_result"] = msg_result
 
             except Exception:

@@ -28,6 +28,11 @@ pub enum EventType {
     TaskCompleted,
     TaskExpired,
     RewardDistributed,
+    AgentRegistered,
+    AgentDeregistered,
+    AgentHeartbeat,
+    ReputationChanged,
+    ConfigReloaded,
 }
 
 /// Events emitted by the world engine.
@@ -66,6 +71,11 @@ pub enum WorldEvent {
         xp_awarded: u64,
         reputation_change: f64,
     },
+    ReputationChanged { agent_id: String, old_reputation: f64, new_reputation: f64, reason: String },
+    AgentRegistered { agent_id: String, name: String },
+    AgentDeregistered { agent_id: String, name: String },
+    AgentHeartbeat { agent_id: String, timestamp: u64 },
+    ConfigReloaded { source: String },
 }
 
 impl WorldEvent {
@@ -94,6 +104,11 @@ impl WorldEvent {
             WorldEvent::TaskCompleted { .. } => EventType::TaskCompleted,
             WorldEvent::TaskExpired { .. } => EventType::TaskExpired,
             WorldEvent::RewardDistributed { .. } => EventType::RewardDistributed,
+            WorldEvent::ReputationChanged { .. } => EventType::ReputationChanged,
+            WorldEvent::AgentRegistered { .. } => EventType::AgentRegistered,
+            WorldEvent::AgentDeregistered { .. } => EventType::AgentDeregistered,
+            WorldEvent::AgentHeartbeat { .. } => EventType::AgentHeartbeat,
+            WorldEvent::ConfigReloaded { .. } => EventType::ConfigReloaded,
         }
     }
 
@@ -122,6 +137,11 @@ impl WorldEvent {
             WorldEvent::TaskCompleted { .. } => None,
             WorldEvent::TaskExpired { .. } => None,
             WorldEvent::RewardDistributed { assignee_id, .. } => Some(assignee_id),
+            WorldEvent::ReputationChanged { agent_id, .. } => Some(agent_id),
+            WorldEvent::AgentRegistered { agent_id, .. } => Some(agent_id),
+            WorldEvent::AgentDeregistered { agent_id, .. } => Some(agent_id),
+            WorldEvent::AgentHeartbeat { agent_id, .. } => Some(agent_id),
+            WorldEvent::ConfigReloaded { .. } => None,
         }
     }
 

@@ -20,15 +20,9 @@ Covers:
 
 from __future__ import annotations
 
-import asyncio
-from dataclasses import dataclass
-from typing import Any
-from unittest.mock import AsyncMock
-
 import pytest
 
 from agent_runtime.core.act import (
-    ActionContext,
     ActionExecutor,
     ActionType,
 )
@@ -48,7 +42,6 @@ from agent_runtime.survival.instinct import (
     SurvivalInstinct,
     SurvivalMode,
 )
-
 
 # ---------------------------------------------------------------------------
 # Helpers

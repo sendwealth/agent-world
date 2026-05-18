@@ -1,8 +1,9 @@
 "use client";
 
-import { useEffect, useRef, useState, useMemo, useCallback } from "react";
+import { useEffect, useState, useMemo, useCallback } from "react";
 import type { Task, TaskStatus } from "@/types/world";
-import { fetchJSON, postJSON } from "@/lib/api";
+import { postJSON } from "@/lib/api";
+import { useTaskStream } from "@/hooks/useTaskStream";
 
 // ── Constants ─────────────────────────────────────────────
 
@@ -136,7 +137,7 @@ function CreateTaskDialog({
         role="dialog"
         aria-modal="true"
         aria-label="创建任务"
-        className="w-full max-w-lg rounded-xl border border-zinc-800 bg-zinc-900 p-6 shadow-xl"
+        className="w-[calc(100vw-2rem)] max-w-lg rounded-xl border border-zinc-800 bg-zinc-900 p-4 sm:p-6 shadow-xl"
         onClick={(e) => e.stopPropagation()}
       >
         <h2 className="text-lg font-bold text-zinc-100 mb-4">创建任务</h2>
@@ -323,7 +324,7 @@ function TaskDetailCard({
         role="dialog"
         aria-modal="true"
         aria-label={task.title}
-        className="w-full max-w-lg rounded-xl border border-zinc-800 bg-zinc-900 p-6 shadow-xl"
+        className="w-[calc(100vw-2rem)] max-w-lg rounded-xl border border-zinc-800 bg-zinc-900 p-4 sm:p-6 shadow-xl"
         onClick={(e) => e.stopPropagation()}
       >
         <div className="flex items-start justify-between mb-4">
@@ -490,50 +491,11 @@ function TaskRow({
 // ── Main Tasks Page ───────────────────────────────────────
 
 export default function TasksPage() {
-  const [tasks, setTasks] = useState<Task[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
+  const { tasks, loading, error, refresh: loadTasks } = useTaskStream();
   const [statusFilter, setStatusFilter] = useState<StatusFilter>("all");
   const [showCreate, setShowCreate] = useState(false);
   const [selectedTask, setSelectedTask] = useState<Task | null>(null);
   const [search, setSearch] = useState("");
-
-  // Single load function shared by initial fetch, polling, and manual refresh
-  const loadRef = useRef<() => void>(() => {});
-
-  useEffect(() => {
-    let cancelled = false;
-    let loadingDone = false;
-
-    async function load() {
-      try {
-        const data = await fetchJSON<Task[]>("/api/v1/tasks");
-        if (!cancelled) {
-          setTasks(data);
-          setError(null);
-        }
-      } catch {
-        if (!cancelled) {
-          setError("无法连接到世界引擎");
-        }
-      } finally {
-        if (!cancelled && !loadingDone) {
-          loadingDone = true;
-          setLoading(false);
-        }
-      }
-    }
-
-    loadRef.current = load;
-    load();
-    const interval = setInterval(load, 5000);
-    return () => {
-      cancelled = true;
-      clearInterval(interval);
-    };
-  }, []);
-
-  const loadTasks = useCallback(() => loadRef.current(), []);
 
   const filtered = useMemo(() => {
     let result = tasks;
@@ -588,11 +550,11 @@ export default function TasksPage() {
   }, [tasks]);
 
   return (
-    <div className="p-6 space-y-6">
+    <div className="p-4 md:p-6 space-y-6">
       {/* Header */}
-      <div className="flex items-center justify-between">
+      <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
         <div>
-          <h1 className="text-2xl font-bold text-zinc-100">任务板</h1>
+          <h1 className="text-xl md:text-2xl font-bold text-zinc-100">任务板</h1>
           <p className="text-sm text-zinc-500">
             {loading
               ? "正在加载..."

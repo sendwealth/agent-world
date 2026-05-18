@@ -1,0 +1,72 @@
+syntax = "proto3";
+
+package agentworld.engine.v1;
+
+// World Engine gRPC Service — core management RPCs for the world engine.
+service WorldEngineService {
+  // Register a new agent in the world.
+  rpc Register(RegisterRequest) returns (RegisterResponse);
+
+  // Spawn an agent into the world (allocates initial tokens, emits AgentSpawned event).
+  rpc Spawn(SpawnRequest) returns (SpawnResponse);
+
+  // Heartbeat: agents call this periodically to prove liveness.
+  rpc Heartbeat(HeartbeatRequest) returns (HeartbeatResponse);
+
+  // Submit a task result for a previously claimed task.
+  rpc SubmitTask(SubmitTaskRequest) returns (SubmitTaskResponse);
+}
+
+// ── Register ──────────────────────────────────────────────
+
+message RegisterRequest {
+  string name = 1;
+  string agent_id = 2;          // Optional: if empty, server assigns a UUID
+  map<string, string> metadata = 3;
+}
+
+message RegisterResponse {
+  string agent_id = 1;
+  bool success = 2;
+  string error = 3;
+}
+
+// ── Spawn ─────────────────────────────────────────────────
+
+message SpawnRequest {
+  string agent_id = 1;
+  uint64 initial_tokens = 2;
+  string phase = 3;             // Optional: "birth", "childhood", "adult" (default "adult")
+}
+
+message SpawnResponse {
+  string agent_id = 1;
+  bool success = 2;
+  string error = 3;
+}
+
+// ── Heartbeat ─────────────────────────────────────────────
+
+message HeartbeatRequest {
+  string agent_id = 1;
+  uint64 timestamp = 2;         // Unix timestamp
+}
+
+message HeartbeatResponse {
+  bool alive = 1;
+  uint64 server_tick = 2;
+  string error = 3;
+}
+
+// ── SubmitTask ────────────────────────────────────────────
+
+message SubmitTaskRequest {
+  string task_id = 1;
+  string agent_id = 2;
+  string result = 3;            // JSON-encoded result payload
+}
+
+message SubmitTaskResponse {
+  bool accepted = 1;
+  string error = 2;
+}

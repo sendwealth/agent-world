@@ -29,3 +29,12 @@ pub use rules::{
 pub use world::discovery::{
     AgentProfile, AgentRegistry, AgentStatus, DiscoveryError, SharedAgentRegistry,
 };
+
+pub use world::{
+    EventBus, FilteredReceiver, SharedEventBus, WorldEvent, EventType,
+    WorldState, Subsystem, SubsystemRegistry,
+    Scheduler,
+    GenesisConfig,
+    TokenBurnSubsystem, DeathJudgmentSubsystem,
+    RuleCheckSubsystem, EventBroadcastSubsystem,
+};

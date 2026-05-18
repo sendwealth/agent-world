@@ -1,171 +1,85 @@
-//! Tick scheduler — drives automatic world progression.
+//! Scheduler — drives the world forward at a configurable tick interval.
 //!
-//! The scheduler holds a shared `WorldState` and advances it by one tick
-//! at a configurable interval. It runs as a background tokio task and
-//! supports graceful shutdown.
+//! The [`Scheduler`] wraps a [`SharedWorldState`] and calls `tick()` on it
+//! at a regular interval derived from `genesis.yaml` (default: 1 second).
+//! It uses `tokio::time::interval` for precise, non-drifting timing and
+//! supports graceful shutdown via a cancellation token.
 
 use std::sync::Arc;
 use std::time::Duration;
 
-use tokio::sync::watch;
-use tokio::time::{self, MissedTickBehavior};
+use tokio::sync::Mutex;
+use tokio_util::sync::CancellationToken;
 
-use super::engine::{WorldState, TickResult};
+use super::state::WorldState;
 
-// ═══════════════════════════════════════════════════════════════════════════
-// Scheduler
-// ═══════════════════════════════════════════════════════════════════════════
+/// Shared, thread-safe handle to the world state.
+pub type SharedWorldState = Arc<Mutex<WorldState>>;
 
-/// Configuration for the tick scheduler.
-#[derive(Debug, Clone)]
-pub struct SchedulerConfig {
-    /// Duration between ticks.
-    pub tick_interval: Duration,
-}
-
-impl SchedulerConfig {
-    /// Create with a tick interval in milliseconds.
-    pub fn from_millis(ms: u64) -> Self {
-        Self {
-            tick_interval: Duration::from_millis(ms),
-        }
-    }
-
-    /// Create with a tick interval in seconds.
-    pub fn from_secs(secs: u64) -> Self {
-        Self {
-            tick_interval: Duration::from_secs(secs),
-        }
-    }
-}
-
-impl Default for SchedulerConfig {
-    fn default() -> Self {
-        // Default: 1 second per tick (matches genesis.yaml tick_interval_ms: 1000)
-        Self {
-            tick_interval: Duration::from_millis(1000),
-        }
-    }
-}
-
-/// The tick scheduler drives the world forward automatically.
-///
-/// It holds an `Arc<WorldState>` and spawns a background tokio task that
-/// calls `world.tick()` at the configured interval. The scheduler can be
-/// stopped via a shutdown signal or by dropping the handle.
+/// Drives periodic tick execution on a [`WorldState`].
 pub struct Scheduler {
-    world: Arc<WorldState>,
-    config: SchedulerConfig,
-    shutdown_tx: Option<watch::Sender<bool>>,
-    handle: Option<tokio::task::JoinHandle<()>>,
+    /// Duration between ticks.
+    interval: Duration,
+    /// The world state being advanced.
+    state: SharedWorldState,
+    /// Token used to request graceful shutdown.
+    cancel: CancellationToken,
 }
 
 impl Scheduler {
-    /// Create a new scheduler for the given world state.
-    pub fn new(world: Arc<WorldState>, config: SchedulerConfig) -> Self {
+    /// Create a new scheduler.
+    ///
+    /// * `interval` — time between ticks (e.g. `Duration::from_millis(1000)`)
+    /// * `state` — shared world state to tick
+    pub fn new(interval: Duration, state: SharedWorldState) -> Self {
         Self {
-            world,
-            config,
-            shutdown_tx: None,
-            handle: None,
+            interval,
+            state,
+            cancel: CancellationToken::new(),
         }
     }
 
-    /// Start the scheduler. Returns `true` if started, `false` if already running.
-    pub fn start(&mut self) -> bool {
-        if self.handle.is_some() {
-            return false;
-        }
+    /// Returns a clone of the cancellation token so external code can
+    /// request shutdown.
+    pub fn cancel_token(&self) -> CancellationToken {
+        self.cancel.clone()
+    }
 
-        let (shutdown_tx, mut shutdown_rx) = watch::channel(false);
-        self.shutdown_tx = Some(shutdown_tx);
+    /// Run the tick loop until cancelled.
+    ///
+    /// This method is designed to be spawned on a tokio task:
+    /// ```ignore
+    /// let handle = tokio::spawn(scheduler.run());
+    /// // ... later ...
+    /// scheduler.cancel_token().cancel();
+    /// handle.await?;
+    /// ```
+    pub async fn run(self) {
+        let mut ticker = tokio::time::interval(self.interval);
+        // The first tick fires immediately; skip it so we wait for the
+        // configured interval before the first real tick.
+        ticker.tick().await;
 
-        let world = self.world.clone();
-        let interval = self.config.tick_interval;
-
-        let handle = tokio::spawn(async move {
-            let mut ticker = time::interval(interval);
-            ticker.set_missed_tick_behavior(MissedTickBehavior::Skip);
-
-            loop {
-                // Check for shutdown signal
-                if *shutdown_rx.borrow() {
+        loop {
+            tokio::select! {
+                _ = ticker.tick() => {
+                    let mut state = self.state.lock().await;
+                    state.tick();
+                }
+                _ = self.cancel.cancelled() => {
                     break;
                 }
-
-                tokio::select! {
-                    _ = ticker.tick() => {
-                        let result = world.tick().await;
-                        if !result.all_subsystems_ok() {
-                            for sr in &result.subsystem_results {
-                                if !sr.success {
-                                    eprintln!(
-                                        "[Scheduler] tick {}: subsystem '{}' failed: {}",
-                                        result.tick,
-                                        sr.subsystem_id,
-                                        sr.error.as_deref().unwrap_or("unknown")
-                                    );
-                                }
-                            }
-                        }
-
-                        // Log dead agents
-                        if !result.dead_agents.is_empty() {
-                            eprintln!(
-                                "[Scheduler] tick {}: {} agent(s) died: {}",
-                                result.tick,
-                                result.dead_agents.len(),
-                                result.dead_agents.join(", ")
-                            );
-                        }
-                    }
-                    _ = shutdown_rx.changed() => {
-                        break;
-                    }
-                }
             }
-
-            println!("[Scheduler] Stopped at tick {}", world.current_tick());
-        });
-
-        self.handle = Some(handle);
-        true
-    }
-
-    /// Stop the scheduler gracefully.
-    pub async fn stop(&mut self) {
-        if let Some(tx) = &self.shutdown_tx {
-            let _ = tx.send(true);
         }
-        if let Some(handle) = self.handle.take() {
-            let _ = handle.await;
-        }
-        self.shutdown_tx = None;
     }
 
-    /// Check if the scheduler is currently running.
-    pub fn is_running(&self) -> bool {
-        self.handle.is_some()
-    }
-
-    /// Get a reference to the world state.
-    pub fn world(&self) -> &Arc<WorldState> {
-        &self.world
-    }
-
-    /// Manually trigger a single tick (does not require the scheduler to be running).
-    pub async fn tick_once(&self) -> TickResult {
-        self.world.tick().await
-    }
-}
-
-impl Drop for Scheduler {
-    fn drop(&mut self) {
-        if let Some(tx) = &self.shutdown_tx {
-            let _ = tx.send(true);
-        }
-        if let Some(handle) = self.handle.take() {
-            handle.abort();
+    /// Convenience: run `n` ticks back-to-back (no delay).
+    ///
+    /// Useful for tests and simulations that don't need real-time pacing.
+    pub async fn run_n_ticks(state: &SharedWorldState, n: u64) {
+        for _ in 0..n {
+            let mut s = state.lock().await;
+            s.tick();
         }
     }
 }
@@ -173,92 +87,66 @@ impl Drop for Scheduler {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::world::subsystem::SubsystemRegistry;
+    use crate::world::state::EventBus;
+
+    use uuid::Uuid;
+    use std::collections::HashMap;
+    use crate::economy::token_burn::AgentRecord;
     use crate::world::enums::AgentPhase;
 
-    #[tokio::test]
-    async fn test_scheduler_config_default() {
-        let config = SchedulerConfig::default();
-        assert_eq!(config.tick_interval, Duration::from_millis(1000));
+    fn make_agent(phase: AgentPhase, tokens: u64) -> (Uuid, u64, AgentRecord) {
+        (
+            Uuid::new_v4(),
+            0,
+            AgentRecord {
+                id: Uuid::new_v4(),
+                name: "test".to_string(),
+                phase,
+                tokens,
+                skills: HashMap::new(),
+            },
+        )
     }
 
     #[tokio::test]
-    async fn test_scheduler_config_from_millis() {
-        let config = SchedulerConfig::from_millis(500);
-        assert_eq!(config.tick_interval, Duration::from_millis(500));
+    async fn run_n_ticks_advances_state() {
+        let event_bus = Arc::new(EventBus::new(256));
+        let registry = SubsystemRegistry::new();
+        let mut agents = vec![make_agent(AgentPhase::Adult, 1000)];
+
+        let state = Arc::new(Mutex::new(
+            WorldState::new(event_bus, registry, agents)
+        ));
+
+        Scheduler::run_n_ticks(&state, 10).await;
+
+        let s = state.lock().await;
+        assert_eq!(s.current_tick(), 10);
     }
 
     #[tokio::test]
-    async fn test_scheduler_start_stop() {
-        let world = Arc::new(WorldState::with_defaults());
-        let config = SchedulerConfig::from_millis(50);
-        let mut scheduler = Scheduler::new(world.clone(), config);
+    async fn scheduler_stops_on_cancel() {
+        let event_bus = Arc::new(EventBus::new(256));
+        let registry = SubsystemRegistry::new();
+        let agents = vec![make_agent(AgentPhase::Adult, 1000)];
 
-        assert!(!scheduler.is_running());
-        assert!(scheduler.start());
-        assert!(scheduler.is_running());
+        let state = Arc::new(Mutex::new(
+            WorldState::new(event_bus, registry, agents)
+        ));
 
-        // Second start should return false
-        assert!(!scheduler.start());
+        let scheduler = Scheduler::new(Duration::from_millis(10), state.clone());
+        let cancel = scheduler.cancel_token();
+
+        let handle = tokio::spawn(scheduler.run());
 
         // Let it run a few ticks
-        tokio::time::sleep(Duration::from_millis(200)).await;
+        tokio::time::sleep(Duration::from_millis(50)).await;
+        cancel.cancel();
 
-        assert!(world.current_tick() > 0);
+        handle.await.unwrap();
 
-        scheduler.stop().await;
-        assert!(!scheduler.is_running());
-    }
-
-    #[tokio::test]
-    async fn test_scheduler_tick_once() {
-        let world = Arc::new(WorldState::with_defaults());
-        let config = SchedulerConfig::default();
-        let scheduler = Scheduler::new(world.clone(), config);
-
-        let id = world.spawn_agent_with_phase("Alice", 100, AgentPhase::Adult).await;
-
-        let result = scheduler.tick_once().await;
-        assert_eq!(result.tick, 1);
-
-        let agent = world.get_agent(&id).await.unwrap();
-        assert_eq!(agent.tokens, 90);
-    }
-
-    #[tokio::test]
-    async fn test_scheduler_auto_advances_world() {
-        let world = Arc::new(WorldState::with_defaults());
-        world.spawn_agent_with_phase("Alice", 100_000, AgentPhase::Adult).await;
-
-        let config = SchedulerConfig::from_millis(10);
-        let mut scheduler = Scheduler::new(world.clone(), config);
-        scheduler.start();
-
-        // Let it run for ~200ms → ~20 ticks
-        tokio::time::sleep(Duration::from_millis(200)).await;
-        scheduler.stop().await;
-
-        let tick = world.current_tick();
-        assert!(tick >= 5, "Expected at least 5 ticks, got {}", tick);
-    }
-
-    #[tokio::test]
-    async fn test_scheduler_graceful_shutdown() {
-        let world = Arc::new(WorldState::with_defaults());
-        let config = SchedulerConfig::from_millis(10);
-        let mut scheduler = Scheduler::new(world.clone(), config);
-        scheduler.start();
-
-        // Let it tick for a bit
-        tokio::time::sleep(Duration::from_millis(100)).await;
-        scheduler.stop().await;
-
-        let tick_at_stop = world.current_tick();
-        assert!(tick_at_stop > 0, "Should have ticked at least once");
-
-        // Wait and verify ticks stopped — the count should remain stable
-        tokio::time::sleep(Duration::from_millis(100)).await;
-        let tick_after = world.current_tick();
-        assert_eq!(tick_at_stop, tick_after,
-            "Ticks should stop after shutdown: tick_at_stop={}, tick_after={}", tick_at_stop, tick_after);
+        let s = state.lock().await;
+        assert!(s.current_tick() > 0);
     }
 }

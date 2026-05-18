@@ -20,17 +20,22 @@ body {
   -webkit-tap-highlight-color: transparent;
 }
 
-/* Touch-friendly: prevent iOS zoom on input focus */
+/* Prevent iOS input zoom */
 input[type="text"],
-input[type="number"],
 input[type="search"],
+input[type="number"],
+input[type="email"],
+input[type="tel"],
+input[type="url"],
 textarea,
 select {
   font-size: 16px;
 }
 
-/* Minimum touch target for buttons */
-button {
+/* Touch-friendly minimum tap target */
+button,
+a[role="button"],
+[tabindex="0"] {
   min-height: 44px;
 }
 

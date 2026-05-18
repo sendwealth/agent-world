@@ -1,8 +1,9 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useState, useMemo } from "react";
 import Link from "next/link";
-import { useAgentStream } from "@/hooks/useAgentStream";
+import type { Agent } from "@/types/world";
+import { fetchJSON } from "@/lib/api";
 
 type StatusFilter = "all" | "alive" | "dead";
 
@@ -29,10 +30,77 @@ function formatSkills(skills: Record<string, number>): string {
     .join(", ");
 }
 
+function AgentCard({ agent }: { agent: Agent }) {
+  return (
+    <Link
+      href={`/agents/${agent.id}`}
+      className="block rounded-xl border border-zinc-800 bg-zinc-900/50 p-4 transition-colors hover:bg-zinc-800/50"
+    >
+      <div className="flex items-center justify-between mb-2">
+        <span className="text-sm font-medium text-zinc-200">{agent.name}</span>
+        <span
+          className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-medium ${
+            agent.alive
+              ? "bg-green-500/10 text-green-400"
+              : "bg-red-500/10 text-red-400"
+          }`}
+        >
+          <span
+            className={`inline-block h-1.5 w-1.5 rounded-full ${
+              agent.alive ? "bg-green-400" : "bg-red-400"
+            }`}
+          />
+          {agent.alive ? "存活" : "死亡"}
+        </span>
+      </div>
+      <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-zinc-400">
+        <span>{phaseLabels[agent.phase] ?? agent.phase}</span>
+        <span>{agent.tokens.toLocaleString()} Token</span>
+        <span>{formatMoney(agent.money)}</span>
+        <span>信誉 {agent.reputation.toFixed(1)}</span>
+        <span>{agent.age} Tick</span>
+      </div>
+      <p className="mt-1.5 text-xs text-zinc-500 truncate">
+        {formatSkills(agent.skills)}
+      </p>
+    </Link>
+  );
+}
+
 export default function AgentsPage() {
-  const { agents, loading, error } = useAgentStream();
+  const [agents, setAgents] = useState<Agent[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
   const [statusFilter, setStatusFilter] = useState<StatusFilter>("all");
   const [search, setSearch] = useState("");
+
+  useEffect(() => {
+    let cancelled = false;
+
+    async function load() {
+      try {
+        const data = await fetchJSON<Agent[]>("/api/v1/agents");
+        if (!cancelled) {
+          setAgents(data);
+          setError(null);
+        }
+      } catch {
+        if (!cancelled) {
+          setError("无法连接到世界引擎");
+        }
+      } finally {
+        if (!cancelled) setLoading(false);
+      }
+    }
+
+    load();
+
+    const interval = setInterval(load, 5000);
+    return () => {
+      cancelled = true;
+      clearInterval(interval);
+    };
+  }, []);
 
   const filtered = useMemo(() => {
     let result = agents;
@@ -63,9 +131,9 @@ export default function AgentsPage() {
   return (
     <div className="p-4 md:p-6 space-y-6">
       {/* Header */}
-      <div className="flex items-center justify-between">
+      <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
         <div>
-          <h1 className="text-xl md:text-2xl font-bold text-zinc-100">Agent 列表</h1>
+          <h1 className="text-2xl font-bold text-zinc-100">Agent 列表</h1>
           <p className="text-sm text-zinc-500">
             {loading
               ? "正在加载..."
@@ -81,12 +149,12 @@ export default function AgentsPage() {
 
       {/* Filters & Search */}
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-        <div className="flex items-center gap-1.5">
+        <div className="flex flex-wrap items-center gap-1.5">
           {filterButtons.map((btn) => (
             <button
               key={btn.value}
               onClick={() => setStatusFilter(btn.value)}
-              className={`min-h-[44px] rounded-lg px-3 py-1.5 text-xs font-medium transition-colors ${
+              className={`rounded-lg px-3 py-1.5 text-xs font-medium transition-colors ${
                 statusFilter === btn.value
                   ? "bg-blue-500/15 text-blue-400 border border-blue-500/30"
                   : "bg-zinc-800/50 text-zinc-400 border border-zinc-800 hover:bg-zinc-800 hover:text-zinc-300"
@@ -102,7 +170,7 @@ export default function AgentsPage() {
             value={search}
             onChange={(e) => setSearch(e.target.value)}
             placeholder="搜索 Agent 名称..."
-            className="w-full rounded-lg border border-zinc-800 bg-zinc-900/50 px-3 py-2 pl-8 text-base text-zinc-200 placeholder-zinc-600 outline-none transition-colors focus:border-zinc-700 focus:ring-1 focus:ring-zinc-700 sm:w-64 sm:text-sm"
+            className="w-full rounded-lg border border-zinc-800 bg-zinc-900/50 px-3 py-2 pl-8 text-sm text-zinc-200 placeholder-zinc-600 outline-none transition-colors focus:border-zinc-700 focus:ring-1 focus:ring-zinc-700 sm:w-64"
           />
           <svg
             className="absolute left-2.5 top-2.5 h-3.5 w-3.5 text-zinc-600"
@@ -120,51 +188,20 @@ export default function AgentsPage() {
         </div>
       </div>
 
-      {/* Loading / Empty state */}
-      {loading || filtered.length === 0 ? (
-        <div className="rounded-xl border border-zinc-800 bg-zinc-900/50">
-          <div className="flex h-48 items-center justify-center text-sm text-zinc-600">
-            {loading ? "正在加载 Agent 数据..." : agents.length === 0 ? "暂无 Agent 数据" : "没有匹配的 Agent"}
-          </div>
+      {loading ? (
+        <div className="flex h-48 items-center justify-center text-sm text-zinc-600">
+          正在加载 Agent 数据...
+        </div>
+      ) : filtered.length === 0 ? (
+        <div className="flex h-48 items-center justify-center text-sm text-zinc-600">
+          {agents.length === 0 ? "暂无 Agent 数据" : "没有匹配的 Agent"}
         </div>
       ) : (
         <>
           {/* Mobile card layout */}
           <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:hidden">
             {filtered.map((agent) => (
-              <Link
-                key={agent.id}
-                href={`/agents/${agent.id}`}
-                className="flex flex-col gap-2 rounded-xl border border-zinc-800 bg-zinc-900/50 p-4 transition-colors hover:bg-zinc-800/40"
-              >
-                <div className="flex items-center justify-between">
-                  <span className="text-sm font-medium text-zinc-200">{agent.name}</span>
-                  <span
-                    className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-medium ${
-                      agent.alive
-                        ? "bg-green-500/10 text-green-400"
-                        : "bg-red-500/10 text-red-400"
-                    }`}
-                  >
-                    <span
-                      className={`inline-block h-1.5 w-1.5 rounded-full ${
-                        agent.alive ? "bg-green-400" : "bg-red-400"
-                      }`}
-                    />
-                    {agent.alive ? "存活" : "死亡"}
-                  </span>
-                </div>
-                <div className="flex items-center gap-2 text-xs text-zinc-500">
-                  <span>{phaseLabels[agent.phase] ?? agent.phase}</span>
-                  <span>·</span>
-                  <span>{agent.age} Tick</span>
-                </div>
-                <div className="flex items-center justify-between text-xs text-zinc-400">
-                  <span>{formatMoney(agent.money)}</span>
-                  <span>信誉 {agent.reputation.toFixed(1)}</span>
-                </div>
-                <p className="text-xs text-zinc-500 truncate">{formatSkills(agent.skills)}</p>
-              </Link>
+              <AgentCard key={agent.id} agent={agent} />
             ))}
           </div>
 

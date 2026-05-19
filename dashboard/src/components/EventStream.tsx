@@ -20,6 +20,7 @@ const eventTypeConfig: Record<
   message: { label: "消息", color: "bg-sky-500", icon: "💬" },
   skill_up: { label: "技能提升", color: "bg-yellow-500", icon: "⬆" },
   reputation_change: { label: "信誉变化", color: "bg-orange-500", icon: "⭐" },
+  reputation_changed: { label: "信誉更新", color: "bg-orange-500", icon: "⭐" },
   inflation: { label: "通胀", color: "bg-amber-500", icon: "📈" },
   investment: { label: "投资", color: "bg-teal-500", icon: "🏦" },
   tax: { label: "税收", color: "bg-rose-500", icon: "🏛" },

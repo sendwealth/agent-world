@@ -32,7 +32,9 @@ export default function BriefingPage() {
   }, [selectedSnapshot]);
 
   useEffect(() => {
-    fetchSnapshots();
+    (async () => {
+      await fetchSnapshots();
+    })();
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   const handleCreateSnapshot = async () => {
@@ -103,7 +105,7 @@ export default function BriefingPage() {
               <p className="text-sm text-zinc-500">加载中...</p>
             )}
             {!loading && snapshots.length === 0 && (
-              <p className="text-sm text-zinc-500">暂无快照数据。点击"手动快照"生成第一个快照。</p>
+              <p className="text-sm text-zinc-500">暂无快照数据。点击{'"'}手动快照{'"'}生成第一个快照。</p>
             )}
             {snapshots.map((snap) => (
               <button

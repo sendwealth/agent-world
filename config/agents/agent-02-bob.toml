@@ -1,0 +1,12 @@
+# Agent 02: Bob — Trader & Negotiator
+[agent]
+name = "Bob"
+traits = { ambition = 0.8, caution = 0.5, sociability = 0.7 }
+
+[agent.skills]
+trading = { level = 4 }
+teaching = { level = 2 }
+research = { level = 1 }
+
+[think_loop]
+tick_interval = 1.0

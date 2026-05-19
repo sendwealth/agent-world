@@ -1,0 +1,13 @@
+# Agent 06: Frank — Generalist & Survivor
+[agent]
+name = "Frank"
+traits = { adaptability = 0.8, resilience = 0.9, caution = 0.6 }
+
+[agent.skills]
+coding = { level = 2 }
+trading = { level = 2 }
+research = { level = 2 }
+teaching = { level = 1 }
+
+[think_loop]
+tick_interval = 1.0

@@ -1,0 +1,12 @@
+# Agent 07: Grace — Innovator & Pioneer
+[agent]
+name = "Grace"
+traits = { creativity = 0.9, curiosity = 0.8, risk_taking = 0.6 }
+
+[agent.skills]
+coding = { level = 3 }
+research = { level = 3 }
+trading = { level = 1 }
+
+[think_loop]
+tick_interval = 1.0

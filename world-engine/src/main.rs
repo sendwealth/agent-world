@@ -144,6 +144,12 @@ async fn main() {
     };
 
     let mut subsystem_registry = SubsystemRegistry::new();
+    // CRITICAL: InterventionChecker runs FIRST — before any other subsystem.
+    // This ensures all safety checks happen before token burn, death judgment, etc.
+    let intervention_config = agent_world_engine::world::InterventionSubsystemConfig::default();
+    subsystem_registry.register(Box::new(
+        agent_world_engine::world::InterventionCheckerSubsystem::new(intervention_config),
+    ));
     subsystem_registry.register(Box::new(TokenBurnSubsystem::new(
         TokenBurnEngine::with_defaults(),
     )));

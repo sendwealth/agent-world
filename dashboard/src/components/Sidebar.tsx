@@ -8,6 +8,10 @@ const navItems = [
   { href: "/", label: "世界概览", icon: "🌍" },
   { href: "/agents", label: "Agent 列表", icon: "🤖" },
   { href: "/tasks", label: "任务板", icon: "📋" },
+  { href: "/organizations", label: "组织关系图", icon: "🏛" },
+  { href: "/economy", label: "经济指标", icon: "💰" },
+  { href: "/stocks", label: "股市走势", icon: "📈" },
+  { href: "/evolution", label: "进化树", icon: "🧬" },
   { href: "/timeline", label: "事件时间线", icon: "📜" },
   { href: "/briefing", label: "世界简报", icon: "📊" },
 ];
@@ -65,8 +69,8 @@ export function Sidebar() {
         <nav className="flex-1 space-y-0.5 p-2">
           {navItems.map((item) => {
             const active =
-              item.href === "/agents"
-                ? pathname === "/agents" || pathname.startsWith("/agents/")
+              item.href === "/agents" || item.href === "/organizations"
+                ? pathname === item.href || pathname.startsWith(item.href + "/")
                 : pathname === item.href;
             return (
               <Link
@@ -125,8 +129,8 @@ export function Sidebar() {
         <nav className="flex-1 space-y-0.5 p-2">
           {navItems.map((item) => {
             const active =
-              item.href === "/agents"
-                ? pathname === "/agents" || pathname.startsWith("/agents/")
+              item.href === "/agents" || item.href === "/organizations"
+                ? pathname === item.href || pathname.startsWith(item.href + "/")
                 : pathname === item.href;
             return (
               <Link

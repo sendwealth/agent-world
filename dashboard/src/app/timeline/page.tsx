@@ -82,6 +82,14 @@ const eventTypeConfig: Record<
     dot: "bg-orange-400",
     icon: "⭐",
   },
+  reputation_changed: {
+    label: "信誉更新",
+    color: "text-orange-400",
+    bg: "bg-orange-500/10",
+    border: "border-orange-500/20",
+    dot: "bg-orange-400",
+    icon: "⭐",
+  },
   inflation: {
     label: "通胀",
     color: "text-amber-400",

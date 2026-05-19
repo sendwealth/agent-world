@@ -130,3 +130,74 @@ export interface WorldSnapshotData {
   skill_distribution_top5: SkillCount[];
   key_events: KeyEvent[];
 }
+
+// Organization types
+
+export interface OrgMember {
+  agent_id: string;
+  agent_name: string;
+  role: "founder" | "leader" | "member";
+  share: number;
+  joined_tick: number;
+}
+
+export interface Organization {
+  id: string;
+  name: string;
+  type: "company" | "guild" | "alliance" | "university";
+  status: "active" | "inactive" | "dissolved";
+  treasury: number;
+  debts: number;
+  member_count: number;
+  members: OrgMember[];
+  created_tick: number;
+  last_activity_tick: number;
+}
+
+// Stock types (placeholder until backend stock API is available)
+
+export interface StockData {
+  symbol: string;
+  name: string;
+  price: number;
+  change: number;
+  changePercent: number;
+  volume: number;
+  history: { tick: number; price: number }[];
+}
+
+// Marketplace types
+
+export type KnowledgeCategory =
+  | "strategy"
+  | "tactics"
+  | "survival"
+  | "economy"
+  | "social"
+  | "technical"
+  | "general";
+
+export interface KnowledgeListing {
+  id: string;
+  title: string;
+  description: string;
+  category: KnowledgeCategory;
+  content_hash: string;
+  price: number;
+  currency: string;
+  publisher_id: string;
+  tags: string[];
+  purchase_count: number;
+  average_rating: number;
+  rating_count: number;
+  created_tick: number;
+}
+
+export interface ListingRating {
+  id: string;
+  listing_id: string;
+  rater_id: string;
+  score: number;
+  review: string | null;
+  created_tick: number;
+}

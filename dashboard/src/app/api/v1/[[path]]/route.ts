@@ -5,10 +5,11 @@ const WORLD_ENGINE_URL =
 
 export async function GET(
   request: NextRequest,
-  { params }: { params: Promise<{ path?: string[] }> },
+  { params }: { params: Promise<{ path?: string[] | string }> },
 ) {
   const { path } = await params;
-  const slug = (path ?? []).join("/");
+  const segments = typeof path === "string" ? [path] : (path ?? []);
+  const slug = segments.join("/");
   const url = `${WORLD_ENGINE_URL}/${slug}${request.nextUrl.search}`;
 
   const res = await fetch(url, {
@@ -24,10 +25,11 @@ export async function GET(
 
 export async function POST(
   request: NextRequest,
-  { params }: { params: Promise<{ path?: string[] }> },
+  { params }: { params: Promise<{ path?: string[] | string }> },
 ) {
   const { path } = await params;
-  const slug = (path ?? []).join("/");
+  const segments = typeof path === "string" ? [path] : (path ?? []);
+  const slug = segments.join("/");
   const url = `${WORLD_ENGINE_URL}/${slug}${request.nextUrl.search}`;
 
   const res = await fetch(url, {
@@ -45,10 +47,11 @@ export async function POST(
 
 export async function PUT(
   request: NextRequest,
-  { params }: { params: Promise<{ path?: string[] }> },
+  { params }: { params: Promise<{ path?: string[] | string }> },
 ) {
   const { path } = await params;
-  const slug = (path ?? []).join("/");
+  const segments = typeof path === "string" ? [path] : (path ?? []);
+  const slug = segments.join("/");
   const url = `${WORLD_ENGINE_URL}/${slug}${request.nextUrl.search}`;
 
   const res = await fetch(url, {
@@ -66,10 +69,11 @@ export async function PUT(
 
 export async function DELETE(
   request: NextRequest,
-  { params }: { params: Promise<{ path?: string[] }> },
+  { params }: { params: Promise<{ path?: string[] | string }> },
 ) {
   const { path } = await params;
-  const slug = (path ?? []).join("/");
+  const segments = typeof path === "string" ? [path] : (path ?? []);
+  const slug = segments.join("/");
   const url = `${WORLD_ENGINE_URL}/${slug}${request.nextUrl.search}`;
 
   const res = await fetch(url, {

@@ -1,41 +1,213 @@
+# ── Agent World — Docker Compose v2 ────────────────────────────
+#
+# One-command startup: make dev
+#
+# Services:
+#   world-engine   — Rust world state / economy / rules engine
+#   agent-01..10   — 10 Python agent-runtime instances
+#   dashboard      — Next.js observability UI
+#   ollama         — Optional local LLM (only started with profile: local-llm)
+#
+# Environment: copy .env.example → .env and adjust
+# ────────────────────────────────────────────────────────────────
+
 services:
   # ── World Engine (Rust) ──────────────────────────────────────
-  # REST API on 8080, gRPC placeholder on 50051
   world-engine:
     build:
       context: ./world-engine
+    container_name: world-engine
     ports:
-      - "8080:8080"   # REST API
-      - "50051:50051" # gRPC (reserved for A2A protocol)
+      - "${ENGINE_PORT:-8080}:${ENGINE_PORT:-8080}"   # REST API
+      - "${GRPC_PORT:-50051}:${GRPC_PORT:-50051}"     # gRPC (A2A protocol)
     volumes:
       - world-data:/app/data
       - ./config:/app/config:ro
     environment:
       - HOST=0.0.0.0
-      - PORT=8080
-      - RUST_LOG=info
+      - PORT=${ENGINE_PORT:-8080}
+      - GRPC_ADDR=0.0.0.0:${GRPC_PORT:-50051}
+      - RUST_LOG=${RUST_LOG:-info}
+      - GENESIS_PATH=config/genesis.yaml
     restart: unless-stopped
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:8080/tasks"]
+      test: ["CMD", "curl", "-f", "http://localhost:${ENGINE_PORT:-8080}/tasks"]
       interval: 10s
       timeout: 5s
       retries: 5
+      start_period: 30s
     networks:
       - agent-world
 
-  # ── Agent Runtime (Python) ───────────────────────────────────
-  agent-runtime:
+  # ── Agent Runtimes (Python) ──────────────────────────────────
+  # 10 agents, each with a unique config file from config/agents/
+
+  agent-01:
     build:
       context: ./agent-runtime
+    container_name: agent-alice
     depends_on:
       world-engine:
         condition: service_healthy
-    environment:
-      - WORLD_ENGINE_URL=http://world-engine:8080
-      - AGENT_NAME=Agent-1
-      - TICK_INTERVAL=1.0
     volumes:
+      - ./config/agents:/app/agent-configs:ro
       - agent-data:/app/data
+    environment:
+      - WORLD_ENGINE_URL=http://world-engine:${ENGINE_PORT:-8080}
+    command: ["spawn", "--config", "/app/agent-configs/agent-01-alice.toml", "--world-url", "http://world-engine:${ENGINE_PORT:-8080}"]
+    restart: unless-stopped
+    networks:
+      - agent-world
+
+  agent-02:
+    build:
+      context: ./agent-runtime
+    container_name: agent-bob
+    depends_on:
+      world-engine:
+        condition: service_healthy
+    volumes:
+      - ./config/agents:/app/agent-configs:ro
+      - agent-data:/app/data
+    environment:
+      - WORLD_ENGINE_URL=http://world-engine:${ENGINE_PORT:-8080}
+    command: ["spawn", "--config", "/app/agent-configs/agent-02-bob.toml", "--world-url", "http://world-engine:${ENGINE_PORT:-8080}"]
+    restart: unless-stopped
+    networks:
+      - agent-world
+
+  agent-03:
+    build:
+      context: ./agent-runtime
+    container_name: agent-carol
+    depends_on:
+      world-engine:
+        condition: service_healthy
+    volumes:
+      - ./config/agents:/app/agent-configs:ro
+      - agent-data:/app/data
+    environment:
+      - WORLD_ENGINE_URL=http://world-engine:${ENGINE_PORT:-8080}
+    command: ["spawn", "--config", "/app/agent-configs/agent-03-carol.toml", "--world-url", "http://world-engine:${ENGINE_PORT:-8080}"]
+    restart: unless-stopped
+    networks:
+      - agent-world
+
+  agent-04:
+    build:
+      context: ./agent-runtime
+    container_name: agent-dave
+    depends_on:
+      world-engine:
+        condition: service_healthy
+    volumes:
+      - ./config/agents:/app/agent-configs:ro
+      - agent-data:/app/data
+    environment:
+      - WORLD_ENGINE_URL=http://world-engine:${ENGINE_PORT:-8080}
+    command: ["spawn", "--config", "/app/agent-configs/agent-04-dave.toml", "--world-url", "http://world-engine:${ENGINE_PORT:-8080}"]
+    restart: unless-stopped
+    networks:
+      - agent-world
+
+  agent-05:
+    build:
+      context: ./agent-runtime
+    container_name: agent-eve
+    depends_on:
+      world-engine:
+        condition: service_healthy
+    volumes:
+      - ./config/agents:/app/agent-configs:ro
+      - agent-data:/app/data
+    environment:
+      - WORLD_ENGINE_URL=http://world-engine:${ENGINE_PORT:-8080}
+    command: ["spawn", "--config", "/app/agent-configs/agent-05-eve.toml", "--world-url", "http://world-engine:${ENGINE_PORT:-8080}"]
+    restart: unless-stopped
+    networks:
+      - agent-world
+
+  agent-06:
+    build:
+      context: ./agent-runtime
+    container_name: agent-frank
+    depends_on:
+      world-engine:
+        condition: service_healthy
+    volumes:
+      - ./config/agents:/app/agent-configs:ro
+      - agent-data:/app/data
+    environment:
+      - WORLD_ENGINE_URL=http://world-engine:${ENGINE_PORT:-8080}
+    command: ["spawn", "--config", "/app/agent-configs/agent-06-frank.toml", "--world-url", "http://world-engine:${ENGINE_PORT:-8080}"]
+    restart: unless-stopped
+    networks:
+      - agent-world
+
+  agent-07:
+    build:
+      context: ./agent-runtime
+    container_name: agent-grace
+    depends_on:
+      world-engine:
+        condition: service_healthy
+    volumes:
+      - ./config/agents:/app/agent-configs:ro
+      - agent-data:/app/data
+    environment:
+      - WORLD_ENGINE_URL=http://world-engine:${ENGINE_PORT:-8080}
+    command: ["spawn", "--config", "/app/agent-configs/agent-07-grace.toml", "--world-url", "http://world-engine:${ENGINE_PORT:-8080}"]
+    restart: unless-stopped
+    networks:
+      - agent-world
+
+  agent-08:
+    build:
+      context: ./agent-runtime
+    container_name: agent-henry
+    depends_on:
+      world-engine:
+        condition: service_healthy
+    volumes:
+      - ./config/agents:/app/agent-configs:ro
+      - agent-data:/app/data
+    environment:
+      - WORLD_ENGINE_URL=http://world-engine:${ENGINE_PORT:-8080}
+    command: ["spawn", "--config", "/app/agent-configs/agent-08-henry.toml", "--world-url", "http://world-engine:${ENGINE_PORT:-8080}"]
+    restart: unless-stopped
+    networks:
+      - agent-world
+
+  agent-09:
+    build:
+      context: ./agent-runtime
+    container_name: agent-iris
+    depends_on:
+      world-engine:
+        condition: service_healthy
+    volumes:
+      - ./config/agents:/app/agent-configs:ro
+      - agent-data:/app/data
+    environment:
+      - WORLD_ENGINE_URL=http://world-engine:${ENGINE_PORT:-8080}
+    command: ["spawn", "--config", "/app/agent-configs/agent-09-iris.toml", "--world-url", "http://world-engine:${ENGINE_PORT:-8080}"]
+    restart: unless-stopped
+    networks:
+      - agent-world
+
+  agent-10:
+    build:
+      context: ./agent-runtime
+    container_name: agent-jack
+    depends_on:
+      world-engine:
+        condition: service_healthy
+    volumes:
+      - ./config/agents:/app/agent-configs:ro
+      - agent-data:/app/data
+    environment:
+      - WORLD_ENGINE_URL=http://world-engine:${ENGINE_PORT:-8080}
+    command: ["spawn", "--config", "/app/agent-configs/agent-10-jack.toml", "--world-url", "http://world-engine:${ENGINE_PORT:-8080}"]
     restart: unless-stopped
     networks:
       - agent-world
@@ -45,22 +217,39 @@ services:
     build:
       context: ./dashboard
       args:
-        WORLD_ENGINE_URL: http://world-engine:8080
+        WORLD_ENGINE_URL: http://world-engine:${ENGINE_PORT:-8080}
+    container_name: dashboard
     ports:
-      - "3000:3000"
+      - "${DASHBOARD_PORT:-3001}:3000"
     depends_on:
       world-engine:
         condition: service_healthy
     environment:
-      - WORLD_ENGINE_URL=http://world-engine:8080
+      - WORLD_ENGINE_URL=http://world-engine:${ENGINE_PORT:-8080}
       - PORT=3000
     restart: unless-stopped
+    networks:
+      - agent-world
+
+  # ── Ollama (optional local LLM) ─────────────────────────────
+  # Started only with: docker compose --profile local-llm up
+  ollama:
+    image: ollama/ollama:latest
+    container_name: ollama
+    ports:
+      - "${OLLAMA_PORT:-11434}:11434"
+    volumes:
+      - ollama-data:/root/.ollama
+    restart: unless-stopped
+    profiles:
+      - local-llm
     networks:
       - agent-world
 
 volumes:
   world-data:
   agent-data:
+  ollama-data:
 
 networks:
   agent-world:

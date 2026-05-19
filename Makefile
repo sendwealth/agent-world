@@ -1,4 +1,5 @@
-.PHONY: help setup dev test lint fmt proto clean build run demo demo-json demo-death
+.PHONY: help setup dev dev-llm dev-detach dev-down dev-logs dev-ps dev-restart \
+       test lint fmt proto clean build run demo demo-json demo-death
 
 help: ## Show this help
 	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) | sort | awk 'BEGIN {FS = ":.*?## "}; {printf "\033[36m%-20s\033[0m %s\n", $$1, $$2}'
@@ -6,57 +7,70 @@ help: ## Show this help
 # ── Setup ────────────────────────────────────────────────
 
 setup: ## Install all dependencies
-	@echo "🔧 Setting up development environment..."
+	@echo "Setting up development environment..."
 	$(MAKE) setup-rust
 	$(MAKE) setup-python
 	$(MAKE) setup-dashboard
 	$(MAKE) proto
-	@echo "✅ Setup complete!"
+	@echo "Setup complete!"
 
 setup-rust:
-	@echo "🦀 Rust dependencies..."
+	@echo "Rust dependencies..."
 	cd world-engine && cargo fetch
 
 setup-python:
-	@echo "🐍 Python dependencies..."
+	@echo "Python dependencies..."
 	cd agent-runtime && uv pip install -e ".[dev]"
 
 setup-dashboard:
-	@echo "🖥️  Dashboard dependencies..."
+	@echo "Dashboard dependencies..."
 	cd dashboard && npm install
 
-# ── Development ──────────────────────────────────────────
+# ── Development (Docker Compose v2) ─────────────────────
+# make dev         → all services (world-engine + 10 agents + dashboard)
+# make dev-llm     → same + local Ollama LLM container
 
-dev: ## Start all services with Docker Compose
+dev: ## Start all services with Docker Compose (world-engine + 10 agents + dashboard)
 	@test -f .env || cp .env.example .env
 	docker compose up --build
+
+dev-llm: ## Start all services + local Ollama LLM
+	@test -f .env || cp .env.example .env
+	docker compose --profile local-llm up --build
 
 dev-detach: ## Start all services in background
 	@test -f .env || cp .env.example .env
 	docker compose up --build -d
 
 dev-down: ## Stop all Docker Compose services
-	docker compose down
+	docker compose --profile local-llm down
 
 dev-logs: ## Tail Docker Compose logs
 	docker compose logs -f
 
-run-engine: ## Start world engine
+dev-ps: ## List running Docker Compose services
+	docker compose ps
+
+dev-restart: ## Restart all services (rebuild + restart)
+	@test -f .env || cp .env.example .env
+	docker compose up --build -d --force-recreate
+
+run-engine: ## Start world engine locally (no Docker)
 	cd world-engine && cargo run --release
 
-run-agents: ## Spawn and run agents
+run-agents: ## Spawn and run agents locally
 	cd agent-runtime && python -m agent_runtime spawn --count 2
 
-run-dashboard: ## Start dashboard
+run-dashboard: ## Start dashboard locally
 	cd dashboard && npm run dev
 
 # ── Testing ──────────────────────────────────────────────
 
 test: ## Run all tests
-	@echo "🧪 Running all tests..."
+	@echo "Running all tests..."
 	$(MAKE) test-rust
 	$(MAKE) test-python
-	@echo "✅ All tests passed!"
+	@echo "All tests passed!"
 
 test-rust: ## Run Rust tests
 	cd world-engine && cargo test
@@ -104,14 +118,14 @@ fmt-python:
 # ── Build ────────────────────────────────────────────────
 
 proto: ## Generate protobuf code
-	@echo "📦 Generating protobuf code..."
+	@echo "Generating protobuf code..."
 	mkdir -p protocol/gen/python protocol/gen/rust
 	protoc --proto_path=protocol \
 		--python_out=protocol/gen/python \
 		--grpc_python_out=protocol/gen/python \
 		--rust_out=protocol/gen/rust \
 		--tonic_out=protocol/gen/rust \
-		protocol/*.proto || echo "⚠️  protoc not found. Install: brew install protobuf"
+		protocol/*.proto || echo "protoc not found. Install: brew install protobuf"
 
 build: ## Build all components
 	cd world-engine && cargo build --release
@@ -123,4 +137,4 @@ clean: ## Clean all build artifacts
 	cd agent-runtime && rm -rf __pycache__ .pytest_cache .mypy_cache
 	cd dashboard && rm -rf node_modules .next
 	rm -rf protocol/gen/
-	@echo "🧹 Clean!"
+	@echo "Clean!"

@@ -1,0 +1,12 @@
+# Agent 04: Dave — Teacher & Mentor
+[agent]
+name = "Dave"
+traits = { patience = 0.9, generosity = 0.8, wisdom = 0.7 }
+
+[agent.skills]
+teaching = { level = 5 }
+research = { level = 2 }
+trading = { level = 1 }
+
+[think_loop]
+tick_interval = 1.0

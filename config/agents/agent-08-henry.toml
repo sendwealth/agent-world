@@ -1,0 +1,12 @@
+# Agent 08: Henry — Merchant & Deal Maker
+[agent]
+name = "Henry"
+traits = { ambition = 0.9, sociability = 0.8, caution = 0.5 }
+
+[agent.skills]
+trading = { level = 5 }
+teaching = { level = 1 }
+research = { level = 1 }
+
+[think_loop]
+tick_interval = 1.0

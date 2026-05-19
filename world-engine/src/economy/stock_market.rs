@@ -341,6 +341,11 @@ impl StockMarket {
         self.stocks.get(stock_id)
     }
 
+    /// Get a mutable reference to a stock listing by ID.
+    pub fn get_stock_mut(&mut self, stock_id: &str) -> Option<&mut StockListing> {
+        self.stocks.get_mut(stock_id)
+    }
+
     /// Get a stock listing by org ID.
     pub fn get_stock_by_org(&self, org_id: &str) -> Option<&StockListing> {
         self.org_to_stock.get(org_id).and_then(|id| self.stocks.get(id))
@@ -470,8 +475,8 @@ impl StockMarket {
         self.holdings.values().filter(|h| h.stock_id == stock_id).collect()
     }
 
-    /// Internal: credit shares to an agent.
-    fn credit_shares(&mut self, stock_id: &str, agent_id: &str, quantity: u64) {
+    /// Credit shares to an agent (used for IPO allocation and integration tests).
+    pub fn credit_shares(&mut self, stock_id: &str, agent_id: &str, quantity: u64) {
         let key = (stock_id.to_string(), agent_id.to_string());
         let holding = self.holdings.entry(key).or_insert_with(|| ShareHolding {
             agent_id: agent_id.to_string(),

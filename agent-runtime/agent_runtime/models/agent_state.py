@@ -5,15 +5,19 @@ from uuid import UUID, uuid4
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
-from .enums import AgentPhase, SurvivalMode
+from .enums import AgentPhase, DeathReason, SurvivalMode
+from .phase_abilities import PhaseAbilities, get_phase_abilities, is_alive, is_terminal
 from .skill import Skill
 
 
 class AgentState(BaseModel):
     """Core state model for an agent in the simulation.
 
-    Tracks identity, resources, skills, personality, and provides
-    synchronization with the World Engine.
+    Tracks identity, resources, skills, personality, lifecycle phase,
+    and provides synchronization with the World Engine.
+
+    Lifecycle phases (aligned with World Engine lifecycle.rs):
+        Birth → Childhood → Adult → Elder → Dying → Dead
     """
 
     model_config = ConfigDict(use_enum_values=False)
@@ -21,7 +25,7 @@ class AgentState(BaseModel):
     id: UUID = Field(default_factory=uuid4, description="Unique agent identifier")
     name: str = Field(..., min_length=1, description="Agent display name")
     phase: AgentPhase = Field(
-        default=AgentPhase.INITIALIZATION, description="Current lifecycle phase"
+        default=AgentPhase.BIRTH, description="Current lifecycle phase"
     )
     survival_mode: SurvivalMode = Field(
         default=SurvivalMode.CONSERVATION, description="Current survival strategy"
@@ -43,6 +47,12 @@ class AgentState(BaseModel):
     tick: int = Field(default=0, ge=0, description="Current tick counter")
     world_sync_version: int = Field(
         default=0, description="Monotonic version counter for World Engine sync"
+    )
+    spawn_tick: int = Field(
+        default=0, ge=0, description="Tick when agent was spawned (set by World Engine)"
+    )
+    death_reason: Optional[DeathReason] = Field(
+        default=None, description="Reason for death (set when agent enters Dying/Dead)"
     )
 
     @field_validator("skills", mode="before")
@@ -113,6 +123,47 @@ class AgentState(BaseModel):
         """Change the survival strategy."""
         self.survival_mode = mode
         self._bump_version()
+
+    # --- Lifecycle helpers (aligned with World Engine lifecycle.rs) ---
+
+    def get_phase_abilities(self) -> PhaseAbilities:
+        """Return the ability set for the current lifecycle phase."""
+        return get_phase_abilities(self.phase)
+
+    def is_alive(self) -> bool:
+        """Return True if the agent is in a living phase."""
+        return is_alive(self.phase)
+
+    def is_dead(self) -> bool:
+        """Return True if the agent is Dead."""
+        return is_terminal(self.phase)
+
+    def can_perform(self, action_type: str) -> bool:
+        """Check if the agent can perform a given action type.
+
+        Uses phase abilities to gate actions. Maps action types to
+        their required abilities. Dead agents cannot perform any action.
+        """
+        # Dead agents can do nothing
+        if is_terminal(self.phase):
+            return False
+
+        abilities = get_phase_abilities(self.phase)
+
+        action_ability_map: Dict[str, str] = {
+            "claim_task": "can_take_tasks",
+            "submit_task": "can_take_tasks",
+            "propose_deal": "can_trade",
+            "teach_skill": "can_teach",
+            "send_message": "can_communicate",
+            "explore": "can_take_tasks",
+        }
+
+        required = action_ability_map.get(action_type)
+        if required is None:
+            return True  # Unknown actions (rest, etc.) are allowed
+
+        return getattr(abilities, required, False)
 
     # --- World Engine sync ---
 

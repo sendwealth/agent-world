@@ -42,6 +42,8 @@ from agent_runtime.core.act import (
     ActionType,
 )
 from agent_runtime.models.agent_state import AgentState
+from agent_runtime.models.enums import AgentPhase
+from agent_runtime.models.phase_abilities import get_phase_abilities, is_terminal
 from agent_runtime.survival.instinct import (
     SurvivalAction,
     SurvivalInstinct,
@@ -369,16 +371,31 @@ class ThinkLoop:
     # ------------------------------------------------------------------
 
     async def _think_once(self) -> None:
-        """Execute one Perceive → Decide → Act cycle."""
+        """Execute one Perceive → Decide → Act cycle.
+
+        Lifecycle integration:
+          - Dead agents: skip the cycle entirely and stop the loop.
+          - Dying agents: run a reduced cycle (only will/communication actions).
+          - Phase abilities gate which actions the agent can perform.
+        """
         self._tick += 1
+
+        # --- Lifecycle gate: Dead agents do nothing ---
+        if is_terminal(self.state.phase):
+            logger.info(
+                "Tick %d: agent is Dead — stopping think loop", self._tick
+            )
+            self.stop()
+            return
 
         # 1. Perceive
         perception = await self._perception.perceive(self.state, self._tick)
         logger.debug(
-            "Tick %d: perceived — token_ratio=%.2f health=%.0f",
+            "Tick %d: perceived — token_ratio=%.2f health=%.0f phase=%s",
             self._tick,
             perception.token_ratio,
             perception.health,
+            self.state.phase.value,
         )
 
         # 2. Survival assessment (synchronous, no LLM)
@@ -397,6 +414,25 @@ class ThinkLoop:
 
         # 3. Decide
         decision = await self._decision.decide(self.state, perception, survival_action)
+
+        # 4. Phase ability gate: check if the agent can perform this action
+        abilities = get_phase_abilities(self.state.phase)
+        if not self.state.can_perform(decision.action_type.value):
+            logger.debug(
+                "Tick %d: action %s blocked by phase %s (abilities: %s)",
+                self._tick,
+                decision.action_type.value,
+                self.state.phase.value,
+                abilities.model_dump(),
+            )
+            # Fall back to rest if the chosen action is not allowed
+            decision = Decision(
+                action_type=ActionType.REST,
+                reasoning=(
+                    f"Action blocked by phase {self.state.phase.value}, resting instead."
+                ),
+            )
+
         logger.debug(
             "Tick %d: decided — action=%s reason=%s",
             self._tick,
@@ -404,10 +440,10 @@ class ThinkLoop:
             decision.reasoning,
         )
 
-        # 4. Act
+        # 5. Act
         await self._act(decision)
 
-        # 5. Reflect (periodic)
+        # 6. Reflect (periodic)
         if self.config.reflect_interval > 0 and self._tick % self.config.reflect_interval == 0:
             await self._reflection.reflect(self.state, self._tick)
 

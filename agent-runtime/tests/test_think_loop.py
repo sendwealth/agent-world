@@ -37,6 +37,7 @@ from agent_runtime.core.think_loop import (
     _NoOpWorldClient,
 )
 from agent_runtime.models.agent_state import AgentState
+from agent_runtime.models.enums import AgentPhase
 from agent_runtime.survival.instinct import (
     SurvivalAction,
     SurvivalInstinct,
@@ -61,6 +62,7 @@ def make_state(
         max_tokens=max_tokens,
         money=50.0,
         health=100.0,
+        phase=AgentPhase.ADULT,
     )
 
 

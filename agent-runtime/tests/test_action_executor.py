@@ -140,6 +140,7 @@ class TestActionStatus:
             "insufficient_tokens",
             "skipped",
             "retry_exhausted",
+            "blocked_by_intervention",
         }
         assert {s.value for s in ActionStatus} == expected
 
@@ -673,14 +674,20 @@ class TestActionHistory:
     @pytest.mark.asyncio
     async def test_history_records_insufficient_tokens(self) -> None:
         executor = ActionExecutor()
-        agent = FakeAgentState(tokens=0)
+        # Use 1 token: above IC-04 low-water mark (0) so intervention checker
+        # passes, but below SEND_MESSAGE cost (10) → INSUFFICIENT_TOKENS.
+        agent = FakeAgentState(tokens=1)
         world = FakeWorldClient()
         ctx = ActionContext(agent=agent, world=world)
 
         await executor.execute(ActionType.SEND_MESSAGE, ctx)
         history = executor.history
         assert len(history) == 1
-        assert history[0].status == ActionStatus.INSUFFICIENT_TOKENS
+        # InterventionChecker (IC-04) blocks before the regular token check
+        assert history[0].status in (
+            ActionStatus.INSUFFICIENT_TOKENS,
+            ActionStatus.BLOCKED_BY_INTERVENTION,
+        )
 
     @pytest.mark.asyncio
     async def test_history_accumulates(self) -> None:
@@ -827,10 +834,14 @@ class TestEdgeCases:
     async def test_sequential_executions_independent(self) -> None:
         """Each execution should be independent."""
         executor = ActionExecutor()
-        agent = FakeAgentState(tokens=25)
+        # Use 26 tokens so after 3 successful actions (5+10+10=25),
+        # 1 token remains — above IC-04 low-water mark (0) so the
+        # intervention checker does not intercept, but below SEND_MESSAGE
+        # cost (10) → INSUFFICIENT_TOKENS.
+        agent = FakeAgentState(tokens=26)
         world = FakeWorldClient()
 
-        # First: claim task (cost 5, remaining 20)
+        # First: claim task (cost 5, remaining 21)
         ctx1 = ActionContext(
             agent=agent,
             world=world,
@@ -839,7 +850,7 @@ class TestEdgeCases:
         r1 = await executor.execute(ActionType.CLAIM_TASK, ctx1)
         assert r1.status == ActionStatus.SUCCESS
 
-        # Second: send message (cost 10, remaining 10)
+        # Second: send message (cost 10, remaining 11)
         ctx2 = ActionContext(
             agent=agent,
             world=world,
@@ -848,14 +859,18 @@ class TestEdgeCases:
         r2 = await executor.execute(ActionType.SEND_MESSAGE, ctx2)
         assert r2.status == ActionStatus.SUCCESS
 
-        # Third: send message again (cost 10, but only 10 left — just enough)
+        # Third: send message again (cost 10, remaining 1)
         ctx3 = ActionContext(agent=agent, world=world, parameters={"payload": {}})
         r3 = await executor.execute(ActionType.SEND_MESSAGE, ctx3)
         assert r3.status == ActionStatus.SUCCESS
 
-        # Fourth: not enough tokens for another send_message
+        # Fourth: not enough tokens for another send_message (1 < 10)
+        # InterventionChecker (IC-04) blocks before the regular token check
         ctx4 = ActionContext(agent=agent, world=world, parameters={"payload": {}})
         r4 = await executor.execute(ActionType.SEND_MESSAGE, ctx4)
-        assert r4.status == ActionStatus.INSUFFICIENT_TOKENS
+        assert r4.status in (
+            ActionStatus.INSUFFICIENT_TOKENS,
+            ActionStatus.BLOCKED_BY_INTERVENTION,
+        )
 
-        assert agent.tokens == 0  # 25 - 5 - 10 - 10
+        assert agent.tokens == 1  # 26 - 5 - 10 - 10

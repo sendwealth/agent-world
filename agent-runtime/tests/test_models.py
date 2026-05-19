@@ -1,6 +1,7 @@
-"""Tests for AgentState data model, enums, and Skill.
+"""Tests for AgentState data model, enums, Skill, and lifecycle abilities.
 
-Covers: creation, validation, serialization, state mutations, and World Engine sync.
+Covers: creation, validation, serialization, state mutations, lifecycle helpers,
+phase abilities, and World Engine sync.
 """
 
 import json
@@ -9,7 +10,18 @@ from uuid import UUID
 import pytest
 from pydantic import ValidationError
 
-from agent_runtime.models import AgentPhase, AgentState, Skill, SurvivalMode
+from agent_runtime.models import (
+    AgentPhase,
+    AgentState,
+    DeathReason,
+    PhaseAbilities,
+    Skill,
+    SurvivalMode,
+    get_phase_abilities,
+    is_alive,
+    is_terminal,
+)
+
 
 # ============================================================
 # Enum tests
@@ -19,21 +31,41 @@ from agent_runtime.models import AgentPhase, AgentState, Skill, SurvivalMode
 class TestAgentPhase:
     def test_all_phases_defined(self):
         expected = {
-            "initialization",
-            "exploration",
-            "survival",
-            "development",
-            "collaboration",
-            "mastery",
+            "birth",
+            "childhood",
+            "adult",
+            "elder",
+            "dying",
+            "dead",
         }
         assert {p.value for p in AgentPhase} == expected
 
     def test_phase_is_string_enum(self):
-        assert isinstance(AgentPhase.EXPLORATION, str)
-        assert AgentPhase.EXPLORATION == "exploration"
+        assert isinstance(AgentPhase.ADULT, str)
+        assert AgentPhase.ADULT == "adult"
 
     def test_phase_from_value(self):
-        assert AgentPhase("survival") is AgentPhase.SURVIVAL
+        assert AgentPhase("childhood") is AgentPhase.CHILDHOOD
+
+    def test_phase_ordering(self):
+        """Phases should follow lifecycle order."""
+        phases = [p.value for p in AgentPhase]
+        expected_order = ["birth", "childhood", "adult", "elder", "dying", "dead"]
+        assert phases == expected_order
+
+
+class TestDeathReason:
+    def test_all_reasons_defined(self):
+        expected = {
+            "token_depleted",
+            "human_terminated",
+            "vote_evicted",
+            "natural_death",
+        }
+        assert {r.value for r in DeathReason} == expected
+
+    def test_death_reason_is_string_enum(self):
+        assert isinstance(DeathReason.TOKEN_DEPLETED, str)
 
 
 class TestSurvivalMode:
@@ -43,6 +75,81 @@ class TestSurvivalMode:
 
     def test_mode_is_string_enum(self):
         assert isinstance(SurvivalMode.CRISIS, str)
+
+
+# ============================================================
+# PhaseAbilities tests
+# ============================================================
+
+
+class TestPhaseAbilities:
+    def test_birth_abilities(self):
+        ab = get_phase_abilities(AgentPhase.BIRTH)
+        assert ab.skill_efficiency == 0.0
+        assert ab.can_learn is True
+        assert ab.can_take_tasks is False
+        assert ab.can_trade is False
+        assert ab.can_communicate is True
+
+    def test_childhood_abilities(self):
+        ab = get_phase_abilities(AgentPhase.CHILDHOOD)
+        assert abs(ab.skill_efficiency - 0.3) < 1e-9
+        assert ab.can_learn is True
+        assert ab.can_take_tasks is True
+        assert ab.can_trade is False
+        assert ab.can_teach is False
+
+    def test_adult_abilities(self):
+        ab = get_phase_abilities(AgentPhase.ADULT)
+        assert ab.skill_efficiency == 1.0
+        assert ab.can_learn is True
+        assert ab.can_take_tasks is True
+        assert ab.can_trade is True
+        assert ab.can_teach is True
+        assert ab.can_write_will is True
+
+    def test_elder_abilities(self):
+        ab = get_phase_abilities(AgentPhase.ELDER)
+        assert abs(ab.skill_efficiency - 0.6) < 1e-9
+        assert ab.can_learn is True
+        assert ab.can_take_tasks is True
+        assert ab.can_trade is True
+        assert ab.can_teach is True
+        assert ab.can_write_will is True
+
+    def test_dying_abilities(self):
+        ab = get_phase_abilities(AgentPhase.DYING)
+        assert abs(ab.skill_efficiency - 0.1) < 1e-9
+        assert ab.can_learn is False
+        assert ab.can_take_tasks is False
+        assert ab.can_trade is False
+        assert ab.can_write_will is True
+        assert ab.can_communicate is True
+
+    def test_dead_abilities(self):
+        ab = get_phase_abilities(AgentPhase.DEAD)
+        assert ab.skill_efficiency == 0.0
+        assert ab.can_learn is False
+        assert ab.can_take_tasks is False
+        assert ab.can_trade is False
+        assert ab.can_teach is False
+        assert ab.can_write_will is False
+        assert ab.can_communicate is False
+
+
+class TestLifecycleHelpers:
+    def test_is_alive(self):
+        assert is_alive(AgentPhase.BIRTH) is True
+        assert is_alive(AgentPhase.CHILDHOOD) is True
+        assert is_alive(AgentPhase.ADULT) is True
+        assert is_alive(AgentPhase.ELDER) is True
+        assert is_alive(AgentPhase.DYING) is True
+        assert is_alive(AgentPhase.DEAD) is False
+
+    def test_is_terminal(self):
+        assert is_terminal(AgentPhase.DEAD) is True
+        assert is_terminal(AgentPhase.ADULT) is False
+        assert is_terminal(AgentPhase.DYING) is False
 
 
 # ============================================================
@@ -143,7 +250,7 @@ class TestAgentStateCreation:
         agent = AgentState(name="TestAgent")
         assert agent.name == "TestAgent"
         assert isinstance(agent.id, UUID)
-        assert agent.phase == AgentPhase.INITIALIZATION
+        assert agent.phase == AgentPhase.BIRTH
         assert agent.survival_mode == SurvivalMode.CONSERVATION
         assert agent.tokens == 100
         assert agent.money == 50.0
@@ -152,11 +259,13 @@ class TestAgentStateCreation:
         assert agent.skills == {}
         assert agent.personality == {}
         assert agent.world_sync_version == 0
+        assert agent.spawn_tick == 0
+        assert agent.death_reason is None
 
     def test_create_with_all_fields(self):
         agent = AgentState(
             name="FullAgent",
-            phase=AgentPhase.EXPLORATION,
+            phase=AgentPhase.ADULT,
             survival_mode=SurvivalMode.ADAPTATION,
             tokens=500,
             money=1000.0,
@@ -165,7 +274,7 @@ class TestAgentStateCreation:
             skills={"coding": Skill(name="coding", level=5)},
             personality={"boldness": 0.8, "caution": 0.3},
         )
-        assert agent.phase == AgentPhase.EXPLORATION
+        assert agent.phase == AgentPhase.ADULT
         assert "coding" in agent.skills
 
     def test_name_required(self):
@@ -204,6 +313,14 @@ class TestAgentStateCreation:
         )
         assert len(agent.skills) == 2
         assert agent.skills["coding"].level == 3
+
+    def test_death_reason_field(self):
+        agent = AgentState(
+            name="DeadAgent",
+            phase=AgentPhase.DEAD,
+            death_reason=DeathReason.TOKEN_DEPLETED,
+        )
+        assert agent.death_reason == DeathReason.TOKEN_DEPLETED
 
 
 class TestAgentStateMutations:
@@ -279,8 +396,8 @@ class TestAgentStateMutations:
         assert self.agent.reputation == -100.0
 
     def test_transition_phase(self):
-        self.agent.transition_phase(AgentPhase.SURVIVAL)
-        assert self.agent.phase == AgentPhase.SURVIVAL
+        self.agent.transition_phase(AgentPhase.CHILDHOOD)
+        assert self.agent.phase == AgentPhase.CHILDHOOD
 
     def test_set_survival_mode(self):
         self.agent.set_survival_mode(SurvivalMode.CRISIS)
@@ -294,24 +411,75 @@ class TestAgentStateMutations:
         assert self.agent.world_sync_version == initial_version + 2
 
 
+class TestAgentStateLifecycleHelpers:
+    """Tests for the lifecycle helper methods on AgentState."""
+
+    def test_get_phase_abilities(self):
+        agent = AgentState(name="TestAgent", phase=AgentPhase.ADULT)
+        ab = agent.get_phase_abilities()
+        assert ab.can_trade is True
+        assert ab.can_write_will is True
+
+    def test_is_alive_method(self):
+        agent = AgentState(name="TestAgent", phase=AgentPhase.ADULT)
+        assert agent.is_alive() is True
+
+        agent.transition_phase(AgentPhase.DEAD)
+        assert agent.is_alive() is False
+
+    def test_is_dead_method(self):
+        agent = AgentState(name="TestAgent", phase=AgentPhase.ADULT)
+        assert agent.is_dead() is False
+
+        agent.transition_phase(AgentPhase.DEAD)
+        assert agent.is_dead() is True
+
+    def test_can_perform_adult(self):
+        agent = AgentState(name="TestAgent", phase=AgentPhase.ADULT)
+        assert agent.can_perform("claim_task") is True
+        assert agent.can_perform("send_message") is True
+        assert agent.can_perform("propose_deal") is True
+        assert agent.can_perform("teach_skill") is True
+        assert agent.can_perform("rest") is True
+
+    def test_can_perform_childhood(self):
+        agent = AgentState(name="TestAgent", phase=AgentPhase.CHILDHOOD)
+        assert agent.can_perform("claim_task") is True
+        assert agent.can_perform("send_message") is True
+        assert agent.can_perform("propose_deal") is False  # can_trade=False
+        assert agent.can_perform("teach_skill") is False   # can_teach=False
+
+    def test_can_perform_dying(self):
+        agent = AgentState(name="TestAgent", phase=AgentPhase.DYING)
+        assert agent.can_perform("claim_task") is False
+        assert agent.can_perform("send_message") is True  # can still communicate
+        assert agent.can_perform("propose_deal") is False
+
+    def test_can_perform_dead(self):
+        agent = AgentState(name="TestAgent", phase=AgentPhase.DEAD)
+        assert agent.can_perform("claim_task") is False
+        assert agent.can_perform("send_message") is False
+        assert agent.can_perform("rest") is False
+
+
 class TestAgentStateSync:
     def test_to_sync_payload(self):
         agent = AgentState(
             name="SyncAgent",
-            phase=AgentPhase.EXPLORATION,
+            phase=AgentPhase.ADULT,
             skills={"coding": Skill(name="coding", level=3)},
         )
         payload = agent.to_sync_payload()
         assert isinstance(payload["id"], str)
         assert payload["name"] == "SyncAgent"
-        assert payload["phase"] == "exploration"
+        assert payload["phase"] == "adult"
         assert "coding" in payload["skills"]
         assert payload["world_sync_version"] >= 0
 
     def test_from_sync_payload(self):
         payload = {
             "name": "RemoteAgent",
-            "phase": "development",
+            "phase": "elder",
             "survival_mode": "expansion",
             "tokens": 300,
             "money": 200.0,
@@ -322,7 +490,7 @@ class TestAgentStateSync:
         }
         agent = AgentState.from_sync_payload(payload)
         assert agent.name == "RemoteAgent"
-        assert agent.phase == AgentPhase.DEVELOPMENT
+        assert agent.phase == AgentPhase.ELDER
         assert agent.survival_mode == SurvivalMode.EXPANSION
         assert agent.skills["mining"].level == 4
 
@@ -337,7 +505,7 @@ class TestAgentStateSync:
             "money": 50.0,
             "health": 100.0,
             "reputation": 0.0,
-            "phase": "exploration",
+            "phase": "adult",
             "survival_mode": "conservation",
             "skills": {},
             "personality": {},
@@ -357,7 +525,7 @@ class TestAgentStateSync:
             "money": 50.0,
             "health": 100.0,
             "reputation": 0.0,
-            "phase": "initialization",
+            "phase": "birth",
             "survival_mode": "conservation",
             "skills": {},
             "personality": {},
@@ -378,7 +546,7 @@ class TestAgentStateSync:
             "money": 10.0,
             "health": 50.0,
             "reputation": 75.0,
-            "phase": "mastery",
+            "phase": "elder",
             "survival_mode": "crisis",
             "skills": {"crafting": {"name": "crafting", "level": 8}},
             "personality": {"new_trait": 0.5},
@@ -394,7 +562,7 @@ class TestAgentStateSerialization:
     def test_json_roundtrip(self):
         agent = AgentState(
             name="RoundTrip",
-            phase=AgentPhase.COLLABORATION,
+            phase=AgentPhase.ADULT,
             tokens=250,
             money=75.5,
             health=85.0,
@@ -405,7 +573,7 @@ class TestAgentStateSerialization:
         json_str = agent.to_json()
         restored = AgentState.from_json(json_str)
         assert restored.name == "RoundTrip"
-        assert restored.phase == AgentPhase.COLLABORATION
+        assert restored.phase == AgentPhase.ADULT
         assert restored.tokens == 250
         assert restored.money == 75.5
         assert restored.health == 85.0

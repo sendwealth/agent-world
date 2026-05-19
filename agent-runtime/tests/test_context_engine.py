@@ -211,6 +211,19 @@ class TestMemorySource:
         items = src.collect([])
         assert items == []
 
+    def test_query_builder_override(self) -> None:
+        """query_builder callback is used when memory_recall is a MemoryRecall-like object."""
+        captured_query: list[str] = []
+
+        class FakeMemoryRecall:
+            def recall_for_decision(self, query: str) -> list[FakeRecalledMemory]:
+                captured_query.append(query)
+                return [FakeRecalledMemory(content="result")]
+
+        src = DefaultMemorySource(query_builder=lambda: "dynamic query")
+        src.collect(FakeMemoryRecall())
+        assert captured_query == ["dynamic query"]
+
 
 # ===========================================================================
 # Test: Multi-source priority ordering
@@ -326,7 +339,7 @@ class TestTokenBudget:
                         priority=ContextPriority.P1_MISSION,
                         token_estimate=20),
         ]
-        result, trimmed = budget.allocate(items)
+        result, trimmed, overflow = budget.allocate(items)
         assert trimmed == 1
         # P0 (protected) + P1 (fits) kept; P3 dropped
         assert any("P0" in i.content for i in result)
@@ -342,7 +355,7 @@ class TestTokenBudget:
                         priority=ContextPriority.P1_MISSION,
                         token_estimate=5),
         ]
-        result, _ = budget.allocate(items)
+        result, _, _ = budget.allocate(items)
         assert any(i.content == "protected" for i in result)
         assert not any(i.content == "extra" for i in result)
 
@@ -354,9 +367,32 @@ class TestTokenBudget:
             ContextItem(content="b", source=ContextSource.MEMORY,
                         priority=ContextPriority.P1_MISSION, token_estimate=10),
         ]
-        result, trimmed = budget.allocate(items)
+        result, trimmed, _ = budget.allocate(items)
         assert len(result) == 2
         assert trimmed == 0
+
+    def test_protected_overflow_flag(self) -> None:
+        budget = TokenBudget(max_tokens=10)
+        items = [
+            ContextItem(content="p1", source=ContextSource.SURVIVAL,
+                        priority=ContextPriority.P0_SURVIVAL, protected=True,
+                        token_estimate=8),
+            ContextItem(content="p2", source=ContextSource.SURVIVAL,
+                        priority=ContextPriority.P0_SURVIVAL, protected=True,
+                        token_estimate=5),
+        ]
+        _, _, overflow = budget.allocate(items)
+        assert overflow is True
+
+    def test_no_overflow_when_protected_under_budget(self) -> None:
+        budget = TokenBudget(max_tokens=100)
+        items = [
+            ContextItem(content="p1", source=ContextSource.SURVIVAL,
+                        priority=ContextPriority.P0_SURVIVAL, protected=True,
+                        token_estimate=10),
+        ]
+        _, _, overflow = budget.allocate(items)
+        assert overflow is False
 
 
 # ===========================================================================
@@ -370,7 +406,7 @@ class TestBudgetTrimming100Messages:
     def test_100_social_messages_trimmed(self) -> None:
         budget = TokenBudget(max_tokens=500)
         items = _make_items(100, ContextPriority.P2_SOCIAL, ContextSource.PERCEPTION)
-        result, trimmed = budget.allocate(items)
+        result, trimmed, _ = budget.allocate(items)
         total_tokens = sum(i.token_estimate for i in result)
         assert total_tokens <= 500
         assert trimmed > 0
@@ -465,7 +501,7 @@ class TestPipelineStats:
         assert s.total_items_collected > 0
         assert s.total_tokens_collected > 0
         assert s.final_token_count > 0
-        assert s.final_token_count <= pipeline.config.max_tokens
+        assert s.final_token_count <= pipeline.config.max_tokens or s.protected_overflow
 
 
 # ===========================================================================

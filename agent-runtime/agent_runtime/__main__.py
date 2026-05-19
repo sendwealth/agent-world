@@ -469,111 +469,119 @@ async def run_agent(config: RuntimeConfig) -> RunStats:
     perception_provider = conn.perception_provider
     a2a_client = conn.a2a_client
 
-    # Start streaming for perception if gRPC is connected
-    if a2a_client is not None:
-        try:
-            await a2a_client.start_streaming()
-            logger.info(
-                "A2A streaming started",
-                extra={"agent": state.name, "event": "streaming_started"},
-            )
-        except Exception:
-            logger.warning("Failed to start A2A streaming, perception will be limited")
-
-    # Attempt registration (with public key)
-    await register_agent(
-        state,
-        config.world.engine_url,
-        public_key_b64=public_key_b64,
-    )
-
-    # Build heartbeat provider if A2A client is available
-    heartbeat_provider: Any | None = None
-    if a2a_client is not None and config.think_loop.heartbeat_enabled:
-        heartbeat_provider = _A2AHeartbeatAdapter(a2a_client)
-
-    # Build ThinkLoop with all providers wired in via constructor
-    think_loop = ThinkLoop(
-        state=state,
-        survival=survival,
-        executor=executor,
-        config=config.think_loop,
-        perception_provider=perception_provider,
-        decision_provider=decision_provider,
-        world_client=world_client,
-        heartbeat_provider=heartbeat_provider,
-    )
-
-    # Graceful shutdown on SIGINT
-    loop = asyncio.get_running_loop()
-    shutdown_event = asyncio.Event()
-
-    def _signal_handler() -> None:
-        logger.info(
-            "SIGINT received — shutting down gracefully",
-            extra={"agent": state.name, "event": "shutdown_signal"},
-        )
-        think_loop.stop()
-        shutdown_event.set()
-
-    loop.add_signal_handler(signal.SIGINT, _signal_handler)
-
-    # Start health check HTTP server
-    health_port = _get_health_port(config)
-    health_server = HealthCheckServer(
-        agent_name=state.name,
-        think_loop=think_loop,
-        port=health_port,
-    )
-
-    logger.info(
-        "Starting agent runtime",
-        extra={
-            "agent": state.name,
-            "event": "runtime_start",
-            "config": {
-                "tick_interval": config.think_loop.tick_interval,
-                "max_ticks": config.think_loop.max_ticks or "unlimited",
-                "world_url": config.world.engine_url,
-                "health_port": health_port,
-            },
-        },
-    )
-
-    stats.start_time = time.monotonic()
-
-    think_task = asyncio.create_task(think_loop.run())
-    health_task = asyncio.create_task(health_server.start())
-
+    # Protect the entire post-connection lifecycle so that a2a_client is
+    # always closed even if start_streaming / register_agent / ThinkLoop
+    # construction raises before the think_task try/finally is reached.
     try:
-        # Wait for the think loop to finish
-        await think_task
-    finally:
-        # Ensure health server is stopped before deregistering, even if
-        # think_task raised an exception.
-        await health_server.stop()
-        await health_task
-        stats.end_time = time.monotonic()
-        stats.ticks = think_loop.tick
-        stats.errors = think_loop.total_errors
-        stats.shutdown_reason = "sigint" if shutdown_event.is_set() else "completed"
-        try:
-            loop.remove_signal_handler(signal.SIGINT)
-        except (ValueError, OSError) as exc:
-            logger.warning("Failed to remove signal handler: %s", exc)
-
-        # Graceful shutdown: save memory if available
-        if vector_memory is not None:
+        # Start streaming for perception if gRPC is connected
+        if a2a_client is not None:
             try:
-                vector_memory.close()
+                await a2a_client.start_streaming()
                 logger.info(
-                    "Vector memory closed (persisted to disk)",
-                    extra={"agent": state.name, "event": "memory_saved"},
+                    "A2A streaming started",
+                    extra={"agent": state.name, "event": "streaming_started"},
                 )
             except Exception:
-                logger.warning("Failed to close vector memory", exc_info=True)
+                logger.warning("Failed to start A2A streaming, perception will be limited")
 
-        # Graceful shutdown: close A2A connection if active
+        # Attempt registration (with public key)
+        await register_agent(
+            state,
+            config.world.engine_url,
+            public_key_b64=public_key_b64,
+        )
+
+        # Build heartbeat provider if A2A client is available
+        heartbeat_provider: Any | None = None
+        if a2a_client is not None and config.think_loop.heartbeat_enabled:
+            heartbeat_provider = _A2AHeartbeatAdapter(a2a_client)
+
+        # Build ThinkLoop with all providers wired in via constructor
+        think_loop = ThinkLoop(
+            state=state,
+            survival=survival,
+            executor=executor,
+            config=config.think_loop,
+            perception_provider=perception_provider,
+            decision_provider=decision_provider,
+            world_client=world_client,
+            heartbeat_provider=heartbeat_provider,
+        )
+
+        # Graceful shutdown on SIGINT
+        loop = asyncio.get_running_loop()
+        shutdown_event = asyncio.Event()
+
+        def _signal_handler() -> None:
+            logger.info(
+                "SIGINT received — shutting down gracefully",
+                extra={"agent": state.name, "event": "shutdown_signal"},
+            )
+            think_loop.stop()
+            shutdown_event.set()
+
+        loop.add_signal_handler(signal.SIGINT, _signal_handler)
+
+        # Start health check HTTP server
+        health_port = _get_health_port(config)
+        health_server = HealthCheckServer(
+            agent_name=state.name,
+            think_loop=think_loop,
+            port=health_port,
+        )
+
+        logger.info(
+            "Starting agent runtime",
+            extra={
+                "agent": state.name,
+                "event": "runtime_start",
+                "config": {
+                    "tick_interval": config.think_loop.tick_interval,
+                    "max_ticks": config.think_loop.max_ticks or "unlimited",
+                    "world_url": config.world.engine_url,
+                    "health_port": health_port,
+                },
+            },
+        )
+
+        stats.start_time = time.monotonic()
+
+        think_task = asyncio.create_task(think_loop.run())
+        health_task = asyncio.create_task(health_server.start())
+
+        try:
+            # Wait for the think loop to finish
+            await think_task
+        finally:
+            # Ensure health server is stopped before deregistering, even if
+            # think_task raised an exception.
+            await health_server.stop()
+            await health_task
+            stats.end_time = time.monotonic()
+            stats.ticks = think_loop.tick
+            stats.errors = think_loop.total_errors
+            stats.shutdown_reason = "sigint" if shutdown_event.is_set() else "completed"
+            try:
+                loop.remove_signal_handler(signal.SIGINT)
+            except (ValueError, OSError) as exc:
+                logger.warning("Failed to remove signal handler: %s", exc)
+
+            # Graceful shutdown: save memory if available
+            if vector_memory is not None:
+                try:
+                    vector_memory.close()
+                    logger.info(
+                        "Vector memory closed (persisted to disk)",
+                        extra={"agent": state.name, "event": "memory_saved"},
+                    )
+                except Exception:
+                    logger.warning("Failed to close vector memory", exc_info=True)
+
+            # Graceful shutdown: deregister from World Engine
+            await deregister_agent(str(state.id), config.world.engine_url)
+    finally:
+        # Close A2A connection if active — this runs regardless of which
+        # stage threw an exception (including before think_task starts).
         if a2a_client is not None:
             try:
                 await a2a_client.close()
@@ -583,9 +591,6 @@ async def run_agent(config: RuntimeConfig) -> RunStats:
                 )
             except Exception:
                 logger.warning("Failed to close A2A client", exc_info=True)
-
-        # Graceful shutdown: deregister from World Engine
-        await deregister_agent(str(state.id), config.world.engine_url)
 
     logger.info(
         "Agent runtime stopped",

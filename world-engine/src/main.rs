@@ -16,6 +16,7 @@ use agent_world_engine::economy::stock_market::StockMarket;
 use agent_world_engine::economy::task::TaskBoard;
 use agent_world_engine::economy::token_burn::TokenBurnEngine;
 use agent_world_engine::organization::org::OrganizationStore;
+use agent_world_engine::organization::governance::GovernanceSystem;
 use agent_world_engine::time_capsule::SnapshotStore;
 use agent_world_engine::wal::WAL;
 use agent_world_engine::world::event::WorldEvent;
@@ -275,6 +276,12 @@ async fn main() {
     )));
     println!("   StockMarket: initialized");
 
+    // ── Initialize GovernanceSystem ────────────────────────
+    let governance = Arc::new(Mutex::new(GovernanceSystem::with_shared_event_bus(
+        event_bus.clone(),
+    )));
+    println!("   GovernanceSystem: initialized");
+
     // ── Initialize ConfigManager (hot-reload) ───────────────
     if std::path::Path::new(&genesis_path).exists() {
         match ConfigManager::new(&genesis_path, Some(event_bus.clone())) {
@@ -318,6 +325,7 @@ async fn main() {
         reputation_system: Some(reputation_system),
         org_store: Some(org_store),
         stock_market: Some(stock_market),
+        governance: Some(governance),
     };
     let app = api::build_full_router(app_state);
 

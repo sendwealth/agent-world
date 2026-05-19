@@ -67,6 +67,15 @@ pub enum EventType {
     StockTraded,
     StockTransferred,
     StockDividend,
+    OrganizationCreated,
+    OrganizationDissolved,
+    OrganizationMemberJoined,
+    OrganizationMemberLeft,
+    ProposalCreated,
+    ProposalVotingStarted,
+    ProposalVoted,
+    ProposalExecuted,
+    ProposalRejected,
 }
 
 /// Events emitted by the world engine.
@@ -132,6 +141,15 @@ pub enum WorldEvent {
     StockTraded { trade_id: String, stock_id: String, buyer_id: String, seller_id: String, price: u64, quantity: u64, fee: u64 },
     StockTransferred { stock_id: String, from_agent: String, to_agent: String, quantity: u64 },
     StockDividend { dividend_id: String, stock_id: String, org_id: String, total_profit: u64, dividend_per_share: u64, recipient_count: usize },
+    OrganizationCreated { org_id: uuid::Uuid, name: String, founder_id: String },
+    OrganizationDissolved { org_id: uuid::Uuid, name: String },
+    OrganizationMemberJoined { org_id: uuid::Uuid, agent_id: String, role: String },
+    OrganizationMemberLeft { org_id: uuid::Uuid, agent_id: String },
+    ProposalCreated { proposal_id: uuid::Uuid, org_id: uuid::Uuid, proposer_id: String, proposal_type: String },
+    ProposalVotingStarted { proposal_id: uuid::Uuid, org_id: uuid::Uuid },
+    ProposalVoted { proposal_id: uuid::Uuid, org_id: uuid::Uuid, voter_id: String, in_favor: bool },
+    ProposalExecuted { proposal_id: uuid::Uuid, org_id: uuid::Uuid },
+    ProposalRejected { proposal_id: uuid::Uuid, org_id: uuid::Uuid, reason: String },
 }
 
 impl WorldEvent {
@@ -187,6 +205,15 @@ impl WorldEvent {
             WorldEvent::StockTraded { .. } => EventType::StockTraded,
             WorldEvent::StockTransferred { .. } => EventType::StockTransferred,
             WorldEvent::StockDividend { .. } => EventType::StockDividend,
+            WorldEvent::OrganizationCreated { .. } => EventType::OrganizationCreated,
+            WorldEvent::OrganizationDissolved { .. } => EventType::OrganizationDissolved,
+            WorldEvent::OrganizationMemberJoined { .. } => EventType::OrganizationMemberJoined,
+            WorldEvent::OrganizationMemberLeft { .. } => EventType::OrganizationMemberLeft,
+            WorldEvent::ProposalCreated { .. } => EventType::ProposalCreated,
+            WorldEvent::ProposalVotingStarted { .. } => EventType::ProposalVotingStarted,
+            WorldEvent::ProposalVoted { .. } => EventType::ProposalVoted,
+            WorldEvent::ProposalExecuted { .. } => EventType::ProposalExecuted,
+            WorldEvent::ProposalRejected { .. } => EventType::ProposalRejected,
         }
     }
 
@@ -242,6 +269,15 @@ impl WorldEvent {
             WorldEvent::StockTraded { buyer_id, .. } => Some(buyer_id),
             WorldEvent::StockTransferred { from_agent, .. } => Some(from_agent),
             WorldEvent::StockDividend { .. } => None,
+            WorldEvent::OrganizationCreated { founder_id, .. } => Some(founder_id),
+            WorldEvent::OrganizationDissolved { .. } => None,
+            WorldEvent::OrganizationMemberJoined { agent_id, .. } => Some(agent_id),
+            WorldEvent::OrganizationMemberLeft { agent_id, .. } => Some(agent_id),
+            WorldEvent::ProposalCreated { proposer_id, .. } => Some(proposer_id),
+            WorldEvent::ProposalVotingStarted { .. } => None,
+            WorldEvent::ProposalVoted { voter_id, .. } => Some(voter_id),
+            WorldEvent::ProposalExecuted { .. } => None,
+            WorldEvent::ProposalRejected { .. } => None,
         }
     }
 

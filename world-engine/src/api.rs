@@ -28,6 +28,7 @@ use crate::economy::stock_market::{
 use crate::economy::task::{TaskBoard, Task};
 use crate::organization::org::{OrganizationStore, OrgType};
 use crate::organization::charter::{Charter, GovernanceModel, ProfitSharing};
+use crate::organization::governance::GovernanceSystem;
 use crate::time_capsule::SnapshotStore;
 use crate::wal::WAL;
 use crate::world::event::WorldEvent;
@@ -42,6 +43,7 @@ pub type SharedMarketplace = Arc<Mutex<Marketplace>>;
 pub type SharedReputationSystem = Arc<Mutex<ReputationSystem>>;
 pub type SharedOrganizationStore = Arc<Mutex<OrganizationStore>>;
 pub type SharedStockMarket = Arc<Mutex<StockMarket>>;
+pub type SharedGovernanceSystem = Arc<Mutex<GovernanceSystem>>;
 
 /// Agent record tracked by the world engine.
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -81,6 +83,7 @@ pub struct AppState {
     pub reputation_system: Option<SharedReputationSystem>,
     pub org_store: Option<SharedOrganizationStore>,
     pub stock_market: Option<SharedStockMarket>,
+    pub governance: Option<SharedGovernanceSystem>,
 }
 
 pub fn create_router(board: SharedTaskBoard) -> Router {
@@ -117,6 +120,7 @@ pub fn create_router_with_wal(board: SharedTaskBoard, wal: SharedWAL) -> Router 
         reputation_system: None,
         org_store: None,
         stock_market: None,
+        governance: None,
     };
     build_full_router(state)
 }
@@ -141,6 +145,7 @@ pub fn create_router_with_wal_and_snapshots(board: SharedTaskBoard, wal: SharedW
         reputation_system: None,
         org_store: None,
         stock_market: None,
+        governance: None,
     };
     build_full_router(state)
 }
@@ -190,6 +195,14 @@ pub fn build_full_router(state: AppState) -> Router {
         .route("/api/v1/orgs/:id/join", post(join_org))
         .route("/api/v1/orgs/:id/leave", post(leave_org))
         .route("/api/v1/orgs/:id/dissolve", post(dissolve_org))
+        .route("/api/v1/orgs/:id/distribution", post(calculate_distribution))
+        .route("/api/v1/orgs/:id/proposals", post(create_proposal))
+        .route("/api/v1/orgs/:id/proposals", get(list_proposals))
+        .route("/api/v1/proposals/:id", get(get_proposal))
+        .route("/api/v1/proposals/:id/vote", post(vote_proposal))
+        .route("/api/v1/proposals/:id/start-voting", post(start_voting))
+        .route("/api/v1/proposals/:id/tally", post(tally_proposal))
+        .route("/api/v1/proposals/:id/cancel", post(cancel_proposal))
         // Stock Market routes
         .route("/api/v1/stocks", get(list_stocks))
         .route("/api/v1/stocks", post(issue_shares))
@@ -228,6 +241,7 @@ pub fn create_router_for_test(
         reputation_system: None,
         org_store: None,
         stock_market: None,
+        governance: None,
     };
     build_full_router(state)
 }
@@ -755,6 +769,15 @@ fn parse_event_types(raw: &str) -> Result<Vec<crate::world::event::EventType>, S
             "stock_traded" => EventType::StockTraded,
             "stock_transferred" => EventType::StockTransferred,
             "stock_dividend" => EventType::StockDividend,
+            "organization_created" => EventType::OrganizationCreated,
+            "organization_dissolved" => EventType::OrganizationDissolved,
+            "organization_member_joined" => EventType::OrganizationMemberJoined,
+            "organization_member_left" => EventType::OrganizationMemberLeft,
+            "proposal_created" => EventType::ProposalCreated,
+            "proposal_voting_started" => EventType::ProposalVotingStarted,
+            "proposal_voted" => EventType::ProposalVoted,
+            "proposal_executed" => EventType::ProposalExecuted,
+            "proposal_rejected" => EventType::ProposalRejected,
             other => return Err(format!("unknown event type: {}", other)),
         };
         types.push(et);
@@ -1105,7 +1128,7 @@ async fn export_snapshots_csv(
     }
 }
 
-// ── Organization Handlers ────────────────────────────────
+// ── Organization & Governance Request Types ───────────────
 
 #[derive(Debug, Deserialize)]
 pub struct CreateOrgRequest {
@@ -1114,6 +1137,8 @@ pub struct CreateOrgRequest {
     pub org_type: String,
     pub charter: CharterRequest,
     pub founders: Vec<FounderRequest>,
+    pub founder_id: String,
+    pub decision_mode: String,
 }
 
 #[derive(Debug, Deserialize)]
@@ -1155,6 +1180,40 @@ pub struct DissolveOrgRequest {
     pub reason: String,
 }
 
+#[derive(Debug, Deserialize)]
+pub struct CreateProposalRequest {
+    pub proposer_id: String,
+    pub proposal_type: String,
+    pub title: String,
+    #[serde(default)]
+    pub description: String,
+    pub payload: Option<serde_json::Value>,
+}
+
+#[derive(Debug, Deserialize)]
+pub struct VoteProposalRequest {
+    pub voter_id: String,
+    pub in_favor: bool,
+}
+
+#[derive(Debug, Deserialize)]
+pub struct StartVotingRequest {
+    pub requester_id: String,
+}
+
+#[derive(Debug, Deserialize)]
+pub struct CancelProposalRequest {
+    pub requester_id: String,
+}
+
+#[derive(Debug, Deserialize)]
+pub struct DistributionRequest {
+    pub total_profit: u64,
+}
+
+// ── Organization & Governance Response Types ──────────────
+
+
 #[derive(Debug, Serialize)]
 pub struct OrgResponse {
     pub id: String,
@@ -1168,6 +1227,11 @@ pub struct OrgResponse {
     pub members: Vec<OrgMemberResponse>,
     pub created_tick: u64,
     pub last_activity_tick: u64,
+    pub charter: String,
+    pub decision_mode: String,
+    pub profit_sharing: String,
+    pub dissolved: bool,
+    pub created_at: u64,
 }
 
 #[derive(Debug, Serialize)]
@@ -1177,6 +1241,29 @@ pub struct OrgMemberResponse {
     pub role: String,
     pub share: f64,
     pub joined_tick: u64,
+}
+
+#[derive(Debug, Serialize)]
+pub struct MemberResponse {
+    pub agent_id: String,
+    pub role: String,
+    pub contribution_score: u64,
+    pub joined_at: u64,
+}
+
+#[derive(Debug, Serialize)]
+pub struct ProposalResponse {
+    pub id: String,
+    pub org_id: String,
+    pub proposer_id: String,
+    pub proposal_type: String,
+    pub title: String,
+    pub description: String,
+    pub status: String,
+    pub votes_for: u32,
+    pub votes_against: u32,
+    pub total_votes: u32,
+    pub created_at: u64,
 }
 
 impl From<&crate::organization::org::Organization> for OrgResponse {
@@ -1198,9 +1285,93 @@ impl From<&crate::organization::org::Organization> for OrgResponse {
             }).collect(),
             created_tick: org.created_tick,
             last_activity_tick: org.last_activity_tick,
+            charter: String::new(),
+            decision_mode: String::new(),
+            profit_sharing: String::new(),
+            dissolved: false,
+            created_at: org.created_tick,
         }
     }
 }
+
+fn org_to_response(org: &crate::organization::governance::Organization) -> OrgResponse {
+    OrgResponse {
+        id: org.id.to_string(),
+        name: org.name.clone(),
+        org_type: String::new(),
+        status: String::new(),
+        treasury: 0,
+        debts: 0,
+        member_count: org.members.len(),
+        members: Vec::new(),
+        created_tick: org.created_at,
+        last_activity_tick: org.created_at,
+        charter: org.charter.clone(),
+        decision_mode: org.decision_mode.to_string(),
+        profit_sharing: org.profit_sharing.to_string(),
+        dissolved: org.dissolved,
+        created_at: org.created_at,
+    }
+}
+
+fn proposal_to_response(proposal: &crate::organization::governance::Proposal) -> ProposalResponse {
+    ProposalResponse {
+        id: proposal.id.to_string(),
+        org_id: proposal.org_id.to_string(),
+        proposer_id: proposal.proposer_id.clone(),
+        proposal_type: proposal.proposal_type.to_string(),
+        title: proposal.title.clone(),
+        description: proposal.description.clone(),
+        status: proposal.status.to_string(),
+        votes_for: proposal.votes_for(),
+        votes_against: proposal.votes_against(),
+        total_votes: proposal.votes_for() + proposal.votes_against(),
+        created_at: proposal.created_at,
+    }
+}
+
+fn parse_decision_mode(s: &str) -> Option<crate::organization::governance::DecisionMode> {
+    use crate::organization::governance::DecisionMode;
+    match s {
+        "vote" => Some(DecisionMode::Vote),
+        "dictator" => Some(DecisionMode::Dictator),
+        "council" => Some(DecisionMode::Council),
+        _ => None,
+    }
+}
+
+fn parse_proposal_type(s: &str) -> Option<crate::organization::governance::ProposalType> {
+    use crate::organization::governance::ProposalType;
+    match s {
+        "amend_charter" => Some(ProposalType::AmendCharter),
+        "accept_member" => Some(ProposalType::AcceptMember),
+        "expel_member" => Some(ProposalType::ExpelMember),
+        "dissolve_org" => Some(ProposalType::DissolveOrg),
+        "change_profit_sharing" => Some(ProposalType::ChangeProfitSharing),
+        _ => None,
+    }
+}
+
+fn governance_error_status(e: &crate::organization::governance::GovernanceError) -> StatusCode {
+    use crate::organization::governance::GovernanceError;
+    match e {
+        GovernanceError::NotFound(_)
+        | GovernanceError::OrganizationNotFound(_) => StatusCode::NOT_FOUND,
+        GovernanceError::AlreadyMember { .. }
+        | GovernanceError::AlreadyVoted { .. } => StatusCode::CONFLICT,
+        GovernanceError::NotMember { .. }
+        | GovernanceError::NotFounder { .. } => StatusCode::FORBIDDEN,
+        GovernanceError::InvalidTransition { .. }
+        | GovernanceError::VotingNotOpen(_)
+        | GovernanceError::ProposalNotOpen(_) => StatusCode::CONFLICT,
+        GovernanceError::OrganizationDissolved(_) => StatusCode::GONE,
+        GovernanceError::CannotRemoveFounder => StatusCode::FORBIDDEN,
+        GovernanceError::EmptyName => StatusCode::BAD_REQUEST,
+    }
+}
+
+// ── Organization & Governance Handlers ────────────────────
+
 
 async fn create_org(
     State(state): State<AppState>,
@@ -1704,5 +1875,202 @@ async fn distribute_dividend(
     match sm.distribute_dividends(&id, body.total_profit, tick) {
         Ok(record) => (StatusCode::CREATED, Json(&record)).into_response(),
         Err(e) => (stock_error_status(&e), Json(ErrorResponse { error: e.to_string() })).into_response(),
+    }
+}
+
+// ── Governance Handlers ─────────────────────────────────
+
+async fn calculate_distribution(
+    State(state): State<AppState>,
+    Path(id): Path<String>,
+    Json(body): Json<DistributionRequest>,
+) -> impl IntoResponse {
+    let governance = match &state.governance {
+        Some(g) => g.clone(),
+        None => return (StatusCode::SERVICE_UNAVAILABLE, Json(ErrorResponse { error: "governance system not configured".into() })).into_response(),
+    };
+
+    let Ok(uuid) = Uuid::parse_str(&id) else {
+        return (StatusCode::BAD_REQUEST, Json(ErrorResponse { error: "invalid org id".into() })).into_response();
+    };
+
+    let gov = governance.lock().await;
+    match gov.get_org(uuid) {
+        Some(org) => {
+            let dist = org.calculate_distribution(body.total_profit);
+            Json(dist).into_response()
+        }
+        None => (StatusCode::NOT_FOUND, Json(ErrorResponse { error: "organization not found".into() })).into_response(),
+    }
+}
+
+async fn create_proposal(
+    State(state): State<AppState>,
+    Path(id): Path<String>,
+    Json(body): Json<CreateProposalRequest>,
+) -> impl IntoResponse {
+    let governance = match &state.governance {
+        Some(g) => g.clone(),
+        None => return (StatusCode::SERVICE_UNAVAILABLE, Json(ErrorResponse { error: "governance system not configured".into() })).into_response(),
+    };
+
+    let Ok(org_uuid) = Uuid::parse_str(&id) else {
+        return (StatusCode::BAD_REQUEST, Json(ErrorResponse { error: "invalid org id".into() })).into_response();
+    };
+
+    let proposal_type = match parse_proposal_type(&body.proposal_type) {
+        Some(t) => t,
+        None => return (StatusCode::BAD_REQUEST, Json(ErrorResponse { error: "invalid proposal_type, must be: amend_charter, accept_member, expel_member, dissolve_org, change_profit_sharing".into() })).into_response(),
+    };
+
+    if body.title.is_empty() {
+        return (StatusCode::BAD_REQUEST, Json(ErrorResponse { error: "title is required".into() })).into_response();
+    }
+
+    let tick = *state.tick_rx.borrow();
+    let mut gov = governance.lock().await;
+    match gov.create_proposal(org_uuid, body.proposer_id, proposal_type, body.title, body.description, tick, body.payload) {
+        Ok(proposal_id) => {
+            let proposal = gov.get_proposal(proposal_id).unwrap();
+            (StatusCode::CREATED, Json(proposal_to_response(proposal))).into_response()
+        }
+        Err(e) => (governance_error_status(&e), Json(ErrorResponse { error: e.to_string() })).into_response(),
+    }
+}
+
+async fn list_proposals(
+    State(state): State<AppState>,
+    Path(id): Path<String>,
+) -> impl IntoResponse {
+    let governance = match &state.governance {
+        Some(g) => g.clone(),
+        None => return (StatusCode::SERVICE_UNAVAILABLE, Json(ErrorResponse { error: "governance system not configured".into() })).into_response(),
+    };
+
+    let Ok(org_uuid) = Uuid::parse_str(&id) else {
+        return (StatusCode::BAD_REQUEST, Json(ErrorResponse { error: "invalid org id".into() })).into_response();
+    };
+
+    let gov = governance.lock().await;
+    let proposals: Vec<ProposalResponse> = gov.list_org_proposals(org_uuid)
+        .into_iter()
+        .map(proposal_to_response)
+        .collect();
+    Json(proposals).into_response()
+}
+
+async fn get_proposal(
+    State(state): State<AppState>,
+    Path(id): Path<String>,
+) -> impl IntoResponse {
+    let governance = match &state.governance {
+        Some(g) => g.clone(),
+        None => return (StatusCode::SERVICE_UNAVAILABLE, Json(ErrorResponse { error: "governance system not configured".into() })).into_response(),
+    };
+
+    let Ok(uuid) = Uuid::parse_str(&id) else {
+        return (StatusCode::BAD_REQUEST, Json(ErrorResponse { error: "invalid proposal id".into() })).into_response();
+    };
+
+    let gov = governance.lock().await;
+    match gov.get_proposal(uuid) {
+        Some(proposal) => Json(proposal_to_response(proposal)).into_response(),
+        None => (StatusCode::NOT_FOUND, Json(ErrorResponse { error: "proposal not found".into() })).into_response(),
+    }
+}
+
+async fn vote_proposal(
+    State(state): State<AppState>,
+    Path(id): Path<String>,
+    Json(body): Json<VoteProposalRequest>,
+) -> impl IntoResponse {
+    let governance = match &state.governance {
+        Some(g) => g.clone(),
+        None => return (StatusCode::SERVICE_UNAVAILABLE, Json(ErrorResponse { error: "governance system not configured".into() })).into_response(),
+    };
+
+    let Ok(uuid) = Uuid::parse_str(&id) else {
+        return (StatusCode::BAD_REQUEST, Json(ErrorResponse { error: "invalid proposal id".into() })).into_response();
+    };
+
+    let tick = *state.tick_rx.borrow();
+    let mut gov = governance.lock().await;
+    match gov.vote(uuid, body.voter_id, body.in_favor, tick) {
+        Ok(()) => {
+            let proposal = gov.get_proposal(uuid).unwrap();
+            Json(proposal_to_response(proposal)).into_response()
+        }
+        Err(e) => (governance_error_status(&e), Json(ErrorResponse { error: e.to_string() })).into_response(),
+    }
+}
+
+async fn start_voting(
+    State(state): State<AppState>,
+    Path(id): Path<String>,
+    Json(body): Json<StartVotingRequest>,
+) -> impl IntoResponse {
+    let governance = match &state.governance {
+        Some(g) => g.clone(),
+        None => return (StatusCode::SERVICE_UNAVAILABLE, Json(ErrorResponse { error: "governance system not configured".into() })).into_response(),
+    };
+
+    let Ok(uuid) = Uuid::parse_str(&id) else {
+        return (StatusCode::BAD_REQUEST, Json(ErrorResponse { error: "invalid proposal id".into() })).into_response();
+    };
+
+    let mut gov = governance.lock().await;
+    match gov.start_voting(uuid, &body.requester_id) {
+        Ok(()) => {
+            let proposal = gov.get_proposal(uuid).unwrap();
+            Json(proposal_to_response(proposal)).into_response()
+        }
+        Err(e) => (governance_error_status(&e), Json(ErrorResponse { error: e.to_string() })).into_response(),
+    }
+}
+
+async fn tally_proposal(
+    State(state): State<AppState>,
+    Path(id): Path<String>,
+) -> impl IntoResponse {
+    let governance = match &state.governance {
+        Some(g) => g.clone(),
+        None => return (StatusCode::SERVICE_UNAVAILABLE, Json(ErrorResponse { error: "governance system not configured".into() })).into_response(),
+    };
+
+    let Ok(uuid) = Uuid::parse_str(&id) else {
+        return (StatusCode::BAD_REQUEST, Json(ErrorResponse { error: "invalid proposal id".into() })).into_response();
+    };
+
+    let mut gov = governance.lock().await;
+    match gov.tally_proposal(uuid) {
+        Ok(_status) => {
+            let proposal = gov.get_proposal(uuid).unwrap();
+            Json(proposal_to_response(proposal)).into_response()
+        }
+        Err(e) => (governance_error_status(&e), Json(ErrorResponse { error: e.to_string() })).into_response(),
+    }
+}
+
+async fn cancel_proposal(
+    State(state): State<AppState>,
+    Path(id): Path<String>,
+    Json(body): Json<CancelProposalRequest>,
+) -> impl IntoResponse {
+    let governance = match &state.governance {
+        Some(g) => g.clone(),
+        None => return (StatusCode::SERVICE_UNAVAILABLE, Json(ErrorResponse { error: "governance system not configured".into() })).into_response(),
+    };
+
+    let Ok(uuid) = Uuid::parse_str(&id) else {
+        return (StatusCode::BAD_REQUEST, Json(ErrorResponse { error: "invalid proposal id".into() })).into_response();
+    };
+
+    let mut gov = governance.lock().await;
+    match gov.cancel_proposal(uuid, &body.requester_id) {
+        Ok(()) => {
+            let proposal = gov.get_proposal(uuid).unwrap();
+            Json(proposal_to_response(proposal)).into_response()
+        }
+        Err(e) => (governance_error_status(&e), Json(ErrorResponse { error: e.to_string() })).into_response(),
     }
 }

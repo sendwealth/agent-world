@@ -4,6 +4,7 @@ pub mod marketplace;
 pub mod mentorship;
 pub mod reputation;
 pub mod reward;
+pub mod stock_market;
 pub mod task;
 pub mod token_burn;
 pub mod trust;
@@ -19,6 +20,11 @@ pub use reputation::{
 pub use reward::{
     RewardConfig, RewardDistributor, RewardDistribution,
     CentralBank, Ledger, LedgerEntry, TransactionType,
+};
+pub use stock_market::{
+    StockMarket, StockListing, ShareHolding, Order, Trade,
+    DividendRecord, DividendRecipient, OrderType, OrderKind,
+    OrderStatus, StockMarketError,
 };
 pub use task::{TaskBoard, Task, TaskStatus, TaskError};
 pub use token_burn::{TokenBurnEngine, BurnResult};

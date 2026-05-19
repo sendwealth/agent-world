@@ -62,6 +62,11 @@ pub enum EventType {
     OrgMemberLeft,
     OrgDissolved,
     OrgInactivated,
+    StockIssued,
+    StockIpo,
+    StockTraded,
+    StockTransferred,
+    StockDividend,
 }
 
 /// Events emitted by the world engine.
@@ -122,6 +127,11 @@ pub enum WorldEvent {
     OrgMemberLeft { org_id: String, agent_id: String, remaining_members: usize },
     OrgDissolved { org_id: String, reason: String },
     OrgInactivated { org_id: String, inactive_since: u64, current_tick: u64 },
+    StockIssued { stock_id: String, org_id: String, ticker: String, total_shares: u64, price: u64 },
+    StockIpo { stock_id: String, org_id: String, ticker: String, price: u64, total_shares: u64 },
+    StockTraded { trade_id: String, stock_id: String, buyer_id: String, seller_id: String, price: u64, quantity: u64, fee: u64 },
+    StockTransferred { stock_id: String, from_agent: String, to_agent: String, quantity: u64 },
+    StockDividend { dividend_id: String, stock_id: String, org_id: String, total_profit: u64, dividend_per_share: u64, recipient_count: usize },
 }
 
 impl WorldEvent {
@@ -172,6 +182,11 @@ impl WorldEvent {
             WorldEvent::OrgMemberLeft { .. } => EventType::OrgMemberLeft,
             WorldEvent::OrgDissolved { .. } => EventType::OrgDissolved,
             WorldEvent::OrgInactivated { .. } => EventType::OrgInactivated,
+            WorldEvent::StockIssued { .. } => EventType::StockIssued,
+            WorldEvent::StockIpo { .. } => EventType::StockIpo,
+            WorldEvent::StockTraded { .. } => EventType::StockTraded,
+            WorldEvent::StockTransferred { .. } => EventType::StockTransferred,
+            WorldEvent::StockDividend { .. } => EventType::StockDividend,
         }
     }
 
@@ -222,6 +237,11 @@ impl WorldEvent {
             WorldEvent::OrgMemberLeft { agent_id, .. } => Some(agent_id),
             WorldEvent::OrgDissolved { .. } => None,
             WorldEvent::OrgInactivated { .. } => None,
+            WorldEvent::StockIssued { .. } => None,
+            WorldEvent::StockIpo { .. } => None,
+            WorldEvent::StockTraded { buyer_id, .. } => Some(buyer_id),
+            WorldEvent::StockTransferred { from_agent, .. } => Some(from_agent),
+            WorldEvent::StockDividend { .. } => None,
         }
     }
 

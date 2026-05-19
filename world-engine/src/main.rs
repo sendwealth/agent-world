@@ -12,6 +12,7 @@ use agent_world_engine::api::{self, AppState};
 use agent_world_engine::config::{ConfigManager, GenesisConfig};
 use agent_world_engine::economy::marketplace::Marketplace;
 use agent_world_engine::economy::reputation::{ReputationConfig, ReputationSystem};
+use agent_world_engine::economy::stock_market::StockMarket;
 use agent_world_engine::economy::task::TaskBoard;
 use agent_world_engine::economy::token_burn::TokenBurnEngine;
 use agent_world_engine::organization::org::OrganizationStore;
@@ -268,6 +269,12 @@ async fn main() {
     )));
     println!("   OrganizationStore: initialized");
 
+    // ── Initialize StockMarket ────────────────────────────
+    let stock_market = Arc::new(Mutex::new(StockMarket::with_event_bus(
+        event_bus.as_ref().clone(),
+    )));
+    println!("   StockMarket: initialized");
+
     // ── Initialize ConfigManager (hot-reload) ───────────────
     if std::path::Path::new(&genesis_path).exists() {
         match ConfigManager::new(&genesis_path, Some(event_bus.clone())) {
@@ -310,6 +317,7 @@ async fn main() {
         marketplace: Some(marketplace),
         reputation_system: Some(reputation_system),
         org_store: Some(org_store),
+        stock_market: Some(stock_market),
     };
     let app = api::build_full_router(app_state);
 

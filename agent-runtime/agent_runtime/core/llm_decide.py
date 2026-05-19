@@ -1,0 +1,188 @@
+"""LLM-driven decision provider — bridges DecisionEngine to ThinkLoop.
+
+This module adapts the standalone :class:`DecisionEngine` (from ``decide.py``)
+to the :class:`DecisionProvider` protocol expected by :class:`ThinkLoop`.
+It translates between the two type systems:
+
+- ``Perception`` → ``DecisionPerception``
+- ``SurvivalAction`` → ``SurvivalAssessment``
+- ``DecisionAction`` → ``ActionType`` (via a mapping table)
+
+On any LLM failure it falls back to a simple random choice.
+
+Usage::
+
+    from agent_runtime.core.llm_decide import LLMDecisionProvider
+    from agent_runtime.llm import create_provider, LLMConfig
+
+    llm = create_provider(LLMConfig(provider="ollama", model="llama3"))
+    provider = LLMDecisionProvider(llm_provider=llm)
+
+    # Use in ThinkLoop
+    loop = ThinkLoop(..., decision_provider=provider)
+"""
+
+from __future__ import annotations
+
+import logging
+import random
+from typing import Any
+
+from agent_runtime.core.act import ActionType
+from agent_runtime.core.decide import (
+    DecisionAction,
+    DecisionEngine,
+    DecisionPerception,
+    SurvivalAssessment,
+)
+from agent_runtime.core.think_loop import Decision, Perception
+from agent_runtime.llm.base import LLMProvider
+from agent_runtime.models.agent_state import AgentState
+from agent_runtime.survival.instinct import SurvivalAction
+
+logger = logging.getLogger(__name__)
+
+
+# ---------------------------------------------------------------------------
+# DecisionAction → ActionType mapping
+# ---------------------------------------------------------------------------
+
+_DECISION_TO_ACTION: dict[DecisionAction, ActionType] = {
+    DecisionAction.RESPOND_MESSAGE: ActionType.SEND_MESSAGE,
+    DecisionAction.CLAIM_TASK: ActionType.CLAIM_TASK,
+    DecisionAction.REST: ActionType.REST,
+    DecisionAction.EXPLORE: ActionType.EXPLORE,
+    DecisionAction.TRADE: ActionType.PROPOSE_DEAL,
+    DecisionAction.PRACTICE_SKILL: ActionType.TEACH_SKILL,
+    DecisionAction.SOCIALIZE: ActionType.SEND_MESSAGE,
+}
+
+# DecisionActions without a direct ActionType counterpart — mapped to REST
+_UNMAPPABLE_ACTIONS: frozenset[DecisionAction] = frozenset(
+    {DecisionAction.MOVE, DecisionAction.GATHER, DecisionAction.BUILD}
+)
+
+
+# ---------------------------------------------------------------------------
+# LLMDecisionProvider
+# ---------------------------------------------------------------------------
+
+
+class LLMDecisionProvider:
+    """Decision provider backed by a real LLM.
+
+    Uses :class:`DecisionEngine` internally and translates its output
+    to the ``ThinkLoop`` ``DecisionProvider`` protocol.  Falls back to
+    a random affordable action on any LLM error.
+    """
+
+    def __init__(
+        self,
+        llm_provider: LLMProvider,
+        *,
+        fallback_actions: list[ActionType] | None = None,
+    ) -> None:
+        self._engine = DecisionEngine(provider=llm_provider)
+        self._fallback_actions = fallback_actions or [ActionType.REST, ActionType.EXPLORE]
+
+    async def decide(
+        self,
+        state: AgentState,
+        perception: Perception,
+        survival: SurvivalAction,
+    ) -> Decision:
+        """Produce a decision via LLM, falling back to random on failure."""
+        # Translate types
+        dec_perception = _perception_to_decision(perception)
+        dec_survival = _survival_to_assessment(survival)
+
+        try:
+            result = await self._engine.decide(state, dec_perception, dec_survival)
+            action_type = _map_decision_action(result.action)
+
+            # If the DecisionAction mapped to an unexecutable action,
+            # include the original reasoning but note the remap.
+            reasoning = result.reasoning
+            if result.action in _UNMAPPABLE_ACTIONS:
+                reasoning = (
+                    f"{reasoning} [Remapped from {result.action.value} to rest"
+                    f" — action not yet executable]"
+                )
+
+            return Decision(
+                action_type=action_type,
+                parameters=result.parameters,
+                reasoning=reasoning,
+            )
+        except Exception:
+            logger.warning(
+                "LLM decision failed for agent %s, falling back to random",
+                state.id,
+                exc_info=True,
+            )
+            return _random_fallback(state, self._fallback_actions)
+
+
+# ---------------------------------------------------------------------------
+# Type conversion helpers
+# ---------------------------------------------------------------------------
+
+
+def _perception_to_decision(perception: Perception) -> DecisionPerception:
+    """Convert ThinkLoop Perception to DecisionEngine DecisionPerception."""
+    return DecisionPerception(
+        tick=perception.tick,
+        nearby_agents=[],
+        available_tasks=[perception.active_task] if perception.active_task else [],
+        visible_resources=[],
+        recent_events=[],
+    )
+
+
+def _survival_to_assessment(survival: SurvivalAction) -> SurvivalAssessment:
+    """Convert SurvivalAction to SurvivalAssessment."""
+    # Estimate ticks until depletion based on mode
+    ticks_map = {
+        "panic": 10,
+        "urgent": 50,
+        "conservative": 100,
+        "normal": 500,
+        "invest": 1000,
+    }
+    mode_str = survival.mode.value
+    ticks = ticks_map.get(mode_str, 500)
+
+    return SurvivalAssessment(
+        ticks_until_depletion=ticks,
+        in_danger=mode_str in ("panic", "urgent"),
+        survival_score=max(0, min(100, int(survival.token_ratio * 100))),
+        recommendation=f"Survival mode: {mode_str}, token ratio: {survival.token_ratio:.1%}",
+    )
+
+
+def _map_decision_action(action: DecisionAction) -> ActionType:
+    """Map a DecisionAction to an ActionType.
+
+    Returns the mapped ActionType if available, otherwise REST.
+    """
+    mapped = _DECISION_TO_ACTION.get(action)
+    if mapped is not None:
+        return mapped
+    return ActionType.REST
+
+
+def _random_fallback(
+    state: AgentState,
+    actions: list[ActionType],
+) -> Decision:
+    """Return a random affordable action as a fallback."""
+    # REST costs 0 so it's always affordable
+    affordable = [a for a in actions if a == ActionType.REST or state.tokens > 0]
+    if not affordable:
+        affordable = [ActionType.REST]
+
+    chosen = random.choice(affordable)
+    return Decision(
+        action_type=chosen,
+        reasoning="Fallback: random decision due to LLM failure",
+    )

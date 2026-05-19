@@ -44,6 +44,7 @@ from agent_runtime.config import (
     load_runtime_config,
     parse_runtime_config,
 )
+from agent_runtime.env_loader import load_dotenv
 from agent_runtime.core.act import ActionExecutor
 from agent_runtime.core.think_loop import ThinkLoop, ThinkLoopConfig
 from agent_runtime.llm.base import LLMConfig, ProviderType
@@ -414,22 +415,76 @@ async def run_agent(config: RuntimeConfig) -> RunStats:
 def _build_decision_provider(
     config: RuntimeConfig, executor: ActionExecutor
 ) -> Any | None:
-    """Build a memory-aware decision provider if dependencies are available."""
+    """Build the best available decision provider.
+
+    Priority:
+      1. Memory-aware provider wrapping LLMDecisionProvider (if LLM + memory deps available)
+      2. LLMDecisionProvider (if LLM config available, no memory)
+      3. Memory-aware provider wrapping MockDecisionProvider (if memory deps available, no LLM)
+      4. None (ThinkLoop falls back to MockDecisionProvider)
+    """
+    # Build the LLM-backed decision provider if config is available
+    llm_provider = _create_llm_decision_provider(config)
+
+    # Try to wrap with memory-aware provider
     try:
         from agent_runtime.core.memory_aware_decide import MemoryAwareDecisionProvider
-        from agent_runtime.core.think_loop import MockDecisionProvider
         from agent_runtime.memory.vector_memory import VectorMemory
         from agent_runtime.memory.memory_recall import MemoryRecall
 
         vector_memory = VectorMemory()
         memory_recall = MemoryRecall(vector_memory=vector_memory)
-        base_provider = MockDecisionProvider(executor)
-        return MemoryAwareDecisionProvider(
-            base_provider=base_provider,
-            memory_recall=memory_recall,
-        )
+
+        if llm_provider is not None:
+            logger.info("Using MemoryAware + LLM decision provider")
+            return MemoryAwareDecisionProvider(
+                base_provider=llm_provider,
+                memory_recall=memory_recall,
+            )
+        else:
+            from agent_runtime.core.think_loop import MockDecisionProvider
+
+            logger.info("Using MemoryAware + Mock decision provider (no LLM config)")
+            return MemoryAwareDecisionProvider(
+                base_provider=MockDecisionProvider(executor),
+                memory_recall=memory_recall,
+            )
     except Exception:
-        logger.info("Memory-aware decision provider not available, using default")
+        logger.info("Memory-aware decision provider not available")
+
+    # Without memory, use LLM provider directly
+    if llm_provider is not None:
+        logger.info("Using LLM decision provider (no memory layer)")
+        return llm_provider
+
+    logger.info("No LLM configured, falling back to mock decision provider")
+    return None
+
+
+def _create_llm_decision_provider(config: RuntimeConfig) -> Any | None:
+    """Create an LLMDecisionProvider from config, or None if LLM is not configured."""
+    if config.llm is None:
+        return None
+
+    try:
+        from agent_runtime.llm.factory import create_provider
+        from agent_runtime.core.llm_decide import LLMDecisionProvider
+
+        llm = create_provider(config.llm)
+        logger.info(
+            "LLM provider created: provider=%s model=%s base_url=%s",
+            config.llm.provider.value,
+            config.llm.model,
+            config.llm.base_url or "(default)",
+        )
+        return LLMDecisionProvider(llm_provider=llm)
+    except Exception:
+        logger.warning(
+            "Failed to create LLM provider (provider=%s model=%s), will use fallback",
+            config.llm.provider.value if config.llm else "none",
+            config.llm.model if config.llm else "none",
+            exc_info=True,
+        )
         return None
 
 
@@ -512,16 +567,20 @@ def build_parser() -> argparse.ArgumentParser:
         help="World Engine URL (default: http://localhost:3000)",
     )
     spawn_parser.add_argument(
-        "--llm-provider", choices=["openai", "anthropic", "ollama"], default=None,
-        help="LLM provider",
+        "--llm-provider", choices=["openai", "anthropic", "ollama", "zhipu"], default=None,
+        help="LLM provider (default: ollama; zhipu maps to OpenAI-compatible GLM-5 API)",
     )
     spawn_parser.add_argument(
         "--llm-model", default=None,
-        help="LLM model name",
+        help="LLM model name (default: llama3)",
     )
     spawn_parser.add_argument(
         "--llm-base-url", default=None,
         help="LLM API base URL",
+    )
+    spawn_parser.add_argument(
+        "--no-llm", action="store_true",
+        help="Disable LLM and use mock random decisions",
     )
 
     return parser
@@ -586,22 +645,84 @@ def build_config_from_args(args: argparse.Namespace) -> RuntimeConfig:
     if args.world_url is not None:
         config.world.engine_url = args.world_url
 
-    # CLI overrides for LLM
-    if args.llm_provider is not None or args.llm_model is not None:
-        if config.llm is None:
-            config.llm = LLMConfig(
-                provider=ProviderType(args.llm_provider or "ollama"),
-                model=args.llm_model or "llama3",
-            )
-        else:
-            if args.llm_provider is not None:
-                config.llm.provider = ProviderType(args.llm_provider)
-            if args.llm_model is not None:
-                config.llm.model = args.llm_model
-        if args.llm_base_url is not None and config.llm is not None:
-            config.llm.base_url = args.llm_base_url
+    # LLM configuration: CLI args > environment variables > default (Ollama)
+    _apply_llm_config(config, args)
 
     return config
+
+
+def _apply_llm_config(config: RuntimeConfig, args: argparse.Namespace) -> None:
+    """Apply LLM configuration from CLI args, environment variables, or defaults.
+
+    Priority order (highest wins):
+      1. --no-llm flag (disables LLM entirely)
+      2. CLI flags (--llm-provider, --llm-model, --llm-base-url)
+      3. Environment variables (LLM_PROVIDER, LLM_MODEL, LLM_BASE_URL, OLLAMA_BASE_URL)
+      4. Existing config file value
+      5. Default: Ollama with llama3 (zero-cost mode)
+    """
+    import os
+
+    # --no-llm explicitly disables LLM
+    if getattr(args, "no_llm", False):
+        config.llm = None
+        logger.info("LLM disabled via --no-llm flag")
+        return
+
+    # Determine provider: CLI > env > existing > default(ollama)
+    provider_str = (
+        args.llm_provider
+        or os.environ.get("LLM_PROVIDER")
+        or (config.llm.provider.value if config.llm else None)
+        or "ollama"
+    )
+
+    # Handle provider aliases (zhipu → openai with zhipu base URL)
+    zhipu_mode = False
+    if provider_str == "zhipu":
+        zhipu_mode = True
+        provider_str = "openai"
+
+    # Determine model: CLI > env > existing > default(llama3)
+    model = (
+        args.llm_model
+        or os.environ.get("LLM_MODEL")
+        or (config.llm.model if config.llm else None)
+        or ("glm-5" if zhipu_mode else "llama3")
+    )
+
+    # Determine base_url: CLI > env > existing > provider-specific defaults
+    base_url = (
+        args.llm_base_url
+        or os.environ.get("LLM_BASE_URL")
+        or (config.llm.base_url if config.llm else None)
+    )
+    # Zhipu default base URL
+    if base_url is None and zhipu_mode:
+        base_url = os.environ.get("ZHIPU_BASE_URL", "https://open.bigmodel.cn/api/paas/v4")
+    # Ollama-specific env var fallback
+    if base_url is None and provider_str == "ollama":
+        base_url = os.environ.get("OLLAMA_BASE_URL")
+
+    # Load API key from environment
+    api_key = (
+        os.environ.get("LLM_API_KEY")
+        or os.environ.get(f"{provider_str.upper()}_API_KEY")
+        or (config.llm.api_key if config.llm else None)
+    )
+    # Zhipu-specific API key env var
+    if api_key is None and zhipu_mode:
+        api_key = os.environ.get("ZHIPU_API_KEY")
+
+    config.llm = LLMConfig(
+        provider=ProviderType(provider_str),
+        model=model,
+        api_key=api_key,
+        base_url=base_url,
+        timeout=config.llm.timeout if config.llm else 60.0,
+        max_tokens=config.llm.max_tokens if config.llm else 4096,
+        temperature=config.llm.temperature if config.llm else None,
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -611,6 +732,9 @@ def build_config_from_args(args: argparse.Namespace) -> RuntimeConfig:
 
 def main() -> None:
     """CLI entry point — parse args and run."""
+    # Load .env file early, before any config reading
+    load_dotenv()
+
     parser = build_parser()
     args = parser.parse_args()
 

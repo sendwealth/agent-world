@@ -29,6 +29,7 @@ from dataclasses import dataclass, field
 from enum import Enum
 from typing import Any, Protocol
 
+from agent_runtime.context.engine import ContextEnginePipeline, PipelineResult
 from agent_runtime.llm.base import LLMMessage, LLMProvider
 
 logger = logging.getLogger(__name__)
@@ -513,8 +514,14 @@ class DecisionEngine:
         decision = await engine.decide(state, perception, survival)
     """
 
-    def __init__(self, provider: LLMProvider) -> None:
+    def __init__(
+        self,
+        provider: LLMProvider,
+        *,
+        pipeline: ContextEnginePipeline | None = None,
+    ) -> None:
         self._provider = provider
+        self._pipeline = pipeline
 
     async def decide(
         self,
@@ -567,7 +574,15 @@ class DecisionEngine:
         available_actions: list[DecisionAction],
     ) -> Decision:
         """Attempt to generate a validated decision via the LLM."""
-        prompt = build_prompt(state, perception, survival, available_actions)
+        if self._pipeline is not None:
+            pipeline_result: PipelineResult = self._pipeline.run(
+                perception=perception,
+                survival=survival,
+                state=state,
+            )
+            prompt = pipeline_result.formatted_context
+        else:
+            prompt = build_prompt(state, perception, survival, available_actions)
 
         # Call LLM provider
         try:

@@ -1,6 +1,6 @@
 # Agent World — Architecture Design Document
 
-> **版本**: v1.1 | **日期**: 2026-05-16 | **状态**: 评审中
+> **版本**: v0.3.0 | **日期**: 2026-05-19 | **状态**: current
 > 与 [DESIGN.md](DESIGN.md)（产品规格）和 [ROADMAP.md](ROADMAP.md)（路线图）配合阅读
 
 ---
@@ -240,51 +240,63 @@ Namespace: agent-world
 
 ### 3.1 模块图
 
-**当前实际文件结构（v0.1.0）：**
+**当前实际文件结构（v0.3.0）：**
 
 ```
 world-engine/
 ├── src/
 │   ├── main.rs                  # ✅ 入口：加载配置 → 启动 HTTP 服务器
 │   ├── lib.rs                   # ✅ 模块重导出
-│   ├── api.rs                   # ✅ Axum REST API（10 个任务板端点 + 3 个 WAL 端点）
-│   ├── lifecycle.rs             # ⏳ 占位符（空结构体）
+│   ├── api.rs                   # ✅ Axum REST API（tasks, WAL, orgs, governance, banking, stocks, SSE）
+│   ├── config.rs                # ✅ Genesis YAML 配置加载
+│   ├── lifecycle.rs             # ✅ LifecycleMachine: Birth→Childhood→Adulthood→Elder→Death
 │   ├── rules.rs                 # ✅ 3 条规则（R001-R003），RuleRegistry + RuleContext
+│   ├── grpc_pool.rs             # ✅ gRPC 连接池
+│   ├── time_capsule.rs          # ✅ 时间胶囊
+│   ├── engine/                  # ✅ 引擎模块
+│   │   └── mod.rs               # ✅ Tick 调度器 + 子系统管理
 │   ├── economy/
 │   │   ├── mod.rs               # ✅ 模块重导出
 │   │   ├── token_burn.rs        # ✅ Token 消耗引擎（阶段乘数 + 技能成本）
 │   │   ├── escrow.rs            # ✅ 托管管理器（完整生命周期）
 │   │   ├── reward.rs            # ✅ 奖励分配（2% 平台费 + XP + 声望）
-│   │   └── task.rs              # ✅ 任务市场（状态机 + 托管集成）
-│   └── world/
-│       ├── mod.rs               # ✅ 模块重导出
-│       ├── enums.rs             # ✅ Currency, AgentPhase, DeathReason
-│       ├── event.rs             # ✅ 23 种 WorldEvent 变体
-│       └── state.rs             # ✅ EventBus（tokio broadcast）
-│   └── wal/
-│       ├── mod.rs               # ✅ WAL（CRC32、崩溃恢复、快照、1000 条轮转）
-│       └── crc.rs               # ✅ CRC32（ISO 3309 查表实现）
+│   │   ├── task.rs              # ✅ 任务市场（状态机 + 托管集成）
+│   │   ├── ledger.rs            # ✅ 双式记账账本
+│   │   ├── banking.rs           # ✅ 银行系统（储蓄/支票账户、贷款、央行操作）
+│   │   └── stock_market.rs      # ✅ 股票市场（发行、IPO、订单簿、撮合引擎、分红）
+│   ├── world/
+│   │   ├── mod.rs               # ✅ 模块重导出
+│   │   ├── enums.rs             # ✅ Currency, AgentPhase, DeathReason
+│   │   ├── event.rs             # ✅ 30+ 种 WorldEvent 变体
+│   │   ├── state.rs             # ✅ EventBus（tokio broadcast）
+│   │   ├── agent.rs             # ✅ AgentRecord 数据结构
+│   │   ├── genesis.rs           # ✅ GenesisConfig 加载
+│   │   ├── engine.rs            # ✅ WorldEngine 核心引擎
+│   │   ├── scheduler.rs         # ✅ Tick 调度器
+│   │   ├── subsystem.rs         # ✅ Subsystem trait
+│   │   ├── subsystems.rs        # ✅ 子系统注册
+│   │   └── discovery.rs         # ✅ Agent 发现
+│   ├── organization/
+│   │   ├── mod.rs               # ✅ 组织模块（Company/Guild/Alliance/University）
+│   │   ├── org.rs               # ✅ 组织 CRUD + 生命周期
+│   │   ├── charter.rs           # ✅ 章程管理
+│   │   ├── governance.rs        # ✅ 治理系统（提案、投票、利润分配）
+│   │   └── members.rs           # ✅ 成员管理
+│   ├── evolution/
+│   │   ├── mod.rs               # ✅ 进化模块
+│   │   ├── skill_tree.rs        # ✅ 分支技能树（4 根分支 10 技能）
+│   │   ├── mutation.rs          # ✅ 技能突变引擎（5% 概率/1000 tick）
+│   │   ├── selection.rs         # ✅ 自然选择（多维适应度评分）
+│   │   └── subsystem.rs         # ✅ EvolutionSubsystem（集成到 tick 循环）
+│   ├── wal/
+│   │   ├── mod.rs               # ✅ WAL（CRC32、崩溃恢复、快照、1000 条轮转）
+│   │   └── crc.rs               # ✅ CRC32（ISO 3309 查表实现）
+│   └── a2a/                     # ❌ gRPC 服务器未实现
 ```
 
 **规划中的模块（未实现）：**
 
 ```
-│   ├── config/
-│   │   ├── mod.rs               # ❌ 配置模块
-│   │   ├── genesis.rs           # ❌ Genesis YAML 加载（main.rs 有基础加载）
-│   │   └── rules.rs             # ❌ World Rules YAML 加载
-│   ├── engine/
-│   │   ├── mod.rs               # ❌ 引擎模块
-│   │   ├── scheduler.rs         # ❌ Tick 调度器（tokio interval）
-│   │   └── state.rs             # ❌ WorldState 全局状态
-│   ├── lifecycle/               # ❌ 完整目录
-│   │   ├── phases.rs, aging.rs, death.rs, inheritance.rs
-│   ├── social/                  # ❌ 完整目录
-│   │   ├── relationship.rs, organization.rs, reputation.rs
-│   ├── evolution/               # ❌ 完整目录
-│   │   ├── skill_tree.rs, leveling.rs, mutation.rs
-│   ├── market/                  # ❌ 完整目录
-│   │   ├── task_board.rs, knowledge.rs, tool_registry.rs
 │   ├── a2a/                     # ❌ 完整目录
 │   │   ├── server.rs, router.rs, discovery.rs, auth.rs
 │   ├── storage/                 # ❌ 完整目录
@@ -586,7 +598,7 @@ impl RestApi {
 
 ### 4.1 模块图
 
-**当前实际文件结构（v0.1.0）：**
+**当前实际文件结构（v0.3.0）：**
 
 ```
 agent-runtime/
@@ -1413,7 +1425,7 @@ impl TaskBoard {
 
 ### 11.1 技术栈
 
-**当前实现（v0.1.0）：**
+**当前实现（v0.3.0）：**
 
 ```
 dashboard/
@@ -1430,8 +1442,13 @@ dashboard/
 │   │   │   ├── page.tsx       # ✅ Agent 列表
 │   │   │   └── [id]/
 │   │   │       └── page.tsx   # ✅ Agent 详情
-│   │   └── tasks/
-│   │       └── page.tsx       # ✅ 任务列表
+│   │   ├── tasks/
+│   │   │   └── page.tsx       # ✅ 任务列表
+│   │   ├── timeline/          # ✅ 事件时间线页面
+│   │   ├── organizations/     # ✅ 组织列表 + 力导向图 + 详情页
+│   │   ├── stocks/            # ✅ 股票市场仪表盘（价格图表）
+│   │   ├── evolution/         # ✅ 进化仪表盘（技能分布图）
+│   │   └── economy/           # ✅ 经济概览（GDP, Gini, 人口时序图）
 │   ├── components/
 │   │   ├── EventStream.tsx    # ✅ 实时事件展示
 │   │   ├── Leaderboard.tsx    # ✅ Agent 排行榜
@@ -1450,11 +1467,8 @@ dashboard/
 
 ```
 │   ├── app/
-│   │   ├── market/            # ❌ 任务板详情页
-│   │   ├── economy/           # ❌ 经济仪表盘
-│   │   ├── society/           # ❌ 社会图谱
-│   │   ├── timeline/          # ✅ 事件时间线页面
-│   │   └── lab/               # ❌ 实验控制台
+│   │   ├── lab/               # ❌ 实验控制台
+│   │   └── society/           # ❌ 社会图谱
 │   ├── components/
 │   │   ├── WorldMap.tsx       # ❌ D3.js 力导向图
 │   │   ├── TokenGauge.tsx     # ❌ Token 仪表
@@ -1835,4 +1849,4 @@ class CustomLLMProvider(LLMProvider):
 
 ---
 
-*文档版本: v1.1 | 最后更新: 2026-05-16 | 下次评审: Phase 1 集成阶段*
+*文档版本: v0.3.0 | 最后更新: 2026-05-19 | 下次评审: Phase 4 规划阶段*

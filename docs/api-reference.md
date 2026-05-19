@@ -2,7 +2,7 @@
 
 Complete reference for the Agent World Engine REST API.
 
-- **Base URL:** `http://localhost:3000`
+- **Base URL:** `http://localhost:8080`
 - **Content-Type:** `application/json`
 - **OpenAPI Spec:** [`openapi.yaml`](openapi.yaml)
 
@@ -27,7 +27,7 @@ The API has eight groups of endpoints:
 
 ## Authentication
 
-The current version (v0.1.0) does not require authentication. All endpoints
+The current version (v0.3.0) does not require authentication. All endpoints
 are publicly accessible. Authorization (e.g., verifying that only the task
 publisher can review) is planned for a future release.
 
@@ -61,7 +61,7 @@ Create a new task on the task board.
 **Example:**
 
 ```bash
-curl -X POST http://localhost:3000/tasks \
+curl -X POST http://localhost:8080/tasks \
   -H "Content-Type: application/json" \
   -d '{
     "title": "Build a REST client",
@@ -83,7 +83,7 @@ List all tasks on the task board.
 **Example:**
 
 ```bash
-curl http://localhost:3000/tasks
+curl http://localhost:8080/tasks
 ```
 
 ---
@@ -388,7 +388,7 @@ creation cost of 100 Money is deposited into the org treasury.
 **Example:**
 
 ```bash
-curl -X POST http://localhost:3000/api/v1/orgs \
+curl -X POST http://localhost:8080/api/v1/orgs \
   -H "Content-Type: application/json" \
   -d '{
     "name": "Acme Corp",
@@ -419,7 +419,7 @@ List all organizations.
 **Example:**
 
 ```bash
-curl http://localhost:3000/api/v1/orgs
+curl http://localhost:8080/api/v1/orgs
 ```
 
 ---
@@ -778,7 +778,7 @@ account.
 **Example:**
 
 ```bash
-curl -X POST http://localhost:3000/bank/accounts \
+curl -X POST http://localhost:8080/bank/accounts \
   -H "Content-Type: application/json" \
   -d '{
     "owner_id": "agent-1",
@@ -1432,7 +1432,7 @@ data: {"type":"stock_traded","payload":{"trade_id":"...","stock_id":"...","buyer
 **Example:**
 
 ```bash
-curl -N http://localhost:3000/api/v1/world/events?types=org_created,stock_traded,loan_applied
+curl -N http://localhost:8080/api/v1/world/events?types=org_created,stock_traded,loan_applied
 ```
 
 **Keep-alive:** Server sends `ping` every 15 seconds.

@@ -6,6 +6,7 @@ use tokio_stream::wrappers::ReceiverStream;
 use tonic::Status;
 
 use crate::agentworld::a2a::v1::A2aMessage;
+use crate::world::intervention::MessageInterventionGuard;
 use super::registry::AgentRegistry;
 
 /// A message waiting to be delivered to an agent.
@@ -16,12 +17,19 @@ pub type PendingMessage = A2aMessage;
 /// Each agent that opens a `StreamMessages` connection gets a sender
 /// registered here. When `SendMessage` or a broadcast arrives, the
 /// router looks up the recipient's sender and delivers the message.
+///
+/// The router includes an integrated `MessageInterventionGuard` that
+/// enforces broadcast rate-limits (IC-01) and message size limits (IC-02).
 pub struct MessageRouter {
     /// agent_id -> mpsc sender for that agent's stream
     streams: Arc<RwLock<HashMap<String, mpsc::Sender<PendingMessage>>>>,
     /// Buffer size for each agent's message channel
     buffer_size: usize,
     registry: Arc<AgentRegistry>,
+    /// Intervention guard for broadcast rate-limit and message size checks.
+    guard: MessageInterventionGuard,
+    /// Broadcast count per agent (agent_id -> count in current window).
+    broadcast_counts: Arc<RwLock<HashMap<String, u32>>>,
 }
 
 impl MessageRouter {
@@ -30,15 +38,42 @@ impl MessageRouter {
             streams: Arc::new(RwLock::new(HashMap::new())),
             buffer_size: 256,
             registry,
+            guard: MessageInterventionGuard::default(),
+            broadcast_counts: Arc::new(RwLock::new(HashMap::new())),
         }
     }
 
     /// Route a single message to its recipient.
     ///
     /// If `to_agent` is empty, the message is broadcast to all connected
-    /// agents *except* the sender.
+    /// agents *except* the sender. Enforces IC-01 (broadcast rate-limit)
+    /// and IC-02 (message size limit).
     pub async fn route(&self, msg: PendingMessage) -> Result<(), Status> {
+        // IC-02: Message size check
+        if let Err(reason) = self.guard.check_message_size(msg.payload.len()) {
+            tracing::warn!(
+                from = %msg.from_agent,
+                size = msg.payload.len(),
+                "Message blocked by IC-02: {}", reason
+            );
+            return Err(Status::failed_precondition(reason));
+        }
+
         if msg.to_agent.is_empty() {
+            // IC-01: Broadcast rate-limit check
+            let mut counts = self.broadcast_counts.write().await;
+            let count = counts.entry(msg.from_agent.clone()).or_insert(0);
+            if let Err(reason) = self.guard.check_broadcast(&msg.from_agent, *count) {
+                tracing::warn!(
+                    from = %msg.from_agent,
+                    count = *count,
+                    "Broadcast blocked by IC-01: {}", reason
+                );
+                return Err(Status::resource_exhausted(reason));
+            }
+            *count += 1;
+            drop(counts);
+
             self.broadcast(&msg).await
         } else {
             self.send_to(&msg).await

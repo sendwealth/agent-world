@@ -29,6 +29,12 @@ from dataclasses import dataclass, field
 from enum import Enum
 from typing import Any, Protocol
 
+from agent_runtime.core.intervention_checker import (
+    CheckVerdict,
+    InterventionChecker,
+    InterventionConfig,
+)
+
 logger = logging.getLogger(__name__)
 
 
@@ -60,6 +66,7 @@ class ActionStatus(str, Enum):
     INSUFFICIENT_TOKENS = "insufficient_tokens"
     SKIPPED = "skipped"
     RETRY_EXHAUSTED = "retry_exhausted"
+    BLOCKED_BY_INTERVENTION = "blocked_by_intervention"
 
 
 @dataclass(frozen=True)
@@ -193,11 +200,13 @@ class ActionExecutor:
         token_costs: dict[ActionType, int] | None = None,
         max_retries: int = _DEFAULT_MAX_RETRIES,
         retry_delay: float = _DEFAULT_RETRY_DELAY_S,
+        intervention_config: InterventionConfig | None = None,
     ) -> None:
         self._token_costs = {**_DEFAULT_TOKEN_COSTS, **(token_costs or {})}
         self._max_retries = max_retries
         self._retry_delay = retry_delay
         self._history: list[ActionResult] = []
+        self._intervention = InterventionChecker(intervention_config)
 
     # ------------------------------------------------------------------
     # Public API
@@ -212,13 +221,31 @@ class ActionExecutor:
         return agent.tokens >= self.get_cost(action_type)
 
     async def execute(self, action_type: ActionType, context: ActionContext) -> ActionResult:
-        """Execute an action with token checking, retry, and result recording.
+        """Execute an action with token checking, intervention check, retry, and result recording.
 
         Returns an :class:`ActionResult` describing the outcome.
         """
         cost = self.get_cost(action_type)
         start_time = time.monotonic()
         start_ts = time.time()
+
+        # 0. InterventionChecker — pre-dispatch safety gate
+        intervention_result = self._intervention.check(
+            action_type=action_type.value,
+            agent_state=context.agent,
+            parameters=context.parameters,
+        )
+        if intervention_result.blocked:
+            result = ActionResult(
+                action_type=action_type,
+                status=ActionStatus.BLOCKED_BY_INTERVENTION,
+                token_cost=0,
+                error=f"[{intervention_result.rule}] {intervention_result.reason}",
+                data={"intervention_rule": intervention_result.rule, "intervention_details": intervention_result.details},
+                timestamp=start_ts,
+            )
+            self._record(result)
+            return result
 
         # 1. Pre-flight token check
         if not self.can_afford(action_type, context.agent):

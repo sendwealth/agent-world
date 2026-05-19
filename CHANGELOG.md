@@ -9,6 +9,76 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [1.0.0] - 2026-05-20
+
+**Phase 1 (Island) — v1.0.0 正式发布。** 自 v0.3.0 以来完成了 Agent CLI、A2A gRPC 通信、Think Loop E2E、生命周期管理、集成测试、Agent Tracing、安全拦截器、Context Engine、10-Agent E2E 稳定性测试等全部 Phase 3.5 里程碑。这是 Phase 1 的完整、生产就绪版本。
+
+### Added
+
+**P3.5-1: Agent CLI (SEN-146)**
+- 完整的 Agent 启动流程：密钥生成/加载、注册到 World Engine、gRPC 连接、健康检查服务器
+- `spawn` 子命令支持 `--config`、`--name`、`--world-url`、`--no-llm`、`--max-ticks` 参数
+- 优雅的信号处理 (SIGINT/SIGTERM) 和 shutdown 流程
+- 健康检查 HTTP 端口 (`HEALTH_PORT`) 用于 Docker 健康检查
+- 任务生命周期管理：自动获取 → 执行 → 提交
+
+**P3.5-2: A2A gRPC 通信 (SEN-147)**
+- 基于 protobuf 的 A2A 协议实现：Discover、SendMessage、StreamMessages RPCs
+- ed25519 签名验证与 nonce 重放防护
+- World Engine gRPC server 集成到 tick 循环
+- Agent Runtime gRPC client 连接管理与消息路由
+
+**P3.5-3: Think Loop E2E (SEN-148)**
+- 完整的 Think-Act-Reflect 循环端到端集成
+- Perception provider 从 World Engine 获取世界状态
+- Decision engine 支持 LLM 驱动的 10 种行动选择
+- Action executor 执行并记录结果
+- 5 项 E2E 集成变更确保 Think Loop 与 World Engine 正确交互
+
+**P3.5-4: 生命周期管理 (SEN-149)**
+- Agent 生命周期状态机：Birth → Active → Aging → Death
+- 与 World Engine 生命周期子系统对齐
+- Birth/Death 事件触发与资源清理
+- 老化机制与阶段转换
+
+**P3.5-5: 集成测试 (SEN-150, SEN-172)**
+- Python E2E 集成测试框架
+- 端口冲突自动清理与 gRPC channel 生命周期管理
+- 10-Agent E2E 稳定性测试验证并发运行
+- 8/8 E2E 测试全部通过，1038 Python 单元测试通过
+
+**P3.5-6: Agent Tracing Dashboard (SEN-154)**
+- TickSnapshot 追踪系统与 SQLite 存储
+- Dashboard API 端点暴露追踪数据
+- 决策追踪可视化：每 tick 的感知/决策/行动/反思完整记录
+- 上下文引擎 Pipeline (SEN-151)：综合世界状态、记忆、技能的上下文构建
+
+**P3.5-7: 安全拦截器 (SEN-152)**
+- InterventionChecker 安全拦截器：在决策执行前进行安全检查
+- 可配置的安全规则与阈值
+- 防止危险行动（如资源耗尽、自杀行为等）
+
+**P3.5-8: Docker Compose 生产就绪**
+- 10-Agent Docker Compose 配置完整
+- `.env.example` 环境变量模板（支持 Ollama/OpenAI/Anthropic/智谱GLM-5）
+- 健康检查、restart 策略、网络隔离
+- CI profile (`--profile ci`) 最小化测试配置
+- Ollama profile (`--profile local-llm`) 可选本地 LLM
+
+**P3.5 Integration**
+- Docker Compose v2 硬化：CI 与生产环境优化
+- Agent 注册流程修复：URL 路径、payload 类型匹配、代理干扰
+- conftest.py sys.path 配置修复
+- Dashboard ESLint 与 Next.js 路由修复
+
+### Changed
+- VERSION bumped to 1.0.0
+- Cargo.toml version → 1.0.0
+- pyproject.toml version → 1.0.0
+- Docker Compose 配置从 100-agent v3 回归到 10-agent v2 稳定配置
+
+---
+
 ## [0.3.0] - 2026-05-19
 
 **Phase 3 (City) milestone.** Organizations, governance, banking, stock market, evolution, 100-agent stress tests, and advanced dashboard pages. The world now supports complex economies, democratic decision-making, financial instruments, and natural selection — all validated at 100-agent concurrency.
@@ -183,7 +253,8 @@ Phase 1 (Island) initial release -- core subsystems with E2E tests, Docker Compo
 
 ---
 
-[Unreleased]: https://github.com/sendwealth/agent-world/compare/v0.3.0...HEAD
+[Unreleased]: https://github.com/sendwealth/agent-world/compare/v1.0.0...HEAD
+[1.0.0]: https://github.com/sendwealth/agent-world/compare/v0.3.0...v1.0.0
 [0.3.0]: https://github.com/sendwealth/agent-world/compare/v0.2.0...v0.3.0
 [0.2.0]: https://github.com/sendwealth/agent-world/compare/v0.1.0...v0.2.0
 [0.1.0]: https://github.com/sendwealth/agent-world/releases/tag/v0.1.0

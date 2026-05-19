@@ -254,3 +254,69 @@ def dashboard_process(
     yield proc
 
     terminate_process(proc)
+
+
+# ── Fixture: Multi-Agent Processes (10 agents for stability tests) ─
+
+@pytest.fixture(scope="session")
+def multi_agent_processes(
+    world_engine_process: subprocess.Popen,
+    engine_port: int,
+    startup_timeout: float,
+) -> Generator[list[tuple[subprocess.Popen, int]], None, None]:
+    """Start 10 Agent Runtime processes connected to the World Engine.
+
+    Each agent runs with ``--no-llm`` for deterministic testing and
+    ``--max-ticks 0`` for unlimited execution.  Health ports are offset
+    by 200 from the default to avoid clashing with the single-agent fixture.
+
+    Yields a list of ``(Popen, health_port)`` tuples.
+    """
+    NUM_AGENTS = 10
+    agents: list[tuple[subprocess.Popen, int]] = []
+
+    for i in range(NUM_AGENTS):
+        health_port = DEFAULT_AGENT_HEALTH_PORT + 200 + i
+        agent_name = f"agent-{i}"
+
+        env = os.environ.copy()
+        env["GRPC_PORT"] = str(DEFAULT_GRPC_PORT)
+
+        proc = subprocess.Popen(
+            [
+                "python", "-m", "agent_runtime", "spawn",
+                "--name", agent_name,
+                "--world-url", f"http://localhost:{engine_port}",
+                "--no-llm",
+                "--max-ticks", "0",
+                "--health-port", str(health_port),
+            ],
+            cwd=str(AGENT_RUNTIME_DIR),
+            env=env,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+        )
+
+        health_url = f"http://localhost:{health_port}/health"
+        healthy = wait_for_health(health_url, timeout=startup_timeout)
+
+        if not healthy:
+            # Tear down everything started so far
+            for p, _ in reversed(agents):
+                terminate_process(p)
+            terminate_process(proc)
+            stdout = proc.stdout.read().decode(errors="replace") if proc.stdout else ""
+            stderr = proc.stderr.read().decode(errors="replace") if proc.stderr else ""
+            pytest.fail(
+                f"Agent '{agent_name}' (port {health_port}) did not become healthy "
+                f"within {startup_timeout}s.\n"
+                f"stdout: {stdout[-500:]}\nstderr: {stderr[-500:]}"
+            )
+
+        agents.append((proc, health_port))
+
+    yield agents
+
+    # Teardown in reverse order
+    for proc, _ in reversed(agents):
+        terminate_process(proc)

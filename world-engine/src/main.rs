@@ -2,6 +2,7 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use tokio::sync::{Mutex, watch};
+use tokio_util::sync::CancellationToken;
 
 use agent_world_engine::a2a::registry::AgentRegistry;
 use agent_world_engine::a2a::router::MessageRouter;
@@ -19,7 +20,8 @@ use agent_world_engine::world::event::WorldEvent;
 use agent_world_engine::world::state::EventBus;
 use agent_world_engine::world::subsystem::SubsystemRegistry;
 use agent_world_engine::world::subsystems::{
-    DeathJudgmentSubsystem, EventBroadcastSubsystem, TokenBurnSubsystem,
+    DeathJudgmentSubsystem, EventBroadcastSubsystem, LifecycleAgingSubsystem,
+    ReputationDecaySubsystem, TokenBurnSubsystem,
 };
 use agent_world_engine::world::{Scheduler, WorldState};
 
@@ -30,6 +32,9 @@ async fn main() {
 
     println!("Agent World Engine v1.0.0");
     println!("   Status: initializing...");
+
+    // ── Shared cancellation token for all background tasks ──
+    let cancel_token = CancellationToken::new();
 
     // ── Load genesis.yaml ───────────────────────────────────
     let genesis_path = std::env::var("GENESIS_PATH")
@@ -67,7 +72,8 @@ async fn main() {
     println!("   EventBus: created (capacity: 256)");
 
     // ── Initialize WAL ──────────────────────────────────────
-    let mut wal = WAL::new("./data");
+    let wal_dir = std::env::var("WAL_DIR").unwrap_or_else(|_| "./data".to_string());
+    let mut wal = WAL::new(&wal_dir);
     match wal.open() {
         Ok(()) => {
             match wal.recover() {
@@ -94,22 +100,30 @@ async fn main() {
 
     let wal_writer = Arc::new(Mutex::new(wal));
 
-    // Spawn WAL writer task
+    // Spawn WAL writer task with cancellation
+    let wal_cancel = cancel_token.clone();
     let wal_subscriber = wal_writer.clone();
     let mut wal_rx = event_bus.subscribe();
     let wal_handle = tokio::spawn(async move {
         loop {
-            match wal_rx.recv().await {
-                Ok(event) => {
-                    let mut w = wal_subscriber.lock().await;
-                    if let Err(e) = w.append_event(&event) {
-                        eprintln!("[WAL] Failed to write event: {}", e);
+            tokio::select! {
+                result = wal_rx.recv() => {
+                    match result {
+                        Ok(event) => {
+                            let mut w = wal_subscriber.lock().await;
+                            if let Err(e) = w.append_event(&event) {
+                                eprintln!("[WAL] Failed to write event: {}", e);
+                            }
+                        }
+                        Err(tokio::sync::broadcast::error::RecvError::Lagged(n)) => {
+                            eprintln!("[WAL] Lagged {} events", n);
+                        }
+                        Err(tokio::sync::broadcast::error::RecvError::Closed) => {
+                            break;
+                        }
                     }
                 }
-                Err(tokio::sync::broadcast::error::RecvError::Lagged(n)) => {
-                    eprintln!("[WAL] Lagged {} events", n);
-                }
-                Err(tokio::sync::broadcast::error::RecvError::Closed) => {
+                _ = wal_cancel.cancelled() => {
                     break;
                 }
             }
@@ -117,6 +131,13 @@ async fn main() {
     });
 
     // ── Initialize Subsystems ───────────────────────────────
+    let lifecycle_config = agent_world_engine::lifecycle::LifecycleConfig {
+        childhood_ticks: genesis_config.lifecycle.childhood_ticks,
+        adult_ticks: genesis_config.lifecycle.adult_ticks,
+        elder_ticks: genesis_config.lifecycle.elder_ticks,
+        death_grace_ticks: genesis_config.lifecycle.death_grace_ticks,
+    };
+
     let mut subsystem_registry = SubsystemRegistry::new();
     subsystem_registry.register(Box::new(TokenBurnSubsystem::new(
         TokenBurnEngine::with_defaults(),
@@ -124,6 +145,14 @@ async fn main() {
     subsystem_registry.register(Box::new(DeathJudgmentSubsystem::new(
         genesis_config.lifecycle.death_grace_ticks,
     )));
+    // CRITICAL: LifecycleMachine is now wired into the tick loop
+    subsystem_registry.register(Box::new(LifecycleAgingSubsystem::new(lifecycle_config)));
+    // CRITICAL: ReputationSystem is now wired into the tick loop for decay
+    let reputation_decay = ReputationDecaySubsystem::new_with_event_bus(
+        ReputationConfig::default(),
+        event_bus.as_ref().clone(),
+    );
+    subsystem_registry.register(Box::new(reputation_decay));
     subsystem_registry.register(Box::new(EventBroadcastSubsystem::new(event_bus.clone())));
     println!(
         "   SubsystemRegistry: {} subsystems registered",
@@ -152,54 +181,78 @@ async fn main() {
         .ok()
         .map(|s| Arc::new(Mutex::new(s)));
 
-    // Spawn periodic snapshot task (every 500 ticks)
+    let snapshot_interval: u64 = std::env::var("SNAPSHOT_INTERVAL")
+        .ok()
+        .and_then(|v| v.parse().ok())
+        .unwrap_or(500);
+
+    // Spawn periodic snapshot task with cancellation and non-blocking I/O
     if let Some(ref store) = snapshot_store {
         let store_clone = store.clone();
         let state_clone = world_state.clone();
         let mut snapshot_rx = event_bus.subscribe();
+        let snapshot_cancel = cancel_token.clone();
         let snapshot_handle = tokio::spawn(async move {
             loop {
-                match snapshot_rx.recv().await {
-                    Ok(event) => {
-                        if let WorldEvent::TickAdvanced { tick } = event {
-                            if tick > 0 && tick % 500 == 0 {
-                                let state = state_clone.lock().await;
-                                let snapshot =
-                                    agent_world_engine::time_capsule::build_snapshot(
-                                        tick,
-                                        &state.agents,
-                                        &[],
-                                    );
-                                drop(state);
-                                let s = store_clone.lock().await;
-                                if let Err(e) = s.save(&snapshot) {
-                                    eprintln!("[TimeCapsule] Failed to save snapshot: {}", e);
+                tokio::select! {
+                    result = snapshot_rx.recv() => {
+                        match result {
+                            Ok(event) => {
+                                if let WorldEvent::TickAdvanced { tick } = event {
+                                    if tick > 0 && tick % snapshot_interval == 0 {
+                                        // Clone the snapshot data under the lock,
+                                        // then release the lock before doing I/O
+                                        let snapshot = {
+                                            let state = state_clone.lock().await;
+                                            agent_world_engine::time_capsule::build_snapshot(
+                                                tick,
+                                                &state.agents,
+                                                &[],
+                                            )
+                                        };
+                                        // Lock the store separately for I/O
+                                        let s = store_clone.lock().await;
+                                        if let Err(e) = s.save(&snapshot) {
+                                            eprintln!("[TimeCapsule] Failed to save snapshot: {}", e);
+                                        }
+                                    }
                                 }
+                            }
+                            Err(tokio::sync::broadcast::error::RecvError::Lagged(n)) => {
+                                eprintln!("[TimeCapsule] Lagged {} events", n);
+                            }
+                            Err(tokio::sync::broadcast::error::RecvError::Closed) => {
+                                break;
                             }
                         }
                     }
-                    Err(tokio::sync::broadcast::error::RecvError::Lagged(n)) => {
-                        eprintln!("[TimeCapsule] Lagged {} events", n);
-                    }
-                    Err(tokio::sync::broadcast::error::RecvError::Closed) => {
+                    _ = snapshot_cancel.cancelled() => {
                         break;
                     }
                 }
             }
         });
-        println!("   TimeCapsule: snapshot every 500 ticks");
-        // Keep the handle alive
+        println!("   TimeCapsule: snapshot every {} ticks", snapshot_interval);
+        // Keep the handle alive for graceful shutdown
         tokio::spawn(async move {
             let _ = snapshot_handle.await;
         });
     }
 
-    // ── Initialize ReputationSystem ─────────────────────────
-    let _reputation_system = ReputationSystem::new(ReputationConfig::default());
+    // ── Initialize ReputationSystem (standalone for API access) ──
+    // This is kept alive in Arc<Mutex<>> and exposed via AppState
+    // The tick-driven decay is handled by ReputationDecaySubsystem above
+    let reputation_system = Arc::new(Mutex::new(ReputationSystem::with_event_bus(
+        ReputationConfig::default(),
+        event_bus.as_ref().clone(),
+    )));
     println!("   ReputationSystem: initialized");
 
     // ── Initialize Marketplace ──────────────────────────────
-    let _marketplace = Marketplace::with_event_bus(event_bus.as_ref().clone());
+    // CRITICAL: Marketplace is kept alive in Arc<Mutex<>> for the full process lifetime
+    let marketplace = Arc::new(Mutex::new(Marketplace::with_event_bus(
+        event_bus.as_ref().clone(),
+    )));
     println!("   Marketplace: initialized");
 
     // ── Initialize TaskBoard ────────────────────────────────
@@ -247,6 +300,8 @@ async fn main() {
         tick_tx,
         tick_rx,
         snapshot_store,
+        marketplace: Some(marketplace),
+        reputation_system: Some(reputation_system),
     };
     let app = api::build_full_router(app_state);
 
@@ -276,6 +331,7 @@ async fn main() {
 
     // ── Run all servers ─────────────────────────────────────
     let shutdown_wal = wal_writer.clone();
+    let shutdown_state = world_state.clone();
     tokio::select! {
         result = http_server => {
             if let Err(e) = result {
@@ -295,17 +351,25 @@ async fn main() {
     }
 
     // ── Graceful shutdown ───────────────────────────────────
+    // Cancel all background tasks
+    cancel_token.cancel();
     scheduler_cancel.cancel();
+
+    // Wait for scheduler to stop
     let _ = scheduler_handle.await;
 
+    // Wait for WAL writer to stop (it will exit via cancel_token)
+    let _ = wal_handle.await;
+
+    // Take final WAL snapshot with actual state
     {
+        let state = shutdown_state.lock().await;
         let mut w = shutdown_wal.lock().await;
-        if let Err(e) = w.take_snapshot(&[], 0) {
+        if let Err(e) = w.take_snapshot(&[], state.current_tick()) {
             eprintln!("[WAL] Final snapshot failed: {}", e);
         }
         w.close();
     }
 
-    wal_handle.abort();
     println!("[Server] Shutdown complete.");
 }

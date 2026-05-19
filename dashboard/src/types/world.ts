@@ -201,3 +201,33 @@ export interface ListingRating {
   review: string | null;
   created_tick: number;
 }
+
+// Agent Tracing types
+
+export interface PhaseData {
+  phase: string;
+  input_data: Record<string, unknown>;
+  output_data: Record<string, unknown>;
+  duration_ms: number;
+  error: string | null;
+}
+
+export interface TickTraceData {
+  agent_id: string;
+  tick: number;
+  phases: PhaseData[];
+  started_at: string;
+  finished_at: string;
+  total_duration_ms: number;
+}
+
+export interface TickTraceSummary {
+  agent_id: string;
+  tick: number;
+  action: string;
+  survival_mode: string;
+  token_ratio: number;
+  duration_ms: number;
+  started_at: string;
+  error: string | null;
+}

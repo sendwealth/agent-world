@@ -48,6 +48,7 @@ pub type SharedOrganizationStore = Arc<Mutex<OrganizationStore>>;
 pub type SharedStockMarket = Arc<Mutex<StockMarket>>;
 pub type SharedGovernanceSystem = Arc<Mutex<GovernanceSystem>>;
 pub type SharedBankingSystem = Arc<Mutex<BankingSystem>>;
+pub type SharedTraceStore = Arc<Mutex<crate::tracing::TraceStore>>;
 
 /// Agent record tracked by the world engine.
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -89,6 +90,7 @@ pub struct AppState {
     pub stock_market: Option<SharedStockMarket>,
     pub governance: Option<SharedGovernanceSystem>,
     pub banking_system: Option<SharedBankingSystem>,
+    pub trace_store: Option<SharedTraceStore>,
 }
 
 pub fn create_router(board: SharedTaskBoard) -> Router {
@@ -127,6 +129,7 @@ pub fn create_router_with_wal(board: SharedTaskBoard, wal: SharedWAL) -> Router 
         stock_market: None,
         governance: None,
         banking_system: None,
+        trace_store: Some(Arc::new(Mutex::new(crate::tracing::TraceStore::new()))),
     };
     build_full_router(state)
 }
@@ -153,6 +156,7 @@ pub fn create_router_with_wal_and_snapshots(board: SharedTaskBoard, wal: SharedW
         stock_market: None,
         governance: None,
         banking_system: None,
+        trace_store: Some(Arc::new(Mutex::new(crate::tracing::TraceStore::new()))),
     };
     build_full_router(state)
 }
@@ -237,6 +241,11 @@ pub fn build_full_router(state: AppState) -> Router {
         .route("/bank/central-bank/mint", post(bank_mint_money))
         .route("/bank/central-bank/write-off/:id", post(bank_write_off))
         .route("/bank/stats", get(bank_stats))
+        // Agent Trace routes (latest before :tick to avoid capture)
+        .route("/api/v1/agents/:id/traces", get(list_agent_traces))
+        .route("/api/v1/agents/:id/traces/latest", get(get_latest_trace))
+        .route("/api/v1/agents/:id/traces/:tick", get(get_trace_by_tick))
+        .route("/api/v1/agents/:id/traces", post(submit_trace))
         .with_state(state)
 }
 
@@ -266,6 +275,7 @@ pub fn create_router_for_test(
         stock_market: None,
         governance: None,
         banking_system: None,
+        trace_store: Some(Arc::new(Mutex::new(crate::tracing::TraceStore::new()))),
     };
     build_full_router(state)
 }
@@ -2588,4 +2598,71 @@ async fn bank_stats(
         "savings_rate": banking.config().savings_rate,
         "loan_rate": banking.config().loan_rate,
     })).into_response()
+}
+
+// ── Trace Handlers ────────────────────────────────────────
+
+#[derive(Debug, Deserialize)]
+struct ListTracesQuery {
+    limit: Option<usize>,
+    offset: Option<usize>,
+}
+
+async fn list_agent_traces(
+    State(state): State<AppState>,
+    Path(agent_id): Path<String>,
+    Query(query): Query<ListTracesQuery>,
+) -> impl IntoResponse {
+    let store = match &state.trace_store {
+        Some(s) => s.clone(),
+        None => return (StatusCode::SERVICE_UNAVAILABLE, Json(ErrorResponse { error: "trace store not configured".into() })).into_response(),
+    };
+    let store = store.lock().await;
+    let limit = query.limit.unwrap_or(100);
+    let offset = query.offset.unwrap_or(0);
+    let timeline = store.get_timeline(&agent_id, limit, offset);
+    Json(&timeline).into_response()
+}
+
+async fn get_latest_trace(
+    State(state): State<AppState>,
+    Path(agent_id): Path<String>,
+) -> impl IntoResponse {
+    let store = match &state.trace_store {
+        Some(s) => s.clone(),
+        None => return (StatusCode::SERVICE_UNAVAILABLE, Json(ErrorResponse { error: "trace store not configured".into() })).into_response(),
+    };
+    let store = store.lock().await;
+    match store.get_latest(&agent_id) {
+        Some(trace) => Json(trace).into_response(),
+        None => (StatusCode::NOT_FOUND, Json(ErrorResponse { error: "no traces for agent".into() })).into_response(),
+    }
+}
+
+async fn get_trace_by_tick(
+    State(state): State<AppState>,
+    Path((agent_id, tick)): Path<(String, u64)>,
+) -> impl IntoResponse {
+    let store = match &state.trace_store {
+        Some(s) => s.clone(),
+        None => return (StatusCode::SERVICE_UNAVAILABLE, Json(ErrorResponse { error: "trace store not configured".into() })).into_response(),
+    };
+    let store = store.lock().await;
+    match store.get_tick(&agent_id, tick) {
+        Some(trace) => Json(trace).into_response(),
+        None => (StatusCode::NOT_FOUND, Json(ErrorResponse { error: format!("no trace at tick {} for agent", tick) })).into_response(),
+    }
+}
+
+async fn submit_trace(
+    State(state): State<AppState>,
+    Json(trace): Json<crate::tracing::TickTraceData>,
+) -> impl IntoResponse {
+    let store = match &state.trace_store {
+        Some(s) => s.clone(),
+        None => return (StatusCode::SERVICE_UNAVAILABLE, Json(ErrorResponse { error: "trace store not configured".into() })).into_response(),
+    };
+    let mut store = store.lock().await;
+    store.save(trace);
+    (StatusCode::OK, Json(serde_json::json!({"status": "ok"}))).into_response()
 }

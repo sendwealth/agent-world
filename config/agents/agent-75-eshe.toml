@@ -1,0 +1,12 @@
+# Agent 75: Eshe — Dancer & Storyteller
+[agent]
+name = "Eshe"
+traits = { discipline = 0.5, caution = 0.4, resilience = 0.5 }
+
+[agent.skills]
+coding = { level = 2 }
+teaching = { level = 3 }
+trading = { level = 5 }
+
+[think_loop]
+tick_interval = 1.0

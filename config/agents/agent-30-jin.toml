@@ -1,0 +1,13 @@
+# Agent 30: Jin — Strategist & Tactician
+[agent]
+name = "Jin"
+traits = { caution = 0.3, focus = 0.6, endurance = 0.9 }
+
+[agent.skills]
+research = { level = 1 }
+coding = { level = 5 }
+trading = { level = 1 }
+teaching = { level = 2 }
+
+[think_loop]
+tick_interval = 1.0

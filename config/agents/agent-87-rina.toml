@@ -1,0 +1,12 @@
+# Agent 87: Rina — Diplomat & Envoy
+[agent]
+name = "Rina"
+traits = { caution = 0.8, intuition = 0.5, wisdom = 0.9 }
+
+[agent.skills]
+research = { level = 2 }
+trading = { level = 1 }
+teaching = { level = 1 }
+
+[think_loop]
+tick_interval = 1.0

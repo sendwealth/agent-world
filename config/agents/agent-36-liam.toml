@@ -1,0 +1,12 @@
+# Agent 36: Liam — Scout & Observer
+[agent]
+name = "Liam"
+traits = { endurance = 0.7, caution = 0.4, risk_taking = 0.4 }
+
+[agent.skills]
+trading = { level = 2 }
+coding = { level = 2 }
+research = { level = 1 }
+
+[think_loop]
+tick_interval = 1.0

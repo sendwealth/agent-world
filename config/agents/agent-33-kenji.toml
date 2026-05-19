@@ -1,0 +1,13 @@
+# Agent 33: Kenji — Inventor & Tinkerer
+[agent]
+name = "Kenji"
+traits = { risk_taking = 0.6, wisdom = 0.7, adaptability = 0.5 }
+
+[agent.skills]
+coding = { level = 2 }
+trading = { level = 3 }
+research = { level = 1 }
+teaching = { level = 1 }
+
+[think_loop]
+tick_interval = 1.0

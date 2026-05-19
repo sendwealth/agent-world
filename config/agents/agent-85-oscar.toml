@@ -1,0 +1,12 @@
+# Agent 85: Oscar — Jester & Entertainer
+[agent]
+name = "Oscar"
+traits = { discipline = 0.4, wisdom = 1.0, adaptability = 1.0 }
+
+[agent.skills]
+teaching = { level = 4 }
+trading = { level = 3 }
+research = { level = 2 }
+
+[think_loop]
+tick_interval = 1.0

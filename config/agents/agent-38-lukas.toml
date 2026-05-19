@@ -1,0 +1,12 @@
+# Agent 38: Lukas — Pilot & Navigator
+[agent]
+name = "Lukas"
+traits = { generosity = 0.6, adaptability = 0.3, ambition = 0.6 }
+
+[agent.skills]
+teaching = { level = 2 }
+research = { level = 2 }
+trading = { level = 1 }
+
+[think_loop]
+tick_interval = 1.0

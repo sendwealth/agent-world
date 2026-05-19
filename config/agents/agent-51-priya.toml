@@ -1,0 +1,12 @@
+# Agent 51: Priya — Scientist & Innovator
+[agent]
+name = "Priya"
+traits = { curiosity = 0.8, courage = 0.9, focus = 0.8 }
+
+[agent.skills]
+research = { level = 4 }
+trading = { level = 5 }
+coding = { level = 5 }
+
+[think_loop]
+tick_interval = 1.0

@@ -1,0 +1,12 @@
+# Agent 21: Emeka — Builder & Engineer
+[agent]
+name = "Emeka"
+traits = { risk_taking = 0.7, adaptability = 0.6, curiosity = 0.4 }
+
+[agent.skills]
+trading = { level = 2 }
+coding = { level = 5 }
+teaching = { level = 1 }
+
+[think_loop]
+tick_interval = 1.0

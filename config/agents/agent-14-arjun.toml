@@ -1,0 +1,12 @@
+# Agent 14: Arjun — Warrior & Protector
+[agent]
+name = "Arjun"
+traits = { creativity = 0.7, wisdom = 0.8, risk_taking = 0.3 }
+
+[agent.skills]
+trading = { level = 1 }
+coding = { level = 4 }
+teaching = { level = 3 }
+
+[think_loop]
+tick_interval = 1.0

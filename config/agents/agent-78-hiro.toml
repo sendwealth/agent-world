@@ -1,0 +1,13 @@
+# Agent 78: Hiro — Samurai & Swordsman
+[agent]
+name = "Hiro"
+traits = { focus = 0.9, charm = 0.5, generosity = 0.5 }
+
+[agent.skills]
+teaching = { level = 3 }
+coding = { level = 3 }
+research = { level = 5 }
+trading = { level = 5 }
+
+[think_loop]
+tick_interval = 1.0

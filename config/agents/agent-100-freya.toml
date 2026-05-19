@@ -1,0 +1,13 @@
+# Agent 100: Freya — Valkyrie & Protector
+[agent]
+name = "Freya"
+traits = { wisdom = 0.4, discipline = 0.8, empathy = 0.9 }
+
+[agent.skills]
+research = { level = 4 }
+teaching = { level = 3 }
+trading = { level = 4 }
+coding = { level = 4 }
+
+[think_loop]
+tick_interval = 1.0

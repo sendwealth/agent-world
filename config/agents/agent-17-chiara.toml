@@ -1,0 +1,12 @@
+# Agent 17: Chiara — Artist & Dreamer
+[agent]
+name = "Chiara"
+traits = { creativity = 0.4, resilience = 0.6, focus = 0.9 }
+
+[agent.skills]
+research = { level = 2 }
+teaching = { level = 5 }
+coding = { level = 5 }
+
+[think_loop]
+tick_interval = 1.0

@@ -1,0 +1,12 @@
+# Agent 39: Maka — Hunter & Tracker
+[agent]
+name = "Maka"
+traits = { resilience = 0.5, courage = 0.3, focus = 0.8 }
+
+[agent.skills]
+teaching = { level = 1 }
+trading = { level = 1 }
+research = { level = 3 }
+
+[think_loop]
+tick_interval = 1.0

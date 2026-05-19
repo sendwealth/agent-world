@@ -1,0 +1,13 @@
+# Agent 98: Dina — Tracker & Pathfinder
+[agent]
+name = "Dina"
+traits = { charm = 0.7, ambition = 1.0, discipline = 0.3 }
+
+[agent.skills]
+trading = { level = 4 }
+research = { level = 4 }
+coding = { level = 4 }
+teaching = { level = 1 }
+
+[think_loop]
+tick_interval = 1.0

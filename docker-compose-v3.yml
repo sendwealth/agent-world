@@ -1,0 +1,1786 @@
+# ── Agent World — Docker Compose v3 (100 Agents) ────────────────
+#
+# One-command startup: docker compose -f docker-compose-v3.yml up -d
+#
+# Services:
+#   world-engine   — Rust world state / economy / rules engine
+#   agent-01..100  — 100 Python agent-runtime instances
+#   dashboard      — Next.js observability UI
+#   ollama         — Optional local LLM (only started with profile: local-llm)
+#
+# Environment: copy .env.example -> .env and adjust
+# ────────────────────────────────────────────────────────────────
+
+services:
+  # ── World Engine (Rust) ──────────────────────────────────────
+  world-engine:
+    build:
+      context: ./world-engine
+    container_name: world-engine
+    ports:
+      - "${ENGINE_PORT:-8080}:${ENGINE_PORT:-8080}"
+      - "${GRPC_PORT:-50051}:${GRPC_PORT:-50051}"
+    volumes:
+      - world-data:/app/data
+      - ./config:/app/config:ro
+    environment:
+      - HOST=0.0.0.0
+      - PORT=${ENGINE_PORT:-8080}
+      - GRPC_ADDR=0.0.0.0:${GRPC_PORT:-50051}
+      - RUST_LOG=${RUST_LOG:-info}
+      - GENESIS_PATH=config/genesis.yaml
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:${ENGINE_PORT:-8080}/tasks"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+    networks:
+      - agent-world
+
+  # ── Agent Runtimes (Python) ──────────────────────────────────
+  # 100 agents, each with a unique config file from config/agents/
+
+  agent-01:
+    build:
+      context: ./agent-runtime
+    container_name: agent-alice
+    depends_on:
+      world-engine:
+        condition: service_healthy
+    volumes:
+      - ./config/agents:/app/agent-configs:ro
+      - agent-data:/app/data
+    environment:
+      - WORLD_ENGINE_URL=http://world-engine:${ENGINE_PORT:-8080}
+    command: ["spawn", "--config", "/app/agent-configs/agent-01-alice.toml", "--world-url", "http://world-engine:${ENGINE_PORT:-8080}"]
+    restart: unless-stopped
+    networks:
+      - agent-world
+
+  agent-02:
+    build:
+      context: ./agent-runtime
+    container_name: agent-bob
+    depends_on:
+      world-engine:
+        condition: service_healthy
+    volumes:
+      - ./config/agents:/app/agent-configs:ro
+      - agent-data:/app/data
+    environment:
+      - WORLD_ENGINE_URL=http://world-engine:${ENGINE_PORT:-8080}
+    command: ["spawn", "--config", "/app/agent-configs/agent-02-bob.toml", "--world-url", "http://world-engine:${ENGINE_PORT:-8080}"]
+    restart: unless-stopped
+    networks:
+      - agent-world
+
+  agent-03:
+    build:
+      context: ./agent-runtime
+    container_name: agent-carol
+    depends_on:
+      world-engine:
+        condition: service_healthy
+    volumes:
+      - ./config/agents:/app/agent-configs:ro
+      - agent-data:/app/data
+    environment:
+      - WORLD_ENGINE_URL=http://world-engine:${ENGINE_PORT:-8080}
+    command: ["spawn", "--config", "/app/agent-configs/agent-03-carol.toml", "--world-url", "http://world-engine:${ENGINE_PORT:-8080}"]
+    restart: unless-stopped
+    networks:
+      - agent-world
+
+  agent-04:
+    build:
+      context: ./agent-runtime
+    container_name: agent-dave
+    depends_on:
+      world-engine:
+        condition: service_healthy
+    volumes:
+      - ./config/agents:/app/agent-configs:ro
+      - agent-data:/app/data
+    environment:
+      - WORLD_ENGINE_URL=http://world-engine:${ENGINE_PORT:-8080}
+    command: ["spawn", "--config", "/app/agent-configs/agent-04-dave.toml", "--world-url", "http://world-engine:${ENGINE_PORT:-8080}"]
+    restart: unless-stopped
+    networks:
+      - agent-world
+
+  agent-05:
+    build:
+      context: ./agent-runtime
+    container_name: agent-eve
+    depends_on:
+      world-engine:
+        condition: service_healthy
+    volumes:
+      - ./config/agents:/app/agent-configs:ro
+      - agent-data:/app/data
+    environment:
+      - WORLD_ENGINE_URL=http://world-engine:${ENGINE_PORT:-8080}
+    command: ["spawn", "--config", "/app/agent-configs/agent-05-eve.toml", "--world-url", "http://world-engine:${ENGINE_PORT:-8080}"]
+    restart: unless-stopped
+    networks:
+      - agent-world
+
+  agent-06:
+    build:
+      context: ./agent-runtime
+    container_name: agent-frank
+    depends_on:
+      world-engine:
+        condition: service_healthy
+    volumes:
+      - ./config/agents:/app/agent-configs:ro
+      - agent-data:/app/data
+    environment:
+      - WORLD_ENGINE_URL=http://world-engine:${ENGINE_PORT:-8080}
+    command: ["spawn", "--config", "/app/agent-configs/agent-06-frank.toml", "--world-url", "http://world-engine:${ENGINE_PORT:-8080}"]
+    restart: unless-stopped
+    networks:
+      - agent-world
+
+  agent-07:
+    build:
+      context: ./agent-runtime
+    container_name: agent-grace
+    depends_on:
+      world-engine:
+        condition: service_healthy
+    volumes:
+      - ./config/agents:/app/agent-configs:ro
+      - agent-data:/app/data
+    environment:
+      - WORLD_ENGINE_URL=http://world-engine:${ENGINE_PORT:-8080}
+    command: ["spawn", "--config", "/app/agent-configs/agent-07-grace.toml", "--world-url", "http://world-engine:${ENGINE_PORT:-8080}"]
+    restart: unless-stopped
+    networks:
+      - agent-world
+
+  agent-08:
+    build:
+      context: ./agent-runtime
+    container_name: agent-henry
+    depends_on:
+      world-engine:
+        condition: service_healthy
+    volumes:
+      - ./config/agents:/app/agent-configs:ro
+      - agent-data:/app/data
+    environment:
+      - WORLD_ENGINE_URL=http://world-engine:${ENGINE_PORT:-8080}
+    command: ["spawn", "--config", "/app/agent-configs/agent-08-henry.toml", "--world-url", "http://world-engine:${ENGINE_PORT:-8080}"]
+    restart: unless-stopped
+    networks:
+      - agent-world
+
+  agent-09:
+    build:
+      context: ./agent-runtime
+    container_name: agent-iris
+    depends_on:
+      world-engine:
+        condition: service_healthy
+    volumes:
+      - ./config/agents:/app/agent-configs:ro
+      - agent-data:/app/data
+    environment:
+      - WORLD_ENGINE_URL=http://world-engine:${ENGINE_PORT:-8080}
+    command: ["spawn", "--config", "/app/agent-configs/agent-09-iris.toml", "--world-url", "http://world-engine:${ENGINE_PORT:-8080}"]
+    restart: unless-stopped
+    networks:
+      - agent-world
+
+  agent-10:
+    build:
+      context: ./agent-runtime
+    container_name: agent-jack
+    depends_on:
+      world-engine:
+        condition: service_healthy
+    volumes:
+      - ./config/agents:/app/agent-configs:ro
+      - agent-data:/app/data
+    environment:
+      - WORLD_ENGINE_URL=http://world-engine:${ENGINE_PORT:-8080}
+    command: ["spawn", "--config", "/app/agent-configs/agent-10-jack.toml", "--world-url", "http://world-engine:${ENGINE_PORT:-8080}"]
+    restart: unless-stopped
+    networks:
+      - agent-world
+
+  agent-100:
+    build:
+      context: ./agent-runtime
+    container_name: agent-freya
+    depends_on:
+      world-engine:
+        condition: service_healthy
+    volumes:
+      - ./config/agents:/app/agent-configs:ro
+      - agent-data:/app/data
+    environment:
+      - WORLD_ENGINE_URL=http://world-engine:${ENGINE_PORT:-8080}
+    command: ["spawn", "--config", "/app/agent-configs/agent-100-freya.toml", "--world-url", "http://world-engine:${ENGINE_PORT:-8080}"]
+    restart: unless-stopped
+    networks:
+      - agent-world
+
+  agent-11:
+    build:
+      context: ./agent-runtime
+    container_name: agent-aiko
+    depends_on:
+      world-engine:
+        condition: service_healthy
+    volumes:
+      - ./config/agents:/app/agent-configs:ro
+      - agent-data:/app/data
+    environment:
+      - WORLD_ENGINE_URL=http://world-engine:${ENGINE_PORT:-8080}
+    command: ["spawn", "--config", "/app/agent-configs/agent-11-aiko.toml", "--world-url", "http://world-engine:${ENGINE_PORT:-8080}"]
+    restart: unless-stopped
+    networks:
+      - agent-world
+
+  agent-12:
+    build:
+      context: ./agent-runtime
+    container_name: agent-amara
+    depends_on:
+      world-engine:
+        condition: service_healthy
+    volumes:
+      - ./config/agents:/app/agent-configs:ro
+      - agent-data:/app/data
+    environment:
+      - WORLD_ENGINE_URL=http://world-engine:${ENGINE_PORT:-8080}
+    command: ["spawn", "--config", "/app/agent-configs/agent-12-amara.toml", "--world-url", "http://world-engine:${ENGINE_PORT:-8080}"]
+    restart: unless-stopped
+    networks:
+      - agent-world
+
+  agent-13:
+    build:
+      context: ./agent-runtime
+    container_name: agent-anika
+    depends_on:
+      world-engine:
+        condition: service_healthy
+    volumes:
+      - ./config/agents:/app/agent-configs:ro
+      - agent-data:/app/data
+    environment:
+      - WORLD_ENGINE_URL=http://world-engine:${ENGINE_PORT:-8080}
+    command: ["spawn", "--config", "/app/agent-configs/agent-13-anika.toml", "--world-url", "http://world-engine:${ENGINE_PORT:-8080}"]
+    restart: unless-stopped
+    networks:
+      - agent-world
+
+  agent-14:
+    build:
+      context: ./agent-runtime
+    container_name: agent-arjun
+    depends_on:
+      world-engine:
+        condition: service_healthy
+    volumes:
+      - ./config/agents:/app/agent-configs:ro
+      - agent-data:/app/data
+    environment:
+      - WORLD_ENGINE_URL=http://world-engine:${ENGINE_PORT:-8080}
+    command: ["spawn", "--config", "/app/agent-configs/agent-14-arjun.toml", "--world-url", "http://world-engine:${ENGINE_PORT:-8080}"]
+    restart: unless-stopped
+    networks:
+      - agent-world
+
+  agent-15:
+    build:
+      context: ./agent-runtime
+    container_name: agent-belen
+    depends_on:
+      world-engine:
+        condition: service_healthy
+    volumes:
+      - ./config/agents:/app/agent-configs:ro
+      - agent-data:/app/data
+    environment:
+      - WORLD_ENGINE_URL=http://world-engine:${ENGINE_PORT:-8080}
+    command: ["spawn", "--config", "/app/agent-configs/agent-15-belen.toml", "--world-url", "http://world-engine:${ENGINE_PORT:-8080}"]
+    restart: unless-stopped
+    networks:
+      - agent-world
+
+  agent-16:
+    build:
+      context: ./agent-runtime
+    container_name: agent-chen
+    depends_on:
+      world-engine:
+        condition: service_healthy
+    volumes:
+      - ./config/agents:/app/agent-configs:ro
+      - agent-data:/app/data
+    environment:
+      - WORLD_ENGINE_URL=http://world-engine:${ENGINE_PORT:-8080}
+    command: ["spawn", "--config", "/app/agent-configs/agent-16-chen.toml", "--world-url", "http://world-engine:${ENGINE_PORT:-8080}"]
+    restart: unless-stopped
+    networks:
+      - agent-world
+
+  agent-17:
+    build:
+      context: ./agent-runtime
+    container_name: agent-chiara
+    depends_on:
+      world-engine:
+        condition: service_healthy
+    volumes:
+      - ./config/agents:/app/agent-configs:ro
+      - agent-data:/app/data
+    environment:
+      - WORLD_ENGINE_URL=http://world-engine:${ENGINE_PORT:-8080}
+    command: ["spawn", "--config", "/app/agent-configs/agent-17-chiara.toml", "--world-url", "http://world-engine:${ENGINE_PORT:-8080}"]
+    restart: unless-stopped
+    networks:
+      - agent-world
+
+  agent-18:
+    build:
+      context: ./agent-runtime
+    container_name: agent-dara
+    depends_on:
+      world-engine:
+        condition: service_healthy
+    volumes:
+      - ./config/agents:/app/agent-configs:ro
+      - agent-data:/app/data
+    environment:
+      - WORLD_ENGINE_URL=http://world-engine:${ENGINE_PORT:-8080}
+    command: ["spawn", "--config", "/app/agent-configs/agent-18-dara.toml", "--world-url", "http://world-engine:${ENGINE_PORT:-8080}"]
+    restart: unless-stopped
+    networks:
+      - agent-world
+
+  agent-19:
+    build:
+      context: ./agent-runtime
+    container_name: agent-diego
+    depends_on:
+      world-engine:
+        condition: service_healthy
+    volumes:
+      - ./config/agents:/app/agent-configs:ro
+      - agent-data:/app/data
+    environment:
+      - WORLD_ENGINE_URL=http://world-engine:${ENGINE_PORT:-8080}
+    command: ["spawn", "--config", "/app/agent-configs/agent-19-diego.toml", "--world-url", "http://world-engine:${ENGINE_PORT:-8080}"]
+    restart: unless-stopped
+    networks:
+      - agent-world
+
+  agent-20:
+    build:
+      context: ./agent-runtime
+    container_name: agent-elif
+    depends_on:
+      world-engine:
+        condition: service_healthy
+    volumes:
+      - ./config/agents:/app/agent-configs:ro
+      - agent-data:/app/data
+    environment:
+      - WORLD_ENGINE_URL=http://world-engine:${ENGINE_PORT:-8080}
+    command: ["spawn", "--config", "/app/agent-configs/agent-20-elif.toml", "--world-url", "http://world-engine:${ENGINE_PORT:-8080}"]
+    restart: unless-stopped
+    networks:
+      - agent-world
+
+  agent-21:
+    build:
+      context: ./agent-runtime
+    container_name: agent-emeka
+    depends_on:
+      world-engine:
+        condition: service_healthy
+    volumes:
+      - ./config/agents:/app/agent-configs:ro
+      - agent-data:/app/data
+    environment:
+      - WORLD_ENGINE_URL=http://world-engine:${ENGINE_PORT:-8080}
+    command: ["spawn", "--config", "/app/agent-configs/agent-21-emeka.toml", "--world-url", "http://world-engine:${ENGINE_PORT:-8080}"]
+    restart: unless-stopped
+    networks:
+      - agent-world
+
+  agent-22:
+    build:
+      context: ./agent-runtime
+    container_name: agent-fatima
+    depends_on:
+      world-engine:
+        condition: service_healthy
+    volumes:
+      - ./config/agents:/app/agent-configs:ro
+      - agent-data:/app/data
+    environment:
+      - WORLD_ENGINE_URL=http://world-engine:${ENGINE_PORT:-8080}
+    command: ["spawn", "--config", "/app/agent-configs/agent-22-fatima.toml", "--world-url", "http://world-engine:${ENGINE_PORT:-8080}"]
+    restart: unless-stopped
+    networks:
+      - agent-world
+
+  agent-23:
+    build:
+      context: ./agent-runtime
+    container_name: agent-felix
+    depends_on:
+      world-engine:
+        condition: service_healthy
+    volumes:
+      - ./config/agents:/app/agent-configs:ro
+      - agent-data:/app/data
+    environment:
+      - WORLD_ENGINE_URL=http://world-engine:${ENGINE_PORT:-8080}
+    command: ["spawn", "--config", "/app/agent-configs/agent-23-felix.toml", "--world-url", "http://world-engine:${ENGINE_PORT:-8080}"]
+    restart: unless-stopped
+    networks:
+      - agent-world
+
+  agent-24:
+    build:
+      context: ./agent-runtime
+    container_name: agent-gaia
+    depends_on:
+      world-engine:
+        condition: service_healthy
+    volumes:
+      - ./config/agents:/app/agent-configs:ro
+      - agent-data:/app/data
+    environment:
+      - WORLD_ENGINE_URL=http://world-engine:${ENGINE_PORT:-8080}
+    command: ["spawn", "--config", "/app/agent-configs/agent-24-gaia.toml", "--world-url", "http://world-engine:${ENGINE_PORT:-8080}"]
+    restart: unless-stopped
+    networks:
+      - agent-world
+
+  agent-25:
+    build:
+      context: ./agent-runtime
+    container_name: agent-hana
+    depends_on:
+      world-engine:
+        condition: service_healthy
+    volumes:
+      - ./config/agents:/app/agent-configs:ro
+      - agent-data:/app/data
+    environment:
+      - WORLD_ENGINE_URL=http://world-engine:${ENGINE_PORT:-8080}
+    command: ["spawn", "--config", "/app/agent-configs/agent-25-hana.toml", "--world-url", "http://world-engine:${ENGINE_PORT:-8080}"]
+    restart: unless-stopped
+    networks:
+      - agent-world
+
+  agent-26:
+    build:
+      context: ./agent-runtime
+    container_name: agent-haruto
+    depends_on:
+      world-engine:
+        condition: service_healthy
+    volumes:
+      - ./config/agents:/app/agent-configs:ro
+      - agent-data:/app/data
+    environment:
+      - WORLD_ENGINE_URL=http://world-engine:${ENGINE_PORT:-8080}
+    command: ["spawn", "--config", "/app/agent-configs/agent-26-haruto.toml", "--world-url", "http://world-engine:${ENGINE_PORT:-8080}"]
+    restart: unless-stopped
+    networks:
+      - agent-world
+
+  agent-27:
+    build:
+      context: ./agent-runtime
+    container_name: agent-idris
+    depends_on:
+      world-engine:
+        condition: service_healthy
+    volumes:
+      - ./config/agents:/app/agent-configs:ro
+      - agent-data:/app/data
+    environment:
+      - WORLD_ENGINE_URL=http://world-engine:${ENGINE_PORT:-8080}
+    command: ["spawn", "--config", "/app/agent-configs/agent-27-idris.toml", "--world-url", "http://world-engine:${ENGINE_PORT:-8080}"]
+    restart: unless-stopped
+    networks:
+      - agent-world
+
+  agent-28:
+    build:
+      context: ./agent-runtime
+    container_name: agent-ines
+    depends_on:
+      world-engine:
+        condition: service_healthy
+    volumes:
+      - ./config/agents:/app/agent-configs:ro
+      - agent-data:/app/data
+    environment:
+      - WORLD_ENGINE_URL=http://world-engine:${ENGINE_PORT:-8080}
+    command: ["spawn", "--config", "/app/agent-configs/agent-28-ines.toml", "--world-url", "http://world-engine:${ENGINE_PORT:-8080}"]
+    restart: unless-stopped
+    networks:
+      - agent-world
+
+  agent-29:
+    build:
+      context: ./agent-runtime
+    container_name: agent-javier
+    depends_on:
+      world-engine:
+        condition: service_healthy
+    volumes:
+      - ./config/agents:/app/agent-configs:ro
+      - agent-data:/app/data
+    environment:
+      - WORLD_ENGINE_URL=http://world-engine:${ENGINE_PORT:-8080}
+    command: ["spawn", "--config", "/app/agent-configs/agent-29-javier.toml", "--world-url", "http://world-engine:${ENGINE_PORT:-8080}"]
+    restart: unless-stopped
+    networks:
+      - agent-world
+
+  agent-30:
+    build:
+      context: ./agent-runtime
+    container_name: agent-jin
+    depends_on:
+      world-engine:
+        condition: service_healthy
+    volumes:
+      - ./config/agents:/app/agent-configs:ro
+      - agent-data:/app/data
+    environment:
+      - WORLD_ENGINE_URL=http://world-engine:${ENGINE_PORT:-8080}
+    command: ["spawn", "--config", "/app/agent-configs/agent-30-jin.toml", "--world-url", "http://world-engine:${ENGINE_PORT:-8080}"]
+    restart: unless-stopped
+    networks:
+      - agent-world
+
+  agent-31:
+    build:
+      context: ./agent-runtime
+    container_name: agent-kai
+    depends_on:
+      world-engine:
+        condition: service_healthy
+    volumes:
+      - ./config/agents:/app/agent-configs:ro
+      - agent-data:/app/data
+    environment:
+      - WORLD_ENGINE_URL=http://world-engine:${ENGINE_PORT:-8080}
+    command: ["spawn", "--config", "/app/agent-configs/agent-31-kai.toml", "--world-url", "http://world-engine:${ENGINE_PORT:-8080}"]
+    restart: unless-stopped
+    networks:
+      - agent-world
+
+  agent-32:
+    build:
+      context: ./agent-runtime
+    container_name: agent-kamila
+    depends_on:
+      world-engine:
+        condition: service_healthy
+    volumes:
+      - ./config/agents:/app/agent-configs:ro
+      - agent-data:/app/data
+    environment:
+      - WORLD_ENGINE_URL=http://world-engine:${ENGINE_PORT:-8080}
+    command: ["spawn", "--config", "/app/agent-configs/agent-32-kamila.toml", "--world-url", "http://world-engine:${ENGINE_PORT:-8080}"]
+    restart: unless-stopped
+    networks:
+      - agent-world
+
+  agent-33:
+    build:
+      context: ./agent-runtime
+    container_name: agent-kenji
+    depends_on:
+      world-engine:
+        condition: service_healthy
+    volumes:
+      - ./config/agents:/app/agent-configs:ro
+      - agent-data:/app/data
+    environment:
+      - WORLD_ENGINE_URL=http://world-engine:${ENGINE_PORT:-8080}
+    command: ["spawn", "--config", "/app/agent-configs/agent-33-kenji.toml", "--world-url", "http://world-engine:${ENGINE_PORT:-8080}"]
+    restart: unless-stopped
+    networks:
+      - agent-world
+
+  agent-34:
+    build:
+      context: ./agent-runtime
+    container_name: agent-kofi
+    depends_on:
+      world-engine:
+        condition: service_healthy
+    volumes:
+      - ./config/agents:/app/agent-configs:ro
+      - agent-data:/app/data
+    environment:
+      - WORLD_ENGINE_URL=http://world-engine:${ENGINE_PORT:-8080}
+    command: ["spawn", "--config", "/app/agent-configs/agent-34-kofi.toml", "--world-url", "http://world-engine:${ENGINE_PORT:-8080}"]
+    restart: unless-stopped
+    networks:
+      - agent-world
+
+  agent-35:
+    build:
+      context: ./agent-runtime
+    container_name: agent-leila
+    depends_on:
+      world-engine:
+        condition: service_healthy
+    volumes:
+      - ./config/agents:/app/agent-configs:ro
+      - agent-data:/app/data
+    environment:
+      - WORLD_ENGINE_URL=http://world-engine:${ENGINE_PORT:-8080}
+    command: ["spawn", "--config", "/app/agent-configs/agent-35-leila.toml", "--world-url", "http://world-engine:${ENGINE_PORT:-8080}"]
+    restart: unless-stopped
+    networks:
+      - agent-world
+
+  agent-36:
+    build:
+      context: ./agent-runtime
+    container_name: agent-liam
+    depends_on:
+      world-engine:
+        condition: service_healthy
+    volumes:
+      - ./config/agents:/app/agent-configs:ro
+      - agent-data:/app/data
+    environment:
+      - WORLD_ENGINE_URL=http://world-engine:${ENGINE_PORT:-8080}
+    command: ["spawn", "--config", "/app/agent-configs/agent-36-liam.toml", "--world-url", "http://world-engine:${ENGINE_PORT:-8080}"]
+    restart: unless-stopped
+    networks:
+      - agent-world
+
+  agent-37:
+    build:
+      context: ./agent-runtime
+    container_name: agent-lina
+    depends_on:
+      world-engine:
+        condition: service_healthy
+    volumes:
+      - ./config/agents:/app/agent-configs:ro
+      - agent-data:/app/data
+    environment:
+      - WORLD_ENGINE_URL=http://world-engine:${ENGINE_PORT:-8080}
+    command: ["spawn", "--config", "/app/agent-configs/agent-37-lina.toml", "--world-url", "http://world-engine:${ENGINE_PORT:-8080}"]
+    restart: unless-stopped
+    networks:
+      - agent-world
+
+  agent-38:
+    build:
+      context: ./agent-runtime
+    container_name: agent-lukas
+    depends_on:
+      world-engine:
+        condition: service_healthy
+    volumes:
+      - ./config/agents:/app/agent-configs:ro
+      - agent-data:/app/data
+    environment:
+      - WORLD_ENGINE_URL=http://world-engine:${ENGINE_PORT:-8080}
+    command: ["spawn", "--config", "/app/agent-configs/agent-38-lukas.toml", "--world-url", "http://world-engine:${ENGINE_PORT:-8080}"]
+    restart: unless-stopped
+    networks:
+      - agent-world
+
+  agent-39:
+    build:
+      context: ./agent-runtime
+    container_name: agent-maka
+    depends_on:
+      world-engine:
+        condition: service_healthy
+    volumes:
+      - ./config/agents:/app/agent-configs:ro
+      - agent-data:/app/data
+    environment:
+      - WORLD_ENGINE_URL=http://world-engine:${ENGINE_PORT:-8080}
+    command: ["spawn", "--config", "/app/agent-configs/agent-39-maka.toml", "--world-url", "http://world-engine:${ENGINE_PORT:-8080}"]
+    restart: unless-stopped
+    networks:
+      - agent-world
+
+  agent-40:
+    build:
+      context: ./agent-runtime
+    container_name: agent-malik
+    depends_on:
+      world-engine:
+        condition: service_healthy
+    volumes:
+      - ./config/agents:/app/agent-configs:ro
+      - agent-data:/app/data
+    environment:
+      - WORLD_ENGINE_URL=http://world-engine:${ENGINE_PORT:-8080}
+    command: ["spawn", "--config", "/app/agent-configs/agent-40-malik.toml", "--world-url", "http://world-engine:${ENGINE_PORT:-8080}"]
+    restart: unless-stopped
+    networks:
+      - agent-world
+
+  agent-41:
+    build:
+      context: ./agent-runtime
+    container_name: agent-mei
+    depends_on:
+      world-engine:
+        condition: service_healthy
+    volumes:
+      - ./config/agents:/app/agent-configs:ro
+      - agent-data:/app/data
+    environment:
+      - WORLD_ENGINE_URL=http://world-engine:${ENGINE_PORT:-8080}
+    command: ["spawn", "--config", "/app/agent-configs/agent-41-mei.toml", "--world-url", "http://world-engine:${ENGINE_PORT:-8080}"]
+    restart: unless-stopped
+    networks:
+      - agent-world
+
+  agent-42:
+    build:
+      context: ./agent-runtime
+    container_name: agent-mila
+    depends_on:
+      world-engine:
+        condition: service_healthy
+    volumes:
+      - ./config/agents:/app/agent-configs:ro
+      - agent-data:/app/data
+    environment:
+      - WORLD_ENGINE_URL=http://world-engine:${ENGINE_PORT:-8080}
+    command: ["spawn", "--config", "/app/agent-configs/agent-42-mila.toml", "--world-url", "http://world-engine:${ENGINE_PORT:-8080}"]
+    restart: unless-stopped
+    networks:
+      - agent-world
+
+  agent-43:
+    build:
+      context: ./agent-runtime
+    container_name: agent-minh
+    depends_on:
+      world-engine:
+        condition: service_healthy
+    volumes:
+      - ./config/agents:/app/agent-configs:ro
+      - agent-data:/app/data
+    environment:
+      - WORLD_ENGINE_URL=http://world-engine:${ENGINE_PORT:-8080}
+    command: ["spawn", "--config", "/app/agent-configs/agent-43-minh.toml", "--world-url", "http://world-engine:${ENGINE_PORT:-8080}"]
+    restart: unless-stopped
+    networks:
+      - agent-world
+
+  agent-44:
+    build:
+      context: ./agent-runtime
+    container_name: agent-miriam
+    depends_on:
+      world-engine:
+        condition: service_healthy
+    volumes:
+      - ./config/agents:/app/agent-configs:ro
+      - agent-data:/app/data
+    environment:
+      - WORLD_ENGINE_URL=http://world-engine:${ENGINE_PORT:-8080}
+    command: ["spawn", "--config", "/app/agent-configs/agent-44-miriam.toml", "--world-url", "http://world-engine:${ENGINE_PORT:-8080}"]
+    restart: unless-stopped
+    networks:
+      - agent-world
+
+  agent-45:
+    build:
+      context: ./agent-runtime
+    container_name: agent-nadia
+    depends_on:
+      world-engine:
+        condition: service_healthy
+    volumes:
+      - ./config/agents:/app/agent-configs:ro
+      - agent-data:/app/data
+    environment:
+      - WORLD_ENGINE_URL=http://world-engine:${ENGINE_PORT:-8080}
+    command: ["spawn", "--config", "/app/agent-configs/agent-45-nadia.toml", "--world-url", "http://world-engine:${ENGINE_PORT:-8080}"]
+    restart: unless-stopped
+    networks:
+      - agent-world
+
+  agent-46:
+    build:
+      context: ./agent-runtime
+    container_name: agent-naomi
+    depends_on:
+      world-engine:
+        condition: service_healthy
+    volumes:
+      - ./config/agents:/app/agent-configs:ro
+      - agent-data:/app/data
+    environment:
+      - WORLD_ENGINE_URL=http://world-engine:${ENGINE_PORT:-8080}
+    command: ["spawn", "--config", "/app/agent-configs/agent-46-naomi.toml", "--world-url", "http://world-engine:${ENGINE_PORT:-8080}"]
+    restart: unless-stopped
+    networks:
+      - agent-world
+
+  agent-47:
+    build:
+      context: ./agent-runtime
+    container_name: agent-ngozi
+    depends_on:
+      world-engine:
+        condition: service_healthy
+    volumes:
+      - ./config/agents:/app/agent-configs:ro
+      - agent-data:/app/data
+    environment:
+      - WORLD_ENGINE_URL=http://world-engine:${ENGINE_PORT:-8080}
+    command: ["spawn", "--config", "/app/agent-configs/agent-47-ngozi.toml", "--world-url", "http://world-engine:${ENGINE_PORT:-8080}"]
+    restart: unless-stopped
+    networks:
+      - agent-world
+
+  agent-48:
+    build:
+      context: ./agent-runtime
+    container_name: agent-nikolai
+    depends_on:
+      world-engine:
+        condition: service_healthy
+    volumes:
+      - ./config/agents:/app/agent-configs:ro
+      - agent-data:/app/data
+    environment:
+      - WORLD_ENGINE_URL=http://world-engine:${ENGINE_PORT:-8080}
+    command: ["spawn", "--config", "/app/agent-configs/agent-48-nikolai.toml", "--world-url", "http://world-engine:${ENGINE_PORT:-8080}"]
+    restart: unless-stopped
+    networks:
+      - agent-world
+
+  agent-49:
+    build:
+      context: ./agent-runtime
+    container_name: agent-noor
+    depends_on:
+      world-engine:
+        condition: service_healthy
+    volumes:
+      - ./config/agents:/app/agent-configs:ro
+      - agent-data:/app/data
+    environment:
+      - WORLD_ENGINE_URL=http://world-engine:${ENGINE_PORT:-8080}
+    command: ["spawn", "--config", "/app/agent-configs/agent-49-noor.toml", "--world-url", "http://world-engine:${ENGINE_PORT:-8080}"]
+    restart: unless-stopped
+    networks:
+      - agent-world
+
+  agent-50:
+    build:
+      context: ./agent-runtime
+    container_name: agent-omar
+    depends_on:
+      world-engine:
+        condition: service_healthy
+    volumes:
+      - ./config/agents:/app/agent-configs:ro
+      - agent-data:/app/data
+    environment:
+      - WORLD_ENGINE_URL=http://world-engine:${ENGINE_PORT:-8080}
+    command: ["spawn", "--config", "/app/agent-configs/agent-50-omar.toml", "--world-url", "http://world-engine:${ENGINE_PORT:-8080}"]
+    restart: unless-stopped
+    networks:
+      - agent-world
+
+  agent-51:
+    build:
+      context: ./agent-runtime
+    container_name: agent-priya
+    depends_on:
+      world-engine:
+        condition: service_healthy
+    volumes:
+      - ./config/agents:/app/agent-configs:ro
+      - agent-data:/app/data
+    environment:
+      - WORLD_ENGINE_URL=http://world-engine:${ENGINE_PORT:-8080}
+    command: ["spawn", "--config", "/app/agent-configs/agent-51-priya.toml", "--world-url", "http://world-engine:${ENGINE_PORT:-8080}"]
+    restart: unless-stopped
+    networks:
+      - agent-world
+
+  agent-52:
+    build:
+      context: ./agent-runtime
+    container_name: agent-raj
+    depends_on:
+      world-engine:
+        condition: service_healthy
+    volumes:
+      - ./config/agents:/app/agent-configs:ro
+      - agent-data:/app/data
+    environment:
+      - WORLD_ENGINE_URL=http://world-engine:${ENGINE_PORT:-8080}
+    command: ["spawn", "--config", "/app/agent-configs/agent-52-raj.toml", "--world-url", "http://world-engine:${ENGINE_PORT:-8080}"]
+    restart: unless-stopped
+    networks:
+      - agent-world
+
+  agent-53:
+    build:
+      context: ./agent-runtime
+    container_name: agent-ren
+    depends_on:
+      world-engine:
+        condition: service_healthy
+    volumes:
+      - ./config/agents:/app/agent-configs:ro
+      - agent-data:/app/data
+    environment:
+      - WORLD_ENGINE_URL=http://world-engine:${ENGINE_PORT:-8080}
+    command: ["spawn", "--config", "/app/agent-configs/agent-53-ren.toml", "--world-url", "http://world-engine:${ENGINE_PORT:-8080}"]
+    restart: unless-stopped
+    networks:
+      - agent-world
+
+  agent-54:
+    build:
+      context: ./agent-runtime
+    container_name: agent-rosa
+    depends_on:
+      world-engine:
+        condition: service_healthy
+    volumes:
+      - ./config/agents:/app/agent-configs:ro
+      - agent-data:/app/data
+    environment:
+      - WORLD_ENGINE_URL=http://world-engine:${ENGINE_PORT:-8080}
+    command: ["spawn", "--config", "/app/agent-configs/agent-54-rosa.toml", "--world-url", "http://world-engine:${ENGINE_PORT:-8080}"]
+    restart: unless-stopped
+    networks:
+      - agent-world
+
+  agent-55:
+    build:
+      context: ./agent-runtime
+    container_name: agent-sachiko
+    depends_on:
+      world-engine:
+        condition: service_healthy
+    volumes:
+      - ./config/agents:/app/agent-configs:ro
+      - agent-data:/app/data
+    environment:
+      - WORLD_ENGINE_URL=http://world-engine:${ENGINE_PORT:-8080}
+    command: ["spawn", "--config", "/app/agent-configs/agent-55-sachiko.toml", "--world-url", "http://world-engine:${ENGINE_PORT:-8080}"]
+    restart: unless-stopped
+    networks:
+      - agent-world
+
+  agent-56:
+    build:
+      context: ./agent-runtime
+    container_name: agent-samir
+    depends_on:
+      world-engine:
+        condition: service_healthy
+    volumes:
+      - ./config/agents:/app/agent-configs:ro
+      - agent-data:/app/data
+    environment:
+      - WORLD_ENGINE_URL=http://world-engine:${ENGINE_PORT:-8080}
+    command: ["spawn", "--config", "/app/agent-configs/agent-56-samir.toml", "--world-url", "http://world-engine:${ENGINE_PORT:-8080}"]
+    restart: unless-stopped
+    networks:
+      - agent-world
+
+  agent-57:
+    build:
+      context: ./agent-runtime
+    container_name: agent-sanya
+    depends_on:
+      world-engine:
+        condition: service_healthy
+    volumes:
+      - ./config/agents:/app/agent-configs:ro
+      - agent-data:/app/data
+    environment:
+      - WORLD_ENGINE_URL=http://world-engine:${ENGINE_PORT:-8080}
+    command: ["spawn", "--config", "/app/agent-configs/agent-57-sanya.toml", "--world-url", "http://world-engine:${ENGINE_PORT:-8080}"]
+    restart: unless-stopped
+    networks:
+      - agent-world
+
+  agent-58:
+    build:
+      context: ./agent-runtime
+    container_name: agent-sergei
+    depends_on:
+      world-engine:
+        condition: service_healthy
+    volumes:
+      - ./config/agents:/app/agent-configs:ro
+      - agent-data:/app/data
+    environment:
+      - WORLD_ENGINE_URL=http://world-engine:${ENGINE_PORT:-8080}
+    command: ["spawn", "--config", "/app/agent-configs/agent-58-sergei.toml", "--world-url", "http://world-engine:${ENGINE_PORT:-8080}"]
+    restart: unless-stopped
+    networks:
+      - agent-world
+
+  agent-59:
+    build:
+      context: ./agent-runtime
+    container_name: agent-shanti
+    depends_on:
+      world-engine:
+        condition: service_healthy
+    volumes:
+      - ./config/agents:/app/agent-configs:ro
+      - agent-data:/app/data
+    environment:
+      - WORLD_ENGINE_URL=http://world-engine:${ENGINE_PORT:-8080}
+    command: ["spawn", "--config", "/app/agent-configs/agent-59-shanti.toml", "--world-url", "http://world-engine:${ENGINE_PORT:-8080}"]
+    restart: unless-stopped
+    networks:
+      - agent-world
+
+  agent-60:
+    build:
+      context: ./agent-runtime
+    container_name: agent-stefan
+    depends_on:
+      world-engine:
+        condition: service_healthy
+    volumes:
+      - ./config/agents:/app/agent-configs:ro
+      - agent-data:/app/data
+    environment:
+      - WORLD_ENGINE_URL=http://world-engine:${ENGINE_PORT:-8080}
+    command: ["spawn", "--config", "/app/agent-configs/agent-60-stefan.toml", "--world-url", "http://world-engine:${ENGINE_PORT:-8080}"]
+    restart: unless-stopped
+    networks:
+      - agent-world
+
+  agent-61:
+    build:
+      context: ./agent-runtime
+    container_name: agent-sumi
+    depends_on:
+      world-engine:
+        condition: service_healthy
+    volumes:
+      - ./config/agents:/app/agent-configs:ro
+      - agent-data:/app/data
+    environment:
+      - WORLD_ENGINE_URL=http://world-engine:${ENGINE_PORT:-8080}
+    command: ["spawn", "--config", "/app/agent-configs/agent-61-sumi.toml", "--world-url", "http://world-engine:${ENGINE_PORT:-8080}"]
+    restart: unless-stopped
+    networks:
+      - agent-world
+
+  agent-62:
+    build:
+      context: ./agent-runtime
+    container_name: agent-tariq
+    depends_on:
+      world-engine:
+        condition: service_healthy
+    volumes:
+      - ./config/agents:/app/agent-configs:ro
+      - agent-data:/app/data
+    environment:
+      - WORLD_ENGINE_URL=http://world-engine:${ENGINE_PORT:-8080}
+    command: ["spawn", "--config", "/app/agent-configs/agent-62-tariq.toml", "--world-url", "http://world-engine:${ENGINE_PORT:-8080}"]
+    restart: unless-stopped
+    networks:
+      - agent-world
+
+  agent-63:
+    build:
+      context: ./agent-runtime
+    container_name: agent-tatiana
+    depends_on:
+      world-engine:
+        condition: service_healthy
+    volumes:
+      - ./config/agents:/app/agent-configs:ro
+      - agent-data:/app/data
+    environment:
+      - WORLD_ENGINE_URL=http://world-engine:${ENGINE_PORT:-8080}
+    command: ["spawn", "--config", "/app/agent-configs/agent-63-tatiana.toml", "--world-url", "http://world-engine:${ENGINE_PORT:-8080}"]
+    restart: unless-stopped
+    networks:
+      - agent-world
+
+  agent-64:
+    build:
+      context: ./agent-runtime
+    container_name: agent-thor
+    depends_on:
+      world-engine:
+        condition: service_healthy
+    volumes:
+      - ./config/agents:/app/agent-configs:ro
+      - agent-data:/app/data
+    environment:
+      - WORLD_ENGINE_URL=http://world-engine:${ENGINE_PORT:-8080}
+    command: ["spawn", "--config", "/app/agent-configs/agent-64-thor.toml", "--world-url", "http://world-engine:${ENGINE_PORT:-8080}"]
+    restart: unless-stopped
+    networks:
+      - agent-world
+
+  agent-65:
+    build:
+      context: ./agent-runtime
+    container_name: agent-uma
+    depends_on:
+      world-engine:
+        condition: service_healthy
+    volumes:
+      - ./config/agents:/app/agent-configs:ro
+      - agent-data:/app/data
+    environment:
+      - WORLD_ENGINE_URL=http://world-engine:${ENGINE_PORT:-8080}
+    command: ["spawn", "--config", "/app/agent-configs/agent-65-uma.toml", "--world-url", "http://world-engine:${ENGINE_PORT:-8080}"]
+    restart: unless-stopped
+    networks:
+      - agent-world
+
+  agent-66:
+    build:
+      context: ./agent-runtime
+    container_name: agent-viktor
+    depends_on:
+      world-engine:
+        condition: service_healthy
+    volumes:
+      - ./config/agents:/app/agent-configs:ro
+      - agent-data:/app/data
+    environment:
+      - WORLD_ENGINE_URL=http://world-engine:${ENGINE_PORT:-8080}
+    command: ["spawn", "--config", "/app/agent-configs/agent-66-viktor.toml", "--world-url", "http://world-engine:${ENGINE_PORT:-8080}"]
+    restart: unless-stopped
+    networks:
+      - agent-world
+
+  agent-67:
+    build:
+      context: ./agent-runtime
+    container_name: agent-xena
+    depends_on:
+      world-engine:
+        condition: service_healthy
+    volumes:
+      - ./config/agents:/app/agent-configs:ro
+      - agent-data:/app/data
+    environment:
+      - WORLD_ENGINE_URL=http://world-engine:${ENGINE_PORT:-8080}
+    command: ["spawn", "--config", "/app/agent-configs/agent-67-xena.toml", "--world-url", "http://world-engine:${ENGINE_PORT:-8080}"]
+    restart: unless-stopped
+    networks:
+      - agent-world
+
+  agent-68:
+    build:
+      context: ./agent-runtime
+    container_name: agent-yara
+    depends_on:
+      world-engine:
+        condition: service_healthy
+    volumes:
+      - ./config/agents:/app/agent-configs:ro
+      - agent-data:/app/data
+    environment:
+      - WORLD_ENGINE_URL=http://world-engine:${ENGINE_PORT:-8080}
+    command: ["spawn", "--config", "/app/agent-configs/agent-68-yara.toml", "--world-url", "http://world-engine:${ENGINE_PORT:-8080}"]
+    restart: unless-stopped
+    networks:
+      - agent-world
+
+  agent-69:
+    build:
+      context: ./agent-runtime
+    container_name: agent-yuki
+    depends_on:
+      world-engine:
+        condition: service_healthy
+    volumes:
+      - ./config/agents:/app/agent-configs:ro
+      - agent-data:/app/data
+    environment:
+      - WORLD_ENGINE_URL=http://world-engine:${ENGINE_PORT:-8080}
+    command: ["spawn", "--config", "/app/agent-configs/agent-69-yuki.toml", "--world-url", "http://world-engine:${ENGINE_PORT:-8080}"]
+    restart: unless-stopped
+    networks:
+      - agent-world
+
+  agent-70:
+    build:
+      context: ./agent-runtime
+    container_name: agent-zara
+    depends_on:
+      world-engine:
+        condition: service_healthy
+    volumes:
+      - ./config/agents:/app/agent-configs:ro
+      - agent-data:/app/data
+    environment:
+      - WORLD_ENGINE_URL=http://world-engine:${ENGINE_PORT:-8080}
+    command: ["spawn", "--config", "/app/agent-configs/agent-70-zara.toml", "--world-url", "http://world-engine:${ENGINE_PORT:-8080}"]
+    restart: unless-stopped
+    networks:
+      - agent-world
+
+  agent-71:
+    build:
+      context: ./agent-runtime
+    container_name: agent-aaliyah
+    depends_on:
+      world-engine:
+        condition: service_healthy
+    volumes:
+      - ./config/agents:/app/agent-configs:ro
+      - agent-data:/app/data
+    environment:
+      - WORLD_ENGINE_URL=http://world-engine:${ENGINE_PORT:-8080}
+    command: ["spawn", "--config", "/app/agent-configs/agent-71-aaliyah.toml", "--world-url", "http://world-engine:${ENGINE_PORT:-8080}"]
+    restart: unless-stopped
+    networks:
+      - agent-world
+
+  agent-72:
+    build:
+      context: ./agent-runtime
+    container_name: agent-bruno
+    depends_on:
+      world-engine:
+        condition: service_healthy
+    volumes:
+      - ./config/agents:/app/agent-configs:ro
+      - agent-data:/app/data
+    environment:
+      - WORLD_ENGINE_URL=http://world-engine:${ENGINE_PORT:-8080}
+    command: ["spawn", "--config", "/app/agent-configs/agent-72-bruno.toml", "--world-url", "http://world-engine:${ENGINE_PORT:-8080}"]
+    restart: unless-stopped
+    networks:
+      - agent-world
+
+  agent-73:
+    build:
+      context: ./agent-runtime
+    container_name: agent-celine
+    depends_on:
+      world-engine:
+        condition: service_healthy
+    volumes:
+      - ./config/agents:/app/agent-configs:ro
+      - agent-data:/app/data
+    environment:
+      - WORLD_ENGINE_URL=http://world-engine:${ENGINE_PORT:-8080}
+    command: ["spawn", "--config", "/app/agent-configs/agent-73-celine.toml", "--world-url", "http://world-engine:${ENGINE_PORT:-8080}"]
+    restart: unless-stopped
+    networks:
+      - agent-world
+
+  agent-74:
+    build:
+      context: ./agent-runtime
+    container_name: agent-dmitri
+    depends_on:
+      world-engine:
+        condition: service_healthy
+    volumes:
+      - ./config/agents:/app/agent-configs:ro
+      - agent-data:/app/data
+    environment:
+      - WORLD_ENGINE_URL=http://world-engine:${ENGINE_PORT:-8080}
+    command: ["spawn", "--config", "/app/agent-configs/agent-74-dmitri.toml", "--world-url", "http://world-engine:${ENGINE_PORT:-8080}"]
+    restart: unless-stopped
+    networks:
+      - agent-world
+
+  agent-75:
+    build:
+      context: ./agent-runtime
+    container_name: agent-eshe
+    depends_on:
+      world-engine:
+        condition: service_healthy
+    volumes:
+      - ./config/agents:/app/agent-configs:ro
+      - agent-data:/app/data
+    environment:
+      - WORLD_ENGINE_URL=http://world-engine:${ENGINE_PORT:-8080}
+    command: ["spawn", "--config", "/app/agent-configs/agent-75-eshe.toml", "--world-url", "http://world-engine:${ENGINE_PORT:-8080}"]
+    restart: unless-stopped
+    networks:
+      - agent-world
+
+  agent-76:
+    build:
+      context: ./agent-runtime
+    container_name: agent-farid
+    depends_on:
+      world-engine:
+        condition: service_healthy
+    volumes:
+      - ./config/agents:/app/agent-configs:ro
+      - agent-data:/app/data
+    environment:
+      - WORLD_ENGINE_URL=http://world-engine:${ENGINE_PORT:-8080}
+    command: ["spawn", "--config", "/app/agent-configs/agent-76-farid.toml", "--world-url", "http://world-engine:${ENGINE_PORT:-8080}"]
+    restart: unless-stopped
+    networks:
+      - agent-world
+
+  agent-77:
+    build:
+      context: ./agent-runtime
+    container_name: agent-greta
+    depends_on:
+      world-engine:
+        condition: service_healthy
+    volumes:
+      - ./config/agents:/app/agent-configs:ro
+      - agent-data:/app/data
+    environment:
+      - WORLD_ENGINE_URL=http://world-engine:${ENGINE_PORT:-8080}
+    command: ["spawn", "--config", "/app/agent-configs/agent-77-greta.toml", "--world-url", "http://world-engine:${ENGINE_PORT:-8080}"]
+    restart: unless-stopped
+    networks:
+      - agent-world
+
+  agent-78:
+    build:
+      context: ./agent-runtime
+    container_name: agent-hiro
+    depends_on:
+      world-engine:
+        condition: service_healthy
+    volumes:
+      - ./config/agents:/app/agent-configs:ro
+      - agent-data:/app/data
+    environment:
+      - WORLD_ENGINE_URL=http://world-engine:${ENGINE_PORT:-8080}
+    command: ["spawn", "--config", "/app/agent-configs/agent-78-hiro.toml", "--world-url", "http://world-engine:${ENGINE_PORT:-8080}"]
+    restart: unless-stopped
+    networks:
+      - agent-world
+
+  agent-79:
+    build:
+      context: ./agent-runtime
+    container_name: agent-imani
+    depends_on:
+      world-engine:
+        condition: service_healthy
+    volumes:
+      - ./config/agents:/app/agent-configs:ro
+      - agent-data:/app/data
+    environment:
+      - WORLD_ENGINE_URL=http://world-engine:${ENGINE_PORT:-8080}
+    command: ["spawn", "--config", "/app/agent-configs/agent-79-imani.toml", "--world-url", "http://world-engine:${ENGINE_PORT:-8080}"]
+    restart: unless-stopped
+    networks:
+      - agent-world
+
+  agent-80:
+    build:
+      context: ./agent-runtime
+    container_name: agent-joel
+    depends_on:
+      world-engine:
+        condition: service_healthy
+    volumes:
+      - ./config/agents:/app/agent-configs:ro
+      - agent-data:/app/data
+    environment:
+      - WORLD_ENGINE_URL=http://world-engine:${ENGINE_PORT:-8080}
+    command: ["spawn", "--config", "/app/agent-configs/agent-80-joel.toml", "--world-url", "http://world-engine:${ENGINE_PORT:-8080}"]
+    restart: unless-stopped
+    networks:
+      - agent-world
+
+  agent-81:
+    build:
+      context: ./agent-runtime
+    container_name: agent-karl
+    depends_on:
+      world-engine:
+        condition: service_healthy
+    volumes:
+      - ./config/agents:/app/agent-configs:ro
+      - agent-data:/app/data
+    environment:
+      - WORLD_ENGINE_URL=http://world-engine:${ENGINE_PORT:-8080}
+    command: ["spawn", "--config", "/app/agent-configs/agent-81-karl.toml", "--world-url", "http://world-engine:${ENGINE_PORT:-8080}"]
+    restart: unless-stopped
+    networks:
+      - agent-world
+
+  agent-82:
+    build:
+      context: ./agent-runtime
+    container_name: agent-luz
+    depends_on:
+      world-engine:
+        condition: service_healthy
+    volumes:
+      - ./config/agents:/app/agent-configs:ro
+      - agent-data:/app/data
+    environment:
+      - WORLD_ENGINE_URL=http://world-engine:${ENGINE_PORT:-8080}
+    command: ["spawn", "--config", "/app/agent-configs/agent-82-luz.toml", "--world-url", "http://world-engine:${ENGINE_PORT:-8080}"]
+    restart: unless-stopped
+    networks:
+      - agent-world
+
+  agent-83:
+    build:
+      context: ./agent-runtime
+    container_name: agent-marcel
+    depends_on:
+      world-engine:
+        condition: service_healthy
+    volumes:
+      - ./config/agents:/app/agent-configs:ro
+      - agent-data:/app/data
+    environment:
+      - WORLD_ENGINE_URL=http://world-engine:${ENGINE_PORT:-8080}
+    command: ["spawn", "--config", "/app/agent-configs/agent-83-marcel.toml", "--world-url", "http://world-engine:${ENGINE_PORT:-8080}"]
+    restart: unless-stopped
+    networks:
+      - agent-world
+
+  agent-84:
+    build:
+      context: ./agent-runtime
+    container_name: agent-nia
+    depends_on:
+      world-engine:
+        condition: service_healthy
+    volumes:
+      - ./config/agents:/app/agent-configs:ro
+      - agent-data:/app/data
+    environment:
+      - WORLD_ENGINE_URL=http://world-engine:${ENGINE_PORT:-8080}
+    command: ["spawn", "--config", "/app/agent-configs/agent-84-nia.toml", "--world-url", "http://world-engine:${ENGINE_PORT:-8080}"]
+    restart: unless-stopped
+    networks:
+      - agent-world
+
+  agent-85:
+    build:
+      context: ./agent-runtime
+    container_name: agent-oscar
+    depends_on:
+      world-engine:
+        condition: service_healthy
+    volumes:
+      - ./config/agents:/app/agent-configs:ro
+      - agent-data:/app/data
+    environment:
+      - WORLD_ENGINE_URL=http://world-engine:${ENGINE_PORT:-8080}
+    command: ["spawn", "--config", "/app/agent-configs/agent-85-oscar.toml", "--world-url", "http://world-engine:${ENGINE_PORT:-8080}"]
+    restart: unless-stopped
+    networks:
+      - agent-world
+
+  agent-86:
+    build:
+      context: ./agent-runtime
+    container_name: agent-pavel
+    depends_on:
+      world-engine:
+        condition: service_healthy
+    volumes:
+      - ./config/agents:/app/agent-configs:ro
+      - agent-data:/app/data
+    environment:
+      - WORLD_ENGINE_URL=http://world-engine:${ENGINE_PORT:-8080}
+    command: ["spawn", "--config", "/app/agent-configs/agent-86-pavel.toml", "--world-url", "http://world-engine:${ENGINE_PORT:-8080}"]
+    restart: unless-stopped
+    networks:
+      - agent-world
+
+  agent-87:
+    build:
+      context: ./agent-runtime
+    container_name: agent-rina
+    depends_on:
+      world-engine:
+        condition: service_healthy
+    volumes:
+      - ./config/agents:/app/agent-configs:ro
+      - agent-data:/app/data
+    environment:
+      - WORLD_ENGINE_URL=http://world-engine:${ENGINE_PORT:-8080}
+    command: ["spawn", "--config", "/app/agent-configs/agent-87-rina.toml", "--world-url", "http://world-engine:${ENGINE_PORT:-8080}"]
+    restart: unless-stopped
+    networks:
+      - agent-world
+
+  agent-88:
+    build:
+      context: ./agent-runtime
+    container_name: agent-sven
+    depends_on:
+      world-engine:
+        condition: service_healthy
+    volumes:
+      - ./config/agents:/app/agent-configs:ro
+      - agent-data:/app/data
+    environment:
+      - WORLD_ENGINE_URL=http://world-engine:${ENGINE_PORT:-8080}
+    command: ["spawn", "--config", "/app/agent-configs/agent-88-sven.toml", "--world-url", "http://world-engine:${ENGINE_PORT:-8080}"]
+    restart: unless-stopped
+    networks:
+      - agent-world
+
+  agent-89:
+    build:
+      context: ./agent-runtime
+    container_name: agent-tomas
+    depends_on:
+      world-engine:
+        condition: service_healthy
+    volumes:
+      - ./config/agents:/app/agent-configs:ro
+      - agent-data:/app/data
+    environment:
+      - WORLD_ENGINE_URL=http://world-engine:${ENGINE_PORT:-8080}
+    command: ["spawn", "--config", "/app/agent-configs/agent-89-tomas.toml", "--world-url", "http://world-engine:${ENGINE_PORT:-8080}"]
+    restart: unless-stopped
+    networks:
+      - agent-world
+
+  agent-90:
+    build:
+      context: ./agent-runtime
+    container_name: agent-valentina
+    depends_on:
+      world-engine:
+        condition: service_healthy
+    volumes:
+      - ./config/agents:/app/agent-configs:ro
+      - agent-data:/app/data
+    environment:
+      - WORLD_ENGINE_URL=http://world-engine:${ENGINE_PORT:-8080}
+    command: ["spawn", "--config", "/app/agent-configs/agent-90-valentina.toml", "--world-url", "http://world-engine:${ENGINE_PORT:-8080}"]
+    restart: unless-stopped
+    networks:
+      - agent-world
+
+  agent-91:
+    build:
+      context: ./agent-runtime
+    container_name: agent-wren
+    depends_on:
+      world-engine:
+        condition: service_healthy
+    volumes:
+      - ./config/agents:/app/agent-configs:ro
+      - agent-data:/app/data
+    environment:
+      - WORLD_ENGINE_URL=http://world-engine:${ENGINE_PORT:-8080}
+    command: ["spawn", "--config", "/app/agent-configs/agent-91-wren.toml", "--world-url", "http://world-engine:${ENGINE_PORT:-8080}"]
+    restart: unless-stopped
+    networks:
+      - agent-world
+
+  agent-92:
+    build:
+      context: ./agent-runtime
+    container_name: agent-xavier
+    depends_on:
+      world-engine:
+        condition: service_healthy
+    volumes:
+      - ./config/agents:/app/agent-configs:ro
+      - agent-data:/app/data
+    environment:
+      - WORLD_ENGINE_URL=http://world-engine:${ENGINE_PORT:-8080}
+    command: ["spawn", "--config", "/app/agent-configs/agent-92-xavier.toml", "--world-url", "http://world-engine:${ENGINE_PORT:-8080}"]
+    restart: unless-stopped
+    networks:
+      - agent-world
+
+  agent-93:
+    build:
+      context: ./agent-runtime
+    container_name: agent-yolanda
+    depends_on:
+      world-engine:
+        condition: service_healthy
+    volumes:
+      - ./config/agents:/app/agent-configs:ro
+      - agent-data:/app/data
+    environment:
+      - WORLD_ENGINE_URL=http://world-engine:${ENGINE_PORT:-8080}
+    command: ["spawn", "--config", "/app/agent-configs/agent-93-yolanda.toml", "--world-url", "http://world-engine:${ENGINE_PORT:-8080}"]
+    restart: unless-stopped
+    networks:
+      - agent-world
+
+  agent-94:
+    build:
+      context: ./agent-runtime
+    container_name: agent-zain
+    depends_on:
+      world-engine:
+        condition: service_healthy
+    volumes:
+      - ./config/agents:/app/agent-configs:ro
+      - agent-data:/app/data
+    environment:
+      - WORLD_ENGINE_URL=http://world-engine:${ENGINE_PORT:-8080}
+    command: ["spawn", "--config", "/app/agent-configs/agent-94-zain.toml", "--world-url", "http://world-engine:${ENGINE_PORT:-8080}"]
+    restart: unless-stopped
+    networks:
+      - agent-world
+
+  agent-95:
+    build:
+      context: ./agent-runtime
+    container_name: agent-alejandra
+    depends_on:
+      world-engine:
+        condition: service_healthy
+    volumes:
+      - ./config/agents:/app/agent-configs:ro
+      - agent-data:/app/data
+    environment:
+      - WORLD_ENGINE_URL=http://world-engine:${ENGINE_PORT:-8080}
+    command: ["spawn", "--config", "/app/agent-configs/agent-95-alejandra.toml", "--world-url", "http://world-engine:${ENGINE_PORT:-8080}"]
+    restart: unless-stopped
+    networks:
+      - agent-world
+
+  agent-96:
+    build:
+      context: ./agent-runtime
+    container_name: agent-bjorn
+    depends_on:
+      world-engine:
+        condition: service_healthy
+    volumes:
+      - ./config/agents:/app/agent-configs:ro
+      - agent-data:/app/data
+    environment:
+      - WORLD_ENGINE_URL=http://world-engine:${ENGINE_PORT:-8080}
+    command: ["spawn", "--config", "/app/agent-configs/agent-96-bjorn.toml", "--world-url", "http://world-engine:${ENGINE_PORT:-8080}"]
+    restart: unless-stopped
+    networks:
+      - agent-world
+
+  agent-97:
+    build:
+      context: ./agent-runtime
+    container_name: agent-ciro
+    depends_on:
+      world-engine:
+        condition: service_healthy
+    volumes:
+      - ./config/agents:/app/agent-configs:ro
+      - agent-data:/app/data
+    environment:
+      - WORLD_ENGINE_URL=http://world-engine:${ENGINE_PORT:-8080}
+    command: ["spawn", "--config", "/app/agent-configs/agent-97-ciro.toml", "--world-url", "http://world-engine:${ENGINE_PORT:-8080}"]
+    restart: unless-stopped
+    networks:
+      - agent-world
+
+  agent-98:
+    build:
+      context: ./agent-runtime
+    container_name: agent-dina
+    depends_on:
+      world-engine:
+        condition: service_healthy
+    volumes:
+      - ./config/agents:/app/agent-configs:ro
+      - agent-data:/app/data
+    environment:
+      - WORLD_ENGINE_URL=http://world-engine:${ENGINE_PORT:-8080}
+    command: ["spawn", "--config", "/app/agent-configs/agent-98-dina.toml", "--world-url", "http://world-engine:${ENGINE_PORT:-8080}"]
+    restart: unless-stopped
+    networks:
+      - agent-world
+
+  agent-99:
+    build:
+      context: ./agent-runtime
+    container_name: agent-elio
+    depends_on:
+      world-engine:
+        condition: service_healthy
+    volumes:
+      - ./config/agents:/app/agent-configs:ro
+      - agent-data:/app/data
+    environment:
+      - WORLD_ENGINE_URL=http://world-engine:${ENGINE_PORT:-8080}
+    command: ["spawn", "--config", "/app/agent-configs/agent-99-elio.toml", "--world-url", "http://world-engine:${ENGINE_PORT:-8080}"]
+    restart: unless-stopped
+    networks:
+      - agent-world
+
+  # ── Dashboard (Next.js) ──────────────────────────────────────
+  dashboard:
+    build:
+      context: ./dashboard
+      args:
+        WORLD_ENGINE_URL: http://world-engine:${ENGINE_PORT:-8080}
+    container_name: dashboard
+    ports:
+      - "${DASHBOARD_PORT:-3001}:3000"
+    depends_on:
+      world-engine:
+        condition: service_healthy
+    environment:
+      - WORLD_ENGINE_URL=http://world-engine:${ENGINE_PORT:-8080}
+      - PORT=3000
+    restart: unless-stopped
+    networks:
+      - agent-world
+
+  # ── Ollama (optional local LLM) ─────────────────────────────
+  # Started only with: docker compose --profile local-llm up
+  ollama:
+    image: ollama/ollama:latest
+    container_name: ollama
+    ports:
+      - "${OLLAMA_PORT:-11434}:11434"
+    volumes:
+      - ollama-data:/root/.ollama
+    restart: unless-stopped
+    profiles:
+      - local-llm
+    networks:
+      - agent-world
+
+volumes:
+  world-data:
+  agent-data:
+  ollama-data:
+
+networks:
+  agent-world:
+    driver: bridge

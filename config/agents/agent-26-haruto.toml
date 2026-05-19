@@ -1,0 +1,11 @@
+# Agent 26: Haruto — Artisan & Craftsman
+[agent]
+name = "Haruto"
+traits = { risk_taking = 0.6, empathy = 0.8, charm = 0.8 }
+
+[agent.skills]
+coding = { level = 3 }
+research = { level = 1 }
+
+[think_loop]
+tick_interval = 1.0

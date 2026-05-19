@@ -1,0 +1,13 @@
+# Agent 46: Naomi — Biologist & Researcher
+[agent]
+name = "Naomi"
+traits = { empathy = 0.9, patience = 0.8, adaptability = 0.6 }
+
+[agent.skills]
+research = { level = 4 }
+coding = { level = 5 }
+teaching = { level = 5 }
+trading = { level = 5 }
+
+[think_loop]
+tick_interval = 1.0

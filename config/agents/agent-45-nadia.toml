@@ -1,0 +1,12 @@
+# Agent 45: Nadia — Spy & Infiltrator
+[agent]
+name = "Nadia"
+traits = { patience = 0.6, intuition = 0.9, creativity = 0.7 }
+
+[agent.skills]
+teaching = { level = 2 }
+research = { level = 1 }
+coding = { level = 1 }
+
+[think_loop]
+tick_interval = 1.0

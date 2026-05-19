@@ -1,0 +1,11 @@
+# Agent 96: Bjorn — Viking & Raider
+[agent]
+name = "Bjorn"
+traits = { generosity = 0.7, sociability = 0.9, charm = 0.4 }
+
+[agent.skills]
+research = { level = 3 }
+coding = { level = 2 }
+
+[think_loop]
+tick_interval = 1.0

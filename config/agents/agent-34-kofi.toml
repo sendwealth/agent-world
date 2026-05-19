@@ -1,0 +1,12 @@
+# Agent 34: Kofi — Historian & Archivist
+[agent]
+name = "Kofi"
+traits = { endurance = 0.5, sociability = 0.4, generosity = 0.5 }
+
+[agent.skills]
+teaching = { level = 1 }
+research = { level = 4 }
+coding = { level = 3 }
+
+[think_loop]
+tick_interval = 1.0

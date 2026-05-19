@@ -1,0 +1,12 @@
+# Agent 70: Zara — Queen & Sovereign
+[agent]
+name = "Zara"
+traits = { wisdom = 0.6, discipline = 0.5, ambition = 0.6 }
+
+[agent.skills]
+teaching = { level = 5 }
+research = { level = 1 }
+coding = { level = 4 }
+
+[think_loop]
+tick_interval = 1.0

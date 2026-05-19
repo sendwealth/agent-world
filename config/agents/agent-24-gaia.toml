@@ -1,0 +1,11 @@
+# Agent 24: Gaia — Naturalist & Gardener
+[agent]
+name = "Gaia"
+traits = { patience = 0.8, curiosity = 0.3, creativity = 0.3 }
+
+[agent.skills]
+trading = { level = 5 }
+coding = { level = 2 }
+
+[think_loop]
+tick_interval = 1.0

@@ -1,0 +1,12 @@
+# Agent 27: Idris — Astronomer & Stargazer
+[agent]
+name = "Idris"
+traits = { patience = 0.7, resilience = 0.4, charm = 0.4 }
+
+[agent.skills]
+research = { level = 5 }
+coding = { level = 1 }
+teaching = { level = 1 }
+
+[think_loop]
+tick_interval = 1.0

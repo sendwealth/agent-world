@@ -1,0 +1,13 @@
+# Agent 92: Xavier — Leader & Visionary
+[agent]
+name = "Xavier"
+traits = { sociability = 0.5, caution = 0.6, charm = 0.4 }
+
+[agent.skills]
+research = { level = 5 }
+teaching = { level = 4 }
+trading = { level = 5 }
+coding = { level = 2 }
+
+[think_loop]
+tick_interval = 1.0

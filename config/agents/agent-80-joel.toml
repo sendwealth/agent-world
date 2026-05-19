@@ -1,0 +1,12 @@
+# Agent 80: Joel — Farmer & Provider
+[agent]
+name = "Joel"
+traits = { courage = 1.0, sociability = 0.4, intuition = 1.0 }
+
+[agent.skills]
+coding = { level = 5 }
+research = { level = 4 }
+teaching = { level = 1 }
+
+[think_loop]
+tick_interval = 1.0

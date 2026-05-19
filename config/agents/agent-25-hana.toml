@@ -1,0 +1,13 @@
+# Agent 25: Hana — Interpreter & Linguist
+[agent]
+name = "Hana"
+traits = { generosity = 0.7, intuition = 0.8, resilience = 0.9 }
+
+[agent.skills]
+teaching = { level = 2 }
+coding = { level = 1 }
+research = { level = 1 }
+trading = { level = 4 }
+
+[think_loop]
+tick_interval = 1.0

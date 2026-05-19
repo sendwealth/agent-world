@@ -12,15 +12,16 @@
 | 子系统 | 模块 | 状态 | 说明 |
 |--------|------|------|------|
 | World Engine | economy/ | **已实现** | token_burn、escrow、reward、task 均有完整实现和测试 |
-| World Engine | world/ | **已实现** | EventBus（23 种事件类型）、enums、state |
-| World Engine | api.rs | **已实现** | Axum REST API，10 个任务板端点 + 3 个 WAL 端点 |
-| World Engine | config/ | **部分** | genesis.yaml 加载已实现；config/ Rust 模块未创建 |
+| World Engine | world/ | **已实现** | EventBus（30+ 种事件类型）、enums、state、SSE endpoint |
+| World Engine | api.rs | **已实现** | Axum REST API，包含 tasks、WAL、organizations、governance、stocks、banking 端点 |
+| World Engine | config/ | **已实现** | genesis.yaml with economy, lifecycle, evolution parameters |
 | World Engine | engine/ | **未实现** | Tick 调度器未实现 |
-| World Engine | lifecycle/ | **占位** | 仅空结构体占位 |
+| World Engine | lifecycle/ | **已实现** | LifecycleMachine: Birth→Childhood→Adulthood→Elder→Death |
 | World Engine | rules/ | **已实现** | 3 条规则：TokenConsumption（R001）、DeathJudgment（R002）、NewbieProtection（R003） |
-| World Engine | social/ | **未实现** | |
-| World Engine | evolution/ | **未实现** | |
-| World Engine | market/ | **未实现** | Rust 侧 market 目录不存在（Python market/ 也为空） |
+| World Engine | social/ | **已实现** | Trust network, mentorship, inheritance |
+| World Engine | evolution/ | **已实现** | Skill trees, mutations, natural selection, EvolutionSubsystem |
+| World Engine | market/ | **已实现** | Banking system, stock market with order book |
+| World Engine | organization/ | **已实现** | Organizations (Company/Guild/Alliance/University), governance, charters, members |
 | World Engine | a2a/ | **未实现** | gRPC 服务器未实现 |
 | World Engine | storage/ | **未实现** | |
 | World Engine | wal/ | **已实现** | Write-Ahead Log：CRC32 校验、崩溃恢复、快照、1000 条自动轮转 |
@@ -36,7 +37,7 @@
 | Agent Runtime | tools/ | **未实现** | |
 | Agent Runtime | config/ | **未实现** | |
 | Agent Runtime | main.py | **未实现** | 无 CLI 入口 |
-| Dashboard | 全部 | **已实现** | 页面和组件已搭建，但依赖 world engine SSE 端点（未实现） |
+| Dashboard | 全部 | **已实现** | Pages: overview, agents, tasks, timeline, organizations, stocks, evolution, economy; SSE 实时数据 |
 | Protocol | a2a.proto | **已实现** | 定义了 Discover、SendMessage、StreamMessages |
 | Protocol | discovery.proto | **未实现** | |
 

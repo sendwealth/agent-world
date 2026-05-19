@@ -1,0 +1,12 @@
+# Agent 94: Zain — Mystic & Seeker
+[agent]
+name = "Zain"
+traits = { risk_taking = 0.6, endurance = 0.4, caution = 0.4 }
+
+[agent.skills]
+coding = { level = 5 }
+trading = { level = 1 }
+teaching = { level = 1 }
+
+[think_loop]
+tick_interval = 1.0

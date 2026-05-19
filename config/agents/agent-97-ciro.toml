@@ -1,0 +1,11 @@
+# Agent 97: Ciro — Scholar & Inventor
+[agent]
+name = "Ciro"
+traits = { focus = 0.5, curiosity = 0.4, adaptability = 0.6 }
+
+[agent.skills]
+coding = { level = 4 }
+research = { level = 3 }
+
+[think_loop]
+tick_interval = 1.0

@@ -1,0 +1,12 @@
+# Agent 89: Tomas — Inventor & Dreamer
+[agent]
+name = "Tomas"
+traits = { endurance = 0.9, risk_taking = 0.5, generosity = 0.9 }
+
+[agent.skills]
+trading = { level = 1 }
+teaching = { level = 4 }
+research = { level = 1 }
+
+[think_loop]
+tick_interval = 1.0

@@ -1,0 +1,12 @@
+# Agent 72: Bruno — Chef & Provider
+[agent]
+name = "Bruno"
+traits = { generosity = 0.7, adaptability = 0.6, empathy = 0.4 }
+
+[agent.skills]
+teaching = { level = 1 }
+research = { level = 2 }
+trading = { level = 3 }
+
+[think_loop]
+tick_interval = 1.0

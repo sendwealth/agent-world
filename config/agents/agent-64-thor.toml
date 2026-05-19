@@ -1,0 +1,11 @@
+# Agent 64: Thor — Smith & Forgemaster
+[agent]
+name = "Thor"
+traits = { ambition = 0.6, curiosity = 0.6, wisdom = 0.4 }
+
+[agent.skills]
+trading = { level = 1 }
+research = { level = 1 }
+
+[think_loop]
+tick_interval = 1.0

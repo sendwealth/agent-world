@@ -1,0 +1,13 @@
+# Agent 63: Tatiana — Dancer & Performer
+[agent]
+name = "Tatiana"
+traits = { wisdom = 0.5, ambition = 0.6, resilience = 0.5 }
+
+[agent.skills]
+research = { level = 5 }
+teaching = { level = 3 }
+coding = { level = 2 }
+trading = { level = 4 }
+
+[think_loop]
+tick_interval = 1.0

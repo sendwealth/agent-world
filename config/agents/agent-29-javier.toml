@@ -1,0 +1,13 @@
+# Agent 29: Javier — Musician & Composer
+[agent]
+name = "Javier"
+traits = { curiosity = 0.9, courage = 0.8, generosity = 0.5 }
+
+[agent.skills]
+teaching = { level = 2 }
+coding = { level = 1 }
+trading = { level = 5 }
+research = { level = 5 }
+
+[think_loop]
+tick_interval = 1.0

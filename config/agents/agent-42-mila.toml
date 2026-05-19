@@ -1,0 +1,13 @@
+# Agent 42: Mila — Poet & Philosopher
+[agent]
+name = "Mila"
+traits = { ambition = 0.8, wisdom = 0.5, charm = 0.8 }
+
+[agent.skills]
+research = { level = 2 }
+coding = { level = 5 }
+teaching = { level = 5 }
+trading = { level = 3 }
+
+[think_loop]
+tick_interval = 1.0

@@ -1,0 +1,11 @@
+# Agent 73: Celine — Healer & Herbalist
+[agent]
+name = "Celine"
+traits = { empathy = 0.8, intuition = 0.6, wisdom = 0.8 }
+
+[agent.skills]
+teaching = { level = 3 }
+coding = { level = 3 }
+
+[think_loop]
+tick_interval = 1.0

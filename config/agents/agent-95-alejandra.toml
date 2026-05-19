@@ -1,0 +1,13 @@
+# Agent 95: Alejandra — Conquistadora & Explorer
+[agent]
+name = "Alejandra"
+traits = { focus = 0.9, patience = 0.4, sociability = 0.9 }
+
+[agent.skills]
+research = { level = 3 }
+trading = { level = 2 }
+coding = { level = 5 }
+teaching = { level = 1 }
+
+[think_loop]
+tick_interval = 1.0

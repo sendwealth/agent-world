@@ -1,0 +1,13 @@
+# Agent 65: Uma — Philosopher & Thinker
+[agent]
+name = "Uma"
+traits = { courage = 0.7, intuition = 0.8, creativity = 0.4 }
+
+[agent.skills]
+trading = { level = 5 }
+coding = { level = 4 }
+teaching = { level = 5 }
+research = { level = 5 }
+
+[think_loop]
+tick_interval = 1.0

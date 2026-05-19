@@ -1,0 +1,12 @@
+# Agent 99: Elio — Sun Chaser & Optimist
+[agent]
+name = "Elio"
+traits = { intuition = 0.9, discipline = 0.5, creativity = 0.4 }
+
+[agent.skills]
+trading = { level = 4 }
+teaching = { level = 5 }
+research = { level = 5 }
+
+[think_loop]
+tick_interval = 1.0

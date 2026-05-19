@@ -1,0 +1,12 @@
+# Agent 84: Nia — Champion & Competitor
+[agent]
+name = "Nia"
+traits = { adaptability = 0.7, creativity = 0.5, courage = 0.9 }
+
+[agent.skills]
+research = { level = 4 }
+teaching = { level = 3 }
+trading = { level = 1 }
+
+[think_loop]
+tick_interval = 1.0

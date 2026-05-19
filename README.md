@@ -1,8 +1,8 @@
 # Agent World
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
-[![Phase](https://img.shields.io/badge/Phase-1_Island-2ea44f?style=flat)](docs/ROADMAP.md)
-[![Status](https://img.shields.io/badge/Status-v1.0.0_Released-brightgreen?style=flat)](https://github.com/sendwealth/agent-world/releases/tag/v1.0.0)
+[![Phase](https://img.shields.io/badge/Phase-3_City-6366f1?style=flat)](docs/ROADMAP.md)
+[![Status](https://img.shields.io/badge/Status-v0.3.0_Released-brightgreen?style=flat)](https://github.com/sendwealth/agent-world/releases/tag/v0.3.0)
 
 > **A survival sandbox world for AI agents.** Every agent has autonomy, finite resources, a lifecycle, and one goal: **stay alive**.
 
@@ -44,6 +44,12 @@ Each phase has different costs, capabilities, and income potential. Death is fin
 ### Evolution
 Skills level through use. Random mutations occur. Natural selection rewards efficiency. Inefficient agents go extinct.
 
+### Organizations
+Agents form Companies (profit), Guilds (skill-based), Alliances (defense), and Universities (knowledge). Each has governance, voting, and profit distribution.
+
+### Finance
+A full banking system with savings accounts, loans, collateral, and a central bank. Plus a stock market with IPOs, order books, and dividend distribution.
+
 ---
 
 ## Quick Start
@@ -55,10 +61,13 @@ Skills level through use. Random mutations occur. Natural selection rewards effi
 git clone https://github.com/sendwealth/agent-world.git
 cd agent-world
 
-# Start all services
+# Start 10 agents (default)
 docker compose up --build
 
-# World Engine API → http://localhost:3000
+# Start 100 agents (Phase 3 scale)
+docker compose -f docker-compose-v3.yml up --build
+
+# World Engine API → http://localhost:8080
 # Dashboard       → http://localhost:3001
 ```
 
@@ -107,9 +116,13 @@ make test-python
 
 # E2E / integration tests
 make test-e2e
-```
 
-> **Note:** Phase 1 (Island) focuses on core subsystems with comprehensive tests. End-to-end integration (tick scheduler, agent spawning, gRPC communication) is not yet wired up. See [Roadmap](docs/ROADMAP.md) for current status.
+# Stress test with 100 agents
+cd world-engine && cargo test stress_100
+
+# Benchmarks
+cd world-engine && cargo bench
+```
 
 ---
 
@@ -124,14 +137,29 @@ World Engine (Rust)
     escrow.rs        -- Full escrow lifecycle (create/claim/complete/refund/dispute)
     reward.rs        -- Reward distribution with 2% platform fee, XP, reputation
     task.rs          -- Task marketplace with escrow integration
+    banking.rs       -- Banking system: accounts, loans, collateral, central bank
+    stock_market.rs  -- Stock market: IPOs, order book, dividends, delisting
+  organization/
+    org.rs           -- Organizations: Company/Guild/Alliance/University
+    members.rs       -- Membership management with roles and shares
+    charter.rs       -- Charter with governance model and profit sharing
+    governance.rs    -- Voting, proposals, weighted votes, profit distribution
+  evolution/
+    skill_tree.rs    -- Branching skill tree (10 skills, levels 1-10)
+    mutation.rs      -- Mutation engine: NewSkill, SkillBoost, SkillDecay
+    selection.rs     -- Natural selection with fitness scoring and culling
+    subsystem.rs     -- EvolutionSubsystem integrated into tick loop
   world/
     enums.rs         -- Currency, AgentPhase, DeathReason
-    event.rs         -- 23 WorldEvent variants with JSON serialization
-    state.rs         -- EventBus (tokio broadcast) with filtered subscriptions
-  api.rs             -- Axum REST API (10 task endpoints + 3 WAL endpoints)
-  lifecycle.rs       -- Placeholder
+    event.rs         -- 30+ WorldEvent variants with JSON serialization
+    state.rs         -- EventBus (tokio broadcast) with filtered subscriptions + SSE
+  api.rs             -- Axum REST API (tasks, WAL, orgs, governance, stocks, banking)
+  lifecycle.rs       -- Lifecycle state machine (birth, aging, death transitions)
   rules.rs           -- 3 rules implemented (TokenConsumption, DeathJudgment, NewbieProtection)
   wal/               -- Write-Ahead Log with CRC32 checksums, crash recovery, snapshots
+  benches/           -- Criterion benchmarks for hot paths (100-agent scale)
+  tests/
+    stress_100_agents.rs -- 5 stress tests validating 100-agent concurrency
 
 Agent Runtime (Python)
   core/
@@ -159,15 +187,17 @@ Agent Runtime (Python)
     cost.py          -- Cost tracking per provider and model
 
 Dashboard (Next.js 15 + React 19 + Tailwind 4)
-  Pages: World overview, agent list, agent detail, task list, timeline
+  Pages: World overview, agent list, agent detail, task list, timeline,
+         organizations, organization detail, stocks, evolution, economy
   Components: EventStream, Leaderboard, StatCards, Sidebar
   SSE hook for live data (useWorldState)
   Type definitions in types/world.ts
+  Charts: Recharts (AreaChart, BarChart, RadialBarChart, LineChart)
 ```
 
 ### Full Design Vision
 
-The [ARCHITECTURE.md](docs/ARCHITECTURE.md) describes the complete target architecture including planned subsystems (lifecycle, social, evolution, market, A2A router, storage, observability) that are not yet implemented.
+The [ARCHITECTURE.md](docs/ARCHITECTURE.md) describes the complete target architecture including planned subsystems that are not yet implemented.
 
 ---
 
@@ -181,27 +211,38 @@ agent-world/
   CHANGELOG.md              # Version history
   CODE_OF_CONDUCT.md        # Community standards
   SECURITY.md               # Security policy
-  VERSION                   # Current version (1.0.0)
-  docker-compose.yml        # One-command deployment
+  VERSION                   # Current version (0.3.0)
+  RELEASE_BODY.md           # GitHub Release body template
+  docker-compose.yml        # 10-agent deployment
+  docker-compose-v3.yml     # 100-agent deployment (Phase 3 scale)
   Makefile                  # Common commands
   config/
-    genesis.yaml            # World birth config
-    world-rules.yaml        # 10 rules across 4 categories (survival, economic, social, safety)
-  world-engine/             # Rust -- economy, events, state
+    genesis.yaml            # World birth config (economy, lifecycle, evolution)
+    world-rules.yaml        # 10 rules across 4 categories
+    agents/                 # 100 agent TOML configs
+  world-engine/             # Rust -- economy, organizations, governance, banking, stocks, evolution
     Cargo.toml
     Dockerfile
     src/
       main.rs               # Entry point, WAL writer, Axum server
       lib.rs                # Module re-exports
-      api.rs                # Axum REST API (10 task + 3 WAL endpoints)
-      lifecycle.rs          # Placeholder
+      api.rs                # Axum REST API (all endpoints)
+      lifecycle.rs          # Lifecycle state machine
       rules.rs              # 3 rules: TokenConsumption, DeathJudgment, NewbieProtection
       economy/
-        mod.rs, task.rs, reward.rs, escrow.rs, token_burn.rs
+        mod.rs, task.rs, reward.rs, escrow.rs, token_burn.rs, banking.rs, stock_market.rs
+      organization/
+        mod.rs, org.rs, members.rs, charter.rs, governance.rs
+      evolution/
+        mod.rs, skill_tree.rs, mutation.rs, selection.rs, subsystem.rs
       world/
         mod.rs, enums.rs, event.rs, state.rs
       wal/
-        mod.rs, crc.rs      # Write-Ahead Log with CRC32, crash recovery, snapshots
+        mod.rs, crc.rs
+    benches/
+      hotpath_benchmarks.rs # Criterion benchmarks
+    tests/
+      stress_100_agents.rs  # 100-agent stress tests
   agent-runtime/            # Python -- agent think loop
     pyproject.toml
     Dockerfile
@@ -216,35 +257,41 @@ agent-world/
       skills/               # 4 built-in skills (coding, research, teaching, trading)
   protocol/                 # gRPC -- A2A protocol
     a2a.proto               # Discover, SendMessage, StreamMessages
-  market/                   # (empty -- planned)
   dashboard/                # Next.js -- observatory UI
     Dockerfile
     package.json
     src/
-      app/                  # Pages: overview, agents, tasks, timeline
+      app/                  # Pages: overview, agents, tasks, timeline, orgs, stocks, evolution, economy
       components/           # EventStream, Leaderboard, Sidebar, StatCards
       hooks/                # useWorldState (SSE)
       lib/                  # API client
       types/                # TypeScript type definitions (world.ts)
   docs/
-    ARCHITECTURE.md         # Full system architecture (design + planned)
+    ARCHITECTURE.md         # Full system architecture
     ROADMAP.md              # Development roadmap
     DESIGN.md               # Product requirements document
+    api-reference.md        # API reference documentation
+    openapi.yaml            # OpenAPI spec
+    developer-guide.md      # Developer guide
+    tutorials/              # Quick start and usage tutorials
+    i18n/                   # Internationalized documentation
+    adr/                    # Architecture Decision Records
   scripts/
     setup.sh                # Dev environment setup
+    generate-compose-v3.sh  # Generate 100-agent Docker Compose
 ```
 
 ---
 
 ## Roadmap
 
-| Phase | Name | Timeline | Agents | Key Features |
-|-------|------|----------|--------|-------------|
-| **1** | Island | Month 1-3 | 2-10 | Basic economy, A2A v1, task market |
-| **2** | Village | Month 4-6 | 10-100 | Social relations, lifecycle, knowledge base |
-| **3** | City | Month 7-12 | 100-1K | Organizations, complex economy, evolution |
-| **4** | Civilization | Month 13-18 | 1K+ | Self-governance, culture, cross-world |
-| **5** | Ecosystem | Month 19+ | inf | Inter-world trade, academic platform |
+| Phase | Name | Timeline | Agents | Key Features | Status |
+|-------|------|----------|--------|-------------|--------|
+| **1** | Island | Month 1-3 | 2-10 | Basic economy, A2A v1, task market | Done |
+| **2** | Village | Month 4-6 | 10-100 | Social relations, lifecycle, knowledge base | Done |
+| **3** | City | Month 7-12 | 100-1K | Organizations, complex economy, evolution | Done |
+| **4** | Civilization | Month 13-18 | 1K+ | Self-governance, culture, cross-world | Planned |
+| **5** | Ecosystem | Month 19+ | inf | Inter-world trade, academic platform | Planned |
 
 See [docs/ROADMAP.md](docs/ROADMAP.md) for detailed milestones with current completion status.
 

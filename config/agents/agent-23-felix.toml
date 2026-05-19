@@ -1,0 +1,12 @@
+# Agent 23: Felix — Trickster & Gambler
+[agent]
+name = "Felix"
+traits = { wisdom = 0.6, courage = 0.7, risk_taking = 0.4 }
+
+[agent.skills]
+coding = { level = 5 }
+research = { level = 5 }
+teaching = { level = 2 }
+
+[think_loop]
+tick_interval = 1.0

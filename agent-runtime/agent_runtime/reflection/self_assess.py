@@ -614,10 +614,16 @@ class ReflectionEngine:
         if metrics.action_count == 0:
             # No actions to analyse — keep current strategy, no forced switch
             reasoning = "No recent actions to analyse — keeping current strategy."
-        elif metrics.action_counts.get("send_message", 0) > metrics.action_count * cfg.dominance_threshold:
+        elif (
+            metrics.action_counts.get("send_message", 0)
+            > metrics.action_count * cfg.dominance_threshold
+        ):
             new_strategy = BehaviorStrategy.SOCIAL
             reasoning = "High messaging activity — switching to social strategy."
-        elif metrics.action_counts.get("explore", 0) > metrics.action_count * cfg.dominance_threshold:
+        elif (
+            metrics.action_counts.get("explore", 0)
+            > metrics.action_count * cfg.dominance_threshold
+        ):
             new_strategy = BehaviorStrategy.EXPLORATORY
             reasoning = "High exploration activity — switching to exploratory strategy."
         elif metrics.success_rate < cfg.low_success_threshold:
@@ -626,7 +632,10 @@ class ReflectionEngine:
                 f"Low success rate ({metrics.success_rate:.0%}) — "
                 f"switching to conservative to minimise losses."
             )
-        elif metrics.success_rate > cfg.high_success_threshold and metrics.resource_delta < cfg.spending_threshold:
+        elif (
+            metrics.success_rate > cfg.high_success_threshold
+            and metrics.resource_delta < cfg.spending_threshold
+        ):
             # Successful but spending — push aggressive to capitalise
             new_strategy = BehaviorStrategy.AGGRESSIVE
             reasoning = (

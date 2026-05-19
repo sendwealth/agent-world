@@ -17,9 +17,7 @@ import random
 from typing import AsyncIterator
 
 import grpc
-
-from protocol.gen.python import a2a_pb2
-from protocol.gen.python import a2a_pb2_grpc
+from protocol.gen.python import a2a_pb2, a2a_pb2_grpc
 
 from .config import A2AClientConfig
 from .message import build_a2a_message

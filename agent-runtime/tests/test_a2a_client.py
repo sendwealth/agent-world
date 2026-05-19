@@ -19,13 +19,9 @@ Covers:
 
 from __future__ import annotations
 
-import asyncio
-from dataclasses import dataclass
-from typing import Any
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
-
 from protocol.gen.python import a2a_pb2
 
 from agent_runtime.a2a.client import A2AClient
@@ -34,23 +30,19 @@ from agent_runtime.a2a.message import a2a_message_to_dict, build_a2a_message
 from agent_runtime.a2a.perception import GRPCPerceptionProvider
 from agent_runtime.a2a.world_client import GRPCWorldClient
 from agent_runtime.core.act import (
-    ActionContext,
     ActionExecutor,
     ActionType,
 )
 from agent_runtime.core.think_loop import (
     Decision,
-    Perception,
     ThinkLoop,
     ThinkLoopConfig,
 )
 from agent_runtime.models.agent_state import AgentState
 from agent_runtime.survival.instinct import (
-    SurvivalAction,
     SurvivalInstinct,
     SurvivalMode,
 )
-
 
 # ---------------------------------------------------------------------------
 # Helpers

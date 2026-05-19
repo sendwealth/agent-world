@@ -11,8 +11,8 @@ import asyncio
 import logging
 import time
 from collections.abc import Sequence
-from dataclasses import dataclass, field
-from typing import Any, Protocol, runtime_checkable
+from dataclasses import dataclass
+from typing import Protocol, runtime_checkable
 
 from agent_runtime.reflection.memory import LongTermMemory, MemoryCategory, MemoryEntry
 from agent_runtime.reflection.strategy import StrategyRegistry
@@ -343,7 +343,11 @@ class ReflectionLayer:
 
         # Store a reflection summary
         total_actions = sum(s.total for s in action_stats)
-        overall_rate = sum(s.successes for s in action_stats) / total_actions if total_actions > 0 else 0.0
+        overall_rate = (
+            sum(s.successes for s in action_stats) / total_actions
+            if total_actions > 0
+            else 0.0
+        )
         entries.append(
             MemoryEntry(
                 category=MemoryCategory.REFLECTION,
@@ -382,7 +386,10 @@ class ReflectionLayer:
                         ),
                         tick=current_tick,
                         importance=0.8,
-                        metadata={"action_type": stats.action_type, "success_rate": stats.success_rate},
+                        metadata={
+                            "action_type": stats.action_type,
+                            "success_rate": stats.success_rate,
+                        },
                     )
                 )
 
@@ -398,7 +405,10 @@ class ReflectionLayer:
                         ),
                         tick=current_tick,
                         importance=0.6,
-                        metadata={"action_type": stats.action_type, "efficiency": stats.token_efficiency},
+                        metadata={
+                            "action_type": stats.action_type,
+                            "efficiency": stats.token_efficiency,
+                        },
                     )
                 )
 

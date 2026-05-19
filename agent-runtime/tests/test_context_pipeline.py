@@ -16,12 +16,8 @@ import pytest
 
 from agent_runtime.context.engine import (
     ContextEnginePipeline,
-    ContextItem,
-    ContextPriority,
     ContextSource,
     PipelineConfig,
-    PipelineResult,
-    PipelineStats,
 )
 from agent_runtime.core.decide import (
     DecisionAction,
@@ -29,7 +25,6 @@ from agent_runtime.core.decide import (
     DecisionPerception,
     SurvivalAssessment,
 )
-
 
 # ---------------------------------------------------------------------------
 # Fixtures
@@ -156,7 +151,11 @@ class TestDecisionEngineWithPipeline:
 
         # Create perception with many messages
         msgs = [
-            {"type": "INFORM", "payload": {"content": f"Message {i} " + "x" * 100}, "trust_score": 0.5}
+            {
+                "type": "INFORM",
+                "payload": {"content": f"Message {i} " + "x" * 100},
+                "trust_score": 0.5,
+            }
             for i in range(50)
         ]
         result = pipeline.run(

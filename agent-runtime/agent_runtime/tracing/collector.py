@@ -219,7 +219,6 @@ class TraceCollector:
                 loop._tick = tick
 
                 if survival_action.mode.value in ("panic", "urgent"):
-                    from agent_runtime.survival.instinct import SurvivalMode
                     logger.warning(
                         "Tick %d: survival mode=%s — executing emergency actions",
                         tick,

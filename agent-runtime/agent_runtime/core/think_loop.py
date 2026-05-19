@@ -42,7 +42,6 @@ from agent_runtime.core.act import (
     ActionType,
 )
 from agent_runtime.models.agent_state import AgentState
-from agent_runtime.models.enums import AgentPhase
 from agent_runtime.models.phase_abilities import get_phase_abilities, is_terminal
 from agent_runtime.survival.instinct import (
     SurvivalAction,

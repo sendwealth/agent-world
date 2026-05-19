@@ -7,11 +7,10 @@ to consume.  Returns serializable dicts ready for JSON API responses.
 from __future__ import annotations
 
 import logging
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from typing import Any
 from uuid import UUID
 
-from agent_runtime.tracing.models import TickSnapshot, TickSummary
 from agent_runtime.tracing.store import TraceStore
 
 logger = logging.getLogger(__name__)

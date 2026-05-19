@@ -30,7 +30,6 @@ from enum import Enum
 from typing import Any, Protocol
 
 from agent_runtime.core.intervention_checker import (
-    CheckVerdict,
     InterventionChecker,
     InterventionConfig,
 )
@@ -240,8 +239,14 @@ class ActionExecutor:
                 action_type=action_type,
                 status=ActionStatus.BLOCKED_BY_INTERVENTION,
                 token_cost=0,
-                error=f"[{intervention_result.rule}] {intervention_result.reason}",
-                data={"intervention_rule": intervention_result.rule, "intervention_details": intervention_result.details},
+                error=(
+                    f"[{intervention_result.rule}] "
+                    f"{intervention_result.reason}"
+                ),
+                data={
+                    "intervention_rule": intervention_result.rule,
+                    "intervention_details": intervention_result.details,
+                },
                 timestamp=start_ts,
             )
             self._record(result)

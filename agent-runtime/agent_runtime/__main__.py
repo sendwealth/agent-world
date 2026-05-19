@@ -41,13 +41,11 @@ from agent_runtime import __version__
 from agent_runtime.config import (
     AgentSpawnConfig,
     RuntimeConfig,
-    WorldConfig,
     load_runtime_config,
-    parse_runtime_config,
 )
-from agent_runtime.env_loader import load_dotenv
 from agent_runtime.core.act import ActionExecutor
-from agent_runtime.core.think_loop import ThinkLoop, ThinkLoopConfig
+from agent_runtime.core.think_loop import ThinkLoop
+from agent_runtime.env_loader import load_dotenv
 from agent_runtime.llm.base import LLMConfig, ProviderType
 from agent_runtime.models.agent_state import AgentState
 from agent_runtime.survival.instinct import SurvivalInstinct
@@ -157,7 +155,10 @@ class RESTWorldClient:
         return await self._request("POST", "/gather", json={"resource_type": resource_type})
 
     async def build(self, structure_type: str, **kwargs: Any) -> dict[str, Any]:
-        return await self._request("POST", "/build", json={"structure_type": structure_type, **kwargs})
+        return await self._request(
+            "POST", "/build",
+            json={"structure_type": structure_type, **kwargs},
+        )
 
     async def broadcast_message(
         self, payload: dict[str, object]
@@ -646,8 +647,8 @@ def _build_decision_provider_with_memory(
     # Try to wrap with memory-aware provider
     try:
         from agent_runtime.core.memory_aware_decide import MemoryAwareDecisionProvider
-        from agent_runtime.memory.vector_memory import VectorMemory
         from agent_runtime.memory.memory_recall import MemoryRecall
+        from agent_runtime.memory.vector_memory import VectorMemory
 
         vector_memory = VectorMemory()
         memory_recall = MemoryRecall(vector_memory=vector_memory)
@@ -690,8 +691,8 @@ def _create_llm_decision_provider(config: RuntimeConfig) -> Any | None:
         return None
 
     try:
-        from agent_runtime.llm.factory import create_provider
         from agent_runtime.core.llm_decide import LLMDecisionProvider
+        from agent_runtime.llm.factory import create_provider
 
         llm = create_provider(config.llm)
         logger.info(

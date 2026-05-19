@@ -4,16 +4,14 @@ Covers the lifecycle module (agent_runtime/lifecycle/) and its integration
 with ThinkLoop and AgentState.
 """
 
-import asyncio
 
 import pytest
 
-from agent_runtime.core.act import ActionContext, ActionExecutor, ActionType
+from agent_runtime.core.act import ActionExecutor, ActionType
 from agent_runtime.core.think_loop import Decision, ThinkLoop, ThinkLoopConfig
 from agent_runtime.lifecycle import (
     DeathHandler,
     DeathHandlerConfig,
-    LifecycleEvent,
     LifecycleSyncService,
     LifecycleTransitionGuard,
 )
@@ -22,11 +20,8 @@ from agent_runtime.models.enums import AgentPhase, DeathReason
 from agent_runtime.models.phase_abilities import (
     PhaseAbilities,
     get_phase_abilities,
-    is_alive,
-    is_terminal,
 )
 from agent_runtime.survival.instinct import SurvivalInstinct
-
 
 # ---------------------------------------------------------------------------
 # PhaseAbilities tests (comprehensive)

@@ -30,7 +30,6 @@ from agent_runtime.memory.vector_memory import (
     _now_iso,
 )
 
-
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
@@ -228,8 +227,8 @@ class TestVectorMemoryStore:
         vm = make_vector_memory()
         e = vm.store("exp", memory_type="experience")
         assert e.memory_type == "experience"
-        l = vm.store("les", memory_type="lesson")
-        assert l.memory_type == "lesson"
+        lesson_entry = vm.store("les", memory_type="lesson")
+        assert lesson_entry.memory_type == "lesson"
         f = vm.store("fac", memory_type="fact")
         assert f.memory_type == "fact"
 

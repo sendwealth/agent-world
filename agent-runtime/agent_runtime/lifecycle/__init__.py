@@ -21,8 +21,10 @@ from agent_runtime.models.enums import AgentPhase, DeathReason
 from agent_runtime.models.phase_abilities import (
     PhaseAbilities,
     get_phase_abilities,
-    is_alive,
     is_terminal,
+)
+from agent_runtime.models.phase_abilities import (
+    is_alive as is_alive,
 )
 
 logger = logging.getLogger(__name__)

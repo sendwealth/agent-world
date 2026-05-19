@@ -28,7 +28,6 @@ from agent_runtime.__main__ import (
 from agent_runtime.config import AgentSpawnConfig, RuntimeConfig
 from agent_runtime.core.think_loop import ThinkLoopConfig
 
-
 # ---------------------------------------------------------------------------
 # Parser tests
 # ---------------------------------------------------------------------------

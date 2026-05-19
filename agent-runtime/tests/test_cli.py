@@ -17,14 +17,13 @@ Covers:
 from __future__ import annotations
 
 import asyncio
-import json
 import socket
 
 import pytest
 
 from agent_runtime.__main__ import (
-    RESTWorldClient,
     HealthCheckServer,
+    RESTWorldClient,
     WorldConnection,
     _get_health_port,
     _has_world_arg,
@@ -40,11 +39,10 @@ from agent_runtime.__main__ import (
     spawn_agent,
 )
 from agent_runtime.config import AgentSpawnConfig, RuntimeConfig
+from agent_runtime.core.act import ActionExecutor
 from agent_runtime.core.think_loop import ThinkLoop, ThinkLoopConfig
 from agent_runtime.models.agent_state import AgentState
 from agent_runtime.survival.instinct import SurvivalInstinct
-from agent_runtime.core.act import ActionExecutor
-
 
 # ---------------------------------------------------------------------------
 # Parser tests

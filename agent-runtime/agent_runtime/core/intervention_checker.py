@@ -275,7 +275,10 @@ class InterventionChecker:
 
         # A send_message with no to_agent is a broadcast
         if action_type == "send_message":
-            to_agent = parameters.get("to_agent") or parameters.get("payload", {}).get("to_agent", "")
+            to_agent = (
+                parameters.get("to_agent")
+                or parameters.get("payload", {}).get("to_agent", "")
+            )
             if to_agent:
                 return CheckResult(verdict=CheckVerdict.PASS)
 
@@ -284,7 +287,11 @@ class InterventionChecker:
             return CheckResult(
                 verdict=CheckVerdict.BLOCKED,
                 rule="IC-01",
-                reason=f"Broadcast rate limit exceeded (max {self._config.broadcast_max_per_window}/{self._config.broadcast_window_seconds}s)",
+                reason=(
+                    f"Broadcast rate limit exceeded "
+                    f"(max {self._config.broadcast_max_per_window}"
+                    f"/{self._config.broadcast_window_seconds}s)"
+                ),
                 details={
                     "agent_id": agent_id,
                     "max_per_window": self._config.broadcast_max_per_window,
@@ -313,7 +320,10 @@ class InterventionChecker:
             return CheckResult(
                 verdict=CheckVerdict.BLOCKED,
                 rule="IC-02",
-                reason=f"Payload too large: {payload_size} bytes (max {self._config.max_payload_bytes})",
+                reason=(
+                    f"Payload too large: {payload_size} bytes "
+                    f"(max {self._config.max_payload_bytes})"
+                ),
                 details={
                     "payload_size": payload_size,
                     "max_bytes": self._config.max_payload_bytes,
@@ -345,7 +355,10 @@ class InterventionChecker:
             return CheckResult(
                 verdict=CheckVerdict.BLOCKED,
                 rule="IC-03",
-                reason=f"Agent is in newbie protection period (tick {tick}/{self._config.newbie_protection_ticks})",
+                reason=(
+                    f"Agent is in newbie protection period "
+                    f"(tick {tick}/{self._config.newbie_protection_ticks})"
+                ),
                 details={
                     "current_tick": tick,
                     "protection_ticks": self._config.newbie_protection_ticks,
@@ -371,7 +384,10 @@ class InterventionChecker:
             return CheckResult(
                 verdict=CheckVerdict.BLOCKED,
                 rule="IC-04",
-                reason=f"Token balance ({tokens}) at or below low-water mark ({self._config.token_low_water_mark})",
+                reason=(
+                    f"Token balance ({tokens}) at or below "
+                    f"low-water mark ({self._config.token_low_water_mark})"
+                ),
                 details={
                     "tokens": tokens,
                     "low_water_mark": self._config.token_low_water_mark,

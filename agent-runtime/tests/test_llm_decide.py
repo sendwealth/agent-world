@@ -2,9 +2,7 @@
 
 from __future__ import annotations
 
-import asyncio
 import json
-from unittest.mock import AsyncMock
 
 import pytest
 
@@ -18,10 +16,9 @@ from agent_runtime.core.llm_decide import (
     _survival_to_assessment,
 )
 from agent_runtime.core.think_loop import Decision, Perception
-from agent_runtime.llm.base import LLMConfig, LLMMessage, LLMResponse, ProviderType, TokenUsage
+from agent_runtime.llm.base import LLMMessage, LLMResponse, TokenUsage
 from agent_runtime.models.agent_state import AgentState
 from agent_runtime.survival.instinct import SurvivalAction, SurvivalMode
-
 
 # ---------------------------------------------------------------------------
 # Fixtures

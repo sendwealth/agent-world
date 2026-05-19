@@ -10,9 +10,8 @@ Covers:
 
 from __future__ import annotations
 
-import asyncio
 from typing import Any
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
@@ -20,7 +19,6 @@ from agent_runtime.__main__ import (
     RESTWorldClient,
     WorldConnection,
     _A2AHeartbeatAdapter,
-    connect_world_engine,
 )
 from agent_runtime.core.act import (
     ActionContext,
@@ -31,19 +29,15 @@ from agent_runtime.core.decide import DecisionAction
 from agent_runtime.core.llm_decide import (
     _DECISION_TO_ACTION,
     _UNMAPPABLE_ACTIONS,
-    _map_decision_action,
     _perception_to_decision,
 )
 from agent_runtime.core.think_loop import (
-    Decision,
-    HeartbeatProvider,
     Perception,
     ThinkLoop,
     ThinkLoopConfig,
 )
 from agent_runtime.models.agent_state import AgentState
 from agent_runtime.survival.instinct import SurvivalInstinct
-
 
 # ---------------------------------------------------------------------------
 # Fixtures

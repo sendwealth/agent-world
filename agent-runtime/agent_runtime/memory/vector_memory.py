@@ -24,7 +24,6 @@ from __future__ import annotations
 
 import json
 import logging
-import math
 import sqlite3
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
@@ -339,7 +338,6 @@ class VectorMemory:
             Matching entries with decay-adjusted scores.
         """
         query_embedding = self._provider.embed(query)
-        now = _now_iso()
 
         # Fetch more candidates than needed, then re-rank with decay
         candidates = self._search_by_similarity(

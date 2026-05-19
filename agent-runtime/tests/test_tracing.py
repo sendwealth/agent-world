@@ -11,7 +11,6 @@ Covers:
 
 from __future__ import annotations
 
-import asyncio
 import json
 import time
 from datetime import datetime, timezone
@@ -19,30 +18,24 @@ from uuid import UUID, uuid4
 
 import pytest
 
-from agent_runtime.core.act import ActionExecutor, ActionType
+from agent_runtime.core.act import ActionExecutor
 from agent_runtime.core.think_loop import (
-    Decision,
-    Perception,
     ThinkLoop,
     ThinkLoopConfig,
 )
 from agent_runtime.models.agent_state import AgentState
 from agent_runtime.survival.instinct import (
-    SurvivalAction,
     SurvivalInstinct,
-    SurvivalMode,
 )
 from agent_runtime.tracing import (
     PhaseSnapshot,
     TickSnapshot,
-    TickSummary,
     TraceCollector,
     TraceQuery,
     TraceQueryService,
     TraceStore,
 )
 from agent_runtime.tracing.models import TracePhase
-
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -556,8 +549,6 @@ class TestTraceCollectorThinkLoop:
             config=ThinkLoopConfig(tick_interval=0.0),
         )
 
-        # Save the original unbound method
-        original_method = ThinkLoop._think_once
         collector.install(loop)
         # After install, the instance attribute should differ from the class method
         assert loop.__dict__.get("_think_once") is not None

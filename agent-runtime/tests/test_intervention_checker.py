@@ -1,16 +1,11 @@
 """Tests for the InterventionChecker — pre-dispatch safety gate."""
 
-import time
 from unittest.mock import MagicMock
 
-import pytest
-
 from agent_runtime.core.intervention_checker import (
-    CheckVerdict,
     InterventionChecker,
     InterventionConfig,
 )
-
 
 # ---------------------------------------------------------------------------
 # Helpers

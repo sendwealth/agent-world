@@ -22,7 +22,6 @@ from agent_runtime.memory.vector_memory import VectorMemory
 from agent_runtime.models.agent_state import AgentState
 from agent_runtime.survival.instinct import SurvivalAction, SurvivalInstinct, SurvivalMode
 
-
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------

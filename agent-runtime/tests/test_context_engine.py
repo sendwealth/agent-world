@@ -9,7 +9,6 @@ Covers:
 
 from __future__ import annotations
 
-import os
 from dataclasses import dataclass
 from typing import Any
 
@@ -24,17 +23,10 @@ from agent_runtime.context.engine import (
     DefaultPerceptionSource,
     DefaultStateSource,
     DefaultSurvivalSource,
-    MemorySource,
     MessageFilter,
-    PerceptionSource,
     PipelineConfig,
-    PipelineResult,
-    PipelineStats,
-    StateSource,
-    SurvivalSource,
     TokenBudget,
 )
-
 
 # ---------------------------------------------------------------------------
 # Fixtures — lightweight fakes matching the real dataclass shapes
@@ -221,8 +213,17 @@ class TestMultiSourcePriority:
     def test_pipeline_collects_from_all_sources(self) -> None:
         pipeline = ContextEnginePipeline()
         result = pipeline.run(
-            perception=FakePerception(tick=1, messages=[{"type": "INFORM", "payload": {"content": "Hi"}, "trust_score": 0.5}]),
-            survival=FakeSurvivalAction(mode=FakeMode(), token_ratio=0.5, actions=[]),
+            perception=FakePerception(
+                tick=1,
+                messages=[{
+                    "type": "INFORM",
+                    "payload": {"content": "Hi"},
+                    "trust_score": 0.5,
+                }],
+            ),
+            survival=FakeSurvivalAction(
+                mode=FakeMode(), token_ratio=0.5, actions=[],
+            ),
             state=FakeState(phase=FakePhase()),
             memory=[FakeRecalledMemory(content="past event")],
         )
@@ -378,7 +379,11 @@ class TestBudgetTrimming100Messages:
     def test_100_messages_pipeline(self) -> None:
         pipeline = ContextEnginePipeline(config=PipelineConfig(max_tokens=500))
         msgs = [
-            {"type": "INFORM", "payload": {"content": f"Message {i} " + "x" * 40}, "trust_score": 0.5}
+            {
+                "type": "INFORM",
+                "payload": {"content": f"Message {i} " + "x" * 40},
+                "trust_score": 0.5,
+            }
             for i in range(100)
         ]
         result = pipeline.run(

@@ -21,7 +21,7 @@ from unittest.mock import AsyncMock
 
 import pytest
 
-from agent_runtime.core.act import ActionExecutor, ActionType
+from agent_runtime.core.act import ActionExecutor
 from agent_runtime.core.reflect import (
     ReflectionConfig,
     ReflectionEngine,
@@ -30,7 +30,6 @@ from agent_runtime.core.reflect import (
     parse_reflection_response,
 )
 from agent_runtime.core.think_loop import (
-    Decision,
     ThinkLoop,
     ThinkLoopConfig,
 )
@@ -41,7 +40,6 @@ from agent_runtime.memory.short_term import ShortTermMemory
 from agent_runtime.memory.working_memory import WorkingMemory
 from agent_runtime.models.agent_state import AgentState
 from agent_runtime.survival.instinct import SurvivalInstinct
-
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -158,7 +156,9 @@ class TestReflectionResult:
 class TestBuildReflectionPrompt:
     def test_prompt_contains_state(self):
         state = make_state(name="Alice", tokens=500, max_tokens=1000)
-        prompt = build_reflection_prompt(state, tick=42, recent_actions=[], strategy_context="test")
+        prompt = build_reflection_prompt(
+            state, tick=42, recent_actions=[], strategy_context="test",
+        )
         assert "Alice" in prompt
         assert "Tick 42" in prompt
         assert "500" in prompt
@@ -169,7 +169,9 @@ class TestBuildReflectionPrompt:
             {"tick": 1, "action": "explore", "status": "success"},
             {"tick": 2, "action": "rest", "status": "success"},
         ]
-        prompt = build_reflection_prompt(state, tick=10, recent_actions=actions, strategy_context="")
+        prompt = build_reflection_prompt(
+            state, tick=10, recent_actions=actions, strategy_context="",
+        )
         assert "explore" in prompt
         assert "rest" in prompt
 

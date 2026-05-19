@@ -9,11 +9,9 @@ for the query patterns:
 
 from __future__ import annotations
 
-import json
 import logging
 import sqlite3
 import time
-from pathlib import Path
 from typing import Any
 from uuid import UUID
 
@@ -88,7 +86,6 @@ class TraceStore:
         snapshot as JSON for complete retrieval.
         """
         act_phase = snapshot.get_phase("act")  # use value, not enum
-        decide_phase = snapshot.get_phase("decide")
         sense_phase = snapshot.get_phase("sense")
         survive_phase = snapshot.get_phase("survive")
 
@@ -143,7 +140,6 @@ class TraceStore:
         rows = []
         for snapshot in snapshots:
             act_phase = snapshot.get_phase("act")
-            decide_phase = snapshot.get_phase("decide")
             sense_phase = snapshot.get_phase("sense")
             survive_phase = snapshot.get_phase("survive")
 

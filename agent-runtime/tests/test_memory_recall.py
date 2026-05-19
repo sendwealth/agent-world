@@ -10,15 +10,12 @@ Covers:
 
 from __future__ import annotations
 
-import pytest
-
 from agent_runtime.memory.memory_recall import (
     MemoryRecall,
     MemoryRecallConfig,
     RecalledMemory,
 )
 from agent_runtime.memory.vector_memory import VectorMemory
-
 
 # ---------------------------------------------------------------------------
 # Helpers

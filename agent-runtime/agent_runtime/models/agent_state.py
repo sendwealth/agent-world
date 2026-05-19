@@ -105,7 +105,12 @@ class AgentState(BaseModel):
         self.reputation = max(-100.0, min(100.0, self.reputation + delta))
         self._bump_version()
 
-    def can_claim_task(self, reward: float, high_value_threshold: float = 500.0, min_reputation: float = 10.0) -> bool:
+    def can_claim_task(
+        self,
+        reward: float,
+        high_value_threshold: float = 500.0,
+        min_reputation: float = 10.0,
+    ) -> bool:
         """Check if the agent can claim a task with the given reward.
 
         Agents below the minimum reputation cannot claim high-value tasks.

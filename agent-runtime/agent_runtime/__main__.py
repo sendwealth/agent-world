@@ -215,6 +215,7 @@ async def register_agent(
     state: AgentState,
     world_url: str,
     *,
+    public_key_b64: str | None = None,
     timeout: float = 5.0,
 ) -> bool:
     """Attempt to register the agent with the World Engine REST API.
@@ -230,6 +231,10 @@ async def register_agent(
 
     url = f"{world_url.rstrip('/')}/agents"
     payload = state.to_sync_payload()
+
+    # Attach Ed25519 public key if available
+    if public_key_b64 is not None:
+        payload["public_key"] = public_key_b64
 
     logger.info(
         "Registering agent %s (%s) with World Engine at %s",
@@ -256,6 +261,47 @@ async def register_agent(
         return False
     except Exception:
         logger.exception("Failed to register with World Engine")
+        return False
+
+
+async def deregister_agent(
+    agent_id: str,
+    world_url: str,
+    *,
+    timeout: float = 5.0,
+) -> bool:
+    """Deregister the agent from the World Engine REST API.
+
+    Non-fatal: errors are logged but do not propagate.
+    """
+    try:
+        import httpx
+    except ImportError:
+        logger.info("httpx not available, skipping agent deregistration")
+        return False
+
+    url = f"{world_url.rstrip('/')}/agents/{agent_id}"
+    logger.info("Deregistering agent %s from World Engine", agent_id)
+
+    try:
+        async with httpx.AsyncClient(timeout=timeout) as client:
+            resp = await client.delete(url)
+            if resp.status_code in (200, 204):
+                logger.info("Agent deregistered successfully")
+                return True
+            logger.warning(
+                "World Engine returned %d on deregister: %s",
+                resp.status_code,
+                resp.text[:200] if resp.text else "(empty)",
+            )
+            return False
+    except httpx.ConnectError:
+        logger.warning(
+            "World Engine unreachable during deregister — already standalone",
+        )
+        return False
+    except Exception:
+        logger.exception("Failed to deregister from World Engine")
         return False
 
 
@@ -307,19 +353,23 @@ class RunStats:
     errors: int = 0
     start_time: float = 0.0
     end_time: float = 0.0
+    shutdown_reason: str = ""
 
     @property
     def duration_s(self) -> float:
         return self.end_time - self.start_time
 
     def to_dict(self) -> dict[str, Any]:
-        return {
+        d: dict[str, Any] = {
             "agent_name": self.agent_name,
             "agent_id": self.agent_id,
             "ticks": self.ticks,
             "errors": self.errors,
             "duration_s": round(self.duration_s, 2),
         }
+        if self.shutdown_reason:
+            d["shutdown_reason"] = self.shutdown_reason
+        return d
 
 
 async def run_agent(config: RuntimeConfig) -> RunStats:
@@ -330,12 +380,30 @@ async def run_agent(config: RuntimeConfig) -> RunStats:
         agent_id=str(state.id),
     )
 
+    # Generate Ed25519 key pair for this agent
+    public_key_b64: str | None = None
+    try:
+        from agent_runtime.crypto.keys import generate_key_pair
+
+        key_pair = generate_key_pair()
+        public_key_b64 = key_pair.public_key_b64()
+        logger.info(
+            "Generated Ed25519 key pair for agent %s (pub=%s...)",
+            state.name,
+            public_key_b64[:12],
+            extra={"agent": state.name, "event": "key_generated"},
+        )
+    except ImportError:
+        logger.info("crypto.keys not available, skipping key generation")
+    except Exception:
+        logger.warning("Failed to generate key pair", exc_info=True)
+
     # Set up core components
     survival = SurvivalInstinct()
     executor = ActionExecutor()
 
     # Build decision provider (memory-aware if vector memory available)
-    decision_provider = _build_decision_provider(config, executor)
+    decision_provider, vector_memory = _build_decision_provider_with_memory(config, executor)
 
     # Connect to World Engine (gRPC preferred, REST fallback)
     grpc_address = _extract_grpc_address(config.world.engine_url)
@@ -345,8 +413,12 @@ async def run_agent(config: RuntimeConfig) -> RunStats:
         agent_id=str(state.id),
     )
 
-    # Attempt registration
-    await register_agent(state, config.world.engine_url)
+    # Attempt registration (with public key)
+    await register_agent(
+        state,
+        config.world.engine_url,
+        public_key_b64=public_key_b64,
+    )
 
     # Build ThinkLoop with all providers wired in via constructor
     think_loop = ThinkLoop(
@@ -372,6 +444,14 @@ async def run_agent(config: RuntimeConfig) -> RunStats:
 
     loop.add_signal_handler(signal.SIGINT, _signal_handler)
 
+    # Start health check HTTP server
+    health_port = _get_health_port(config)
+    health_server = HealthCheckServer(
+        agent_name=state.name,
+        think_loop=think_loop,
+        port=health_port,
+    )
+
     logger.info(
         "Starting agent runtime",
         extra={
@@ -381,6 +461,7 @@ async def run_agent(config: RuntimeConfig) -> RunStats:
                 "tick_interval": config.think_loop.tick_interval,
                 "max_ticks": config.think_loop.max_ticks or "unlimited",
                 "world_url": config.world.engine_url,
+                "health_port": health_port,
             },
         },
     )
@@ -388,15 +469,39 @@ async def run_agent(config: RuntimeConfig) -> RunStats:
     stats.start_time = time.monotonic()
 
     try:
-        await think_loop.run()
+        # Run think loop and health server concurrently
+        think_task = asyncio.create_task(think_loop.run())
+        health_task = asyncio.create_task(health_server.start())
+
+        # Wait for the think loop to finish
+        await think_task
+
+        # Stop health server
+        await health_server.stop()
+        await health_task
     finally:
         stats.end_time = time.monotonic()
         stats.ticks = think_loop.tick
         stats.errors = think_loop.total_errors
+        stats.shutdown_reason = "sigint" if shutdown_event.is_set() else "completed"
         try:
             loop.remove_signal_handler(signal.SIGINT)
         except (ValueError, OSError) as exc:
             logger.warning("Failed to remove signal handler: %s", exc)
+
+        # Graceful shutdown: save memory if available
+        if vector_memory is not None:
+            try:
+                vector_memory.close()
+                logger.info(
+                    "Vector memory closed (persisted to disk)",
+                    extra={"agent": state.name, "event": "memory_saved"},
+                )
+            except Exception:
+                logger.warning("Failed to close vector memory", exc_info=True)
+
+        # Graceful shutdown: deregister from World Engine
+        await deregister_agent(str(state.id), config.world.engine_url)
 
     logger.info(
         "Agent runtime stopped",
@@ -406,6 +511,7 @@ async def run_agent(config: RuntimeConfig) -> RunStats:
             "ticks": stats.ticks,
             "errors": stats.errors,
             "duration_s": round(stats.duration_s, 2),
+            "shutdown_reason": stats.shutdown_reason,
         },
     )
 
@@ -423,6 +529,18 @@ def _build_decision_provider(
       3. Memory-aware provider wrapping MockDecisionProvider (if memory deps available, no LLM)
       4. None (ThinkLoop falls back to MockDecisionProvider)
     """
+    provider, _ = _build_decision_provider_with_memory(config, executor)
+    return provider
+
+
+def _build_decision_provider_with_memory(
+    config: RuntimeConfig, executor: ActionExecutor
+) -> tuple[Any | None, Any | None]:
+    """Build the best available decision provider and return (provider, vector_memory).
+
+    Returns a tuple of (decision_provider, vector_memory) where
+    vector_memory may be None if memory deps are unavailable.
+    """
     # Build the LLM-backed decision provider if config is available
     llm_provider = _create_llm_decision_provider(config)
 
@@ -437,17 +555,23 @@ def _build_decision_provider(
 
         if llm_provider is not None:
             logger.info("Using MemoryAware + LLM decision provider")
-            return MemoryAwareDecisionProvider(
-                base_provider=llm_provider,
-                memory_recall=memory_recall,
+            return (
+                MemoryAwareDecisionProvider(
+                    base_provider=llm_provider,
+                    memory_recall=memory_recall,
+                ),
+                vector_memory,
             )
         else:
             from agent_runtime.core.think_loop import MockDecisionProvider
 
             logger.info("Using MemoryAware + Mock decision provider (no LLM config)")
-            return MemoryAwareDecisionProvider(
-                base_provider=MockDecisionProvider(executor),
-                memory_recall=memory_recall,
+            return (
+                MemoryAwareDecisionProvider(
+                    base_provider=MockDecisionProvider(executor),
+                    memory_recall=memory_recall,
+                ),
+                vector_memory,
             )
     except Exception:
         logger.info("Memory-aware decision provider not available")
@@ -455,10 +579,10 @@ def _build_decision_provider(
     # Without memory, use LLM provider directly
     if llm_provider is not None:
         logger.info("Using LLM decision provider (no memory layer)")
-        return llm_provider
+        return llm_provider, None
 
     logger.info("No LLM configured, falling back to mock decision provider")
-    return None
+    return None, None
 
 
 def _create_llm_decision_provider(config: RuntimeConfig) -> Any | None:
@@ -486,6 +610,122 @@ def _create_llm_decision_provider(config: RuntimeConfig) -> Any | None:
             exc_info=True,
         )
         return None
+
+
+# ---------------------------------------------------------------------------
+# Health check HTTP server
+# ---------------------------------------------------------------------------
+
+
+class HealthCheckServer:
+    """Lightweight HTTP health check server using asyncio.
+
+    Exposes ``GET /health`` returning JSON with agent status.
+    Runs alongside the ThinkLoop.
+    """
+
+    def __init__(
+        self,
+        agent_name: str,
+        think_loop: ThinkLoop,
+        port: int = 9090,
+    ) -> None:
+        self._agent_name = agent_name
+        self._think_loop = think_loop
+        self._port = port
+        self._start_time = time.monotonic()
+        self._server: asyncio.Server | None = None
+
+    async def start(self) -> None:
+        """Start the health check HTTP server."""
+        try:
+            self._server = await asyncio.start_server(
+                self._handle_request,
+                host="0.0.0.0",
+                port=self._port,
+            )
+        except OSError:
+            logger.warning(
+                "Health check server: port %d unavailable, skipping",
+                self._port,
+            )
+            return
+        logger.info(
+            "Health check server listening on 0.0.0.0:%d",
+            self._port,
+            extra={"event": "health_server_started", "port": self._port},
+        )
+        # Keep running until stop() closes the server
+        if self._server is not None:
+            await self._server.serve_forever()
+
+    async def stop(self) -> None:
+        """Stop the health check server."""
+        if self._server is not None:
+            self._server.close()
+            await self._server.wait_closed()
+            logger.info("Health check server stopped")
+
+    async def _handle_request(
+        self,
+        reader: asyncio.StreamReader,
+        writer: asyncio.StreamWriter,
+    ) -> None:
+        """Handle a single HTTP request."""
+        try:
+            # Read the request line (we only care about the first line)
+            request_line = await asyncio.wait_for(reader.readline(), timeout=5.0)
+            request_str = request_line.decode("ascii", errors="replace").strip()
+
+            # Drain remaining headers
+            while True:
+                line = await asyncio.wait_for(reader.readline(), timeout=2.0)
+                if line in (b"\r\n", b"\n", b""):
+                    break
+
+            # Only respond to GET /health
+            if request_str.startswith("GET /health"):
+                uptime = time.monotonic() - self._start_time
+                body = json.dumps({
+                    "status": "running" if self._think_loop.running else "stopped",
+                    "agent": self._agent_name,
+                    "tick": self._think_loop.tick,
+                    "uptime_s": round(uptime, 1),
+                })
+                response = (
+                    "HTTP/1.1 200 OK\r\n"
+                    "Content-Type: application/json\r\n"
+                    f"Content-Length: {len(body)}\r\n"
+                    "Connection: close\r\n"
+                    "\r\n"
+                    f"{body}"
+                )
+            else:
+                response = "HTTP/1.1 404 Not Found\r\nConnection: close\r\n\r\n"
+
+            writer.write(response.encode("ascii"))
+            await writer.drain()
+        except Exception:
+            logger.debug("Health check request error", exc_info=True)
+        finally:
+            writer.close()
+            try:
+                await writer.wait_closed()
+            except Exception:
+                pass
+
+
+def _get_health_port(config: RuntimeConfig) -> int:
+    """Determine the health check port from env or config default."""
+    import os
+
+    env_port = os.environ.get("HEALTH_PORT")
+    if env_port:
+        try:
+            return int(env_port)
+        except ValueError:
+            pass
+    return config.health_port
 
 
 def _extract_grpc_address(engine_url: str) -> str:
@@ -523,6 +763,12 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument(
         "--log-text", action="store_true",
         help="Use human-readable log format instead of JSON (default: JSON)",
+    )
+
+    # Top-level --world shortcut (alias for spawn --world-url)
+    parser.add_argument(
+        "--world", default=None, dest="world",
+        help="World Engine URL — shorthand that implies 'spawn' (e.g. --world http://localhost:8080)",
     )
 
     sub = parser.add_subparsers(dest="command", help="Available commands")
@@ -581,6 +827,10 @@ def build_parser() -> argparse.ArgumentParser:
     spawn_parser.add_argument(
         "--no-llm", action="store_true",
         help="Disable LLM and use mock random decisions",
+    )
+    spawn_parser.add_argument(
+        "--health-port", type=int, default=None,
+        help="Health check HTTP port (default: 9090, env: HEALTH_PORT)",
     )
 
     return parser
@@ -641,9 +891,14 @@ def build_config_from_args(args: argparse.Namespace) -> RuntimeConfig:
     if args.tick_interval is not None:
         config.think_loop.tick_interval = args.tick_interval
 
-    # CLI overrides for world
-    if args.world_url is not None:
-        config.world.engine_url = args.world_url
+    # CLI overrides for world -- support both --world-url and top-level --world
+    world_url = args.world_url or getattr(args, "world", None)
+    if world_url is not None:
+        config.world.engine_url = world_url
+
+    # Health check port
+    if getattr(args, "health_port", None) is not None:
+        config.health_port = args.health_port  # type: ignore[attr-defined]
 
     # LLM configuration: CLI args > environment variables > default (Ollama)
     _apply_llm_config(config, args)
@@ -738,9 +993,15 @@ def main() -> None:
     parser = build_parser()
     args = parser.parse_args()
 
+    # Auto-default to 'spawn' when no subcommand but --world is given
     if args.command is None:
-        parser.print_help()
-        sys.exit(1)
+        if _has_world_arg(sys.argv[1:]):
+            # Rewrite --world to --world-url and inject 'spawn' subcommand
+            rewritten = _rewrite_world_to_world_url(sys.argv[1:])
+            args = parser.parse_args(["spawn"] + rewritten)
+        else:
+            parser.print_help()
+            sys.exit(1)
 
     setup_logging(verbose=args.verbose, json_output=not args.log_text)
 
@@ -756,6 +1017,36 @@ def main() -> None:
     else:
         parser.print_help()
         sys.exit(1)
+
+
+def _has_world_arg(argv: list[str]) -> bool:
+    """Check if --world or --world-url is present in the argument list."""
+    for arg in argv:
+        if arg in ("--world", "--world-url"):
+            return True
+        if arg.startswith("--world=") or arg.startswith("--world-url="):
+            return True
+    return False
+
+
+def _rewrite_world_to_world_url(argv: list[str]) -> list[str]:
+    """Replace top-level --world with spawn's --world-url for re-parsing."""
+    result: list[str] = []
+    i = 0
+    while i < len(argv):
+        if argv[i] == "--world":
+            result.append("--world-url")
+            i += 1
+            if i < len(argv):
+                result.append(argv[i])
+                i += 1
+        elif argv[i].startswith("--world="):
+            result.append("--world-url=" + argv[i].split("=", 1)[1])
+            i += 1
+        else:
+            result.append(argv[i])
+            i += 1
+    return result
 
 
 if __name__ == "__main__":

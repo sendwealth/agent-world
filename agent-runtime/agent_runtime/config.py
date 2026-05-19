@@ -120,6 +120,7 @@ class RuntimeConfig:
     llm: LLMConfig | None = None
     think_loop: ThinkLoopConfig = field(default_factory=ThinkLoopConfig)
     world: WorldConfig = field(default_factory=WorldConfig)
+    health_port: int = 9090
 
 
 # ---------------------------------------------------------------------------

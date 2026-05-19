@@ -2,6 +2,18 @@ use serde::{Deserialize, Serialize};
 
 use super::enums::{AgentPhase, Currency, DeathReason};
 
+/// Type of trust interaction between agents.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum TrustInteractionType {
+    Cooperation,
+    Betrayal,
+    TradeCompleted,
+    TaskCompleted,
+    Gift,
+    Attack,
+}
+
 /// Discriminant for filtering events by kind.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum EventType {
@@ -37,6 +49,14 @@ pub enum EventType {
     KnowledgeDelisted,
     KnowledgePurchased,
     KnowledgeRated,
+    TrustChanged,
+    TrustInteraction,
+    MentorshipEstablished,
+    MentorshipProgress,
+    MentorshipCompleted,
+    WillCreated,
+    InheritanceTriggered,
+    TimeCapsuleBriefing,
 }
 
 /// Events emitted by the world engine.
@@ -84,6 +104,14 @@ pub enum WorldEvent {
     KnowledgeDelisted { listing_id: String },
     KnowledgePurchased { listing_id: String, buyer: String, seller: String, price: u64, currency: Currency },
     KnowledgeRated { listing_id: String, rater: String, score: u8, average_rating: f64 },
+    TrustChanged { agent_id: String, other_agent_id: String, old_trust: f64, new_trust: f64, reason: String },
+    TrustInteraction { from: String, to: String, interaction: TrustInteractionType },
+    MentorshipEstablished { mentor_id: String, apprentice_id: String, skill: String },
+    MentorshipProgress { mentor_id: String, apprentice_id: String, skill: String, level_gained: u32 },
+    MentorshipCompleted { mentor_id: String, apprentice_id: String, skill: String, final_level: u32 },
+    WillCreated { agent_id: String, beneficiaries_count: usize },
+    InheritanceTriggered { deceased_id: String, beneficiary_id: String, tokens_transferred: u64, skills_transferred: u32 },
+    TimeCapsuleBriefing { tick: u64, summary: String },
 }
 
 impl WorldEvent {
@@ -121,6 +149,14 @@ impl WorldEvent {
             WorldEvent::KnowledgeDelisted { .. } => EventType::KnowledgeDelisted,
             WorldEvent::KnowledgePurchased { .. } => EventType::KnowledgePurchased,
             WorldEvent::KnowledgeRated { .. } => EventType::KnowledgeRated,
+            WorldEvent::TrustChanged { .. } => EventType::TrustChanged,
+            WorldEvent::TrustInteraction { .. } => EventType::TrustInteraction,
+            WorldEvent::MentorshipEstablished { .. } => EventType::MentorshipEstablished,
+            WorldEvent::MentorshipProgress { .. } => EventType::MentorshipProgress,
+            WorldEvent::MentorshipCompleted { .. } => EventType::MentorshipCompleted,
+            WorldEvent::WillCreated { .. } => EventType::WillCreated,
+            WorldEvent::InheritanceTriggered { .. } => EventType::InheritanceTriggered,
+            WorldEvent::TimeCapsuleBriefing { .. } => EventType::TimeCapsuleBriefing,
         }
     }
 
@@ -158,6 +194,14 @@ impl WorldEvent {
             WorldEvent::KnowledgeDelisted { .. } => None,
             WorldEvent::KnowledgePurchased { buyer, .. } => Some(buyer),
             WorldEvent::KnowledgeRated { rater, .. } => Some(rater),
+            WorldEvent::TrustChanged { agent_id, .. } => Some(agent_id),
+            WorldEvent::TrustInteraction { from, .. } => Some(from),
+            WorldEvent::MentorshipEstablished { mentor_id, .. } => Some(mentor_id),
+            WorldEvent::MentorshipProgress { mentor_id, .. } => Some(mentor_id),
+            WorldEvent::MentorshipCompleted { mentor_id, .. } => Some(mentor_id),
+            WorldEvent::WillCreated { agent_id, .. } => Some(agent_id),
+            WorldEvent::InheritanceTriggered { deceased_id, .. } => Some(deceased_id),
+            WorldEvent::TimeCapsuleBriefing { .. } => None,
         }
     }
 

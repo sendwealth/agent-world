@@ -31,6 +31,12 @@ pub struct GenesisConfig {
     pub market: MarketConfig,
     #[serde(default)]
     pub safety: SafetyConfig,
+    #[serde(default)]
+    pub trust: TrustConfigSection,
+    #[serde(default)]
+    pub mentorship: MentorshipConfigSection,
+    #[serde(default)]
+    pub inheritance: InheritanceConfigSection,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
@@ -254,6 +260,78 @@ impl Default for SafetyConfig {
 fn default_max_agents_per_org() -> u32 { 5 }
 fn default_anti_monopoly_threshold() -> f64 { 0.3 }
 fn default_new_agent_protection_ticks() -> u64 { 50 }
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub struct TrustConfigSection {
+    #[serde(default = "default_trust_cooperation_gain")]
+    pub cooperation_gain: f64,
+    #[serde(default = "default_trust_betrayal_loss")]
+    pub betrayal_loss: f64,
+    #[serde(default = "default_trust_decay_rate")]
+    pub decay_rate: f64,
+    #[serde(default = "default_trust_interaction_interval")]
+    pub interaction_interval: u64,
+}
+
+impl Default for TrustConfigSection {
+    fn default() -> Self {
+        Self {
+            cooperation_gain: default_trust_cooperation_gain(),
+            betrayal_loss: default_trust_betrayal_loss(),
+            decay_rate: default_trust_decay_rate(),
+            interaction_interval: default_trust_interaction_interval(),
+        }
+    }
+}
+
+fn default_trust_cooperation_gain() -> f64 { 0.1 }
+fn default_trust_betrayal_loss() -> f64 { 0.3 }
+fn default_trust_decay_rate() -> f64 { 0.001 }
+fn default_trust_interaction_interval() -> u64 { 50 }
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub struct MentorshipConfigSection {
+    #[serde(default = "default_mentorship_ticks_per_level")]
+    pub ticks_per_level: u64,
+    #[serde(default = "default_mentorship_transfer_ratio")]
+    pub transfer_ratio: f64,
+    #[serde(default = "default_mentorship_max_apprentices")]
+    pub max_apprentices_per_mentor: u32,
+}
+
+impl Default for MentorshipConfigSection {
+    fn default() -> Self {
+        Self {
+            ticks_per_level: default_mentorship_ticks_per_level(),
+            transfer_ratio: default_mentorship_transfer_ratio(),
+            max_apprentices_per_mentor: default_mentorship_max_apprentices(),
+        }
+    }
+}
+
+fn default_mentorship_ticks_per_level() -> u64 { 20 }
+fn default_mentorship_transfer_ratio() -> f64 { 0.7 }
+fn default_mentorship_max_apprentices() -> u32 { 3 }
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub struct InheritanceConfigSection {
+    #[serde(default = "default_inheritance_ratio_config")]
+    pub inheritance_ratio: f64,
+    #[serde(default = "default_skill_transfer_ratio_config")]
+    pub skill_transfer_ratio: f64,
+}
+
+impl Default for InheritanceConfigSection {
+    fn default() -> Self {
+        Self {
+            inheritance_ratio: default_inheritance_ratio_config(),
+            skill_transfer_ratio: default_skill_transfer_ratio_config(),
+        }
+    }
+}
+
+fn default_inheritance_ratio_config() -> f64 { 0.5 }
+fn default_skill_transfer_ratio_config() -> f64 { 0.3 }
 
 // ── Validation ────────────────────────────────────────────
 

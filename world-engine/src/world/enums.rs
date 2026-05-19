@@ -28,4 +28,5 @@ pub enum DeathReason {
     TokenDepleted,
     HumanTerminated,
     VoteEvicted,
+    NaturalDeath,
 }

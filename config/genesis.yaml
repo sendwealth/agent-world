@@ -59,3 +59,21 @@ safety:
   max_agents_per_org: 5       # 组织最大 Agent 数
   anti_monopoly_threshold: 0.3  # 单 Agent 资源占比上限
   new_agent_protection_ticks: 50  # 新人保护期
+
+# 信任网络配置
+trust:
+  cooperation_gain: 0.1         # 合作信任增益
+  betrayal_loss: 0.3            # 背叛信任损失
+  decay_rate: 0.001             # 每tick信任衰减率（趋向0）
+  interaction_interval: 50      # Agent间信任交互间隔（tick数）
+
+# 师徒系统配置
+mentorship:
+  ticks_per_level: 20           # 每技能等级教学所需tick数
+  transfer_ratio: 0.7           # 导师技能转移比例（70%）
+  max_apprentices_per_mentor: 3 # 每导师最大同时学徒数
+
+# 继承系统配置
+inheritance:
+  inheritance_ratio: 0.5        # 死亡时Token转移比例（50%）
+  skill_transfer_ratio: 0.3     # 技能等级转移比例（30%）

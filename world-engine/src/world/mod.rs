@@ -10,7 +10,7 @@ pub mod subsystem;
 pub mod subsystems;
 
 pub use agent::{Agent, AgentRegistry};
-pub use event::{EventType, WorldEvent};
+pub use event::{EventType, WorldEvent, TrustInteractionType};
 pub use genesis::GenesisConfig;
 pub use scheduler::Scheduler;
 pub use state::{EventBus, FilteredReceiver, SharedEventBus, WorldState};

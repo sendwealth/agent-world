@@ -294,7 +294,7 @@ impl LifecycleMachine {
                 if current_tick >= self.config.elder_end_tick(spawn_tick) {
                     // Natural death from old age
                     return TransitionResult::Died {
-                        reason: DeathReason::TokenDepleted,
+                        reason: DeathReason::NaturalDeath,
                         old_phase,
                     };
                 }
@@ -795,7 +795,7 @@ some_other_section:
         assert_eq!(
             result,
             TransitionResult::Died {
-                reason: DeathReason::TokenDepleted,
+                reason: DeathReason::NaturalDeath,
                 old_phase: AgentPhase::Elder,
             }
         );

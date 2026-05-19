@@ -19,6 +19,8 @@ use tokio_stream::wrappers::BroadcastStream;
 use tokio_stream::StreamExt;
 use uuid::Uuid;
 
+use crate::economy::marketplace::Marketplace;
+use crate::economy::reputation::ReputationSystem;
 use crate::economy::task::{TaskBoard, Task};
 use crate::time_capsule::SnapshotStore;
 use crate::wal::WAL;
@@ -30,6 +32,8 @@ use crate::world::state::EventBus;
 pub type SharedTaskBoard = Arc<Mutex<TaskBoard>>;
 pub type SharedWAL = Arc<Mutex<WAL>>;
 pub type SharedSnapshotStore = Arc<Mutex<SnapshotStore>>;
+pub type SharedMarketplace = Arc<Mutex<Marketplace>>;
+pub type SharedReputationSystem = Arc<Mutex<ReputationSystem>>;
 
 /// Agent record tracked by the world engine.
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -65,6 +69,8 @@ pub struct AppState {
     pub tick_tx: watch::Sender<u64>,
     pub tick_rx: watch::Receiver<u64>,
     pub snapshot_store: Option<SharedSnapshotStore>,
+    pub marketplace: Option<SharedMarketplace>,
+    pub reputation_system: Option<SharedReputationSystem>,
 }
 
 pub fn create_router(board: SharedTaskBoard) -> Router {
@@ -97,6 +103,8 @@ pub fn create_router_with_wal(board: SharedTaskBoard, wal: SharedWAL) -> Router 
         tick_tx,
         tick_rx,
         snapshot_store,
+        marketplace: None,
+        reputation_system: None,
     };
     build_full_router(state)
 }
@@ -117,6 +125,8 @@ pub fn create_router_with_wal_and_snapshots(board: SharedTaskBoard, wal: SharedW
         tick_tx,
         tick_rx,
         snapshot_store,
+        marketplace: None,
+        reputation_system: None,
     };
     build_full_router(state)
 }
@@ -182,6 +192,8 @@ pub fn create_router_for_test(
         tick_tx,
         tick_rx,
         snapshot_store,
+        marketplace: None,
+        reputation_system: None,
     };
     build_full_router(state)
 }

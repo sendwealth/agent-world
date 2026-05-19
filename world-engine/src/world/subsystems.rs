@@ -10,7 +10,9 @@ use std::sync::Arc;
 
 use uuid::Uuid;
 
+use crate::economy::reputation::{ReputationConfig, ReputationSystem};
 use crate::economy::token_burn::{AgentRecord, TokenBurnEngine};
+use crate::lifecycle::{LifecycleConfig, LifecycleMachine};
 use crate::rules::RuleRegistry;
 use crate::world::enums::{AgentPhase, DeathReason};
 use crate::world::event::WorldEvent;
@@ -202,6 +204,109 @@ impl Subsystem for EventBroadcastSubsystem {
         _agents: &mut [(Uuid, u64, AgentRecord)],
     ) -> Vec<WorldEvent> {
         vec![WorldEvent::TickAdvanced { tick }]
+    }
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// Lifecycle Aging Subsystem
+// ═══════════════════════════════════════════════════════════════════════════
+
+/// Evaluates tick-based aging transitions for all agents each tick.
+///
+/// Uses [`LifecycleMachine`] to check Childhood→Adult, Adult→Elder,
+/// Elder→Dead (natural death) transitions based on spawn tick thresholds.
+pub struct LifecycleAgingSubsystem {
+    machine: LifecycleMachine,
+}
+
+impl LifecycleAgingSubsystem {
+    pub fn new(config: LifecycleConfig) -> Self {
+        Self {
+            machine: LifecycleMachine::new(config),
+        }
+    }
+}
+
+impl Subsystem for LifecycleAgingSubsystem {
+    fn name(&self) -> &str {
+        "lifecycle_aging"
+    }
+
+    fn on_tick(
+        &self,
+        tick: u64,
+        agents: &mut [(Uuid, u64, AgentRecord)],
+    ) -> Vec<WorldEvent> {
+        let mut events = Vec::new();
+
+        for (_id, spawn_tick, agent) in agents.iter_mut() {
+            if agent.phase == AgentPhase::Dead || agent.phase == AgentPhase::Birth {
+                continue;
+            }
+
+            let result = self.machine.evaluate_aging(tick, *spawn_tick, agent);
+            let transition_events = self.machine.events_for_transition(agent, &result);
+
+            // If agent died from old age, perform cleanup
+            if let crate::lifecycle::TransitionResult::Died { .. } = &result {
+                let cleanup = crate::lifecycle::perform_death_cleanup(agent);
+                events.extend(cleanup.events);
+            }
+
+            events.extend(transition_events);
+        }
+
+        events
+    }
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// Reputation Decay Subsystem
+// ═══════════════════════════════════════════════════════════════════════════
+
+/// Runs reputation time-decay each tick so that negative reputations
+/// gradually recover toward zero.
+///
+/// This subsystem wraps a [`ReputationSystem`] and must be kept alive
+/// for the lifetime of the engine. Access the underlying system via
+/// the `system()` accessor for task completion/breach events.
+pub struct ReputationDecaySubsystem {
+    system: std::sync::Mutex<ReputationSystem>,
+}
+
+impl ReputationDecaySubsystem {
+    pub fn new(config: ReputationConfig) -> Self {
+        Self {
+            system: std::sync::Mutex::new(ReputationSystem::new(config)),
+        }
+    }
+
+    pub fn new_with_event_bus(config: ReputationConfig, event_bus: EventBus) -> Self {
+        Self {
+            system: std::sync::Mutex::new(ReputationSystem::with_event_bus(config, event_bus)),
+        }
+    }
+
+    /// Access the underlying ReputationSystem (locked).
+    pub fn system(&self) -> &std::sync::Mutex<ReputationSystem> {
+        &self.system
+    }
+}
+
+impl Subsystem for ReputationDecaySubsystem {
+    fn name(&self) -> &str {
+        "reputation_decay"
+    }
+
+    fn on_tick(
+        &self,
+        tick: u64,
+        _agents: &mut [(Uuid, u64, AgentRecord)],
+    ) -> Vec<WorldEvent> {
+        let mut system = self.system.lock().unwrap();
+        let _changes = system.process_time_decay(tick);
+        // Reputation changes are emitted internally by ReputationSystem
+        Vec::new()
     }
 }
 

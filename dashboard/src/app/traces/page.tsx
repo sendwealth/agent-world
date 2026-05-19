@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, useMemo, useCallback, useRef } from "react";
+import { useEffect, useState, useMemo, useRef } from "react";
 import { useRouter } from "next/navigation";
 import type { Agent, TickTraceSummary, WorldEvent } from "@/types/world";
 import { fetchJSON } from "@/lib/api";
@@ -74,29 +74,36 @@ export default function TracesPage() {
   }, []);
 
   // Load traces when agent is selected
-  const loadTraces = useCallback(async (agentId: string) => {
-    setTracesLoading(true);
-    try {
-      const data = await fetchJSON<TickTraceSummary[]>(
-        `/api/v1/agents/${agentId}/traces?limit=50`
-      );
-      setTraces(data);
-      setError(null);
-    } catch {
-      setError("无法加载决策轨迹");
-      setTraces([]);
-    } finally {
-      setTracesLoading(false);
-    }
-  }, []);
-
   useEffect(() => {
-    if (selectedAgentId) {
-      loadTraces(selectedAgentId);
-    } else {
-      setTraces([]);
+    let cancelled = false;
+
+    async function fetchTraces() {
+      if (!selectedAgentId) {
+        setTraces([]);
+        return;
+      }
+      setTracesLoading(true);
+      try {
+        const data = await fetchJSON<TickTraceSummary[]>(
+          `/api/v1/agents/${selectedAgentId}/traces?limit=50`
+        );
+        if (!cancelled) {
+          setTraces(data);
+          setError(null);
+        }
+      } catch {
+        if (!cancelled) {
+          setError("无法加载决策轨迹");
+          setTraces([]);
+        }
+      } finally {
+        if (!cancelled) setTracesLoading(false);
+      }
     }
-  }, [selectedAgentId, loadTraces]);
+
+    fetchTraces();
+    return () => { cancelled = true; };
+  }, [selectedAgentId]);
 
   // SSE-driven refresh
   useEffect(() => {
@@ -109,7 +116,8 @@ export default function TracesPage() {
 
       refreshPending.current = true;
       debounceRef.current = setTimeout(() => {
-        loadTraces(selectedAgentId);
+        // Trigger re-fetch by toggling selectedAgentId dependency via state update
+        setSelectedAgentId((prev) => prev);
         refreshPending.current = false;
       }, 500);
     }
@@ -123,7 +131,7 @@ export default function TracesPage() {
       }
       refreshPending.current = false;
     };
-  }, [sse, selectedAgentId, loadTraces]);
+  }, [sse, selectedAgentId]);
 
   // Compute stats
   const stats = useMemo(() => {

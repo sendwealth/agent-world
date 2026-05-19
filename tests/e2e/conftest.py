@@ -81,6 +81,19 @@ def terminate_process(proc: subprocess.Popen, timeout: float = 5.0) -> None:
         pass
 
 
+def kill_port(port: int) -> None:
+    """Kill any process listening on *port* to avoid stale-process conflicts."""
+    import subprocess as _sp
+    try:
+        pids = _sp.check_output(
+            ["lsof", "-t", "-i", f":{port}"], stderr=_sp.DEVNULL
+        ).decode()
+        for pid in pids.split():
+            _sp.run(["kill", pid], stderr=_sp.DEVNULL)
+    except (_sp.CalledProcessError, FileNotFoundError):
+        pass  # nothing on that port — all good
+
+
 # ── Fixture: World Engine ───────────────────────────────────────
 
 @pytest.fixture(scope="session")
@@ -118,6 +131,10 @@ def world_engine_process(
         # Isolate data to avoid conflicting with dev runs
         "WAL_DIR": "/tmp/agent-world-e2e-test/wal",
     })
+
+    # Kill any stale process on our ports before starting
+    kill_port(engine_port)
+    kill_port(grpc_port)
 
     ENGINE_BIN = WORLD_ENGINE_DIR / "target" / "debug" / "agent-world-engine"
     proc = subprocess.Popen(

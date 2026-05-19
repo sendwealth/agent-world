@@ -1,17 +1,72 @@
 use std::sync::Arc;
-use tokio::sync::Mutex;
+use std::time::Duration;
 
+use tokio::sync::{Mutex, watch};
+
+use agent_world_engine::a2a::registry::AgentRegistry;
+use agent_world_engine::a2a::router::MessageRouter;
+use agent_world_engine::a2a::service::A2aServiceImpl;
+use agent_world_engine::agentworld::a2a::v1::a2a_service_server::A2aServiceServer;
+use agent_world_engine::api::{self, AppState};
+use agent_world_engine::config::{ConfigManager, GenesisConfig};
+use agent_world_engine::economy::marketplace::Marketplace;
+use agent_world_engine::economy::reputation::{ReputationConfig, ReputationSystem};
 use agent_world_engine::economy::task::TaskBoard;
+use agent_world_engine::economy::token_burn::TokenBurnEngine;
+use agent_world_engine::time_capsule::SnapshotStore;
 use agent_world_engine::wal::WAL;
+use agent_world_engine::world::event::WorldEvent;
+use agent_world_engine::world::state::EventBus;
+use agent_world_engine::world::subsystem::SubsystemRegistry;
+use agent_world_engine::world::subsystems::{
+    DeathJudgmentSubsystem, EventBroadcastSubsystem, TokenBurnSubsystem,
+};
+use agent_world_engine::world::{Scheduler, WorldState};
 
 #[tokio::main]
 async fn main() {
-    let event_bus = agent_world_engine::world::EventBus::new(256);
+    // ── Initialize tracing ──────────────────────────────────
+    tracing_subscriber::fmt().init();
 
     println!("Agent World Engine v1.0.0");
     println!("   Status: initializing...");
 
-    // Initialize WAL and recover from crash
+    // ── Load genesis.yaml ───────────────────────────────────
+    let genesis_path = std::env::var("GENESIS_PATH")
+        .unwrap_or_else(|_| "config/genesis.yaml".to_string());
+
+    let genesis_config: GenesisConfig = if std::path::Path::new(&genesis_path).exists() {
+        match GenesisConfig::load_from_file(std::path::Path::new(&genesis_path)) {
+            Ok(config) => {
+                let errors = config.validate();
+                if !errors.is_empty() {
+                    for e in &errors {
+                        eprintln!("   Config validation error: {}", e);
+                    }
+                    println!("   Using default config due to validation errors");
+                    GenesisConfig::default()
+                } else {
+                    println!("   GenesisConfig: loaded from {}", genesis_path);
+                    config
+                }
+            }
+            Err(e) => {
+                eprintln!("   Failed to load genesis.yaml: {} — using defaults", e);
+                GenesisConfig::default()
+            }
+        }
+    } else {
+        println!("   GenesisConfig: file not found, using defaults");
+        GenesisConfig::default()
+    };
+
+    let tick_interval = Duration::from_millis(genesis_config.world.tick_interval_ms);
+
+    // ── Initialize EventBus ─────────────────────────────────
+    let event_bus = Arc::new(EventBus::new(256));
+    println!("   EventBus: created (capacity: 256)");
+
+    // ── Initialize WAL ──────────────────────────────────────
     let mut wal = WAL::new("./data");
     match wal.open() {
         Ok(()) => {
@@ -37,20 +92,17 @@ async fn main() {
         }
     }
 
-    println!("   EventBus: created (capacity: 256)");
-
-    // Subscribe WAL to all events (write-ahead logging)
     let wal_writer = Arc::new(Mutex::new(wal));
+
+    // Spawn WAL writer task
     let wal_subscriber = wal_writer.clone();
     let mut wal_rx = event_bus.subscribe();
-
-    // Spawn background task to write events to WAL
     let wal_handle = tokio::spawn(async move {
         loop {
             match wal_rx.recv().await {
                 Ok(event) => {
-                    let mut wal = wal_subscriber.lock().await;
-                    if let Err(e) = wal.append_event(&event) {
+                    let mut w = wal_subscriber.lock().await;
+                    if let Err(e) = w.append_event(&event) {
                         eprintln!("[WAL] Failed to write event: {}", e);
                     }
                 }
@@ -64,34 +116,177 @@ async fn main() {
         }
     });
 
-    // Initialize task board with event bus (use RwLock for read concurrency)
-    let task_board = Arc::new(Mutex::new(TaskBoard::with_event_bus(event_bus)));
+    // ── Initialize Subsystems ───────────────────────────────
+    let mut subsystem_registry = SubsystemRegistry::new();
+    subsystem_registry.register(Box::new(TokenBurnSubsystem::new(
+        TokenBurnEngine::with_defaults(),
+    )));
+    subsystem_registry.register(Box::new(DeathJudgmentSubsystem::new(
+        genesis_config.lifecycle.death_grace_ticks,
+    )));
+    subsystem_registry.register(Box::new(EventBroadcastSubsystem::new(event_bus.clone())));
+    println!(
+        "   SubsystemRegistry: {} subsystems registered",
+        subsystem_registry.len()
+    );
 
-    // Build the HTTP API router with WAL support
-    let app = agent_world_engine::api::create_router_with_wal(task_board, wal_writer.clone());
+    // ── Initialize WorldState ───────────────────────────────
+    let world_state = Arc::new(Mutex::new(WorldState::new(
+        event_bus.clone(),
+        subsystem_registry,
+        vec![],
+    )));
+    println!("   WorldState: initialized");
 
-    // Start the HTTP server
+    // ── Initialize Scheduler ────────────────────────────────
+    let scheduler = Scheduler::new(tick_interval, world_state.clone());
+    let scheduler_cancel = scheduler.cancel_token();
+    let scheduler_handle = tokio::spawn(scheduler.run());
+    println!(
+        "   Scheduler: tick interval {}ms",
+        genesis_config.world.tick_interval_ms
+    );
+
+    // ── Initialize TimeCapsule ──────────────────────────────
+    let snapshot_store = SnapshotStore::new("./data/snapshots.db")
+        .ok()
+        .map(|s| Arc::new(Mutex::new(s)));
+
+    // Spawn periodic snapshot task (every 500 ticks)
+    if let Some(ref store) = snapshot_store {
+        let store_clone = store.clone();
+        let state_clone = world_state.clone();
+        let mut snapshot_rx = event_bus.subscribe();
+        let snapshot_handle = tokio::spawn(async move {
+            loop {
+                match snapshot_rx.recv().await {
+                    Ok(event) => {
+                        if let WorldEvent::TickAdvanced { tick } = event {
+                            if tick > 0 && tick % 500 == 0 {
+                                let state = state_clone.lock().await;
+                                let snapshot =
+                                    agent_world_engine::time_capsule::build_snapshot(
+                                        tick,
+                                        &state.agents,
+                                        &[],
+                                    );
+                                drop(state);
+                                let s = store_clone.lock().await;
+                                if let Err(e) = s.save(&snapshot) {
+                                    eprintln!("[TimeCapsule] Failed to save snapshot: {}", e);
+                                }
+                            }
+                        }
+                    }
+                    Err(tokio::sync::broadcast::error::RecvError::Lagged(n)) => {
+                        eprintln!("[TimeCapsule] Lagged {} events", n);
+                    }
+                    Err(tokio::sync::broadcast::error::RecvError::Closed) => {
+                        break;
+                    }
+                }
+            }
+        });
+        println!("   TimeCapsule: snapshot every 500 ticks");
+        // Keep the handle alive
+        tokio::spawn(async move {
+            let _ = snapshot_handle.await;
+        });
+    }
+
+    // ── Initialize ReputationSystem ─────────────────────────
+    let _reputation_system = ReputationSystem::new(ReputationConfig::default());
+    println!("   ReputationSystem: initialized");
+
+    // ── Initialize Marketplace ──────────────────────────────
+    let _marketplace = Marketplace::with_event_bus(event_bus.as_ref().clone());
+    println!("   Marketplace: initialized");
+
+    // ── Initialize TaskBoard ────────────────────────────────
+    let task_board = Arc::new(Mutex::new(TaskBoard::with_event_bus(
+        event_bus.as_ref().clone(),
+    )));
+    println!("   TaskBoard: initialized");
+
+    // ── Initialize ConfigManager (hot-reload) ───────────────
+    if std::path::Path::new(&genesis_path).exists() {
+        match ConfigManager::new(&genesis_path, Some(event_bus.clone())) {
+            Ok(config_mgr) => match agent_world_engine::config::spawn_config_watcher(Arc::new(config_mgr)) {
+                Ok((_watcher_handle, _cancel_tx)) => {
+                    println!("   ConfigManager: watching {} for changes", genesis_path);
+                }
+                Err(e) => {
+                    eprintln!("   ConfigManager: watcher failed: {}", e);
+                }
+            },
+            Err(e) => {
+                eprintln!("   ConfigManager: failed to initialize: {}", e);
+            }
+        }
+    }
+
+    // ── Initialize gRPC Server ──────────────────────────────
+    let grpc_registry = Arc::new(AgentRegistry::new(event_bus.clone()));
+    let grpc_router = Arc::new(MessageRouter::new(grpc_registry.clone()));
+    let grpc_service = A2aServiceImpl::new(grpc_registry, grpc_router);
+    let grpc_addr_str =
+        std::env::var("GRPC_ADDR").unwrap_or_else(|_| "0.0.0.0:50051".to_string());
+    let grpc_addr: std::net::SocketAddr = grpc_addr_str
+        .parse()
+        .expect("Invalid GRPC_ADDR");
+    println!("   gRPC server: {}", grpc_addr);
+
+    // ── Initialize HTTP/SSE Server ──────────────────────────
+    let (tick_tx, tick_rx) = watch::channel(0u64);
+    let app_state = AppState {
+        board: task_board,
+        wal: wal_writer.clone(),
+        event_bus: event_bus.clone(),
+        agents: Arc::new(Mutex::new(Vec::new())),
+        messages: Arc::new(Mutex::new(Vec::new())),
+        tick_tx,
+        tick_rx,
+        snapshot_store,
+    };
+    let app = api::build_full_router(app_state);
+
     let host = std::env::var("HOST").unwrap_or_else(|_| "0.0.0.0".to_string());
     let port: u16 = std::env::var("PORT")
         .unwrap_or_else(|_| "3000".to_string())
         .parse()
         .expect("PORT must be a valid u16");
-    let addr: std::net::SocketAddr = format!("{}:{}", host, port)
+    let http_addr: std::net::SocketAddr = format!("{}:{}", host, port)
         .parse()
         .expect("Invalid HOST:PORT");
-    println!("   API server: http://{}", addr);
+
+    println!("   HTTP API: http://{}", http_addr);
+    println!("   SSE endpoint: http://{}/api/v1/world/events", http_addr);
     println!("   Status: ready");
 
-    let listener = tokio::net::TcpListener::bind(addr).await.unwrap();
+    let http_listener = tokio::net::TcpListener::bind(http_addr).await.unwrap();
+    let http_server = axum::serve(http_listener, app);
 
-    // Graceful shutdown on ctrl-c
+    // Spawn gRPC server as a separate task
+    let grpc_handle = tokio::spawn(async move {
+        tonic::transport::Server::builder()
+            .add_service(A2aServiceServer::new(grpc_service))
+            .serve(grpc_addr)
+            .await
+    });
+
+    // ── Run all servers ─────────────────────────────────────
     let shutdown_wal = wal_writer.clone();
-    let server = axum::serve(listener, app);
-
     tokio::select! {
-        result = server => {
+        result = http_server => {
             if let Err(e) = result {
-                eprintln!("Server error: {}", e);
+                eprintln!("HTTP server error: {}", e);
+            }
+        }
+        result = grpc_handle => {
+            match result {
+                Ok(Ok(())) => {}
+                Ok(Err(e)) => eprintln!("gRPC server error: {}", e),
+                Err(e) => eprintln!("gRPC task error: {}", e),
             }
         }
         _ = tokio::signal::ctrl_c() => {
@@ -99,13 +294,16 @@ async fn main() {
         }
     }
 
-    // Final snapshot and close WAL
+    // ── Graceful shutdown ───────────────────────────────────
+    scheduler_cancel.cancel();
+    let _ = scheduler_handle.await;
+
     {
-        let mut wal = shutdown_wal.lock().await;
-        if let Err(e) = wal.take_snapshot(&[], 0) {
+        let mut w = shutdown_wal.lock().await;
+        if let Err(e) = w.take_snapshot(&[], 0) {
             eprintln!("[WAL] Final snapshot failed: {}", e);
         }
-        wal.close();
+        w.close();
     }
 
     wal_handle.abort();

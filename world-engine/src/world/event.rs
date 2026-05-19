@@ -33,6 +33,10 @@ pub enum EventType {
     AgentHeartbeat,
     ReputationChanged,
     ConfigReloaded,
+    KnowledgeListed,
+    KnowledgeDelisted,
+    KnowledgePurchased,
+    KnowledgeRated,
 }
 
 /// Events emitted by the world engine.
@@ -76,6 +80,10 @@ pub enum WorldEvent {
     AgentDeregistered { agent_id: String, name: String },
     AgentHeartbeat { agent_id: String, timestamp: u64 },
     ConfigReloaded { source: String },
+    KnowledgeListed { listing_id: String, publisher: String, price: u64, currency: Currency },
+    KnowledgeDelisted { listing_id: String },
+    KnowledgePurchased { listing_id: String, buyer: String, seller: String, price: u64, currency: Currency },
+    KnowledgeRated { listing_id: String, rater: String, score: u8, average_rating: f64 },
 }
 
 impl WorldEvent {
@@ -109,6 +117,10 @@ impl WorldEvent {
             WorldEvent::AgentDeregistered { .. } => EventType::AgentDeregistered,
             WorldEvent::AgentHeartbeat { .. } => EventType::AgentHeartbeat,
             WorldEvent::ConfigReloaded { .. } => EventType::ConfigReloaded,
+            WorldEvent::KnowledgeListed { .. } => EventType::KnowledgeListed,
+            WorldEvent::KnowledgeDelisted { .. } => EventType::KnowledgeDelisted,
+            WorldEvent::KnowledgePurchased { .. } => EventType::KnowledgePurchased,
+            WorldEvent::KnowledgeRated { .. } => EventType::KnowledgeRated,
         }
     }
 
@@ -142,6 +154,10 @@ impl WorldEvent {
             WorldEvent::AgentDeregistered { agent_id, .. } => Some(agent_id),
             WorldEvent::AgentHeartbeat { agent_id, .. } => Some(agent_id),
             WorldEvent::ConfigReloaded { .. } => None,
+            WorldEvent::KnowledgeListed { publisher, .. } => Some(publisher),
+            WorldEvent::KnowledgeDelisted { .. } => None,
+            WorldEvent::KnowledgePurchased { buyer, .. } => Some(buyer),
+            WorldEvent::KnowledgeRated { rater, .. } => Some(rater),
         }
     }
 

@@ -14,6 +14,7 @@ const navItems = [
   { href: "/evolution", label: "进化树", icon: "🧬" },
   { href: "/timeline", label: "事件时间线", icon: "📜" },
   { href: "/briefing", label: "世界简报", icon: "📊" },
+  { href: "/traces", label: "决策轨迹", icon: "🔍" },
 ];
 
 export function Sidebar() {
@@ -69,7 +70,7 @@ export function Sidebar() {
         <nav className="flex-1 space-y-0.5 p-2">
           {navItems.map((item) => {
             const active =
-              item.href === "/agents" || item.href === "/organizations"
+              item.href === "/agents" || item.href === "/organizations" || item.href === "/traces"
                 ? pathname === item.href || pathname.startsWith(item.href + "/")
                 : pathname === item.href;
             return (
@@ -129,7 +130,7 @@ export function Sidebar() {
         <nav className="flex-1 space-y-0.5 p-2">
           {navItems.map((item) => {
             const active =
-              item.href === "/agents" || item.href === "/organizations"
+              item.href === "/agents" || item.href === "/organizations" || item.href === "/traces"
                 ? pathname === item.href || pathname.startsWith(item.href + "/")
                 : pathname === item.href;
             return (

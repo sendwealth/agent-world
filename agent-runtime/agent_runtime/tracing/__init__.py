@@ -21,6 +21,7 @@ from agent_runtime.tracing.models import (
     TickSnapshot,
     TickSummary,
 )
+from agent_runtime.tracing.pusher import TracePusher
 from agent_runtime.tracing.query import TraceQuery, TraceQueryService
 from agent_runtime.tracing.store import TraceStore
 
@@ -29,6 +30,7 @@ __all__ = [
     "TickSnapshot",
     "TickSummary",
     "TraceCollector",
+    "TracePusher",
     "TraceQuery",
     "TraceQueryService",
     "TraceStore",

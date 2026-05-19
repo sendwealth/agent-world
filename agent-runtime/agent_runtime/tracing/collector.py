@@ -15,14 +15,18 @@ the ThinkLoop internals.
 
 from __future__ import annotations
 
+import asyncio
 import logging
 import time
 from datetime import datetime, timezone
-from typing import Any
+from typing import TYPE_CHECKING, Any
 from uuid import UUID
 
 from agent_runtime.tracing.models import PhaseSnapshot, TickSnapshot, TracePhase
 from agent_runtime.tracing.store import TraceStore
+
+if TYPE_CHECKING:
+    from agent_runtime.tracing.pusher import TracePusher
 
 logger = logging.getLogger(__name__)
 
@@ -55,10 +59,12 @@ class TraceCollector:
         store: TraceStore,
         *,
         enabled: bool = True,
+        pusher: TracePusher | None = None,
     ) -> None:
         self.agent_id = agent_id
         self._store = store
         self.enabled = enabled
+        self._pusher = pusher
 
         # Current tick being collected
         self._current: TickSnapshot | None = None
@@ -141,6 +147,16 @@ class TraceCollector:
                 self.agent_id,
                 self._current.tick,
             )
+
+        # Push to World Engine (fire-and-forget)
+        if self._pusher is not None:
+            snapshot = self._current
+            try:
+                loop = asyncio.get_running_loop()
+                loop.create_task(self._pusher.push(snapshot))
+            except RuntimeError:
+                # No running event loop — skip push
+                pass
 
         snapshot = self._current
         self._current = None

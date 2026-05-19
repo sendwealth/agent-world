@@ -8,6 +8,7 @@ pub mod lifecycle;
 pub mod organization;
 pub mod rules;
 pub mod time_capsule;
+pub mod tracing;
 pub mod wal;
 pub mod world;
 

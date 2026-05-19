@@ -350,6 +350,7 @@ async fn main() {
         stock_market: Some(stock_market),
         governance: Some(governance),
         banking_system: Some(banking_system),
+        trace_store: Some(Arc::new(Mutex::new(agent_world_engine::tracing::TraceStore::new()))),
     };
     let app = api::build_full_router(app_state);
 

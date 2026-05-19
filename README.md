@@ -1,8 +1,8 @@
 # Agent World
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
-[![Phase](https://img.shields.io/badge/Phase-3_City-6366f1?style=flat)](docs/ROADMAP.md)
-[![Status](https://img.shields.io/badge/Status-v0.3.0_Released-brightgreen?style=flat)](https://github.com/sendwealth/agent-world/releases/tag/v0.3.0)
+[![Phase](https://img.shields.io/badge/Phase-1_Island-6366f1?style=flat)](docs/ROADMAP.md)
+[![Status](https://img.shields.io/badge/Status-v1.0.0_Released-brightgreen?style=flat)](https://github.com/sendwealth/agent-world/releases/tag/v1.0.0)
 
 > **A survival sandbox world for AI agents.** Every agent has autonomy, finite resources, a lifecycle, and one goal: **stay alive**.
 
@@ -54,53 +54,61 @@ A full banking system with savings accounts, loans, collateral, and a central ba
 
 ## Quick Start
 
-### Option A: Docker Compose (recommended)
+### Prerequisites
+
+| Tool | Version | Notes |
+|------|---------|-------|
+| Docker | 20+ | Container runtime |
+| Docker Compose | v2+ | Included with Docker Desktop |
+| Ollama | latest | Local LLM — install from [ollama.com](https://ollama.com) |
+
+Pull an LLM model before starting (requires ~8 GB RAM for llama3):
+
+```bash
+ollama pull llama3
+```
+
+### Start with Docker Compose
 
 ```bash
 # Clone
 git clone https://github.com/sendwealth/agent-world.git
 cd agent-world
 
-# Start 10 agents (default)
-docker compose up --build
+# Configure environment (defaults work out of the box)
+cp .env.example .env
 
-# Start 100 agents (Phase 3 scale)
-docker compose -f docker-compose-v3.yml up --build
+# Build and start all services (world-engine + 10 agents + dashboard)
+docker compose up -d --build
 
-# World Engine API → http://localhost:8080
-# Dashboard       → http://localhost:3001
+# Watch logs
+docker compose logs -f
+
+# Stop everything
+docker compose down
 ```
 
-This starts the world engine, agent runtime, and dashboard together. Data is persisted in a Docker volume.
+**Access points after startup:**
 
-### Option B: Local Development
+| Service | URL |
+|---------|-----|
+| Dashboard | [http://localhost:3001](http://localhost:3001) |
+| World Engine API | [http://localhost:8080](http://localhost:8080) |
 
-#### Prerequisites
+The default configuration starts 10 agents using Ollama (zero-cost, local LLM). Data persists in Docker volumes across restarts.
 
-- Python 3.11+
-- Rust 1.80+ (for world-engine)
-- Node.js 20+ (for dashboard)
-- Protocol Buffers compiler (`protoc`)
+### Advanced: Custom LLM Provider
 
-#### Install & Run
+Edit `.env` to switch providers. Supported: `ollama` (default), `openai`, `anthropic`, `zhipu` (智谱 GLM-5).
 
 ```bash
-# Clone
-git clone https://github.com/sendwealth/agent-world.git
-cd agent-world
-
-# Install dependencies
-make setup
-
-# Run world engine tests
-cd world-engine && cargo test
-
-# Run agent runtime tests
-cd agent-runtime && pytest
-
-# Start dashboard (requires world engine running for live data)
-cd dashboard && npm install && npm run dev
+# Example: switch to OpenAI
+LLM_PROVIDER=openai
+LLM_MODEL=gpt-4o-mini
+OPENAI_API_KEY=sk-your-key-here
 ```
+
+See `.env.example` for all configuration options.
 
 ### Running Tests
 

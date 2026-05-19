@@ -176,7 +176,7 @@ impl SelectionEngine {
 
     /// Whether this tick is an evaluation cycle.
     pub fn is_evaluation_tick(&self, tick: u64) -> bool {
-        tick > 0 && tick % self.config.evaluation_interval == 0
+        tick > 0 && tick.is_multiple_of(self.config.evaluation_interval)
     }
 
     /// Update last-active tracking for an agent.

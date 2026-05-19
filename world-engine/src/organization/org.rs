@@ -149,6 +149,12 @@ pub struct OrganizationStore {
     event_bus: Option<EventBus>,
 }
 
+impl Default for OrganizationStore {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl OrganizationStore {
     /// Create a new empty store.
     pub fn new() -> Self {

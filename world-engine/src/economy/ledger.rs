@@ -312,6 +312,7 @@ impl MoneyLedger {
     ///
     /// Creates a debit entry on `from` and a credit entry on `to`.
     /// Both entries share the same `pair_id` to form a balanced pair.
+    #[allow(clippy::too_many_arguments)]
     pub fn transfer(
         &mut self,
         from: &str,

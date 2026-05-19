@@ -75,6 +75,12 @@ pub struct AgentRegistry {
 /// How long an agent can go without a heartbeat before being marked offline.
 const DEFAULT_HEARTBEAT_TIMEOUT_SECS: u64 = 30;
 
+impl Default for AgentRegistry {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl AgentRegistry {
     /// Create a new, empty registry.
     pub fn new() -> Self {

@@ -257,7 +257,7 @@ impl Organization {
     }
 
     pub fn is_founder(&self, agent_id: &str) -> bool {
-        self.members.get(agent_id).map_or(false, |m| m.role == MemberRole::Founder)
+        self.members.get(agent_id).is_some_and(|m| m.role == MemberRole::Founder)
     }
 
     pub fn member_role(&self, agent_id: &str) -> Option<MemberRole> {
@@ -337,7 +337,7 @@ impl Organization {
                 }
                 let mut dist = HashMap::new();
                 let mut allocated = 0u64;
-                for (agent_id, _member) in &self.members {
+                for agent_id in self.members.keys() {
                     let weight = self.custom_weights.get(agent_id).copied().unwrap_or(1);
                     let share = (total_profit * weight) / total_weight;
                     dist.insert(agent_id.clone(), share);
@@ -621,6 +621,7 @@ impl GovernanceSystem {
     // ── Proposal Lifecycle ─────────────────────────────────
 
     /// Create a new proposal.
+    #[allow(clippy::too_many_arguments)]
     pub fn create_proposal(
         &mut self,
         org_id: Uuid,

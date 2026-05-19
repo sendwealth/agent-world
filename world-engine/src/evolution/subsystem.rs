@@ -294,7 +294,7 @@ impl Subsystem for EvolutionSubsystem {
         events.extend(self.passive_xp(agents));
 
         // Evaluation cycle at configured intervals
-        if tick > 0 && tick % self.config.evaluation_interval == 0 {
+        if tick > 0 && tick.is_multiple_of(self.config.evaluation_interval) {
             events.extend(self.run_evaluation_cycle(tick, agents));
         }
 

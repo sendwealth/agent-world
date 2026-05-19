@@ -127,7 +127,7 @@ impl MutationEngine {
         existing_skills: &HashMap<String, (u32, f64)>,
     ) -> Option<MutationOutcome> {
         if existing_skills.is_empty() {
-            return None;
+            return self.mutation_new_skill(rng, existing_skills);
         }
 
         let skills: Vec<&String> = existing_skills.keys().collect();

@@ -653,14 +653,9 @@ pub fn spawn_config_watcher(
             let rx = fs_rx;
             // Use tokio::task::spawn_blocking to poll the std channel.
             tokio::task::spawn_blocking(move || {
-                loop {
-                    match rx.recv() {
-                        Ok(()) => {
-                            if async_tx.blocking_send(()).is_err() {
-                                break;
-                            }
-                        }
-                        Err(_) => break,
+                while let Ok(()) = rx.recv() {
+                    if async_tx.blocking_send(()).is_err() {
+                        break;
                     }
                 }
             })

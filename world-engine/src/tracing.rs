@@ -86,6 +86,12 @@ pub struct TraceStore {
     traces: HashMap<String, Vec<TickTraceData>>,
 }
 
+impl Default for TraceStore {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl TraceStore {
     pub fn new() -> Self {
         Self {

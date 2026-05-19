@@ -729,7 +729,7 @@ impl Rule for AntiMonopolyRule {
         }
 
         // Only check periodically
-        if self.check_interval > 1 && ctx.tick % self.check_interval != 0 {
+        if self.check_interval > 1 && !ctx.tick.is_multiple_of(self.check_interval) {
             return RuleResult::empty(self.id());
         }
 
@@ -1237,6 +1237,7 @@ pub fn custom_registry(
 }
 
 /// Build a `RuleRegistry` with fully custom configuration for all rules.
+#[allow(clippy::too_many_arguments)]
 pub fn custom_registry_full(
     consumption_config: ConsumptionConfig,
     grace_ticks: u64,

@@ -184,10 +184,11 @@ pub struct MarketplaceFilter {
     pub sort: Option<MarketplaceSort>,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum MarketplaceSort {
     /// Newest first.
+    #[default]
     Newest,
     /// Oldest first.
     Oldest,
@@ -199,12 +200,6 @@ pub enum MarketplaceSort {
     RatingDesc,
     /// Most purchased first.
     PurchasesDesc,
-}
-
-impl Default for MarketplaceSort {
-    fn default() -> Self {
-        MarketplaceSort::Newest
-    }
 }
 
 // ── Marketplace ───────────────────────────────────────────
@@ -383,6 +378,7 @@ impl Marketplace {
 
     /// Publish a new knowledge listing.
     /// Price must be > 0 and expressed in the given currency.
+    #[allow(clippy::too_many_arguments)]
     pub fn publish_listing(
         &mut self,
         title: String,
@@ -580,7 +576,7 @@ impl Marketplace {
         review: Option<String>,
         tick: u64,
     ) -> Result<Uuid, MarketplaceError> {
-        if score < 1 || score > 5 {
+        if !(1..=5).contains(&score) {
             return Err(MarketplaceError::InvalidRating);
         }
 
@@ -617,7 +613,7 @@ impl Marketplace {
 
         self.ratings
             .entry(listing_id)
-            .or_insert_with(Vec::new)
+            .or_default()
             .push(rating);
 
         self.emit(WorldEvent::KnowledgeRated {

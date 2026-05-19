@@ -321,7 +321,7 @@ pub fn build_snapshot(
             avg_level: if count > 0 { total_level / count as f64 } else { 0.0 },
         })
         .collect();
-    skill_counts.sort_by(|a, b| b.agent_count.cmp(&a.agent_count));
+    skill_counts.sort_by_key(|b| std::cmp::Reverse(b.agent_count));
     let skill_distribution_top5 = skill_counts.into_iter().take(5).collect();
 
     let timestamp = chrono::Utc::now().timestamp();

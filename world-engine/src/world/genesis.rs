@@ -9,7 +9,7 @@ use std::time::Duration;
 use serde::{Deserialize, Serialize};
 
 /// Top-level genesis configuration, mirroring `config/genesis.yaml`.
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
 pub struct GenesisConfig {
     #[serde(default)]
     pub world: WorldSection,
@@ -36,17 +36,6 @@ impl GenesisConfig {
     /// The tick interval as a [`Duration`].
     pub fn tick_interval(&self) -> Duration {
         Duration::from_millis(self.world.tick_interval_ms)
-    }
-}
-
-impl Default for GenesisConfig {
-    fn default() -> Self {
-        Self {
-            world: WorldSection::default(),
-            economy: EconomySection::default(),
-            lifecycle: LifecycleSection::default(),
-            safety: SafetySection::default(),
-        }
     }
 }
 

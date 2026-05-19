@@ -309,22 +309,12 @@ pub struct ReviewTaskRequest {
     pub reviewer_id: String,
 }
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Default, Deserialize)]
 #[serde(default)]
 pub struct ListTasksQuery {
     pub status: Option<String>,
     pub publisher_id: Option<String>,
     pub assignee_id: Option<String>,
-}
-
-impl Default for ListTasksQuery {
-    fn default() -> Self {
-        Self {
-            status: None,
-            publisher_id: None,
-            assignee_id: None,
-        }
-    }
 }
 
 #[derive(Debug, Deserialize)]
@@ -1328,6 +1318,7 @@ impl From<&crate::organization::org::Organization> for OrgResponse {
     }
 }
 
+#[allow(dead_code)]
 fn org_to_response(org: &crate::organization::governance::Organization) -> OrgResponse {
     OrgResponse {
         id: org.id.to_string(),
@@ -1364,6 +1355,7 @@ fn proposal_to_response(proposal: &crate::organization::governance::Proposal) ->
     }
 }
 
+#[allow(dead_code)]
 fn parse_decision_mode(s: &str) -> Option<crate::organization::governance::DecisionMode> {
     use crate::organization::governance::DecisionMode;
     match s {

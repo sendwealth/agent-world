@@ -252,6 +252,12 @@ pub struct StockMarket {
     event_bus: Option<EventBus>,
 }
 
+impl Default for StockMarket {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl StockMarket {
     /// Create a new empty stock market.
     pub fn new() -> Self {
@@ -366,6 +372,7 @@ impl StockMarket {
     /// Take a stock public (IPO). The org must meet conditions:
     /// - Org must have >= IPO_MIN_MEMBERS
     /// - Org treasury must be >= IPO_MIN_TREASURY
+    ///
     /// After IPO, the stock becomes publicly tradeable.
     ///
     /// `org_member_count` and `org_treasury` are provided by the caller
@@ -507,6 +514,7 @@ impl StockMarket {
     /// Place a buy order.
     /// For limit orders, `price` must be > 0. For market orders, price is ignored.
     /// `agent_funds` is the agent's available money balance (checked externally).
+    #[allow(clippy::too_many_arguments)]
     pub fn place_buy_order(
         &mut self,
         stock_id: &str,
@@ -653,15 +661,15 @@ impl StockMarket {
     /// List orders, optionally filtered by stock and/or agent.
     pub fn list_orders(&self, stock_id: Option<&str>, agent_id: Option<&str>) -> Vec<&Order> {
         self.orders.values()
-            .filter(|o| stock_id.map_or(true, |s| o.stock_id == s))
-            .filter(|o| agent_id.map_or(true, |a| o.agent_id == a))
+            .filter(|o| stock_id.is_none_or(|s| o.stock_id == s))
+            .filter(|o| agent_id.is_none_or(|a| o.agent_id == a))
             .collect()
     }
 
     /// List trades, optionally filtered by stock.
     pub fn list_trades(&self, stock_id: Option<&str>) -> Vec<&Trade> {
         self.trades.iter()
-            .filter(|t| stock_id.map_or(true, |s| t.stock_id == s))
+            .filter(|t| stock_id.is_none_or(|s| t.stock_id == s))
             .collect()
     }
 
@@ -895,7 +903,7 @@ impl StockMarket {
     /// List dividend history, optionally filtered by stock.
     pub fn list_dividends(&self, stock_id: Option<&str>) -> Vec<&DividendRecord> {
         self.dividends.iter()
-            .filter(|d| stock_id.map_or(true, |s| d.stock_id == s))
+            .filter(|d| stock_id.is_none_or(|s| d.stock_id == s))
             .collect()
     }
 

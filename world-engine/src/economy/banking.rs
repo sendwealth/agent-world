@@ -732,7 +732,7 @@ impl BankingSystem {
             }
 
             // Central bank pays interest to the savings account.
-            if let Ok(_) = self.ledger.transfer(
+            if self.ledger.transfer(
                 "central_bank",
                 &ledger_id,
                 interest,
@@ -741,7 +741,7 @@ impl BankingSystem {
                 format!("Savings interest for account {}", account_id),
                 tick,
                 Some(account_id.to_string()),
-            ) {
+            ).is_ok() {
                 let new_balance = self.ledger.get_balance(&ledger_id, Currency::Money);
                 results.push(InterestPaymentResult {
                     account_id: account_id.to_string(),
@@ -783,7 +783,7 @@ impl BankingSystem {
         let overdue_loans: Vec<Uuid> = self.loans.values()
             .filter(|l| {
                 (l.status == LoanStatus::Active || l.status == LoanStatus::Defaulted)
-                    && l.due_tick.map_or(false, |due| tick > due)
+                    && l.due_tick.is_some_and(|due| tick > due)
             })
             .map(|l| l.id)
             .collect();
@@ -814,7 +814,7 @@ impl BankingSystem {
                 }
 
                 // Deduct from borrower wallet.
-                if let Ok(_) = self.ledger.transfer(
+                if self.ledger.transfer(
                     &borrower_id,
                     "central_bank",
                     actual_deduction,
@@ -823,7 +823,7 @@ impl BankingSystem {
                     format!("Auto-deduction for overdue loan {}", loan_id),
                     tick,
                     Some(loan_id.to_string()),
-                ) {
+                ).is_ok() {
                     loan.total_repaid += actual_deduction;
                     loan.outstanding_balance = loan.outstanding_balance.saturating_sub(actual_deduction);
 
@@ -937,8 +937,8 @@ impl BankingSystem {
     ) -> Vec<&Loan> {
         self.loans.values()
             .filter(|l| {
-                borrower_id.map_or(true, |b| l.borrower_id == b)
-                    && status.map_or(true, |s| l.status == s)
+                borrower_id.is_none_or(|b| l.borrower_id == b)
+                    && status.is_none_or(|s| l.status == s)
             })
             .collect()
     }

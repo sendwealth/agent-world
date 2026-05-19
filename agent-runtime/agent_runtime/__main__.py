@@ -270,8 +270,18 @@ async def register_agent(
         logger.info("httpx not available, skipping agent registration")
         return False
 
-    url = f"{world_url.rstrip('/')}/agents"
-    payload = state.to_sync_payload()
+    url = f"{world_url.rstrip('/')}/api/v1/agents"
+
+    # Build a registration payload matching World Engine's SpawnAgentRequest:
+    #   { name: String, tokens: u64, money: u64 }
+    # The full to_sync_payload() cannot be used directly because it sends
+    # money as a float and includes extra fields that the Rust API may not
+    # deserialize (money: 50.0 fails serde's u64 expectation).
+    payload = {
+        "name": state.name,
+        "tokens": int(state.tokens),
+        "money": int(state.money),
+    }
 
     # Attach Ed25519 public key if available
     if public_key_b64 is not None:
@@ -283,7 +293,7 @@ async def register_agent(
     )
 
     try:
-        async with httpx.AsyncClient(timeout=timeout) as client:
+        async with httpx.AsyncClient(timeout=timeout, trust_env=False) as client:
             resp = await client.post(url, json=payload)
             if resp.status_code in (200, 201):
                 logger.info("Agent registered successfully")
@@ -321,11 +331,11 @@ async def deregister_agent(
         logger.info("httpx not available, skipping agent deregistration")
         return False
 
-    url = f"{world_url.rstrip('/')}/agents/{agent_id}"
+    url = f"{world_url.rstrip('/')}/api/v1/agents/{agent_id}"
     logger.info("Deregistering agent %s from World Engine", agent_id)
 
     try:
-        async with httpx.AsyncClient(timeout=timeout) as client:
+        async with httpx.AsyncClient(timeout=timeout, trust_env=False) as client:
             resp = await client.delete(url)
             if resp.status_code in (200, 204):
                 logger.info("Agent deregistered successfully")
@@ -825,16 +835,20 @@ def _get_health_port(config: RuntimeConfig) -> int:
 def _extract_grpc_address(engine_url: str) -> str:
     """Convert an HTTP REST URL to a gRPC address (host:port).
 
-    ``http://localhost:3000`` → ``localhost:3000``
-    ``https://engine.example.com:443`` → ``engine.example.com:443``
+    ``http://localhost:3000`` → ``localhost:50051``
+    ``https://engine.example.com:443`` → ``engine.example.com:50051``
+
+    The gRPC port can be overridden with the ``GRPC_PORT`` environment variable.
     """
     url = engine_url.replace("https://", "").replace("http://", "")
-    # Default gRPC port is 50051; strip REST port and use gRPC port
+    # Extract host from REST URL
     if ":" in url:
         host = url.split(":")[0]
     else:
         host = url
-    return f"{host}:50051"
+    # Use GRPC_PORT env var if set, otherwise default to 50051
+    grpc_port = os.environ.get("GRPC_PORT", "50051")
+    return f"{host}:{grpc_port}"
 
 
 # ---------------------------------------------------------------------------

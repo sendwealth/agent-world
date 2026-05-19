@@ -34,10 +34,10 @@ CONFIG_DIR = ROOT / "config"
 
 # ── Default configuration ───────────────────────────────────────
 
-DEFAULT_ENGINE_PORT = int(os.environ.get("E2E_ENGINE_PORT", "3000"))
-DEFAULT_GRPC_PORT = int(os.environ.get("E2E_GRPC_PORT", "50051"))
-DEFAULT_DASHBOARD_PORT = int(os.environ.get("E2E_DASHBOARD_PORT", "3001"))
-DEFAULT_AGENT_HEALTH_PORT = int(os.environ.get("E2E_AGENT_HEALTH_PORT", "9090"))
+DEFAULT_ENGINE_PORT = int(os.environ.get("E2E_ENGINE_PORT", "18080"))
+DEFAULT_GRPC_PORT = int(os.environ.get("E2E_GRPC_PORT", "50052"))
+DEFAULT_DASHBOARD_PORT = int(os.environ.get("E2E_DASHBOARD_PORT", "13001"))
+DEFAULT_AGENT_HEALTH_PORT = int(os.environ.get("E2E_AGENT_HEALTH_PORT", "19090"))
 DEFAULT_STARTUP_TIMEOUT = int(os.environ.get("E2E_STARTUP_TIMEOUT", "30"))
 DEFAULT_HEALTH_INTERVAL = 0.5  # seconds between health polls
 
@@ -116,12 +116,13 @@ def world_engine_process(
         "RUST_LOG": "warn",
         "GENESIS_PATH": str(CONFIG_DIR / "genesis.yaml"),
         # Isolate data to avoid conflicting with dev runs
-        "WAL_DIR": str(ROOT / "data" / "e2e_test"),
+        "WAL_DIR": "/tmp/agent-world-e2e-test/wal",
     })
 
+    ENGINE_BIN = WORLD_ENGINE_DIR / "target" / "debug" / "agent-world-engine"
     proc = subprocess.Popen(
-        ["cargo", "run", "--release"],
-        cwd=str(WORLD_ENGINE_DIR),
+        [str(ENGINE_BIN)],
+        cwd=str(ROOT),
         env=env,
         stdout=subprocess.PIPE,
         stderr=subprocess.PIPE,
@@ -161,6 +162,10 @@ def agent_process(
     health_port = DEFAULT_AGENT_HEALTH_PORT + hash(request.node.name) % 100
     agent_name = f"e2e-test-{request.node.name}"
 
+    env = os.environ.copy()
+    # Pass gRPC port so the agent can attempt gRPC before REST fallback
+    env["GRPC_PORT"] = str(DEFAULT_GRPC_PORT)
+
     proc = subprocess.Popen(
         [
             "python", "-m", "agent_runtime", "spawn",
@@ -170,7 +175,7 @@ def agent_process(
             "--health-port", str(health_port),
         ],
         cwd=str(AGENT_RUNTIME_DIR),
-        env=os.environ.copy(),
+        env=env,
         stdout=subprocess.PIPE,
         stderr=subprocess.PIPE,
     )

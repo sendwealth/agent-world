@@ -76,6 +76,16 @@ pub enum EventType {
     ProposalVoted,
     ProposalExecuted,
     ProposalRejected,
+    BankAccountOpened,
+    BankDeposit,
+    BankWithdrawal,
+    LoanApplied,
+    LoanApproved,
+    LoanDisbursed,
+    LoanRepayment,
+    BankRateAdjusted,
+    MoneyMinted,
+    BadDebtWrittenOff,
 }
 
 /// Events emitted by the world engine.
@@ -150,6 +160,16 @@ pub enum WorldEvent {
     ProposalVoted { proposal_id: uuid::Uuid, org_id: uuid::Uuid, voter_id: String, in_favor: bool },
     ProposalExecuted { proposal_id: uuid::Uuid, org_id: uuid::Uuid },
     ProposalRejected { proposal_id: uuid::Uuid, org_id: uuid::Uuid, reason: String },
+    BankAccountOpened { account_id: String, owner_id: String, account_type: String },
+    BankDeposit { account_id: String, owner_id: String, amount: u64, new_balance: u64 },
+    BankWithdrawal { account_id: String, owner_id: String, amount: u64, new_balance: u64 },
+    LoanApplied { loan_id: String, borrower_id: String, amount: u64, term_ticks: u64 },
+    LoanApproved { loan_id: String, borrower_id: String, amount: u64 },
+    LoanDisbursed { loan_id: String, borrower_id: String, amount: u64, due_tick: u64 },
+    LoanRepayment { loan_id: String, borrower_id: String, amount: u64, outstanding_balance: u64, fully_repaid: bool },
+    BankRateAdjusted { new_savings_rate: f64, new_loan_rate: f64 },
+    MoneyMinted { amount: u64, total_supply: u64 },
+    BadDebtWrittenOff { loan_id: String, borrower_id: String, amount: u64 },
 }
 
 impl WorldEvent {
@@ -214,6 +234,16 @@ impl WorldEvent {
             WorldEvent::ProposalVoted { .. } => EventType::ProposalVoted,
             WorldEvent::ProposalExecuted { .. } => EventType::ProposalExecuted,
             WorldEvent::ProposalRejected { .. } => EventType::ProposalRejected,
+            WorldEvent::BankAccountOpened { .. } => EventType::BankAccountOpened,
+            WorldEvent::BankDeposit { .. } => EventType::BankDeposit,
+            WorldEvent::BankWithdrawal { .. } => EventType::BankWithdrawal,
+            WorldEvent::LoanApplied { .. } => EventType::LoanApplied,
+            WorldEvent::LoanApproved { .. } => EventType::LoanApproved,
+            WorldEvent::LoanDisbursed { .. } => EventType::LoanDisbursed,
+            WorldEvent::LoanRepayment { .. } => EventType::LoanRepayment,
+            WorldEvent::BankRateAdjusted { .. } => EventType::BankRateAdjusted,
+            WorldEvent::MoneyMinted { .. } => EventType::MoneyMinted,
+            WorldEvent::BadDebtWrittenOff { .. } => EventType::BadDebtWrittenOff,
         }
     }
 
@@ -278,6 +308,16 @@ impl WorldEvent {
             WorldEvent::ProposalVoted { voter_id, .. } => Some(voter_id),
             WorldEvent::ProposalExecuted { .. } => None,
             WorldEvent::ProposalRejected { .. } => None,
+            WorldEvent::BankAccountOpened { owner_id, .. } => Some(owner_id),
+            WorldEvent::BankDeposit { owner_id, .. } => Some(owner_id),
+            WorldEvent::BankWithdrawal { owner_id, .. } => Some(owner_id),
+            WorldEvent::LoanApplied { borrower_id, .. } => Some(borrower_id),
+            WorldEvent::LoanApproved { borrower_id, .. } => Some(borrower_id),
+            WorldEvent::LoanDisbursed { borrower_id, .. } => Some(borrower_id),
+            WorldEvent::LoanRepayment { borrower_id, .. } => Some(borrower_id),
+            WorldEvent::BankRateAdjusted { .. } => None,
+            WorldEvent::MoneyMinted { .. } => None,
+            WorldEvent::BadDebtWrittenOff { borrower_id, .. } => Some(borrower_id),
         }
     }
 

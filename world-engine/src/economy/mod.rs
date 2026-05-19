@@ -1,4 +1,6 @@
+pub mod banking;
 pub mod escrow;
+pub mod ledger;
 pub mod inheritance;
 pub mod marketplace;
 pub mod mentorship;
@@ -8,6 +10,13 @@ pub mod task;
 pub mod token_burn;
 pub mod trust;
 
+pub use banking::{
+    BankingSystem, BankingError, BankAccount, BankAccountType,
+    Loan, LoanStatus, Collateral, CentralBankConfig,
+    DepositResult, WithdrawResult, LoanApplicationResult,
+    RepaymentResult, InterestPaymentResult, RateAdjustmentResult,
+    MintResult, WriteOffResult,
+};
 pub use escrow::{EscrowManager, EscrowRecord, EscrowStatus};
 pub use inheritance::{InheritanceSystem, InheritanceConfig, Will, Beneficiary, InheritanceResult};
 pub use marketplace::{Marketplace, KnowledgeListing, KnowledgeCategory, ListingStatus};

@@ -24,6 +24,14 @@ pub enum TransactionType {
     Knowledge,
     /// Teaching fee.
     Teach,
+    /// Bank deposit.
+    BankDeposit,
+    /// Bank withdrawal.
+    BankWithdrawal,
+    /// Loan disbursement from the central bank.
+    LoanDisbursement,
+    /// Loan repayment to the central bank.
+    LoanRepayment,
 }
 
 // ── Ledger Entry ──────────────────────────────────────────

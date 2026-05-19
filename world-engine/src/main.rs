@@ -10,6 +10,7 @@ use agent_world_engine::a2a::service::A2aServiceImpl;
 use agent_world_engine::agentworld::a2a::v1::a2a_service_server::A2aServiceServer;
 use agent_world_engine::api::{self, AppState};
 use agent_world_engine::config::{ConfigManager, GenesisConfig};
+use agent_world_engine::economy::banking::{BankingSystem, CentralBankConfig};
 use agent_world_engine::economy::marketplace::Marketplace;
 use agent_world_engine::economy::reputation::{ReputationConfig, ReputationSystem};
 use agent_world_engine::economy::task::TaskBoard;
@@ -261,6 +262,13 @@ async fn main() {
     )));
     println!("   TaskBoard: initialized");
 
+    // ── Initialize Banking System ──────────────────────────
+    let banking_system = Arc::new(Mutex::new(BankingSystem::with_event_bus(
+        CentralBankConfig::default(),
+        event_bus.as_ref().clone(),
+    )));
+    println!("   BankingSystem: initialized");
+
     // ── Initialize ConfigManager (hot-reload) ───────────────
     if std::path::Path::new(&genesis_path).exists() {
         match ConfigManager::new(&genesis_path, Some(event_bus.clone())) {
@@ -302,6 +310,7 @@ async fn main() {
         snapshot_store,
         marketplace: Some(marketplace),
         reputation_system: Some(reputation_system),
+        banking_system: Some(banking_system),
     };
     let app = api::build_full_router(app_state);
 

@@ -57,6 +57,16 @@ pub enum EventType {
     WillCreated,
     InheritanceTriggered,
     TimeCapsuleBriefing,
+    BankAccountOpened,
+    BankDeposit,
+    BankWithdrawal,
+    LoanApplied,
+    LoanApproved,
+    LoanDisbursed,
+    LoanRepayment,
+    BankRateAdjusted,
+    MoneyMinted,
+    BadDebtWrittenOff,
 }
 
 /// Events emitted by the world engine.
@@ -112,6 +122,16 @@ pub enum WorldEvent {
     WillCreated { agent_id: String, beneficiaries_count: usize },
     InheritanceTriggered { deceased_id: String, beneficiary_id: String, tokens_transferred: u64, skills_transferred: u32 },
     TimeCapsuleBriefing { tick: u64, summary: String },
+    BankAccountOpened { account_id: String, owner_id: String, account_type: String },
+    BankDeposit { account_id: String, owner_id: String, amount: u64, new_balance: u64 },
+    BankWithdrawal { account_id: String, owner_id: String, amount: u64, new_balance: u64 },
+    LoanApplied { loan_id: String, borrower_id: String, amount: u64, term_ticks: u64 },
+    LoanApproved { loan_id: String, borrower_id: String, amount: u64 },
+    LoanDisbursed { loan_id: String, borrower_id: String, amount: u64, due_tick: u64 },
+    LoanRepayment { loan_id: String, borrower_id: String, amount: u64, outstanding_balance: u64, fully_repaid: bool },
+    BankRateAdjusted { new_savings_rate: f64, new_loan_rate: f64 },
+    MoneyMinted { amount: u64, total_supply: u64 },
+    BadDebtWrittenOff { loan_id: String, borrower_id: String, amount: u64 },
 }
 
 impl WorldEvent {
@@ -157,6 +177,16 @@ impl WorldEvent {
             WorldEvent::WillCreated { .. } => EventType::WillCreated,
             WorldEvent::InheritanceTriggered { .. } => EventType::InheritanceTriggered,
             WorldEvent::TimeCapsuleBriefing { .. } => EventType::TimeCapsuleBriefing,
+            WorldEvent::BankAccountOpened { .. } => EventType::BankAccountOpened,
+            WorldEvent::BankDeposit { .. } => EventType::BankDeposit,
+            WorldEvent::BankWithdrawal { .. } => EventType::BankWithdrawal,
+            WorldEvent::LoanApplied { .. } => EventType::LoanApplied,
+            WorldEvent::LoanApproved { .. } => EventType::LoanApproved,
+            WorldEvent::LoanDisbursed { .. } => EventType::LoanDisbursed,
+            WorldEvent::LoanRepayment { .. } => EventType::LoanRepayment,
+            WorldEvent::BankRateAdjusted { .. } => EventType::BankRateAdjusted,
+            WorldEvent::MoneyMinted { .. } => EventType::MoneyMinted,
+            WorldEvent::BadDebtWrittenOff { .. } => EventType::BadDebtWrittenOff,
         }
     }
 
@@ -202,6 +232,16 @@ impl WorldEvent {
             WorldEvent::WillCreated { agent_id, .. } => Some(agent_id),
             WorldEvent::InheritanceTriggered { deceased_id, .. } => Some(deceased_id),
             WorldEvent::TimeCapsuleBriefing { .. } => None,
+            WorldEvent::BankAccountOpened { owner_id, .. } => Some(owner_id),
+            WorldEvent::BankDeposit { owner_id, .. } => Some(owner_id),
+            WorldEvent::BankWithdrawal { owner_id, .. } => Some(owner_id),
+            WorldEvent::LoanApplied { borrower_id, .. } => Some(borrower_id),
+            WorldEvent::LoanApproved { borrower_id, .. } => Some(borrower_id),
+            WorldEvent::LoanDisbursed { borrower_id, .. } => Some(borrower_id),
+            WorldEvent::LoanRepayment { borrower_id, .. } => Some(borrower_id),
+            WorldEvent::BankRateAdjusted { .. } => None,
+            WorldEvent::MoneyMinted { .. } => None,
+            WorldEvent::BadDebtWrittenOff { borrower_id, .. } => Some(borrower_id),
         }
     }
 

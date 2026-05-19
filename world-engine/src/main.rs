@@ -14,6 +14,7 @@ use agent_world_engine::economy::marketplace::Marketplace;
 use agent_world_engine::economy::reputation::{ReputationConfig, ReputationSystem};
 use agent_world_engine::economy::task::TaskBoard;
 use agent_world_engine::economy::token_burn::TokenBurnEngine;
+use agent_world_engine::organization::org::OrganizationStore;
 use agent_world_engine::time_capsule::SnapshotStore;
 use agent_world_engine::wal::WAL;
 use agent_world_engine::world::event::WorldEvent;
@@ -261,6 +262,12 @@ async fn main() {
     )));
     println!("   TaskBoard: initialized");
 
+    // ── Initialize OrganizationStore ────────────────────────
+    let org_store = Arc::new(Mutex::new(OrganizationStore::with_event_bus(
+        event_bus.as_ref().clone(),
+    )));
+    println!("   OrganizationStore: initialized");
+
     // ── Initialize ConfigManager (hot-reload) ───────────────
     if std::path::Path::new(&genesis_path).exists() {
         match ConfigManager::new(&genesis_path, Some(event_bus.clone())) {
@@ -302,6 +309,7 @@ async fn main() {
         snapshot_store,
         marketplace: Some(marketplace),
         reputation_system: Some(reputation_system),
+        org_store: Some(org_store),
     };
     let app = api::build_full_router(app_state);
 

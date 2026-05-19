@@ -57,6 +57,11 @@ pub enum EventType {
     WillCreated,
     InheritanceTriggered,
     TimeCapsuleBriefing,
+    OrgCreated,
+    OrgMemberJoined,
+    OrgMemberLeft,
+    OrgDissolved,
+    OrgInactivated,
 }
 
 /// Events emitted by the world engine.
@@ -112,6 +117,11 @@ pub enum WorldEvent {
     WillCreated { agent_id: String, beneficiaries_count: usize },
     InheritanceTriggered { deceased_id: String, beneficiary_id: String, tokens_transferred: u64, skills_transferred: u32 },
     TimeCapsuleBriefing { tick: u64, summary: String },
+    OrgCreated { org_id: String, name: String, org_type: String, founder_count: usize },
+    OrgMemberJoined { org_id: String, agent_id: String, agent_name: String, role: String, total_members: usize },
+    OrgMemberLeft { org_id: String, agent_id: String, remaining_members: usize },
+    OrgDissolved { org_id: String, reason: String },
+    OrgInactivated { org_id: String, inactive_since: u64, current_tick: u64 },
 }
 
 impl WorldEvent {
@@ -157,6 +167,11 @@ impl WorldEvent {
             WorldEvent::WillCreated { .. } => EventType::WillCreated,
             WorldEvent::InheritanceTriggered { .. } => EventType::InheritanceTriggered,
             WorldEvent::TimeCapsuleBriefing { .. } => EventType::TimeCapsuleBriefing,
+            WorldEvent::OrgCreated { .. } => EventType::OrgCreated,
+            WorldEvent::OrgMemberJoined { .. } => EventType::OrgMemberJoined,
+            WorldEvent::OrgMemberLeft { .. } => EventType::OrgMemberLeft,
+            WorldEvent::OrgDissolved { .. } => EventType::OrgDissolved,
+            WorldEvent::OrgInactivated { .. } => EventType::OrgInactivated,
         }
     }
 
@@ -202,6 +217,11 @@ impl WorldEvent {
             WorldEvent::WillCreated { agent_id, .. } => Some(agent_id),
             WorldEvent::InheritanceTriggered { deceased_id, .. } => Some(deceased_id),
             WorldEvent::TimeCapsuleBriefing { .. } => None,
+            WorldEvent::OrgCreated { .. } => None,
+            WorldEvent::OrgMemberJoined { agent_id, .. } => Some(agent_id),
+            WorldEvent::OrgMemberLeft { agent_id, .. } => Some(agent_id),
+            WorldEvent::OrgDissolved { .. } => None,
+            WorldEvent::OrgInactivated { .. } => None,
         }
     }
 

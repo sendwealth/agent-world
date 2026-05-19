@@ -4,6 +4,7 @@ pub mod config;
 pub mod economy;
 pub mod grpc_pool;
 pub mod lifecycle;
+pub mod organization;
 pub mod rules;
 pub mod time_capsule;
 pub mod wal;

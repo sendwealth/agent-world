@@ -62,6 +62,9 @@ pub enum EventType {
     OrgMemberLeft,
     OrgDissolved,
     OrgInactivated,
+    SkillLevelUp,
+    SkillMutated,
+    FitnessEvaluated,
 }
 
 /// Events emitted by the world engine.
@@ -122,6 +125,9 @@ pub enum WorldEvent {
     OrgMemberLeft { org_id: String, agent_id: String, remaining_members: usize },
     OrgDissolved { org_id: String, reason: String },
     OrgInactivated { org_id: String, inactive_since: u64, current_tick: u64 },
+    SkillLevelUp { agent_id: String, skill: String, new_level: u32 },
+    SkillMutated { agent_id: String, mutation_type: String, skill: String, description: String },
+    FitnessEvaluated { agent_id: String, score: f64, token_efficiency: f64, survival_duration: f64, skill_diversity: f64 },
 }
 
 impl WorldEvent {
@@ -172,6 +178,9 @@ impl WorldEvent {
             WorldEvent::OrgMemberLeft { .. } => EventType::OrgMemberLeft,
             WorldEvent::OrgDissolved { .. } => EventType::OrgDissolved,
             WorldEvent::OrgInactivated { .. } => EventType::OrgInactivated,
+            WorldEvent::SkillLevelUp { .. } => EventType::SkillLevelUp,
+            WorldEvent::SkillMutated { .. } => EventType::SkillMutated,
+            WorldEvent::FitnessEvaluated { .. } => EventType::FitnessEvaluated,
         }
     }
 
@@ -222,6 +231,9 @@ impl WorldEvent {
             WorldEvent::OrgMemberLeft { agent_id, .. } => Some(agent_id),
             WorldEvent::OrgDissolved { .. } => None,
             WorldEvent::OrgInactivated { .. } => None,
+            WorldEvent::SkillLevelUp { agent_id, .. } => Some(agent_id),
+            WorldEvent::SkillMutated { agent_id, .. } => Some(agent_id),
+            WorldEvent::FitnessEvaluated { agent_id, .. } => Some(agent_id),
         }
     }
 

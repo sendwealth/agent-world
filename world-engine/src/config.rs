@@ -142,6 +142,12 @@ pub struct EvolutionConfig {
     pub mutation_rate: f64,
     #[serde(default = "default_inheritance_ratio")]
     pub inheritance_ratio: f64,
+    #[serde(default = "default_evaluation_interval")]
+    pub evaluation_interval: u64,
+    #[serde(default = "default_inactivity_threshold")]
+    pub inactivity_threshold: u64,
+    #[serde(default = "default_passive_xp_per_tick")]
+    pub passive_xp_per_tick: f64,
 }
 
 impl Default for EvolutionConfig {
@@ -150,6 +156,9 @@ impl Default for EvolutionConfig {
             skill_max_level: default_skill_max_level(),
             mutation_rate: default_mutation_rate(),
             inheritance_ratio: default_inheritance_ratio(),
+            evaluation_interval: default_evaluation_interval(),
+            inactivity_threshold: default_inactivity_threshold(),
+            passive_xp_per_tick: default_passive_xp_per_tick(),
         }
     }
 }
@@ -157,6 +166,9 @@ impl Default for EvolutionConfig {
 fn default_skill_max_level() -> u32 { 10 }
 fn default_mutation_rate() -> f64 { 0.05 }
 fn default_inheritance_ratio() -> f64 { 0.5 }
+fn default_evaluation_interval() -> u64 { 1000 }
+fn default_inactivity_threshold() -> u64 { 500 }
+fn default_passive_xp_per_tick() -> f64 { 1.0 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub struct A2aConfig {

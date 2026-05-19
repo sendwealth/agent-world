@@ -13,6 +13,7 @@ dependencies = [
  "http-body-util",
  "notify",
  "prost",
+ "rand",
  "reqwest",
  "rusqlite",
  "serde",

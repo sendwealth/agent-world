@@ -55,12 +55,13 @@ _DECISION_TO_ACTION: dict[DecisionAction, ActionType] = {
     DecisionAction.TRADE: ActionType.PROPOSE_DEAL,
     DecisionAction.PRACTICE_SKILL: ActionType.TEACH_SKILL,
     DecisionAction.SOCIALIZE: ActionType.SEND_MESSAGE,
+    DecisionAction.MOVE: ActionType.MOVE,
+    DecisionAction.GATHER: ActionType.GATHER,
+    DecisionAction.BUILD: ActionType.BUILD,
 }
 
 # DecisionActions without a direct ActionType counterpart — mapped to REST
-_UNMAPPABLE_ACTIONS: frozenset[DecisionAction] = frozenset(
-    {DecisionAction.MOVE, DecisionAction.GATHER, DecisionAction.BUILD}
-)
+_UNMAPPABLE_ACTIONS: frozenset[DecisionAction] = frozenset()
 
 
 # ---------------------------------------------------------------------------
@@ -129,13 +130,61 @@ class LLMDecisionProvider:
 
 
 def _perception_to_decision(perception: Perception) -> DecisionPerception:
-    """Convert ThinkLoop Perception to DecisionEngine DecisionPerception."""
+    """Convert ThinkLoop Perception to DecisionEngine DecisionPerception.
+
+    Extracts structured data from the Perception's market_state and
+    messages fields to populate the decision perception with real data.
+    """
+    # Extract nearby_agents from market_state
+    market = perception.market_state
+    nearby_agents_raw: list[Any] = market.get("nearby_agents", [])
+    nearby_agents: list[str] = []
+    for agent_info in nearby_agents_raw:
+        if isinstance(agent_info, dict):
+            name = agent_info.get("name") or agent_info.get("agent_id", "unknown")
+            nearby_agents.append(str(name))
+        elif isinstance(agent_info, str):
+            nearby_agents.append(agent_info)
+
+    # Extract available tasks — market_state may also contain tasks
+    available_tasks: list[str] = []
+    if perception.active_task:
+        available_tasks.append(perception.active_task)
+    for task in market.get("available_tasks", []):
+        task_str = task if isinstance(task, str) else str(task)
+        if task_str not in available_tasks:
+            available_tasks.append(task_str)
+
+    # Extract visible_resources from market_state
+    visible_resources_raw: list[Any] = market.get("visible_resources", [])
+    visible_resources: list[str] = [
+        r if isinstance(r, str) else str(r) for r in visible_resources_raw
+    ]
+
+    # Extract recent_events from messages
+    recent_events: list[str] = []
+    for msg in perception.messages:
+        if isinstance(msg, dict):
+            msg_type = msg.get("type", "event")
+            payload = msg.get("payload", {})
+            if isinstance(payload, dict):
+                summary = payload.get("text") or payload.get("action") or msg_type
+            else:
+                summary = msg_type
+            from_agent = msg.get("from_agent", "")
+            if from_agent:
+                recent_events.append(f"[{from_agent}] {summary}")
+            else:
+                recent_events.append(str(summary))
+        elif isinstance(msg, str):
+            recent_events.append(msg)
+
     return DecisionPerception(
         tick=perception.tick,
-        nearby_agents=[],
-        available_tasks=[perception.active_task] if perception.active_task else [],
-        visible_resources=[],
-        recent_events=[],
+        nearby_agents=nearby_agents,
+        available_tasks=available_tasks,
+        visible_resources=visible_resources,
+        recent_events=recent_events,
     )
 
 

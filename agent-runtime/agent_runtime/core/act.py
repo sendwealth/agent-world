@@ -47,6 +47,9 @@ class ActionType(str, Enum):
     TEACH_SKILL = "teach_skill"
     REST = "rest"
     EXPLORE = "explore"
+    MOVE = "move"
+    GATHER = "gather"
+    BUILD = "build"
 
 
 class ActionStatus(str, Enum):
@@ -98,6 +101,9 @@ _DEFAULT_TOKEN_COSTS: dict[ActionType, int] = {
     ActionType.TEACH_SKILL: 15,
     ActionType.REST: 0,
     ActionType.EXPLORE: 3,
+    ActionType.MOVE: 12,
+    ActionType.GATHER: 8,
+    ActionType.BUILD: 20,
 }
 
 
@@ -131,6 +137,12 @@ class WorldClientProtocol(Protocol):
     ) -> dict[str, Any]: ...
 
     async def explore(self, parameters: dict[str, Any]) -> dict[str, Any]: ...
+
+    async def move(self, direction: str) -> dict[str, Any]: ...
+
+    async def gather(self, resource_type: str) -> dict[str, Any]: ...
+
+    async def build(self, structure_type: str, **kwargs: Any) -> dict[str, Any]: ...
 
 
 @dataclass
@@ -294,6 +306,9 @@ class ActionExecutor:
         ActionType.TEACH_SKILL: "_handle_teach_skill",
         ActionType.REST: "_handle_rest",
         ActionType.EXPLORE: "_handle_explore",
+        ActionType.MOVE: "_handle_move",
+        ActionType.GATHER: "_handle_gather",
+        ActionType.BUILD: "_handle_build",
     }
 
     async def _dispatch(self, action_type: ActionType, context: ActionContext) -> dict[str, Any]:
@@ -350,6 +365,34 @@ class ActionExecutor:
         """Explore the world for opportunities."""
         params = context.parameters.get("explore_params", {})
         return await context.world.explore(params)
+
+    async def _handle_move(self, context: ActionContext) -> dict[str, Any]:
+        """Move the agent in a direction via the world client."""
+        direction = context.parameters.get("direction", "")
+        if not direction:
+            raise ValueError("move requires 'direction' parameter")
+        return await context.world.move(direction)
+
+    async def _handle_gather(self, context: ActionContext) -> dict[str, Any]:
+        """Gather a resource from the agent's location."""
+        resource_type = context.parameters.get("resource_type", "")
+        if not resource_type:
+            raise ValueError("gather requires 'resource_type' parameter")
+        return await context.world.gather(resource_type)
+
+    async def _handle_build(self, context: ActionContext) -> dict[str, Any]:
+        """Build a structure at the agent's location."""
+        structure_type = context.parameters.get("structure_type", "")
+        if not structure_type:
+            raise ValueError("build requires 'structure_type' parameter")
+        return await context.world.build(
+            structure_type,
+            **{
+                k: v
+                for k, v in context.parameters.items()
+                if k not in ("structure_type",)
+            },
+        )
 
     # ------------------------------------------------------------------
     # Internal helpers

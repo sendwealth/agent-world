@@ -150,6 +150,15 @@ class RESTWorldClient:
     async def explore(self, parameters: dict[str, Any]) -> dict[str, Any]:
         return await self._request("GET", "/explore", params=parameters)
 
+    async def move(self, direction: str) -> dict[str, Any]:
+        return await self._request("POST", "/move", json={"direction": direction})
+
+    async def gather(self, resource_type: str) -> dict[str, Any]:
+        return await self._request("POST", "/gather", json={"resource_type": resource_type})
+
+    async def build(self, structure_type: str, **kwargs: Any) -> dict[str, Any]:
+        return await self._request("POST", "/build", json={"structure_type": structure_type, **kwargs})
+
     async def broadcast_message(
         self, payload: dict[str, object]
     ) -> dict[str, object]:
@@ -161,24 +170,37 @@ class RESTWorldClient:
 # ---------------------------------------------------------------------------
 
 
+@dataclass
+class WorldConnection:
+    """Holds the world client and optional perception provider from a gRPC connection."""
+
+    world_client: Any
+    perception_provider: Any | None = None
+    a2a_client: Any | None = None
+
+
 async def connect_world_engine(
     grpc_address: str,
     rest_url: str,
     agent_id: str,
-) -> Any | None:
+) -> WorldConnection:
     """Connect to the World Engine via gRPC, falling back to REST.
 
     Tries gRPC first (preferred).  If the gRPC server is unreachable,
     creates a REST fallback client so the agent can still run.
 
     Returns:
-        A world client (GRPCWorldClient, RESTWorldClient), or None
-        if neither connection method works.
+        A WorldConnection containing the world client and, when gRPC
+        is available, a GRPCPerceptionProvider and the underlying
+        A2AClient for streaming.
     """
     # Try gRPC first
     try:
+        import asyncio
+
         from agent_runtime.a2a.client import A2AClient
         from agent_runtime.a2a.config import A2AClientConfig
+        from agent_runtime.a2a.perception import GRPCPerceptionProvider
         from agent_runtime.a2a.world_client import GRPCWorldClient
 
         config = A2AClientConfig(
@@ -187,13 +209,31 @@ async def connect_world_engine(
         )
         client = A2AClient(config)
         await client.connect()
+
+        # Verify the channel is actually reachable before committing to gRPC
+        try:
+            import grpc
+            future = grpc.channel_ready_future(client._channel)  # type: ignore[arg-type]
+            await asyncio.wait_for(
+                asyncio.get_running_loop().run_in_executor(None, future.result),
+                timeout=2.0,
+            )
+        except Exception:
+            await client.close()
+            raise ConnectionError(f"gRPC channel not ready: {grpc_address}")
+
         world_client = GRPCWorldClient(client)
+        perception_provider = GRPCPerceptionProvider(client)
         logger.info(
             "Connected to World Engine via gRPC at %s",
             grpc_address,
             extra={"agent": agent_id, "event": "grpc_connected"},
         )
-        return world_client
+        return WorldConnection(
+            world_client=world_client,
+            perception_provider=perception_provider,
+            a2a_client=client,
+        )
     except ImportError:
         logger.info("gRPC dependencies not available, using REST fallback")
     except Exception:
@@ -209,7 +249,7 @@ async def connect_world_engine(
         rest_url,
         extra={"agent": agent_id, "event": "rest_fallback"},
     )
-    return rest_client
+    return WorldConnection(world_client=rest_client)
 
 
 async def register_agent(
@@ -373,6 +413,18 @@ class RunStats:
         return d
 
 
+class _A2AHeartbeatAdapter:
+    """Adapts an A2AClient to the HeartbeatProvider protocol."""
+
+    def __init__(self, a2a_client: Any) -> None:
+        self._client = a2a_client
+
+    async def heartbeat(self) -> int:
+        """Send heartbeat and return server tick."""
+        response = await self._client.heartbeat()
+        return response.server_time
+
+
 async def run_agent(config: RuntimeConfig) -> RunStats:
     """Spawn an agent and run its think loop until signalled to stop."""
     state = spawn_agent(config.agent)
@@ -408,11 +460,25 @@ async def run_agent(config: RuntimeConfig) -> RunStats:
 
     # Connect to World Engine (gRPC preferred, REST fallback)
     grpc_address = _extract_grpc_address(config.world.engine_url)
-    world_client = await connect_world_engine(
+    conn = await connect_world_engine(
         grpc_address=grpc_address,
         rest_url=config.world.engine_url,
         agent_id=str(state.id),
     )
+    world_client = conn.world_client
+    perception_provider = conn.perception_provider
+    a2a_client = conn.a2a_client
+
+    # Start streaming for perception if gRPC is connected
+    if a2a_client is not None:
+        try:
+            await a2a_client.start_streaming()
+            logger.info(
+                "A2A streaming started",
+                extra={"agent": state.name, "event": "streaming_started"},
+            )
+        except Exception:
+            logger.warning("Failed to start A2A streaming, perception will be limited")
 
     # Attempt registration (with public key)
     await register_agent(
@@ -421,14 +487,21 @@ async def run_agent(config: RuntimeConfig) -> RunStats:
         public_key_b64=public_key_b64,
     )
 
+    # Build heartbeat provider if A2A client is available
+    heartbeat_provider: Any | None = None
+    if a2a_client is not None and config.think_loop.heartbeat_enabled:
+        heartbeat_provider = _A2AHeartbeatAdapter(a2a_client)
+
     # Build ThinkLoop with all providers wired in via constructor
     think_loop = ThinkLoop(
         state=state,
         survival=survival,
         executor=executor,
         config=config.think_loop,
+        perception_provider=perception_provider,
         decision_provider=decision_provider,
         world_client=world_client,
+        heartbeat_provider=heartbeat_provider,
     )
 
     # Graceful shutdown on SIGINT
@@ -499,6 +572,17 @@ async def run_agent(config: RuntimeConfig) -> RunStats:
                 )
             except Exception:
                 logger.warning("Failed to close vector memory", exc_info=True)
+
+        # Graceful shutdown: close A2A connection if active
+        if a2a_client is not None:
+            try:
+                await a2a_client.close()
+                logger.info(
+                    "A2A client closed",
+                    extra={"agent": state.name, "event": "a2a_closed"},
+                )
+            except Exception:
+                logger.warning("Failed to close A2A client", exc_info=True)
 
         # Graceful shutdown: deregister from World Engine
         await deregister_agent(str(state.id), config.world.engine_url)

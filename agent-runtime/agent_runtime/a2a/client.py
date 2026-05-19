@@ -137,6 +137,21 @@ class A2AClient:
             )
         )
 
+    async def heartbeat(self) -> a2a_pb2.HeartbeatResponse:
+        """Send a heartbeat to the server (with retry).
+
+        Returns:
+            HeartbeatResponse with server_time for tick synchronization.
+        """
+        request = a2a_pb2.HeartbeatRequest(
+            agent_id=self._config.agent_id,
+        )
+        return await self._retry_rpc(
+            lambda: self._stub.Heartbeat(  # type: ignore[union-attr]
+                request, timeout=self._config.timeout
+            )
+        )
+
     # ------------------------------------------------------------------
     # Bidirectional streaming
     # ------------------------------------------------------------------

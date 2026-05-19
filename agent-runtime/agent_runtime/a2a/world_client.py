@@ -152,6 +152,42 @@ class GRPCWorldClient:
             logger.exception("explore failed")
             return {"status": "error", "error": str(exc)}
 
+    async def move(self, direction: str) -> dict[str, Any]:
+        """Move the agent in a direction — sent as a WILL message."""
+        try:
+            ack = await self._client.send_message(
+                message_type=a2a_pb2.WILL,
+                payload={"action": "move", "direction": direction},
+            )
+            return {"status": "ok", "direction": direction, "received": ack.received}
+        except Exception as exc:
+            logger.exception("move failed")
+            return {"status": "error", "error": str(exc)}
+
+    async def gather(self, resource_type: str) -> dict[str, Any]:
+        """Gather a resource — sent as a WILL message."""
+        try:
+            ack = await self._client.send_message(
+                message_type=a2a_pb2.WILL,
+                payload={"action": "gather", "resource_type": resource_type},
+            )
+            return {"status": "ok", "resource_type": resource_type, "received": ack.received}
+        except Exception as exc:
+            logger.exception("gather failed")
+            return {"status": "error", "error": str(exc)}
+
+    async def build(self, structure_type: str, **kwargs: Any) -> dict[str, Any]:
+        """Build a structure — sent as a WILL message."""
+        try:
+            ack = await self._client.send_message(
+                message_type=a2a_pb2.WILL,
+                payload={"action": "build", "structure_type": structure_type, **kwargs},
+            )
+            return {"status": "ok", "structure_type": structure_type, "received": ack.received}
+        except Exception as exc:
+            logger.exception("build failed")
+            return {"status": "error", "error": str(exc)}
+
     # ------------------------------------------------------------------
     # A2AClientProtocol method (SurvivalInstinct integration)
     # ------------------------------------------------------------------

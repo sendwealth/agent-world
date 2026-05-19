@@ -146,11 +146,11 @@ class TestActionMapping:
     def test_trade(self):
         assert _map_decision_action(DecisionAction.TRADE) == ActionType.PROPOSE_DEAL
 
-    def test_unmappable_returns_rest(self):
-        # MOVE, GATHER, BUILD have no direct ActionType
-        assert _map_decision_action(DecisionAction.MOVE) == ActionType.REST
-        assert _map_decision_action(DecisionAction.GATHER) == ActionType.REST
-        assert _map_decision_action(DecisionAction.BUILD) == ActionType.REST
+    def test_move_gather_build_mapped(self):
+        # MOVE, GATHER, BUILD now have direct ActionType counterparts
+        assert _map_decision_action(DecisionAction.MOVE) == ActionType.MOVE
+        assert _map_decision_action(DecisionAction.GATHER) == ActionType.GATHER
+        assert _map_decision_action(DecisionAction.BUILD) == ActionType.BUILD
 
 
 class TestRandomFallback:
@@ -219,15 +219,15 @@ class TestLLMDecisionProvider:
         assert "Fallback" in decision.reasoning or "fallback" in decision.reasoning.lower()
 
     @pytest.mark.asyncio
-    async def test_unmappable_action_remapped_to_rest(
+    async def test_move_action_mapped_directly(
         self, agent_state, perception, survival_normal
     ):
         mock_llm = MockLLMProvider(response_action="move")
         provider = LLMDecisionProvider(llm_provider=mock_llm)
 
         decision = await provider.decide(agent_state, perception, survival_normal)
-        assert decision.action_type == ActionType.REST
-        assert "Remapped" in decision.reasoning
+        assert decision.action_type == ActionType.MOVE
+        assert "Remapped" not in decision.reasoning
 
     @pytest.mark.asyncio
     async def test_survival_context_passed_to_llm(

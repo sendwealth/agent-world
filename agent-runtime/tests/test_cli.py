@@ -25,6 +25,7 @@ import pytest
 from agent_runtime.__main__ import (
     RESTWorldClient,
     HealthCheckServer,
+    WorldConnection,
     _get_health_port,
     _has_world_arg,
     _rewrite_world_to_world_url,
@@ -296,12 +297,15 @@ class TestRESTWorldClient:
 class TestConnectWorldEngine:
     @pytest.mark.asyncio
     async def test_rest_fallback_when_grpc_unavailable(self) -> None:
-        client = await connect_world_engine(
+        conn = await connect_world_engine(
             grpc_address="nonexistent:50051",
             rest_url="http://localhost:3000",
             agent_id="test-agent",
         )
-        assert isinstance(client, RESTWorldClient)
+        assert isinstance(conn, WorldConnection)
+        assert isinstance(conn.world_client, RESTWorldClient)
+        assert conn.perception_provider is None
+        assert conn.a2a_client is None
 
 
 # ---------------------------------------------------------------------------

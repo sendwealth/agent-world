@@ -16,6 +16,7 @@ import pytest
 
 from agent_runtime.__main__ import (
     RESTWorldClient,
+    WorldConnection,
     build_config_from_args,
     build_parser,
     connect_world_engine,
@@ -211,12 +212,15 @@ class TestRESTWorldClient:
 class TestConnectWorldEngine:
     @pytest.mark.asyncio
     async def test_rest_fallback_when_grpc_unavailable(self) -> None:
-        client = await connect_world_engine(
+        conn = await connect_world_engine(
             grpc_address="nonexistent:50051",
             rest_url="http://localhost:3000",
             agent_id="test-agent",
         )
-        assert isinstance(client, RESTWorldClient)
+        assert isinstance(conn, WorldConnection)
+        assert isinstance(conn.world_client, RESTWorldClient)
+        assert conn.perception_provider is None
+        assert conn.a2a_client is None
 
 
 # ---------------------------------------------------------------------------

@@ -68,6 +68,7 @@ class ThinkLoopConfig:
         reflect_interval: Run reflect every N ticks.
         error_backoff: Seconds to wait after an error before retrying.
         max_consecutive_errors: Stop after this many consecutive errors (0 = unlimited).
+        heartbeat_enabled: Send heartbeat RPC each tick for server tick sync.
     """
 
     tick_interval: float = 1.0
@@ -75,6 +76,7 @@ class ThinkLoopConfig:
     reflect_interval: int = 10
     error_backoff: float = 5.0
     max_consecutive_errors: int = 0
+    heartbeat_enabled: bool = False
 
 
 # ---------------------------------------------------------------------------
@@ -97,6 +99,7 @@ class Perception:
     active_task: str | None = None
     health: float = 100.0
     tick: int = 0
+    server_tick: int = 0
 
 
 # ---------------------------------------------------------------------------
@@ -145,6 +148,12 @@ class ReflectionProvider(Protocol):
     """Called periodically for the agent to reflect on its behaviour."""
 
     async def reflect(self, state: AgentState, tick: int) -> None: ...
+
+
+class HeartbeatProvider(Protocol):
+    """Sends a heartbeat to the server and returns the server tick."""
+
+    async def heartbeat(self) -> int: ...
 
 
 # ---------------------------------------------------------------------------
@@ -251,6 +260,7 @@ class ThinkLoop:
         decision_provider: DecisionProvider | None = None,
         reflection_provider: ReflectionProvider | None = None,
         world_client: Any | None = None,
+        heartbeat_provider: HeartbeatProvider | None = None,
     ) -> None:
         self.state = state
         self.survival = survival
@@ -265,8 +275,12 @@ class ThinkLoop:
         # World client for ACT phase — defaults to no-op for backward compat
         self._world_client = world_client
 
+        # Heartbeat provider — optional, sends heartbeat each tick
+        self._heartbeat = heartbeat_provider
+
         # Runtime state
         self._tick: int = 0
+        self._server_tick: int = 0
         self._running: bool = False
         self._consecutive_errors: int = 0
         self._total_errors: int = 0
@@ -280,6 +294,11 @@ class ThinkLoop:
     def tick(self) -> int:
         """Current tick number."""
         return self._tick
+
+    @property
+    def server_tick(self) -> int:
+        """Last known server tick from heartbeat."""
+        return self._server_tick
 
     @property
     def running(self) -> bool:
@@ -387,6 +406,22 @@ class ThinkLoop:
             )
             self.stop()
             return
+
+        # 0. Heartbeat (optional — sends liveness ping and syncs server tick)
+        if self._heartbeat is not None and self.config.heartbeat_enabled:
+            try:
+                self._server_tick = await self._heartbeat.heartbeat()
+                logger.debug(
+                    "Tick %d: heartbeat ok — server_tick=%d",
+                    self._tick,
+                    self._server_tick,
+                )
+            except Exception:
+                logger.debug(
+                    "Tick %d: heartbeat failed (non-fatal)",
+                    self._tick,
+                    exc_info=True,
+                )
 
         # 1. Perceive
         perception = await self._perception.perceive(self.state, self._tick)
@@ -525,3 +560,12 @@ class _NoOpWorldClient:
 
     async def explore(self, parameters: dict[str, Any]) -> dict[str, Any]:
         return {"status": "ok", "action": "explore", "findings": []}
+
+    async def move(self, direction: str) -> dict[str, Any]:
+        return {"status": "ok", "action": "move", "direction": direction}
+
+    async def gather(self, resource_type: str) -> dict[str, Any]:
+        return {"status": "ok", "action": "gather", "resource_type": resource_type}
+
+    async def build(self, structure_type: str, **kwargs: Any) -> dict[str, Any]:
+        return {"status": "ok", "action": "build", "structure_type": structure_type}

@@ -121,6 +121,9 @@ class TestActionType:
             "teach_skill",
             "rest",
             "explore",
+            "move",
+            "gather",
+            "build",
         }
         assert {t.value for t in ActionType} == expected
 

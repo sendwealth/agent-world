@@ -29,6 +29,7 @@ import argparse
 import asyncio
 import json
 import logging
+import os
 import signal
 import sys
 import time
@@ -468,18 +469,17 @@ async def run_agent(config: RuntimeConfig) -> RunStats:
 
     stats.start_time = time.monotonic()
 
-    try:
-        # Run think loop and health server concurrently
-        think_task = asyncio.create_task(think_loop.run())
-        health_task = asyncio.create_task(health_server.start())
+    think_task = asyncio.create_task(think_loop.run())
+    health_task = asyncio.create_task(health_server.start())
 
+    try:
         # Wait for the think loop to finish
         await think_task
-
-        # Stop health server
+    finally:
+        # Ensure health server is stopped before deregistering, even if
+        # think_task raised an exception.
         await health_server.stop()
         await health_task
-    finally:
         stats.end_time = time.monotonic()
         stats.ticks = think_loop.tick
         stats.errors = think_loop.total_errors
@@ -677,14 +677,21 @@ class HealthCheckServer:
             request_line = await asyncio.wait_for(reader.readline(), timeout=5.0)
             request_str = request_line.decode("ascii", errors="replace").strip()
 
-            # Drain remaining headers
-            while True:
+            # Drain remaining headers (with upper limit to prevent abuse)
+            for _ in range(64):
                 line = await asyncio.wait_for(reader.readline(), timeout=2.0)
                 if line in (b"\r\n", b"\n", b""):
                     break
+            else:
+                # Too many headers — close connection
+                writer.write(b"HTTP/1.1 400 Bad Request\r\nConnection: close\r\n\r\n")
+                await writer.drain()
+                return
 
-            # Only respond to GET /health
-            if request_str.startswith("GET /health"):
+            # Only respond to GET /health (exact path match, allow query string)
+            parts = request_str.split()
+            path = parts[1].split("?")[0] if len(parts) >= 2 else ""
+            if parts and parts[0] == "GET" and path == "/health":
                 uptime = time.monotonic() - self._start_time
                 body = json.dumps({
                     "status": "running" if self._think_loop.running else "stopped",
@@ -717,8 +724,6 @@ class HealthCheckServer:
 
 def _get_health_port(config: RuntimeConfig) -> int:
     """Determine the health check port from env or config default."""
-    import os
-
     env_port = os.environ.get("HEALTH_PORT")
     if env_port:
         try:

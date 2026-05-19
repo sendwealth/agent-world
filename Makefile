@@ -1,6 +1,6 @@
 .PHONY: help setup dev dev-llm dev-detach dev-down dev-logs dev-ps dev-restart \
-       test lint fmt proto clean build run demo demo-json demo-death \
-       bench stress
+       dev-ci dev-ci-down test lint fmt proto clean build run demo demo-json demo-death \
+       bench stress test-e2e-integration
 
 help: ## Show this help
 	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) | sort | awk 'BEGIN {FS = ":.*?## "}; {printf "\033[36m%-20s\033[0m %s\n", $$1, $$2}'
@@ -44,7 +44,22 @@ dev-detach: ## Start all services in background
 	docker compose up --build -d
 
 dev-down: ## Stop all Docker Compose services
-	docker compose --profile local-llm down
+	docker compose --profile local-llm --profile ci down
+
+# ── CI profile (minimal: world-engine + 1 agent) ─────────
+# make dev-ci         → build & run CI profile (world-engine + ci-agent)
+# make dev-ci-down    → stop CI profile
+
+dev-ci: ## Start CI profile (world-engine + 1 agent only)
+	@test -f .env || cp .env.example .env
+	docker compose --profile ci up --build
+
+dev-ci-detach: ## Start CI profile in background
+	@test -f .env || cp .env.example .env
+	docker compose --profile ci up --build -d
+
+dev-ci-down: ## Stop CI profile
+	docker compose --profile ci down
 
 dev-logs: ## Tail Docker Compose logs
 	docker compose logs -f
@@ -84,6 +99,9 @@ test-integration: ## Run integration tests
 
 test-e2e: ## Run end-to-end tests
 	cd world-engine && cargo test --test e2e_full_flow
+
+test-e2e-integration: ## Run Python E2E integration tests (subprocess-based)
+	pytest tests/e2e/ -v --timeout=60
 
 bench: ## Run benchmark tests (P3-7: 100 agents × 2000 ticks)
 	cd world-engine && cargo test --test benchmark_100_agents -- --nocapture

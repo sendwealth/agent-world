@@ -21,7 +21,7 @@ RUN groupadd --system appuser && useradd --system --gid appuser appuser
 COPY --from=builder /app/target/release/agent-world-engine /usr/local/bin/
 
 ENV PORT=8080
-EXPOSE 8080
+EXPOSE 8080 50051
 USER appuser
 
 ENTRYPOINT ["agent-world-engine"]

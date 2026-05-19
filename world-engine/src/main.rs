@@ -27,6 +27,7 @@ use agent_world_engine::world::subsystems::{
     DeathJudgmentSubsystem, EventBroadcastSubsystem, LifecycleAgingSubsystem,
     ReputationDecaySubsystem, TokenBurnSubsystem,
 };
+use agent_world_engine::evolution::{EvolutionSubsystem, subsystem::EvolutionSubsystemConfig};
 use agent_world_engine::world::{Scheduler, WorldState};
 
 #[tokio::main]
@@ -158,6 +159,20 @@ async fn main() {
     );
     subsystem_registry.register(Box::new(reputation_decay));
     subsystem_registry.register(Box::new(EventBroadcastSubsystem::new(event_bus.clone())));
+    // CRITICAL: EvolutionSubsystem for skill trees, mutations, and natural selection
+    let evolution_config = EvolutionSubsystemConfig {
+        skill_max_level: genesis_config.evolution.skill_max_level,
+        mutation_rate: genesis_config.evolution.mutation_rate,
+        evaluation_interval: genesis_config.evolution.evaluation_interval,
+        max_agents: genesis_config.world.max_agents,
+        inactivity_threshold: genesis_config.evolution.inactivity_threshold,
+        initial_tokens: genesis_config.economy.initial_tokens,
+        passive_xp_per_tick: genesis_config.evolution.passive_xp_per_tick,
+        mutation_boost_xp: 75.0,
+        mutation_decay_xp: 30.0,
+        mutation_new_skill_xp: 50.0,
+    };
+    subsystem_registry.register(Box::new(EvolutionSubsystem::new(evolution_config)));
     println!(
         "   SubsystemRegistry: {} subsystems registered",
         subsystem_registry.len()

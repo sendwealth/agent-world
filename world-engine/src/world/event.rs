@@ -86,6 +86,9 @@ pub enum EventType {
     BankRateAdjusted,
     MoneyMinted,
     BadDebtWrittenOff,
+    SkillLevelUp,
+    SkillMutated,
+    FitnessEvaluated,
 }
 
 /// Events emitted by the world engine.
@@ -170,6 +173,9 @@ pub enum WorldEvent {
     BankRateAdjusted { new_savings_rate: f64, new_loan_rate: f64 },
     MoneyMinted { amount: u64, total_supply: u64 },
     BadDebtWrittenOff { loan_id: String, borrower_id: String, amount: u64 },
+    SkillLevelUp { agent_id: String, skill: String, new_level: u32 },
+    SkillMutated { agent_id: String, mutation_type: String, skill: String, description: String },
+    FitnessEvaluated { agent_id: String, score: f64, token_efficiency: f64, survival_duration: f64, skill_diversity: f64 },
 }
 
 impl WorldEvent {
@@ -244,6 +250,9 @@ impl WorldEvent {
             WorldEvent::BankRateAdjusted { .. } => EventType::BankRateAdjusted,
             WorldEvent::MoneyMinted { .. } => EventType::MoneyMinted,
             WorldEvent::BadDebtWrittenOff { .. } => EventType::BadDebtWrittenOff,
+            WorldEvent::SkillLevelUp { .. } => EventType::SkillLevelUp,
+            WorldEvent::SkillMutated { .. } => EventType::SkillMutated,
+            WorldEvent::FitnessEvaluated { .. } => EventType::FitnessEvaluated,
         }
     }
 
@@ -318,6 +327,9 @@ impl WorldEvent {
             WorldEvent::BankRateAdjusted { .. } => None,
             WorldEvent::MoneyMinted { .. } => None,
             WorldEvent::BadDebtWrittenOff { borrower_id, .. } => Some(borrower_id),
+            WorldEvent::SkillLevelUp { agent_id, .. } => Some(agent_id),
+            WorldEvent::SkillMutated { agent_id, .. } => Some(agent_id),
+            WorldEvent::FitnessEvaluated { agent_id, .. } => Some(agent_id),
         }
     }
 

@@ -2,6 +2,7 @@ pub mod a2a;
 pub mod api;
 pub mod config;
 pub mod economy;
+pub mod evolution;
 pub mod grpc_pool;
 pub mod lifecycle;
 pub mod organization;
@@ -40,3 +41,5 @@ pub use world::{
     TokenBurnSubsystem, DeathJudgmentSubsystem,
     RuleCheckSubsystem, EventBroadcastSubsystem,
 };
+
+pub use evolution::EvolutionSubsystem;

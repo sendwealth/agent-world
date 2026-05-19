@@ -59,7 +59,6 @@ from __future__ import annotations
 
 import logging
 import os
-import sys
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
@@ -178,11 +177,9 @@ def _parse_llm_config(data: dict[str, Any]) -> LLMConfig | None:
         provider = ProviderType(provider_str)
     except ValueError:
         valid = ", ".join(p.value for p in ProviderType)
-        logger.error(
-            "Unknown LLM provider %r in config. Valid options: %s",
-            provider_str, valid,
+        raise ValueError(
+            f"Unknown LLM provider {provider_str!r} in config. Valid options: {valid}"
         )
-        sys.exit(1)
 
     # Load API key from environment, never from config file
     api_key = (

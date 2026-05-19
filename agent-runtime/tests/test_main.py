@@ -1,16 +1,32 @@
-"""Tests for the __main__.py CLI entry point."""
+"""Tests for the __main__.py CLI entry point.
+
+Covers:
+- Parser building and argument validation
+- Trait and skill parsing
+- Agent spawning from config
+- Runtime execution (think loop runs, stats collected)
+- RESTWorldClient fallback
+- World Engine connection
+- Config building from CLI args
+"""
 
 from __future__ import annotations
 
 import pytest
 
 from agent_runtime.__main__ import (
-    async_main,
-    build_agent_state,
+    RESTWorldClient,
+    build_config_from_args,
     build_parser,
-    load_config,
+    connect_world_engine,
+    parse_skills,
+    parse_traits,
+    run_agent,
+    spawn_agent,
 )
-from agent_runtime.models.enums import AgentPhase
+from agent_runtime.config import AgentSpawnConfig, RuntimeConfig
+from agent_runtime.core.think_loop import ThinkLoopConfig
+
 
 # ---------------------------------------------------------------------------
 # Parser tests
@@ -18,129 +34,212 @@ from agent_runtime.models.enums import AgentPhase
 
 
 class TestBuildParser:
-    def test_name_required(self) -> None:
+    def test_no_command_returns_none(self) -> None:
         parser = build_parser()
-        with pytest.raises(SystemExit):
-            parser.parse_args([])
+        args = parser.parse_args([])
+        assert args.command is None
 
-    def test_name_provided(self) -> None:
+    def test_spawn_with_name(self) -> None:
         parser = build_parser()
-        args = parser.parse_args(["--name", "Alpha"])
+        args = parser.parse_args(["spawn", "--name", "Alpha"])
+        assert args.command == "spawn"
         assert args.name == "Alpha"
 
     def test_all_options(self) -> None:
         parser = build_parser()
         args = parser.parse_args([
+            "spawn",
             "--name", "Alpha",
-            "--config", "agent.yaml",
-            "--seed", "500",
-            "--server", "localhost:9090",
-            "--tick-interval", "0.5",
+            "--skills", "coding,trading",
+            "--traits", "curiosity=0.8",
+            "--tokens", "2000",
+            "--max-tokens", "5000",
             "--max-ticks", "100",
-            "--log-level", "DEBUG",
+            "--tick-interval", "0.5",
+            "--world-url", "http://engine:3000",
+            "--llm-provider", "ollama",
+            "--llm-model", "llama3",
         ])
         assert args.name == "Alpha"
-        assert args.config == "agent.yaml"
-        assert args.seed == 500
-        assert args.server == "localhost:9090"
-        assert args.tick_interval == 0.5
+        assert args.skills == "coding,trading"
+        assert args.traits == ["curiosity=0.8"]
+        assert args.tokens == 2000
+        assert args.max_tokens == 5000
         assert args.max_ticks == 100
-        assert args.log_level == "DEBUG"
-
-    def test_defaults(self) -> None:
-        parser = build_parser()
-        args = parser.parse_args(["--name", "Test"])
-        assert args.config is None
-        assert args.seed is None
-        assert args.server == "localhost:50051"
-        assert args.tick_interval == 1.0
-        assert args.max_ticks == 0
-        assert args.log_level == "INFO"
+        assert args.tick_interval == 0.5
+        assert args.world_url == "http://engine:3000"
+        assert args.llm_provider == "ollama"
+        assert args.llm_model == "llama3"
 
 
 # ---------------------------------------------------------------------------
-# Config loading tests
+# Trait / skill parsing
 # ---------------------------------------------------------------------------
 
 
-class TestLoadConfig:
-    def test_none_returns_empty(self, tmp_path: object) -> None:
-        assert load_config(None) == {}
+class TestParseTraits:
+    def test_valid_traits(self) -> None:
+        result = parse_traits(["curiosity=0.8", "caution=0.3"])
+        assert result == {"curiosity": 0.8, "caution": 0.3}
 
-    def test_missing_file_returns_empty(self) -> None:
-        assert load_config("/nonexistent/path.yaml") == {}
+    def test_none_input(self) -> None:
+        assert parse_traits(None) == {}
 
-    def test_valid_yaml(self, tmp_path: object) -> None:
-        import pathlib
+    def test_empty_list(self) -> None:
+        assert parse_traits([]) == {}
 
-        p = pathlib.Path(str(tmp_path)) / "config.yaml"
-        p.write_text("economy:\n  initial_tokens: 2000\nmax_tokens: 5000\n")
-        result = load_config(str(p))
-        assert result == {"economy": {"initial_tokens": 2000}, "max_tokens": 5000}
+    def test_malformed_trait_ignored(self) -> None:
+        result = parse_traits(["curiosity=0.8", "bad_trait"])
+        assert result == {"curiosity": 0.8}
 
-    def test_empty_file(self, tmp_path: object) -> None:
-        import pathlib
-
-        p = pathlib.Path(str(tmp_path)) / "empty.yaml"
-        p.write_text("")
-        result = load_config(str(p))
-        assert result == {}
-
-
-# ---------------------------------------------------------------------------
-# Agent state bootstrap tests
-# ---------------------------------------------------------------------------
-
-
-class TestBuildAgentState:
-    def test_basic_creation(self) -> None:
-        state = build_agent_state("Alpha", None, {})
-        assert state.name == "Alpha"
-        assert state.phase == AgentPhase.INITIALIZATION
-
-    def test_seed_overrides_config(self) -> None:
-        config = {"lifecycle": {"birth_tokens": 2000}, "economy": {"initial_tokens": 1000}}
-        state = build_agent_state("Alpha", 500, config)
-        assert state.tokens == 500
-
-    def test_config_tokens_when_no_seed(self) -> None:
-        config = {"lifecycle": {"birth_tokens": 2000}}
-        state = build_agent_state("Alpha", None, config)
-        assert state.tokens == 2000
-
-    def test_default_tokens(self) -> None:
-        state = build_agent_state("Alpha", None, {})
-        assert state.tokens == 1000
-
-    def test_max_tokens_from_config(self) -> None:
-        config = {"max_tokens": 5000}
-        state = build_agent_state("Alpha", None, config)
-        assert state.max_tokens == 5000
-
-    def test_default_max_tokens(self) -> None:
-        state = build_agent_state("Alpha", None, {})
-        assert state.max_tokens == 100_000
-
-
-# ---------------------------------------------------------------------------
-# async_main integration tests
-# ---------------------------------------------------------------------------
-
-
-class TestAsyncMain:
-    @pytest.mark.asyncio
-    async def test_runs_with_max_ticks(self) -> None:
-        """Smoke test: the agent runs and exits after max_ticks."""
-        await async_main([
-            "--name", "TestAgent",
-            "--seed", "50000",
-            "--max-ticks", "3",
-            "--tick-interval", "0.05",
-            "--log-level", "WARNING",
-        ])
-
-    @pytest.mark.asyncio
-    async def test_missing_name_exits(self) -> None:
-        """Missing --name should cause SystemExit."""
+    def test_non_numeric_trait_exits(self) -> None:
         with pytest.raises(SystemExit):
-            await async_main([])
+            parse_traits(["curiosity=not_a_number"])
+
+
+class TestParseSkills:
+    def test_comma_separated(self) -> None:
+        result = parse_skills("coding,trading,research")
+        assert result == {"coding": 1, "trading": 1, "research": 1}
+
+    def test_none_input(self) -> None:
+        assert parse_skills(None) == {}
+
+    def test_empty_string(self) -> None:
+        assert parse_skills("") == {}
+
+    def test_whitespace_handling(self) -> None:
+        result = parse_skills(" coding , trading ")
+        assert result == {"coding": 1, "trading": 1}
+
+
+# ---------------------------------------------------------------------------
+# Agent spawning
+# ---------------------------------------------------------------------------
+
+
+class TestSpawnAgent:
+    def test_spawn_basic(self) -> None:
+        cfg = AgentSpawnConfig(name="TestBot")
+        state = spawn_agent(cfg)
+        assert state.name == "TestBot"
+        assert state.tokens == 500
+        assert state.max_tokens == 1000
+
+    def test_spawn_with_traits(self) -> None:
+        cfg = AgentSpawnConfig(
+            name="CuriousBot",
+            traits={"curiosity": 0.9, "aggression": 0.1},
+        )
+        state = spawn_agent(cfg)
+        assert state.personality == {"curiosity": 0.9, "aggression": 0.1}
+
+    def test_spawn_with_skills(self) -> None:
+        cfg = AgentSpawnConfig(
+            name="SkilledBot",
+            skills={"coding": 5, "trading": 2},
+        )
+        state = spawn_agent(cfg)
+        assert "coding" in state.skills
+        assert state.skills["coding"].level == 5
+
+    def test_spawn_custom_resources(self) -> None:
+        cfg = AgentSpawnConfig(
+            name="RichBot",
+            tokens=5000,
+            max_tokens=10000,
+            money=200.0,
+            health=80.0,
+        )
+        state = spawn_agent(cfg)
+        assert state.tokens == 5000
+        assert state.max_tokens == 10000
+        assert state.money == 200.0
+        assert state.health == 80.0
+
+
+# ---------------------------------------------------------------------------
+# Runtime execution
+# ---------------------------------------------------------------------------
+
+
+class TestRunAgent:
+    @pytest.mark.asyncio
+    async def test_run_agent_completes(self) -> None:
+        config = RuntimeConfig(
+            agent=AgentSpawnConfig(name="TestRunner", tokens=5000, max_tokens=10000),
+            think_loop=ThinkLoopConfig(tick_interval=0.0, max_ticks=5),
+        )
+        stats = await run_agent(config)
+        assert stats.agent_name == "TestRunner"
+        assert stats.ticks == 5
+        assert stats.errors == 0
+        assert stats.duration_s > 0
+        assert stats.agent_id
+
+
+# ---------------------------------------------------------------------------
+# RESTWorldClient fallback
+# ---------------------------------------------------------------------------
+
+
+class TestRESTWorldClient:
+    @pytest.mark.asyncio
+    async def test_send_message_returns_standalone(self) -> None:
+        client = RESTWorldClient("http://localhost:3000")
+        result = await client.send_message({"text": "hello"})
+        assert result["status"] == "standalone"
+
+    @pytest.mark.asyncio
+    async def test_claim_task_returns_standalone(self) -> None:
+        client = RESTWorldClient("http://localhost:3000")
+        result = await client.claim_task("task-123")
+        assert result["status"] == "standalone"
+
+    @pytest.mark.asyncio
+    async def test_explore_returns_standalone(self) -> None:
+        client = RESTWorldClient("http://localhost:3000")
+        result = await client.explore({})
+        assert result["status"] == "standalone"
+
+
+# ---------------------------------------------------------------------------
+# World Engine connection
+# ---------------------------------------------------------------------------
+
+
+class TestConnectWorldEngine:
+    @pytest.mark.asyncio
+    async def test_rest_fallback_when_grpc_unavailable(self) -> None:
+        client = await connect_world_engine(
+            grpc_address="nonexistent:50051",
+            rest_url="http://localhost:3000",
+            agent_id="test-agent",
+        )
+        assert isinstance(client, RESTWorldClient)
+
+
+# ---------------------------------------------------------------------------
+# Build config from args
+# ---------------------------------------------------------------------------
+
+
+class TestBuildConfigFromArgs:
+    def test_name_override(self) -> None:
+        parser = build_parser()
+        args = parser.parse_args(["spawn", "--name", "Override"])
+        config = build_config_from_args(args)
+        assert config.agent.name == "Override"
+
+    def test_default_name_when_none_provided(self) -> None:
+        parser = build_parser()
+        args = parser.parse_args(["spawn"])
+        config = build_config_from_args(args)
+        assert config.agent.name == "Agent"
+
+    def test_skills_from_cli(self) -> None:
+        parser = build_parser()
+        args = parser.parse_args(["spawn", "--skills", "coding,research"])
+        config = build_config_from_args(args)
+        assert "coding" in config.agent.skills
+        assert "research" in config.agent.skills

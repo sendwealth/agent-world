@@ -192,10 +192,10 @@ class TestParseRuntimeConfig:
         config = parse_runtime_config(raw)
         assert config.agent.skills == {}
 
-    def test_unknown_llm_provider_exits(self):
-        """Unknown provider string should cause sys.exit with clear message."""
+    def test_unknown_llm_provider_raises(self):
+        """Unknown provider string should raise ValueError with clear message."""
         raw = {"llm": {"provider": "azure"}}
-        with pytest.raises(SystemExit):
+        with pytest.raises(ValueError, match="Unknown LLM provider"):
             parse_runtime_config(raw)
 
     def test_api_key_from_env_var(self, monkeypatch):

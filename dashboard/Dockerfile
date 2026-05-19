@@ -1,7 +1,7 @@
 # ── Build stage ──────────────────────────────────────────────
 FROM node:20-slim AS builder
 
-ARG WORLD_ENGINE_URL=http://127.0.0.1:3000
+ARG WORLD_ENGINE_URL=http://127.0.0.1:8080
 ENV WORLD_ENGINE_URL=${WORLD_ENGINE_URL}
 
 WORKDIR /app
@@ -15,7 +15,7 @@ RUN npm run build
 # ── Runtime stage ────────────────────────────────────────────
 FROM node:20-slim
 
-ARG WORLD_ENGINE_URL=http://127.0.0.1:3000
+ARG WORLD_ENGINE_URL=http://127.0.0.1:8080
 ENV WORLD_ENGINE_URL=${WORLD_ENGINE_URL}
 
 WORKDIR /app

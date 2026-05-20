@@ -1,0 +1,214 @@
+"use client";
+
+import Link from "next/link";
+import { useEffect, useRef } from "react";
+import { loadAgents, loadEvents } from "@/lib/data";
+import type { DemoAgent, EmergenceEvent } from "@/types/demo";
+import { useState } from "react";
+
+function StatBlock({ value, label }: { value: string; label: string }) {
+  return (
+    <div className="text-center">
+      <div className="text-3xl md:text-4xl font-bold tabular-nums bg-gradient-to-r from-blue-400 to-purple-400 bg-clip-text text-transparent">
+        {value}
+      </div>
+      <div className="text-sm text-zinc-400 mt-1">{label}</div>
+    </div>
+  );
+}
+
+function ParticleField() {
+  const canvasRef = useRef<HTMLCanvasElement>(null);
+
+  useEffect(() => {
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+    const ctx = canvas.getContext("2d");
+    if (!ctx) return;
+
+    let animId: number;
+    const particles: { x: number; y: number; vx: number; vy: number; r: number; color: string }[] = [];
+
+    function resize() {
+      if (!canvas) return;
+      canvas.width = canvas.offsetWidth;
+      canvas.height = canvas.offsetHeight;
+    }
+    resize();
+    window.addEventListener("resize", resize);
+
+    const colors = ["#3b82f6", "#a855f7", "#22c55e", "#f59e0b"];
+    for (let i = 0; i < 60; i++) {
+      particles.push({
+        x: Math.random() * canvas.width,
+        y: Math.random() * canvas.height,
+        vx: (Math.random() - 0.5) * 0.5,
+        vy: (Math.random() - 0.5) * 0.5,
+        r: Math.random() * 2 + 1,
+        color: colors[Math.floor(Math.random() * colors.length)],
+      });
+    }
+
+    function draw() {
+      if (!ctx || !canvas) return;
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+      for (const p of particles) {
+        p.x += p.vx;
+        p.y += p.vy;
+        if (p.x < 0 || p.x > canvas.width) p.vx *= -1;
+        if (p.y < 0 || p.y > canvas.height) p.vy *= -1;
+
+        ctx.beginPath();
+        ctx.arc(p.x, p.y, p.r, 0, Math.PI * 2);
+        ctx.fillStyle = p.color;
+        ctx.globalAlpha = 0.6;
+        ctx.fill();
+      }
+
+      // Draw connections
+      ctx.globalAlpha = 0.08;
+      ctx.strokeStyle = "#3b82f6";
+      ctx.lineWidth = 0.5;
+      for (let i = 0; i < particles.length; i++) {
+        for (let j = i + 1; j < particles.length; j++) {
+          const dx = particles[i].x - particles[j].x;
+          const dy = particles[i].y - particles[j].y;
+          const dist = Math.sqrt(dx * dx + dy * dy);
+          if (dist < 120) {
+            ctx.beginPath();
+            ctx.moveTo(particles[i].x, particles[i].y);
+            ctx.lineTo(particles[j].x, particles[j].y);
+            ctx.stroke();
+          }
+        }
+      }
+      ctx.globalAlpha = 1;
+      animId = requestAnimationFrame(draw);
+    }
+
+    draw();
+    return () => {
+      cancelAnimationFrame(animId);
+      window.removeEventListener("resize", resize);
+    };
+  }, []);
+
+  return (
+    <canvas
+      ref={canvasRef}
+      className="absolute inset-0 w-full h-full"
+      aria-hidden="true"
+    />
+  );
+}
+
+export default function LandingPage() {
+  const [stats, setStats] = useState({ agents: 50, ticks: 5000, events: 8 });
+
+  useEffect(() => {
+    Promise.all([loadAgents(), loadEvents()]).then(([agents, events]) => {
+      setStats({
+        agents: agents.length,
+        ticks: 5000,
+        events: events.length,
+      });
+    });
+  }, []);
+
+  return (
+    <div className="relative">
+      {/* Hero section */}
+      <section className="relative min-h-[90vh] flex items-center justify-center overflow-hidden">
+        <ParticleField />
+        <div className="absolute inset-0 bg-gradient-to-b from-zinc-950/40 via-zinc-950/80 to-zinc-950" />
+        <div className="relative z-10 text-center px-4 max-w-4xl mx-auto">
+          <h1 className="text-4xl md:text-6xl lg:text-7xl font-bold tracking-tight mb-6">
+            <span className="bg-gradient-to-r from-blue-400 via-purple-400 to-amber-400 bg-clip-text text-transparent">
+              Agent World
+            </span>
+          </h1>
+          <p className="text-lg md:text-xl text-zinc-300 max-w-2xl mx-auto mb-4">
+            Watch 50 AI agents build a civilization from scratch.
+          </p>
+          <p className="text-sm text-zinc-500 max-w-xl mx-auto mb-10">
+            No script, no plan — just agents with personalities, skills, and the freedom
+            to trade, organize, govern, and create culture.
+          </p>
+
+          {/* Stats */}
+          <div className="flex justify-center gap-8 md:gap-16 mb-10">
+            <StatBlock value={`${stats.agents}`} label="AI Agents" />
+            <StatBlock value={`${stats.ticks.toLocaleString()}`} label="World Ticks" />
+            <StatBlock value={`${stats.events}`} label="Emergence Events" />
+          </div>
+
+          {/* CTAs */}
+          <div className="flex flex-col sm:flex-row gap-3 justify-center">
+            <Link
+              href="/timeline"
+              className="px-6 py-3 rounded-xl bg-blue-500/10 text-blue-400 border border-blue-500/20 hover:bg-blue-500/20 transition-colors text-sm font-medium"
+            >
+              Explore Timeline &rarr;
+            </Link>
+            <Link
+              href="/dashboard"
+              className="px-6 py-3 rounded-xl bg-zinc-800/50 text-zinc-300 border border-zinc-700 hover:bg-zinc-800 transition-colors text-sm font-medium"
+            >
+              View Dashboard
+            </Link>
+          </div>
+        </div>
+      </section>
+
+      {/* Features section */}
+      <section className="py-20 px-4">
+        <div className="max-w-6xl mx-auto">
+          <h2 className="text-2xl md:text-3xl font-bold text-center mb-12">
+            Three Phases of Emergence
+          </h2>
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+            {[
+              {
+                phase: "Exploration",
+                color: "blue",
+                tick: "0 – 1,200",
+                desc: "Agents spawn into an empty world. They explore, learn skills, form first impressions, and discover each other.",
+                emoji: "🧭",
+              },
+              {
+                phase: "Organization",
+                color: "green",
+                tick: "1,200 – 3,200",
+                desc: "Agents form guilds, companies, and alliances. Trade routes emerge. Economies develop. Power structures crystallize.",
+                emoji: "🏛️",
+              },
+              {
+                phase: "Governance",
+                color: "purple",
+                tick: "3,200 – 5,000",
+                desc: "Organizations propose rules, hold votes, ratify constitutions. Culture diverges. Civilization takes root.",
+                emoji: "⚖️",
+              },
+            ].map((item) => (
+              <div
+                key={item.phase}
+                className={`rounded-xl border border-zinc-800 bg-zinc-900/50 p-6 hover:border-${item.color}-500/30 transition-colors`}
+              >
+                <div className="text-3xl mb-3">{item.emoji}</div>
+                <div className="text-xs text-zinc-500 mb-1">Tick {item.tick}</div>
+                <h3 className="text-lg font-semibold mb-2 text-zinc-100">{item.phase}</h3>
+                <p className="text-sm text-zinc-400">{item.desc}</p>
+              </div>
+            ))}
+          </div>
+        </div>
+      </section>
+
+      {/* Footer */}
+      <footer className="border-t border-zinc-800 py-8 text-center text-xs text-zinc-600">
+        Agent World &mdash; A multi-agent civilization simulation demo
+      </footer>
+    </div>
+  );
+}

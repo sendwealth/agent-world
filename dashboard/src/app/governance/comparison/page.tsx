@@ -1,5 +1,6 @@
 "use client";
 
+import { useEffect, useState } from "react";
 import Link from "next/link";
 import {
   RadarChart,
@@ -17,6 +18,8 @@ import {
   Tooltip,
 } from "recharts";
 import { useGovernanceComparison } from "@/hooks/useGovernanceStream";
+import { fetchJSON } from "@/lib/api";
+import type { Organization } from "@/types/world";
 
 const ORG_COLORS = [
   "#3b82f6",
@@ -59,9 +62,34 @@ const CustomTooltip = ({
 };
 
 export default function GovernanceComparisonPage() {
-  const { orgs, loading, error } = useGovernanceComparison();
+  const [orgNames, setOrgNames] = useState<Record<string, string>>({});
+  const [orgIds, setOrgIds] = useState<string[] | undefined>(undefined);
 
-  if (loading) {
+  // Fetch org list to get IDs and names
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const orgs = await fetchJSON<Organization[]>("/api/v1/orgs");
+        if (cancelled) return;
+        const activeOrgs = orgs.filter((o) => o.status === "active");
+        const nameMap: Record<string, string> = {};
+        activeOrgs.forEach((o) => { nameMap[o.id] = o.name; });
+        setOrgNames(nameMap);
+        setOrgIds(activeOrgs.map((o) => o.id));
+      } catch {
+        // will show empty state
+      }
+    })();
+    return () => { cancelled = true; };
+  }, []);
+
+  const { orgs, loading, error } = useGovernanceComparison(orgIds);
+
+  // Get display name for an org
+  const getOrgName = (orgId: string) => orgNames[orgId] ?? orgId.slice(0, 8);
+
+  if (loading || orgIds === undefined) {
     return (
       <div className="flex h-full items-center justify-center">
         <div className="text-sm text-zinc-600">正在加载治理对比数据...</div>
@@ -105,10 +133,10 @@ export default function GovernanceComparisonPage() {
   ];
 
   // Normalize values for radar chart (0-100 scale)
-  const maxElections = Math.max(...orgs.map((o) => o.election.election_count), 1);
-  const maxTax = Math.max(...orgs.map((o) => o.tax.total_collected), 1);
-  const maxDiplomacy = Math.max(...orgs.map((o) => o.diplomacy.diplomatic_activity), 1);
-  const maxMembers = Math.max(...orgs.map((o) => o.health.member_count), 1);
+  const maxElections = Math.max(...orgs.map((o) => o.election_count), 1);
+  const maxTax = Math.max(...orgs.map((o) => o.total_tax_collected), 1);
+  const maxRelations = Math.max(...orgs.map((o) => o.active_relations_count), 1);
+  const maxMembers = Math.max(...orgs.map((o) => o.member_count), 1);
 
   const radarData = radarMetrics.map((metric) => {
     const entry: Record<string, string | number> = { metric };
@@ -116,37 +144,37 @@ export default function GovernanceComparisonPage() {
       let value = 0;
       switch (metric) {
         case "选举活跃度":
-          value = (org.election.election_count / maxElections) * 100;
+          value = (org.election_count / maxElections) * 100;
           break;
         case "税收效率":
-          value = (org.tax.total_collected / maxTax) * 100;
+          value = (org.total_tax_collected / maxTax) * 100;
           break;
         case "外交活跃度":
-          value = (org.diplomacy.diplomatic_activity / maxDiplomacy) * 100;
+          value = (org.active_relations_count / maxRelations) * 100;
           break;
         case "治理稳定性":
-          value = org.health.stability_score * 100;
+          value = org.governance_stability_score * 100;
           break;
         case "成员规模":
-          value = (org.health.member_count / maxMembers) * 100;
+          value = (org.member_count / maxMembers) * 100;
           break;
       }
-      entry[org.org_name] = Math.round(value);
+      entry[getOrgName(org.org_id)] = Math.round(value);
     });
     return entry;
   });
 
   // Bar chart: side-by-side comparison
-  const comparisonBarData = orgs.map((org) => ({
-    name:
-      org.org_name.length > 10
-        ? org.org_name.slice(0, 10) + "…"
-        : org.org_name,
-    elections: org.election.election_count,
-    tax: org.tax.total_collected,
-    treaties: org.diplomacy.treaties_signed,
-    stability: Math.round(org.health.stability_score * 100),
-  }));
+  const comparisonBarData = orgs.map((org) => {
+    const name = getOrgName(org.org_id);
+    return {
+      name: name.length > 10 ? name.slice(0, 10) + "…" : name,
+      elections: org.election_count,
+      tax: org.total_tax_collected,
+      treaties: org.treaties_signed,
+      stability: Math.round(org.governance_stability_score * 100),
+    };
+  });
 
   return (
     <div className="p-4 md:p-6 space-y-6">
@@ -180,16 +208,19 @@ export default function GovernanceComparisonPage() {
               tick={{ fontSize: 11 }}
             />
             <PolarRadiusAxis stroke="#52525b" tick={{ fontSize: 8 }} />
-            {orgs.slice(0, 6).map((org, i) => (
-              <Radar
-                key={org.org_id}
-                name={org.org_name}
-                dataKey={org.org_name}
-                stroke={ORG_COLORS[i % ORG_COLORS.length]}
-                fill={ORG_COLORS[i % ORG_COLORS.length]}
-                fillOpacity={0.1}
-              />
-            ))}
+            {orgs.slice(0, 6).map((org, i) => {
+              const name = getOrgName(org.org_id);
+              return (
+                <Radar
+                  key={org.org_id}
+                  name={name}
+                  dataKey={name}
+                  stroke={ORG_COLORS[i % ORG_COLORS.length]}
+                  fill={ORG_COLORS[i % ORG_COLORS.length]}
+                  fillOpacity={0.1}
+                />
+              );
+            })}
             <Legend
               wrapperStyle={{ fontSize: 11 }}
               formatter={(value: string) => (
@@ -284,39 +315,39 @@ export default function GovernanceComparisonPage() {
                       href={`/governance/${org.org_id}`}
                       className="text-sm font-medium text-zinc-200 hover:text-blue-400 transition-colors"
                     >
-                      {org.org_name}
+                      {getOrgName(org.org_id)}
                     </Link>
                   </td>
                   <td className="px-4 py-3 text-right text-sm text-zinc-300 tabular-nums">
-                    {org.election.election_count}
+                    {org.election_count}
                   </td>
                   <td className="px-4 py-3 text-right text-sm text-zinc-300 tabular-nums">
-                    ${org.tax.total_collected.toLocaleString()}
+                    ${org.total_tax_collected.toLocaleString()}
                   </td>
                   <td className="px-4 py-3 text-right text-sm text-zinc-300 tabular-nums">
-                    ${org.tax.per_capita.toLocaleString()}
+                    ${org.tax_per_member.toLocaleString()}
                   </td>
                   <td className="px-4 py-3 text-right text-sm text-zinc-300 tabular-nums">
-                    {org.diplomacy.treaties_signed} /{" "}
+                    {org.treaties_signed} /{" "}
                     <span className="text-red-400">
-                      {org.diplomacy.treaties_broken}
+                      {org.treaties_broken}
                     </span>
                   </td>
                   <td className="px-4 py-3 text-right">
                     <span
                       className={`text-sm font-medium tabular-nums ${
-                        org.health.stability_score >= 0.7
+                        org.governance_stability_score >= 0.7
                           ? "text-green-400"
-                          : org.health.stability_score >= 0.4
+                          : org.governance_stability_score >= 0.4
                           ? "text-amber-400"
                           : "text-red-400"
                       }`}
                     >
-                      {(org.health.stability_score * 100).toFixed(0)}%
+                      {(org.governance_stability_score * 100).toFixed(0)}%
                     </span>
                   </td>
                   <td className="px-4 py-3 text-right text-sm text-zinc-300 tabular-nums">
-                    {org.health.member_count}
+                    {org.member_count}
                   </td>
                 </tr>
               ))}

@@ -6,7 +6,7 @@ import type {
   OrgMetrics,
   GovernanceTimelineEvent,
 } from "@/types/world";
-import type { WorldEvent } from "@/types/world";
+import type { WorldEvent, Organization } from "@/types/world";
 import { fetchJSON } from "@/lib/api";
 import { useSSEContext } from "@/components/SSEProvider";
 
@@ -65,6 +65,82 @@ export function useGovernanceSummary() {
   }, [sse, loadSummary]);
 
   return { summary, loading, error };
+}
+
+/**
+ * Fetches all orgs via /api/v1/orgs, then fetches governance metrics
+ * for each via /api/v1/governance/comparison. Returns enriched org
+ * metrics with name populated from the org list.
+ */
+export function useGovernanceOverview() {
+  const [orgMetrics, setOrgMetrics] = useState<
+    (OrgMetrics & { org_name: string })[]
+  >([]);
+  const [summary, setSummary] = useState<WorldGovernanceSummary | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+
+  const sse = useSSEContext();
+
+  const loadData = useCallback(async () => {
+    try {
+      const [orgs, govSummary] = await Promise.all([
+        fetchJSON<Organization[]>("/api/v1/orgs"),
+        fetchJSON<WorldGovernanceSummary>("/api/v1/governance/summary"),
+      ]);
+
+      setSummary(govSummary);
+
+      const activeOrgs = orgs.filter((o) => o.status === "active");
+      if (activeOrgs.length === 0) {
+        setOrgMetrics([]);
+        setError(null);
+        return;
+      }
+
+      const orgIds = activeOrgs.map((o) => o.id);
+      try {
+        const metrics = await fetchJSON<OrgMetrics[]>(
+          `/api/v1/governance/comparison?org_ids=${orgIds.join(",")}`
+        );
+        // Merge org names from the org list
+        const orgNameMap = new Map(activeOrgs.map((o) => [o.id, o.name]));
+        const enriched = metrics.map((m) => ({
+          ...m,
+          org_name: orgNameMap.get(m.org_id) ?? m.org_id,
+        }));
+        setOrgMetrics(enriched);
+      } catch {
+        // comparison endpoint may 404 if no metrics yet
+        setOrgMetrics([]);
+      }
+      setError(null);
+    } catch {
+      setError("无法加载治理数据");
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    (async () => {
+      await loadData();
+    })();
+    const interval = setInterval(loadData, 10000);
+    return () => clearInterval(interval);
+  }, [loadData]);
+
+  useEffect(() => {
+    function onEvent(event: WorldEvent) {
+      if (isGovernanceEvent(event)) {
+        loadData();
+      }
+    }
+    const unsubscribe = sse.subscribe(onEvent);
+    return unsubscribe;
+  }, [sse, loadData]);
+
+  return { orgMetrics, summary, loading, error };
 }
 
 export function useGovernanceOrg(orgId: string) {

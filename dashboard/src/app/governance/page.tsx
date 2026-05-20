@@ -15,7 +15,10 @@ import {
   PolarRadiusAxis,
   Radar,
 } from "recharts";
-import { useGovernanceSummary } from "@/hooks/useGovernanceStream";
+import { useGovernanceOverview } from "@/hooks/useGovernanceStream";
+import type { OrgMetrics } from "@/types/world";
+
+type OrgWithMetrics = OrgMetrics & { org_name: string };
 
 const CustomTooltip = ({
   active,
@@ -66,7 +69,7 @@ function StabilityBar({ score }: { score: number }) {
 }
 
 export default function GovernancePage() {
-  const { summary, loading, error } = useGovernanceSummary();
+  const { orgMetrics, summary, loading, error } = useGovernanceOverview();
 
   if (loading) {
     return (
@@ -100,13 +103,12 @@ export default function GovernancePage() {
     );
   }
 
-  const orgSummaries = summary.org_summaries ?? [];
-
   // Chart data: tax collection per org
-  const taxChartData = orgSummaries.map((o) => ({
-    name: o.org_name.length > 8 ? o.org_name.slice(0, 8) + "…" : o.org_name,
-    totalTax: o.tax.total_collected,
-    perCapita: o.tax.per_capita,
+  const taxChartData = orgMetrics.map((o: OrgWithMetrics) => ({
+    name:
+      o.org_name.length > 8 ? o.org_name.slice(0, 8) + "…" : o.org_name,
+    totalTax: o.total_tax_collected,
+    perCapita: o.tax_per_member,
   }));
 
   // Chart data: diplomacy radar
@@ -117,18 +119,18 @@ export default function GovernancePage() {
       fullMark: Math.max(summary.total_treaties * 1.5, 10),
     },
     {
-      metric: "选举次数",
-      value: summary.total_elections,
-      fullMark: Math.max(summary.total_elections * 1.5, 10),
+      metric: "选举活跃度",
+      value: Math.round(summary.election_activity_rate * 100),
+      fullMark: 100,
     },
     {
       metric: "税收总额",
-      value: summary.total_taxes_collected,
-      fullMark: Math.max(summary.total_taxes_collected * 1.5, 100),
+      value: summary.total_tax_collected,
+      fullMark: Math.max(summary.total_tax_collected * 1.5, 100),
     },
     {
-      metric: "活跃组织",
-      value: summary.active_orgs,
+      metric: "组织总数",
+      value: summary.total_orgs,
       fullMark: Math.max(summary.total_orgs * 1.5, 5),
     },
     {
@@ -146,7 +148,7 @@ export default function GovernancePage() {
           治理面板
         </h1>
         <p className="text-sm text-zinc-500">
-          世界治理概览 — {summary.active_orgs}/{summary.total_orgs} 个活跃组织
+          世界治理概览 — {summary.total_orgs} 个组织
         </p>
       </div>
 
@@ -159,25 +161,23 @@ export default function GovernancePage() {
       {/* Key Indicators */}
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
         <div className="rounded-xl border border-blue-500/20 bg-blue-500/5 p-4 space-y-1">
-          <p className="text-sm text-zinc-400">活跃组织</p>
+          <p className="text-sm text-zinc-400">组织总数</p>
           <p className="text-2xl font-bold text-blue-400">
-            {summary.active_orgs}
+            {summary.total_orgs}
           </p>
-          <p className="text-xs text-zinc-500">
-            共 {summary.total_orgs} 个组织
-          </p>
+          <p className="text-xs text-zinc-500">已形成治理结构</p>
         </div>
         <div className="rounded-xl border border-indigo-500/20 bg-indigo-500/5 p-4 space-y-1">
-          <p className="text-sm text-zinc-400">选举次数</p>
+          <p className="text-sm text-zinc-400">选举活跃度</p>
           <p className="text-2xl font-bold text-indigo-400">
-            {summary.total_elections}
+            {(summary.election_activity_rate * 100).toFixed(0)}%
           </p>
-          <p className="text-xs text-zinc-500">累计领导选举</p>
+          <p className="text-xs text-zinc-500">有选举的组织占比</p>
         </div>
         <div className="rounded-xl border border-orange-500/20 bg-orange-500/5 p-4 space-y-1">
           <p className="text-sm text-zinc-400">税收总额</p>
           <p className="text-2xl font-bold text-orange-400">
-            ${summary.total_taxes_collected.toLocaleString()}
+            ${summary.total_tax_collected.toLocaleString()}
           </p>
           <p className="text-xs text-zinc-500">累计征收</p>
         </div>
@@ -274,17 +274,17 @@ export default function GovernancePage() {
             查看对比 →
           </Link>
         </div>
-        {orgSummaries.length === 0 ? (
+        {orgMetrics.length === 0 ? (
           <p className="text-sm text-zinc-600">暂无组织数据</p>
         ) : (
           <div className="space-y-3">
-            {orgSummaries
+            {[...orgMetrics]
               .sort(
                 (a, b) =>
-                  b.health.stability_score - a.health.stability_score
+                  b.governance_stability_score - a.governance_stability_score
               )
               .slice(0, 10)
-              .map((org, idx) => (
+              .map((org: OrgWithMetrics, idx: number) => (
                 <div key={org.org_id}>
                   <Link
                     href={`/governance/${org.org_id}`}
@@ -299,17 +299,17 @@ export default function GovernancePage() {
                           {org.org_name}
                         </span>
                         <span className="text-[10px] text-zinc-500">
-                          {org.health.member_count} 成员
+                          {org.member_count} 成员
                         </span>
                       </div>
-                      <StabilityBar score={org.health.stability_score} />
+                      <StabilityBar score={org.governance_stability_score} />
                     </div>
                     <div className="text-right shrink-0">
                       <p className="text-xs text-zinc-400">
-                        {org.election.election_count} 次选举
+                        {org.election_count} 次选举
                       </p>
                       <p className="text-[10px] text-zinc-500">
-                        ${org.tax.total_collected.toLocaleString()} 税收
+                        ${org.total_tax_collected.toLocaleString()} 税收
                       </p>
                     </div>
                   </Link>

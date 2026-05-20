@@ -240,62 +240,40 @@ export interface TickTraceSummary {
   error: string | null;
 }
 
-// Governance types
-
-export interface ElectionMetrics {
-  election_count: number;
-  avg_candidates: number;
-  avg_voter_participation: number;
-  avg_term_length: number;
-}
-
-export interface TaxMetrics {
-  total_collected: number;
-  per_capita: number;
-  collection_count: number;
-  distribution_strategies: Record<string, number>;
-  treasury_balance: number;
-}
-
-export interface DiplomacyMetrics {
-  treaties_signed: number;
-  treaties_broken: number;
-  relation_levels: Record<string, number>;
-  diplomatic_activity: number;
-}
-
-export interface OrgHealthMetrics {
-  member_count: number;
-  avg_term_length: number;
-  stability_score: number;
-  member_change_rate: number;
-}
+// Governance types — mirrors Rust API response shapes
 
 export interface OrgMetrics {
   org_id: string;
-  org_name: string;
-  election: ElectionMetrics;
-  tax: TaxMetrics;
-  diplomacy: DiplomacyMetrics;
-  health: OrgHealthMetrics;
+  // Election metrics
+  election_count: number;
+  avg_participation_rate: number;
+  avg_candidate_count: number;
+  avg_term_length_ticks: number;
+  // Tax metrics
+  total_tax_collected: number;
+  tax_per_member: number;
+  tax_collection_count: number;
+  treasury_balance: number;
+  // Diplomacy metrics
+  treaties_signed: number;
+  treaties_broken: number;
+  active_relations_count: number;
+  // Organization health
+  member_count: number;
+  governance_stability_score: number; // 0.0-1.0
 }
 
 export interface WorldGovernanceSummary {
   total_orgs: number;
-  active_orgs: number;
-  total_elections: number;
-  total_taxes_collected: number;
-  total_treaties: number;
   avg_stability: number;
-  org_summaries: OrgMetrics[];
+  total_tax_collected: number;
+  total_treaties: number;
+  election_activity_rate: number;
 }
 
 export interface GovernanceTimelineEvent {
-  id: string;
   event_type: string;
   org_id: string;
-  description: string;
   tick: number;
-  timestamp: string;
-  data?: Record<string, unknown>;
+  summary: string;
 }

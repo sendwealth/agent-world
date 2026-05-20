@@ -53,6 +53,7 @@ fn make_agents(count: usize) -> Vec<(Uuid, u64, AgentRecord)> {
                     phase: AgentPhase::Adult,
                     tokens: 500_000,
                     skills: std::collections::HashMap::new(),
+                    personality: String::new(),
                 },
             )
         })
@@ -205,6 +206,7 @@ fn bench_token_burn_scaling(c: &mut Criterion) {
                 phase: AgentPhase::Adult,
                 tokens: 500_000,
                 skills: Default::default(),
+                personality: String::new(),
             })
             .collect();
 
@@ -280,6 +282,7 @@ fn bench_rule_registry_scaling(c: &mut Criterion) {
                         phase: AgentPhase::Adult,
                         tokens: 500_000,
                         skills: Default::default(),
+                        personality: String::new(),
                     },
                 )
             })

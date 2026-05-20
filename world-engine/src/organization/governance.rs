@@ -5,6 +5,7 @@ use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
 use crate::world::state::EventBus;
+use crate::organization::rule_engine::RuleEngine;
 
 // ── Decision Mode ─────────────────────────────────────────
 
@@ -76,6 +77,8 @@ pub enum ProposalType {
     DissolveOrg,
     /// Change the profit distribution method.
     ChangeProfitSharing,
+    /// Propose a new soft rule for the organization.
+    SoftRuleProposal,
 }
 
 impl std::fmt::Display for ProposalType {
@@ -86,6 +89,7 @@ impl std::fmt::Display for ProposalType {
             ProposalType::ExpelMember => write!(f, "expel_member"),
             ProposalType::DissolveOrg => write!(f, "dissolve_org"),
             ProposalType::ChangeProfitSharing => write!(f, "change_profit_sharing"),
+            ProposalType::SoftRuleProposal => write!(f, "soft_rule_proposal"),
         }
     }
 }
@@ -442,6 +446,8 @@ pub struct GovernanceSystem {
     pub organizations: HashMap<Uuid, Organization>,
     pub proposals: HashMap<Uuid, Proposal>,
     pub config: GovernanceConfig,
+    /// Soft rule engine for agent-proposed rules.
+    pub active_rules: RuleEngine,
     event_bus: Option<Arc<EventBus>>,
 }
 
@@ -451,24 +457,30 @@ impl GovernanceSystem {
             organizations: HashMap::new(),
             proposals: HashMap::new(),
             config: GovernanceConfig::default(),
+            active_rules: RuleEngine::new(),
             event_bus: None,
         }
     }
 
     pub fn with_event_bus(event_bus: EventBus) -> Self {
+        let arc_bus = Arc::new(event_bus);
+        let active_rules = RuleEngine::with_event_bus(arc_bus.clone());
         Self {
             organizations: HashMap::new(),
             proposals: HashMap::new(),
             config: GovernanceConfig::default(),
-            event_bus: Some(Arc::new(event_bus)),
+            active_rules,
+            event_bus: Some(arc_bus),
         }
     }
 
     pub fn with_shared_event_bus(event_bus: Arc<EventBus>) -> Self {
+        let active_rules = RuleEngine::with_event_bus(event_bus.clone());
         Self {
             organizations: HashMap::new(),
             proposals: HashMap::new(),
             config: GovernanceConfig::default(),
+            active_rules,
             event_bus: Some(event_bus),
         }
     }
@@ -949,6 +961,19 @@ impl GovernanceSystem {
                         let org = self.organizations.get_mut(&org_id)
                             .ok_or(GovernanceError::OrganizationNotFound(org_id))?;
                         org.charter = charter.to_string();
+                    }
+                }
+            }
+            ProposalType::SoftRuleProposal => {
+                if let Some(payload) = payload {
+                    // Extract rule data from payload and activate in the rule engine
+                    let rule_id = payload.get("rule_id")
+                        .and_then(|v| v.as_str())
+                        .unwrap_or("")
+                        .to_string();
+
+                    if !rule_id.is_empty() {
+                        let _ = self.active_rules.activate_rule(&rule_id);
                     }
                 }
             }

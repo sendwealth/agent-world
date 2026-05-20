@@ -50,7 +50,15 @@ export type EventType =
   | "reputation_changed"
   | "inflation"
   | "investment"
-  | "tax";
+  | "tax"
+  | "tax_collected"
+  | "treasury_distributed"
+  | "leadership_election_started"
+  | "leadership_changed"
+  | "treaty_proposed"
+  | "treaty_signed"
+  | "treaty_broken"
+  | "relation_changed";
 
 export interface LeaderboardEntry {
   agentId: string;
@@ -230,4 +238,64 @@ export interface TickTraceSummary {
   duration_ms: number;
   started_at: string;
   error: string | null;
+}
+
+// Governance types
+
+export interface ElectionMetrics {
+  election_count: number;
+  avg_candidates: number;
+  avg_voter_participation: number;
+  avg_term_length: number;
+}
+
+export interface TaxMetrics {
+  total_collected: number;
+  per_capita: number;
+  collection_count: number;
+  distribution_strategies: Record<string, number>;
+  treasury_balance: number;
+}
+
+export interface DiplomacyMetrics {
+  treaties_signed: number;
+  treaties_broken: number;
+  relation_levels: Record<string, number>;
+  diplomatic_activity: number;
+}
+
+export interface OrgHealthMetrics {
+  member_count: number;
+  avg_term_length: number;
+  stability_score: number;
+  member_change_rate: number;
+}
+
+export interface OrgMetrics {
+  org_id: string;
+  org_name: string;
+  election: ElectionMetrics;
+  tax: TaxMetrics;
+  diplomacy: DiplomacyMetrics;
+  health: OrgHealthMetrics;
+}
+
+export interface WorldGovernanceSummary {
+  total_orgs: number;
+  active_orgs: number;
+  total_elections: number;
+  total_taxes_collected: number;
+  total_treaties: number;
+  avg_stability: number;
+  org_summaries: OrgMetrics[];
+}
+
+export interface GovernanceTimelineEvent {
+  id: string;
+  event_type: string;
+  org_id: string;
+  description: string;
+  tick: number;
+  timestamp: string;
+  data?: Record<string, unknown>;
 }

@@ -10,7 +10,7 @@ from __future__ import annotations
 
 import logging
 import math
-from typing import Any, Dict, List, Tuple
+from typing import Any, Dict, List
 
 from agent_runtime.models.personality import PersonalityVector
 from agent_runtime.models.values import ValueWeights

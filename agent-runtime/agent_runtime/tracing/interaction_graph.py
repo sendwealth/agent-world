@@ -6,7 +6,6 @@ and neighbor lookups in O(degree) time via a reverse adjacency map.
 
 from __future__ import annotations
 
-import json
 from collections import defaultdict, deque
 from dataclasses import dataclass, field
 from typing import Any

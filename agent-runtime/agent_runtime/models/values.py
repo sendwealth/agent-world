@@ -6,7 +6,7 @@ through experience events and naturally decay to prevent extreme polarization.
 
 from __future__ import annotations
 
-from typing import Any, Dict
+from typing import Dict
 
 from pydantic import BaseModel, Field
 

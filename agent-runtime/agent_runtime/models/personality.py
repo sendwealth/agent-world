@@ -59,13 +59,11 @@ class PersonalityVector(BaseModel):
     @model_validator(mode="after")
     def _clamp_all(self) -> PersonalityVector:
         """Ensure all dimensions are within [0, 1] after loading."""
-        changed = False
         for fname in self._dimension_names():
             val = getattr(self, fname)
             clamped = _clamp(val)
             if val != clamped:
                 object.__setattr__(self, fname, clamped)
-                changed = True
         return self
 
     # ── Mutation ──

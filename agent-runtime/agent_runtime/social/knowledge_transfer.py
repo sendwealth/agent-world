@@ -10,7 +10,7 @@ Implements two transmission channels:
 from __future__ import annotations
 
 import logging
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict
 
 from agent_runtime.core.experience import Experience
 from agent_runtime.models.personality import PersonalityVector
@@ -78,7 +78,9 @@ class KnowledgeTransfer:
         if experience.outcome > 0:
             shift = 0.01 * learning_efficiency
             new_soc = min(1.0, student_personality.social_orientation + shift)
-            personality_shift["social_orientation"] = new_soc - student_personality.social_orientation
+            personality_shift[
+                "social_orientation"
+            ] = new_soc - student_personality.social_orientation
             object.__setattr__(student_personality, "social_orientation", new_soc)
 
         learned = len(value_changes) > 0 or experience.outcome != 0

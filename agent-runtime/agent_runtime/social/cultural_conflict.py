@@ -9,13 +9,12 @@ from __future__ import annotations
 
 import math
 import random
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, Dict, List, Optional
 
 from pydantic import BaseModel, Field
 
 from agent_runtime.models.personality import PersonalityVector
 from agent_runtime.models.values import ValueWeights
-
 
 # Value difference threshold above which a conflict is detected.
 CONFLICT_THRESHOLD = 0.4

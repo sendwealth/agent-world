@@ -10,10 +10,9 @@ Pure Python string processing + basic statistics. No external NLP dependencies.
 from __future__ import annotations
 
 import logging
-import math
 import re
 from collections import Counter
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from typing import Any
 
 logger = logging.getLogger(__name__)

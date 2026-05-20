@@ -8,17 +8,15 @@ P1: BFS list.pop(0) O(n) → collections.deque
 
 import asyncio
 import json
-from pathlib import Path
 
 import pytest
 
 from agent_runtime.llm.base import LLMConfig, ProviderType
-from agent_runtime.llm.cost import CostTracker, UsageRecord
+from agent_runtime.llm.cost import CostTracker
 from agent_runtime.llm.decision_log import DecisionLog, DecisionLogStore
 from agent_runtime.llm.ollama_provider import OllamaHealthStatus, OllamaProvider
 from agent_runtime.tracing.emergence_metrics import EmergenceMetrics
-from agent_runtime.tracing.interaction_graph import Interaction, InteractionGraph
-
+from agent_runtime.tracing.interaction_graph import InteractionGraph
 
 # ---------------------------------------------------------------------------
 # P0: switch_model() TOCTOU race protection
@@ -117,11 +115,10 @@ class TestDecisionLogStore:
     @pytest.mark.asyncio
     async def test_concurrent_appends_serialized(self):
         """Many concurrent appends should not corrupt the list."""
-        store = DecisionLogStore()
         logs = [self._make_log(agent_id=f"a{i}", tick=i) for i in range(100)]
 
         async with DecisionLogStore() as store:
-            await asyncio.gather(*(store.append(l) for l in logs))
+            await asyncio.gather(*(store.append(entry) for entry in logs))
             assert store.count == 100
             assert len(store) == 100
 
@@ -348,14 +345,16 @@ class TestCostTrackerAgentAndTime:
         await tracker.record(resp1, agent_id="a1")
         await tracker.record(resp2, agent_id="a2")
         records = tracker._records
-        ts1 = records[0].timestamp
-        ts2 = records[1].timestamp
+        records[0].timestamp
+        records[1].timestamp
         # Query full range
         result = tracker.by_time_range("2000-01-01T00:00:00+00:00", "2099-12-31T23:59:59+00:00")
         assert result["calls"] == 2
         assert result["total_tokens"] == 450
         # Query empty range
-        result_empty = tracker.by_time_range("2099-01-01T00:00:00+00:00", "2099-12-31T23:59:59+00:00")
+        result_empty = tracker.by_time_range(
+            "2099-01-01T00:00:00+00:00", "2099-12-31T23:59:59+00:00"
+        )
         assert result_empty["calls"] == 0
 
 

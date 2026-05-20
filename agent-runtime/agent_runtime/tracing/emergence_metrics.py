@@ -17,15 +17,10 @@ from collections import Counter, defaultdict
 from dataclasses import dataclass, field
 from typing import Any
 
-logger = logging.getLogger(__name__)
-
-
-# ---------------------------------------------------------------------------
-# Phase 4.3.4 — Language emergence metrics
-# ---------------------------------------------------------------------------
-
-from agent_runtime.social.comm_analyzer import CommunicationAnalyzer, DialectReport
+from agent_runtime.social.comm_analyzer import CommunicationAnalyzer
 from agent_runtime.social.jargon_detector import JargonDetector
+
+logger = logging.getLogger(__name__)
 
 
 @dataclass

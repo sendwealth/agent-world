@@ -9,8 +9,10 @@ import pytest
 from agent_runtime.social.comm_analyzer import CommunicationAnalyzer, DialectReport, MessagePattern
 from agent_runtime.social.jargon_detector import JargonDetector, JargonTerm
 from agent_runtime.social.language_experiment import EfficiencyMetrics, LanguageExperiment
-from agent_runtime.tracing.emergence_metrics import LanguageEmergenceMetrics, LanguageEmergenceSnapshot
-
+from agent_runtime.tracing.emergence_metrics import (
+    LanguageEmergenceMetrics,
+    LanguageEmergenceSnapshot,
+)
 
 # ── Fixtures ──
 

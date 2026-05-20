@@ -9,7 +9,6 @@ from __future__ import annotations
 import asyncio
 import json
 import logging
-import os
 from dataclasses import asdict, dataclass
 from datetime import datetime, timezone
 from pathlib import Path
@@ -92,11 +91,11 @@ class DecisionLogStore:
         """Return logs matching the given filters."""
         result = self._logs
         if agent_id is not None:
-            result = [l for l in result if l.agent_id == agent_id]
+            result = [entry for entry in result if entry.agent_id == agent_id]
         if tick_min is not None:
-            result = [l for l in result if l.tick >= tick_min]
+            result = [entry for entry in result if entry.tick >= tick_min]
         if tick_max is not None:
-            result = [l for l in result if l.tick <= tick_max]
+            result = [entry for entry in result if entry.tick <= tick_max]
         return list(result)
 
     @property

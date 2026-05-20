@@ -88,7 +88,12 @@ class TestAgentStatePersistence:
 class TestMemoryPersistence:
     def test_save_and_search_long_term(self, store):
         store.save_memory("Learned to mine gold", category="experience", importance=0.9, tick=100)
-        store.save_memory("Trading strategy: buy low", category="strategy", importance=0.8, tick=200)
+        store.save_memory(
+            "Trading strategy: buy low",
+            category="strategy",
+            importance=0.8,
+            tick=200,
+        )
 
         results = store.search_memories("mine", top_k=5)
         assert len(results) >= 1

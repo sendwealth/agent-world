@@ -10,8 +10,7 @@ from __future__ import annotations
 import json
 import sqlite3
 from pathlib import Path
-from typing import Any, Dict, List, Optional
-from uuid import UUID
+from typing import Any, Dict, Optional
 
 from agent_runtime.memory.long_term import LongTermMemory, LongTermMemoryEntry
 from agent_runtime.memory.vector_memory import VectorMemory, VectorMemoryEntry

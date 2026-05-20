@@ -2,6 +2,7 @@ pub mod charter;
 pub mod competition;
 pub mod diplomacy;
 pub mod governance;
+pub mod governance_metrics;
 pub mod leadership;
 pub mod members;
 pub mod org;
@@ -29,4 +30,7 @@ pub use treasury::{
 };
 pub use diplomacy::{
     DiplomacyEngine, TreatyType, TreatyStatus, Treaty, RelationLevel, DiplomacyError,
+};
+pub use governance_metrics::{
+    GovernanceMetricsCollector, OrgMetrics, WorldGovernanceSummary, GovernanceEvent,
 };

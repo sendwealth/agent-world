@@ -15,7 +15,7 @@ pub enum TrustInteractionType {
 }
 
 /// Discriminant for filtering events by kind.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub enum EventType {
     TickAdvanced,
     AgentSpawned,

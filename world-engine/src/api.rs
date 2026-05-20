@@ -32,6 +32,7 @@ use crate::economy::task::{TaskBoard, Task};
 use crate::organization::org::{OrganizationStore, OrgType};
 use crate::organization::charter::{Charter, GovernanceModel, ProfitSharing};
 use crate::organization::governance::GovernanceSystem;
+use crate::organization::governance_metrics::GovernanceMetricsCollector;
 use crate::time_capsule::SnapshotStore;
 use crate::wal::WAL;
 use crate::world::event::WorldEvent;
@@ -49,6 +50,7 @@ pub type SharedStockMarket = Arc<Mutex<StockMarket>>;
 pub type SharedGovernanceSystem = Arc<Mutex<GovernanceSystem>>;
 pub type SharedBankingSystem = Arc<Mutex<BankingSystem>>;
 pub type SharedTraceStore = Arc<Mutex<crate::tracing::TraceStore>>;
+pub type SharedGovernanceMetricsCollector = Arc<Mutex<GovernanceMetricsCollector>>;
 
 /// Agent record tracked by the world engine.
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -93,6 +95,7 @@ pub struct AppState {
     pub governance: Option<SharedGovernanceSystem>,
     pub banking_system: Option<SharedBankingSystem>,
     pub trace_store: Option<SharedTraceStore>,
+    pub governance_metrics: Option<SharedGovernanceMetricsCollector>,
 }
 
 pub fn create_router(board: SharedTaskBoard) -> Router {
@@ -132,6 +135,7 @@ pub fn create_router_with_wal(board: SharedTaskBoard, wal: SharedWAL) -> Router 
         governance: None,
         banking_system: None,
         trace_store: Some(Arc::new(Mutex::new(crate::tracing::TraceStore::new()))),
+        governance_metrics: None,
     };
     build_full_router(state)
 }
@@ -159,6 +163,7 @@ pub fn create_router_with_wal_and_snapshots(board: SharedTaskBoard, wal: SharedW
         governance: None,
         banking_system: None,
         trace_store: Some(Arc::new(Mutex::new(crate::tracing::TraceStore::new()))),
+        governance_metrics: None,
     };
     build_full_router(state)
 }
@@ -248,6 +253,11 @@ pub fn build_full_router(state: AppState) -> Router {
         .route("/api/v1/agents/:id/traces/latest", get(get_latest_trace))
         .route("/api/v1/agents/:id/traces/:tick", get(get_trace_by_tick))
         .route("/api/v1/agents/:id/traces", post(submit_trace))
+        // Governance Metrics routes
+        .route("/api/v1/governance/summary", get(governance_summary))
+        .route("/api/v1/governance/orgs/:org_id", get(governance_org_metrics))
+        .route("/api/v1/governance/orgs/:org_id/timeline", get(governance_org_timeline))
+        .route("/api/v1/governance/comparison", get(governance_comparison))
         .with_state(state)
 }
 
@@ -278,6 +288,7 @@ pub fn create_router_for_test(
         governance: None,
         banking_system: None,
         trace_store: Some(Arc::new(Mutex::new(crate::tracing::TraceStore::new()))),
+        governance_metrics: None,
     };
     build_full_router(state)
 }
@@ -2661,4 +2672,114 @@ async fn submit_trace(
     let mut store = store.lock().await;
     store.save(trace);
     (StatusCode::OK, Json(serde_json::json!({"status": "ok"}))).into_response()
+}
+
+// ── Governance Metrics Handlers ──────────────────────────────
+
+/// Query parameters for governance comparison endpoint.
+#[derive(Debug, Deserialize)]
+#[serde(default)]
+pub struct GovernanceComparisonQuery {
+    pub org_ids: Option<String>,
+}
+
+impl Default for GovernanceComparisonQuery {
+    fn default() -> Self {
+        Self { org_ids: None }
+    }
+}
+
+/// Query parameters for governance timeline endpoint.
+#[derive(Debug, Deserialize)]
+#[serde(default)]
+pub struct GovernanceTimelineQuery {
+    pub event_type: Option<crate::world::event::EventType>,
+    pub from_tick: Option<u64>,
+    pub to_tick: Option<u64>,
+}
+
+impl Default for GovernanceTimelineQuery {
+    fn default() -> Self {
+        Self {
+            event_type: None,
+            from_tick: None,
+            to_tick: None,
+        }
+    }
+}
+
+/// GET /api/v1/governance/summary — World governance summary.
+async fn governance_summary(
+    State(state): State<AppState>,
+) -> impl IntoResponse {
+    let metrics = match &state.governance_metrics {
+        Some(m) => m.clone(),
+        None => return (StatusCode::SERVICE_UNAVAILABLE, Json(ErrorResponse { error: "governance metrics not configured".into() })).into_response(),
+    };
+    let metrics = metrics.lock().await;
+    let summary = metrics.get_world_governance_summary();
+    Json(summary).into_response()
+}
+
+/// GET /api/v1/governance/orgs/:org_id — Single org governance metrics.
+async fn governance_org_metrics(
+    State(state): State<AppState>,
+    Path(org_id): Path<Uuid>,
+) -> impl IntoResponse {
+    let metrics = match &state.governance_metrics {
+        Some(m) => m.clone(),
+        None => return (StatusCode::SERVICE_UNAVAILABLE, Json(ErrorResponse { error: "governance metrics not configured".into() })).into_response(),
+    };
+    let metrics = metrics.lock().await;
+    let m = metrics.get_org_metrics(org_id);
+    // Check if org has any data (zeroed defaults means untracked)
+    if m.election_count == 0 && m.tax_collection_count == 0 && m.treaties_signed == 0 && m.member_count == 0 {
+        return (StatusCode::NOT_FOUND, Json(ErrorResponse { error: format!("no metrics for org {}", org_id) })).into_response();
+    }
+    Json(m).into_response()
+}
+
+/// GET /api/v1/governance/orgs/:org_id/timeline — Governance event timeline.
+async fn governance_org_timeline(
+    State(state): State<AppState>,
+    Path(org_id): Path<Uuid>,
+    Query(query): Query<GovernanceTimelineQuery>,
+) -> impl IntoResponse {
+    let metrics = match &state.governance_metrics {
+        Some(m) => m.clone(),
+        None => return (StatusCode::SERVICE_UNAVAILABLE, Json(ErrorResponse { error: "governance metrics not configured".into() })).into_response(),
+    };
+    let from = query.from_tick.unwrap_or(0);
+    let to = query.to_tick.unwrap_or(u64::MAX);
+    let metrics = metrics.lock().await;
+    let timeline = metrics.get_timeline(org_id, query.event_type, (from, to));
+    Json(timeline).into_response()
+}
+
+/// GET /api/v1/governance/comparison — Compare multiple orgs.
+async fn governance_comparison(
+    State(state): State<AppState>,
+    Query(query): Query<GovernanceComparisonQuery>,
+) -> impl IntoResponse {
+    let org_ids: Vec<Uuid> = query
+        .org_ids
+        .unwrap_or_default()
+        .split(',')
+        .filter_map(|s| s.trim().parse::<Uuid>().ok())
+        .collect();
+
+    if org_ids.is_empty() {
+        return (
+            StatusCode::BAD_REQUEST,
+            Json(ErrorResponse { error: "org_ids query parameter required (comma-separated UUIDs)".into() }),
+        ).into_response();
+    }
+
+    let metrics = match &state.governance_metrics {
+        Some(m) => m.clone(),
+        None => return (StatusCode::SERVICE_UNAVAILABLE, Json(ErrorResponse { error: "governance metrics not configured".into() })).into_response(),
+    };
+    let metrics = metrics.lock().await;
+    let comparison: Vec<_> = org_ids.iter().map(|id| metrics.get_org_metrics(*id)).collect();
+    Json(comparison).into_response()
 }

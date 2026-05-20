@@ -25,6 +25,16 @@ from .governance import (
     Treaty,
     TreatyResponse,
 )
+from .governance_analysis import (
+    ExportFormat,
+    GovernanceAnalyzer,
+    GovernanceComparison,
+    GovernanceEventData,
+    LeadershipPrediction,
+    OrgGovernanceSnapshot,
+    StabilityLevel,
+    StabilityReport,
+)
 from .proposal import (
     OrgProposal,
     OrgType,
@@ -51,6 +61,15 @@ __all__ = [
     "OrgSnapshot",
     "Treaty",
     "TreatyResponse",
+    # governance_analysis
+    "ExportFormat",
+    "GovernanceAnalyzer",
+    "GovernanceComparison",
+    "GovernanceEventData",
+    "LeadershipPrediction",
+    "OrgGovernanceSnapshot",
+    "StabilityLevel",
+    "StabilityReport",
     # proposal
     "OrgProposal",
     "OrgType",

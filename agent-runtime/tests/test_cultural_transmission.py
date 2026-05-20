@@ -133,6 +133,20 @@ class TestKnowledgeTransferSkill:
         assert xp == 0.0
         assert "mining" not in student_skills
 
+    def test_transfer_skill_openness_zero_still_gets_base_xp(self) -> None:
+        """openness=0 yields 40% base transfer (intentional: skill transfer has
+        a practice/physiological component independent of ideological receptiveness)."""
+        kt = KnowledgeTransfer()
+        teacher_skill = Skill(name="mining", max_level=10, level=5, experience=0, next_level_exp=100)
+        student_skills: Dict[str, Skill] = {}
+        student_p = make_personality(openness=0.0)
+
+        xp = kt.transfer_skill(teacher_skill, student_skills, student_p)
+
+        # openness=0 → openness_factor=0.4, effective_xp = int(1.5 * 10 * 0.4) = 6
+        assert xp > 0
+        assert "mining" in student_skills
+
 
 # ── ImitationEngine tests ──
 
@@ -303,6 +317,22 @@ class TestCulturalDiffusionOrganizational:
         assert member_v.competition_weight < 0.7
         assert result["member_count"] == 1
 
+    def test_org_culture_rate_never_exceeds_hard_cap(self) -> None:
+        """Regression: high-agreeableness agent must not exceed 0.003 rate cap."""
+        cd = CulturalDiffusion()
+        org_culture = make_values(cooperation_weight=1.0, competition_weight=0.0)
+        member_v = make_values(cooperation_weight=0.0, competition_weight=1.0)
+        # Max agreeableness: previously this would yield rate=0.0045
+        member_p = make_personality(agreeableness=1.0)
+
+        before = member_v.cooperation_weight
+        cd.apply_organizational_culture("org1", org_culture, [
+            {"agent_id": "a", "values": member_v, "personality": member_p},
+        ])
+        delta = abs(member_v.cooperation_weight - before)
+
+        assert delta <= CULTURAL_DIFFUSION_RATE + 1e-9
+
 
 class TestCulturalDistance:
     """Tests for CulturalDiffusion.compute_cultural_distance."""
@@ -336,3 +366,18 @@ class TestCulturalDistance:
 
         # All dims at 0.5 vs all dims at 0.5 → 0 distance
         assert distance < 1e-9
+
+    def test_extreme_value_upper_bound(self) -> None:
+        """Maximally divergent groups should not exceed sqrt(6) distance."""
+        import math
+
+        cd = CulturalDiffusion()
+        dim_names = ValueWeights._dimension_names()
+        group_a = [make_values(**{d: 0.0 for d in dim_names})]
+        group_b = [make_values(**{d: 1.0 for d in dim_names})]
+
+        distance = cd.compute_cultural_distance(group_a, group_b)
+
+        # Max possible: 6 dims × (1.0)² = 6 → sqrt(6)
+        assert distance <= math.sqrt(len(dim_names)) + 1e-9
+        assert distance > 0.0

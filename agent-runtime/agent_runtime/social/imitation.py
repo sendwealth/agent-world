@@ -23,6 +23,10 @@ BASE_IMITATION_RATE = 0.05
 # Minimum openness threshold to even consider imitation.
 OPENNESS_THRESHOLD = 0.3
 
+# Maximum possible Euclidean distance between two 8-dim personality vectors
+# (each dim in [0, 1], so max per dim = 1.0, max total = sqrt(8)).
+MAX_PERSONALITY_DISTANCE = math.sqrt(8)
+
 
 class ImitationEngine:
     """Agents observe successful peers and partially imitate their traits."""
@@ -73,7 +77,7 @@ class ImitationEngine:
         # Social agents imitate more; distant agents imitate less
         social_factor = observer_personality.social_orientation
         distance = observer_personality.distance(observed_personality)
-        distance_factor = max(0.1, 1.0 - distance / math.sqrt(8))  # normalize by max dist
+        distance_factor = max(0.1, 1.0 - distance / MAX_PERSONALITY_DISTANCE)
 
         rate = BASE_IMITATION_RATE * social_factor * distance_factor
         rate = min(rate, 0.1)  # hard cap at 10% per observation
@@ -150,7 +154,7 @@ class ImitationEngine:
             # Similarity bonus (closer personality → more relatable)
             cand_pers: PersonalityVector = candidate["personality"]
             distance = agent_personality.distance(cand_pers)
-            similarity_bonus = max(0.0, 1.0 - distance / math.sqrt(8))
+            similarity_bonus = max(0.0, 1.0 - distance / MAX_PERSONALITY_DISTANCE)
             score += similarity_bonus * 0.3
 
             # Context tag overlap

@@ -301,6 +301,16 @@ class TraceStore:
         ).fetchone()
         return int(row["cnt"]) if row else 0
 
+    def list_all(self) -> list[TickSnapshot]:
+        """Get all TickSnapshots from the store, ordered by tick ASC."""
+        rows = self._conn.execute(
+            """
+            SELECT snapshot_json FROM tick_snapshots
+            ORDER BY tick ASC
+            """
+        ).fetchall()
+        return [TickSnapshot.from_json(r["snapshot_json"]) for r in rows]
+
     # ------------------------------------------------------------------
     # Maintenance
     # ------------------------------------------------------------------

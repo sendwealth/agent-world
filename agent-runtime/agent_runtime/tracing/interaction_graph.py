@@ -59,6 +59,10 @@ class InteractionGraph:
         self._reverse_adjacency[to_agent].add(from_agent)
         return inter
 
+    def get_all_interactions(self) -> list[Interaction]:
+        """Return all recorded interactions."""
+        return list(self._edges)
+
     def get_interactions(
         self, from_agent: str, to_agent: str
     ) -> list[Interaction]:

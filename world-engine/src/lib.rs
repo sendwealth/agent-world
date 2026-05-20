@@ -1,6 +1,8 @@
 pub mod a2a;
 pub mod api;
 pub mod api_auth;
+pub mod api_experiment;
+pub mod api_export;
 pub mod api_research;
 pub mod config;
 pub mod economy;

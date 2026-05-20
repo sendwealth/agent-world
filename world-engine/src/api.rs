@@ -260,13 +260,15 @@ pub fn build_full_router(state: AppState) -> Router {
 fn v2_router(state: &AppState) -> Router<AppState> {
     use axum::middleware;
 
-    let research = crate::api_research::research_routes();
+    let v2_routes = crate::api_research::research_routes()
+        .merge(crate::api_experiment::experiment_routes())
+        .merge(crate::api_export::export_routes());
     match &state.api_key_store {
-        Some(store) => research.layer(middleware::from_fn_with_state(
+        Some(store) => v2_routes.layer(middleware::from_fn_with_state(
             store.clone(),
             crate::api_auth::auth_middleware,
         )),
-        None => research,
+        None => v2_routes,
     }
 }
 

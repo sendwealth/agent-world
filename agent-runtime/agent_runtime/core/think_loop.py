@@ -155,6 +155,17 @@ class HeartbeatProvider(Protocol):
     async def heartbeat(self) -> int: ...
 
 
+class CulturalInfluenceHook(Protocol):
+    """Optional hook for applying cultural influence during the think cycle.
+
+    Called once per tick after reflection. Implementations can nudge the
+    agent's values/personality based on regional, organizational, or peer
+    cultural context.
+    """
+
+    def apply(self, state: AgentState, tick: int) -> None: ...
+
+
 # ---------------------------------------------------------------------------
 # Default (mock) providers
 # ---------------------------------------------------------------------------
@@ -260,6 +271,7 @@ class ThinkLoop:
         reflection_provider: ReflectionProvider | None = None,
         world_client: Any | None = None,
         heartbeat_provider: HeartbeatProvider | None = None,
+        cultural_hook: CulturalInfluenceHook | None = None,
     ) -> None:
         self.state = state
         self.survival = survival
@@ -276,6 +288,9 @@ class ThinkLoop:
 
         # Heartbeat provider — optional, sends heartbeat each tick
         self._heartbeat = heartbeat_provider
+
+        # Cultural influence hook — optional, nudges values/personality each tick
+        self._cultural_hook = cultural_hook
 
         # Runtime state
         self._tick: int = 0
@@ -480,6 +495,17 @@ class ThinkLoop:
         # 6. Reflect (periodic)
         if self.config.reflect_interval > 0 and self._tick % self.config.reflect_interval == 0:
             await self._reflection.reflect(self.state, self._tick)
+
+        # 7. Cultural influence hook (every tick, no-op if not configured)
+        if self._cultural_hook is not None:
+            try:
+                self._cultural_hook.apply(self.state, self._tick)
+            except Exception:
+                logger.debug(
+                    "Tick %d: cultural hook error (non-fatal)",
+                    self._tick,
+                    exc_info=True,
+                )
 
     # ------------------------------------------------------------------
     # Action execution

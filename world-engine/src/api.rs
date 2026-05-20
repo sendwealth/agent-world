@@ -2783,3 +2783,340 @@ async fn governance_comparison(
     let comparison: Vec<_> = org_ids.iter().map(|id| metrics.get_org_metrics(*id)).collect();
     Json(comparison).into_response()
 }
+
+// ── Governance API Tests ──────────────────────────────────────────────────
+
+#[cfg(test)]
+mod governance_api_tests {
+    use super::*;
+    use axum::body::Body;
+    use http_body_util::BodyExt;
+    use tower::ServiceExt;
+
+    /// Build a test AppState with governance_metrics wired up.
+    fn build_test_state() -> (AppState, tempfile::TempDir) {
+        let bus = Arc::new(EventBus::new(256));
+        let collector = GovernanceMetricsCollector::new(&bus);
+        // Allow background task to subscribe
+        std::thread::sleep(std::time::Duration::from_millis(10));
+
+        let (tick_tx, tick_rx) = watch::channel(0u64);
+        let board = Arc::new(Mutex::new(TaskBoard::new()));
+        let tmp = tempfile::tempdir().expect("tempdir");
+        let wal = Arc::new(Mutex::new(WAL::new(tmp.path())));
+
+        let state = AppState {
+            board,
+            wal,
+            event_bus: bus,
+            agents: Arc::new(Mutex::new(Vec::new())),
+            messages: Arc::new(Mutex::new(Vec::new())),
+            tick_tx,
+            tick_rx,
+            snapshot_store: None,
+            marketplace: None,
+            reputation_system: None,
+            org_store: None,
+            stock_market: None,
+            governance: None,
+            banking_system: None,
+            trace_store: None,
+            governance_metrics: Some(Arc::new(Mutex::new(collector))),
+        };
+        (state, tmp)
+    }
+
+    /// Helper to extract JSON body from a response.
+    async fn body_to_json(body: Body) -> serde_json::Value {
+        let bytes = body
+            .collect()
+            .await
+            .expect("failed to read body")
+            .to_bytes();
+        serde_json::from_slice(&bytes).expect("failed to parse JSON")
+    }
+
+    #[tokio::test]
+    async fn test_governance_summary_returns_world_summary() {
+        let (state, _tmp) = build_test_state();
+        let bus = state.event_bus.clone();
+
+        // Emit some governance events
+        let org_a = Uuid::new_v4();
+        let org_b = Uuid::new_v4();
+        bus.emit(WorldEvent::TaxCollected {
+            org_id: org_a.to_string(),
+            payer_id: "p1".into(),
+            tax_kind: "IncomeTax".into(),
+            rate: 0.1,
+            gross_amount: 1000,
+            tax_amount: 100,
+            tick: 5,
+        });
+        bus.emit(WorldEvent::TreatySigned {
+            treaty_id: "t-1".into(),
+            org_a: org_a.to_string(),
+            org_b: org_b.to_string(),
+        });
+
+        tokio::time::sleep(std::time::Duration::from_millis(30)).await;
+
+        let app = build_full_router(state);
+        let response = app
+            .oneshot(
+                axum::http::Request::builder()
+                    .uri("/api/v1/governance/summary")
+                    .body(Body::empty())
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+
+        assert_eq!(response.status(), StatusCode::OK);
+        let json = body_to_json(response.into_body()).await;
+        assert_eq!(json["total_orgs"], 2);
+        assert_eq!(json["total_tax_collected"], 100);
+        assert_eq!(json["total_treaties"], 2); // Each org counts as 1 signing
+    }
+
+    #[tokio::test]
+    async fn test_governance_org_metrics_returns_per_org_data() {
+        let (state, _tmp) = build_test_state();
+        let bus = state.event_bus.clone();
+        let org_id = Uuid::new_v4();
+
+        bus.emit(WorldEvent::OrganizationMemberJoined {
+            org_id,
+            agent_id: "a1".into(),
+            role: "Member".into(),
+        });
+        bus.emit(WorldEvent::TaxCollected {
+            org_id: org_id.to_string(),
+            payer_id: "a1".into(),
+            tax_kind: "IncomeTax".into(),
+            rate: 0.1,
+            gross_amount: 500,
+            tax_amount: 50,
+            tick: 10,
+        });
+
+        tokio::time::sleep(std::time::Duration::from_millis(30)).await;
+
+        let app = build_full_router(state);
+        let uri = format!("/api/v1/governance/orgs/{}", org_id);
+        let response = app
+            .oneshot(
+                axum::http::Request::builder()
+                    .uri(&uri)
+                    .body(Body::empty())
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+
+        assert_eq!(response.status(), StatusCode::OK);
+        let json = body_to_json(response.into_body()).await;
+        assert_eq!(json["org_id"], org_id.to_string());
+        assert_eq!(json["total_tax_collected"], 50);
+        assert_eq!(json["member_count"], 1);
+        assert_eq!(json["tax_collection_count"], 1);
+    }
+
+    #[tokio::test]
+    async fn test_governance_org_metrics_returns_404_for_unknown_org() {
+        let (state, _tmp) = build_test_state();
+        let unknown_id = Uuid::new_v4();
+
+        let app = build_full_router(state);
+        let uri = format!("/api/v1/governance/orgs/{}", unknown_id);
+        let response = app
+            .oneshot(
+                axum::http::Request::builder()
+                    .uri(&uri)
+                    .body(Body::empty())
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+
+        assert_eq!(response.status(), StatusCode::NOT_FOUND);
+    }
+
+    #[tokio::test]
+    async fn test_governance_timeline_returns_filtered_events() {
+        let (state, _tmp) = build_test_state();
+        let bus = state.event_bus.clone();
+        let org_id = Uuid::new_v4();
+
+        bus.emit(WorldEvent::TaxCollected {
+            org_id: org_id.to_string(),
+            payer_id: "p1".into(),
+            tax_kind: "IncomeTax".into(),
+            rate: 0.1,
+            gross_amount: 100,
+            tax_amount: 10,
+            tick: 5,
+        });
+        bus.emit(WorldEvent::TaxCollected {
+            org_id: org_id.to_string(),
+            payer_id: "p2".into(),
+            tax_kind: "IncomeTax".into(),
+            rate: 0.1,
+            gross_amount: 200,
+            tax_amount: 20,
+            tick: 15,
+        });
+        bus.emit(WorldEvent::LeadershipElectionStarted {
+            org_id,
+            candidates: vec!["c1".into()],
+            voting_method: "SimpleMajority".into(),
+        });
+
+        tokio::time::sleep(std::time::Duration::from_millis(30)).await;
+
+        let app = build_full_router(state);
+
+        // Query with tick range filter [0, 10]
+        let uri = format!(
+            "/api/v1/governance/orgs/{}/timeline?from_tick=0&to_tick=10",
+            org_id
+        );
+        let response = app
+            .oneshot(
+                axum::http::Request::builder()
+                    .uri(&uri)
+                    .body(Body::empty())
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+
+        assert_eq!(response.status(), StatusCode::OK);
+        let json = body_to_json(response.into_body()).await;
+        let events = json.as_array().expect("expected array");
+        // tick 5 TaxCollected + tick 0 LeadershipElectionStarted = 2 events
+        assert_eq!(events.len(), 2);
+    }
+
+    #[tokio::test]
+    async fn test_governance_comparison_returns_multiple_orgs() {
+        let (state, _tmp) = build_test_state();
+        let bus = state.event_bus.clone();
+        let org_a = Uuid::new_v4();
+        let org_b = Uuid::new_v4();
+
+        // org_a: tax + election
+        bus.emit(WorldEvent::TaxCollected {
+            org_id: org_a.to_string(),
+            payer_id: "p1".into(),
+            tax_kind: "IncomeTax".into(),
+            rate: 0.1,
+            gross_amount: 100,
+            tax_amount: 10,
+            tick: 1,
+        });
+        bus.emit(WorldEvent::LeadershipElectionStarted {
+            org_id: org_a,
+            candidates: vec!["c1".into(), "c2".into()],
+            voting_method: "SimpleMajority".into(),
+        });
+
+        // org_b: treaty only
+        bus.emit(WorldEvent::TreatySigned {
+            treaty_id: "t-1".into(),
+            org_a: org_a.to_string(),
+            org_b: org_b.to_string(),
+        });
+
+        tokio::time::sleep(std::time::Duration::from_millis(30)).await;
+
+        let app = build_full_router(state);
+        let uri = format!(
+            "/api/v1/governance/comparison?org_ids={},{}",
+            org_a, org_b
+        );
+        let response = app
+            .oneshot(
+                axum::http::Request::builder()
+                    .uri(&uri)
+                    .body(Body::empty())
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+
+        assert_eq!(response.status(), StatusCode::OK);
+        let json = body_to_json(response.into_body()).await;
+        let comparison = json.as_array().expect("expected array");
+        assert_eq!(comparison.len(), 2);
+
+        // org_a should have tax and election data
+        let metrics_a = &comparison[0];
+        assert_eq!(metrics_a["total_tax_collected"], 10);
+        assert_eq!(metrics_a["election_count"], 1);
+
+        // org_b should have treaty data
+        let metrics_b = &comparison[1];
+        assert_eq!(metrics_b["treaties_signed"], 1);
+    }
+
+    #[tokio::test]
+    async fn test_governance_comparison_returns_400_without_org_ids() {
+        let (state, _tmp) = build_test_state();
+        let app = build_full_router(state);
+
+        let response = app
+            .oneshot(
+                axum::http::Request::builder()
+                    .uri("/api/v1/governance/comparison")
+                    .body(Body::empty())
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+
+        assert_eq!(response.status(), StatusCode::BAD_REQUEST);
+    }
+
+    #[tokio::test]
+    async fn test_governance_summary_returns_503_when_not_configured() {
+        let board = Arc::new(Mutex::new(TaskBoard::new()));
+        let tmp = tempfile::tempdir().expect("tempdir");
+        let wal = Arc::new(Mutex::new(WAL::new(tmp.path())));
+        let bus = Arc::new(EventBus::new(256));
+        let (tick_tx, tick_rx) = watch::channel(0u64);
+
+        // State without governance_metrics
+        let state = AppState {
+            board,
+            wal,
+            event_bus: bus,
+            agents: Arc::new(Mutex::new(Vec::new())),
+            messages: Arc::new(Mutex::new(Vec::new())),
+            tick_tx,
+            tick_rx,
+            snapshot_store: None,
+            marketplace: None,
+            reputation_system: None,
+            org_store: None,
+            stock_market: None,
+            governance: None,
+            banking_system: None,
+            trace_store: None,
+            governance_metrics: None,
+        };
+
+        let app = build_full_router(state);
+        let response = app
+            .oneshot(
+                axum::http::Request::builder()
+                    .uri("/api/v1/governance/summary")
+                    .body(Body::empty())
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+
+        assert_eq!(response.status(), StatusCode::SERVICE_UNAVAILABLE);
+    }
+}

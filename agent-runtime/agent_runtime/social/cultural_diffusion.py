@@ -103,8 +103,9 @@ class CulturalDiffusion:
         declared culture vector (e.g. from the org charter). Members' values
         are nudged toward the org culture at CULTURAL_DIFFUSION_RATE.
 
-        Tradition_adherence acts as a moderator: agents with higher tradition
-        adherence are more influenced by org culture.
+        Agreeableness acts as a moderator: agents with higher agreeableness
+        are more influenced by org culture, but the rate is capped so it
+        never exceeds CULTURAL_DIFFUSION_RATE.
 
         Args:
             org_id: Organization identifier.
@@ -134,12 +135,12 @@ class CulturalDiffusion:
                 target = getattr(org_culture, d)
                 diff = target - current
 
-                # Tradition adherence amplifies org influence
-                tradition_factor = 1.0
+                # Agreeableness modulates org influence: only reduces rate, never amplifies
+                agreeableness_factor = 1.0
                 if p is not None:
-                    tradition_factor = 0.5 + 0.5 * p.agreeableness
+                    agreeableness_factor = 0.5 + 0.5 * p.agreeableness
 
-                rate = CULTURAL_DIFFUSION_RATE * tradition_factor
+                rate = CULTURAL_DIFFUSION_RATE * min(1.0, agreeableness_factor)
                 delta = max(-rate, min(rate, diff))
                 new_val = max(0.0, min(1.0, current + delta))
                 actual_delta = new_val - current

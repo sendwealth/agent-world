@@ -26,6 +26,9 @@ MAX_SKILL_TRANSFER_RATIO = 0.3
 # Higher openness → faster learning from others.
 OPENNESS_WEIGHT = 0.4
 
+# Experience points awarded per skill level during transfer.
+XP_PER_SKILL_LEVEL = 10
+
 
 class KnowledgeTransfer:
     """Manages direct knowledge/experience transmission between agents."""
@@ -58,32 +61,31 @@ class KnowledgeTransfer:
             OPENNESS_WEIGHT + (1.0 - OPENNESS_WEIGHT) * student_personality.openness
         )
 
-        # Apply the experience to student's values, scaled by learning efficiency
+        # Pre-scale outcome by learning efficiency so update_from_experience
+        # applies a correctly-proportioned delta from the start (no mutation-then-fix).
+        scaled_outcome = experience.outcome * learning_efficiency
         original = student_values.to_storage_dict()
-        student_values.update_from_experience(experience.event_type, experience.outcome)
+        student_values.update_from_experience(experience.event_type, scaled_outcome)
 
-        # Scale the actual changes by learning efficiency
+        # Record the actual changes applied
         updated = student_values.to_storage_dict()
         value_changes: Dict[str, float] = {}
         for dim in ValueWeights._dimension_names():
             delta = updated[dim] - original[dim]
             if abs(delta) > 1e-9:
-                scaled_delta = delta * learning_efficiency
-                new_val = max(0.0, min(1.0, original[dim] + scaled_delta))
-                object.__setattr__(student_values, dim, new_val)
-                value_changes[dim] = scaled_delta
+                value_changes[dim] = delta
 
         # Small personality shift: teaching tends to increase social orientation
         personality_shift: Dict[str, float] = {}
         if experience.outcome > 0:
             shift = 0.01 * learning_efficiency
             new_soc = min(1.0, student_personality.social_orientation + shift)
-            personality_shift[
-                "social_orientation"
-            ] = new_soc - student_personality.social_orientation
+            personality_shift["social_orientation"] = (
+                new_soc - student_personality.social_orientation
+            )
             object.__setattr__(student_personality, "social_orientation", new_soc)
 
-        learned = len(value_changes) > 0 or experience.outcome != 0
+        learned = len(value_changes) > 0
 
         return {
             "learned": learned,
@@ -121,7 +123,10 @@ class KnowledgeTransfer:
         openness_factor = (
             OPENNESS_WEIGHT + (1.0 - OPENNESS_WEIGHT) * student_personality.openness
         )
-        effective_xp = int(transferable_level * 10 * openness_factor)  # 10 xp per level
+        # Note: openness=0 still yields openness_factor=0.4 (40% base transfer rate).
+        # This is intentional — skill transfer has a physiological/practice component
+        # that doesn't require ideological receptiveness, unlike value shifts.
+        effective_xp = int(transferable_level * XP_PER_SKILL_LEVEL * openness_factor)
 
         if effective_xp <= 0:
             return 0.0

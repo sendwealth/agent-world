@@ -7,7 +7,6 @@ Covers:
 - CulturalConflictAndFusion (conflict detection, fusion, diversity index)
 """
 
-
 from agent_runtime.models.personality import PersonalityVector
 from agent_runtime.models.values import ValueWeights
 from agent_runtime.social.cultural_conflict import (

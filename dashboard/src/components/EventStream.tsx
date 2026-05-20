@@ -24,6 +24,14 @@ const eventTypeConfig: Record<
   inflation: { label: "通胀", color: "bg-amber-500", icon: "📈" },
   investment: { label: "投资", color: "bg-teal-500", icon: "🏦" },
   tax: { label: "税收", color: "bg-rose-500", icon: "🏛" },
+  tax_collected: { label: "税收征收", color: "bg-orange-500", icon: "🏛" },
+  treasury_distributed: { label: "国库分配", color: "bg-emerald-500", icon: "💰" },
+  leadership_election_started: { label: "选举开始", color: "bg-blue-500", icon: "🗳" },
+  leadership_changed: { label: "领导更替", color: "bg-indigo-500", icon: "👑" },
+  treaty_proposed: { label: "条约提议", color: "bg-cyan-500", icon: "📝" },
+  treaty_signed: { label: "条约签署", color: "bg-green-500", icon: "🤝" },
+  treaty_broken: { label: "条约撕毁", color: "bg-red-500", icon: "💔" },
+  relation_changed: { label: "关系变化", color: "bg-purple-500", icon: "🔄" },
 };
 
 function formatTime(ts: string): string {

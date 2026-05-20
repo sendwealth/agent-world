@@ -2,17 +2,13 @@
 
 from __future__ import annotations
 
-import pytest
-
-from agent_runtime.core.decide import DecisionAction, DecisionPerception, SurvivalAssessment
+from agent_runtime.core.decide import DecisionAction
 from agent_runtime.llm.prompts import (
     DEFAULT_TEMPLATE,
     SURVIVAL_TEMPLATE,
     PromptTemplate,
     get_template,
-    register_template,
 )
-
 
 # ---------------------------------------------------------------------------
 # Mock state

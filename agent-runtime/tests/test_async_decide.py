@@ -12,7 +12,6 @@ from agent_runtime.core.think_loop import Decision, Perception
 from agent_runtime.models.agent_state import AgentState
 from agent_runtime.survival.instinct import SurvivalAction, SurvivalMode
 
-
 # ---------------------------------------------------------------------------
 # Fixtures
 # ---------------------------------------------------------------------------

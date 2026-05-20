@@ -16,7 +16,6 @@ from agent_runtime.llm.queue import (
     _resolve_priority,
 )
 
-
 # ---------------------------------------------------------------------------
 # Mock LLM Provider
 # ---------------------------------------------------------------------------
@@ -262,7 +261,7 @@ class TestLLMQueue:
         await queue.start()
 
         # Enqueue low priority first, then high priority
-        results = await asyncio.gather(
+        _results = await asyncio.gather(
             queue.enqueue(LLMRequest(
                 messages=[LLMMessage(role="user", content="default")],
                 priority="default",

@@ -127,7 +127,10 @@ class QueueStats:
 # JSON schema: {"action": str, "parameters": {}, "reasoning": str, "confidence": int}
 # Used when LLM calls time out or fail and fallback_on_timeout is True.
 _FALLBACK_RESPONSE = LLMResponse(
-    content='{"action": "rest", "parameters": {}, "reasoning": "LLM queue fallback", "confidence": 0}',
+    content=(
+        '{"action": "rest", "parameters": {},'
+        ' "reasoning": "LLM queue fallback", "confidence": 0}'
+    ),
     model="fallback",
 )
 

@@ -1,0 +1,23 @@
+experiment:
+  id: "baseline-50agents-v1"
+  name: "基线实验: 50 Agent 标准配置"
+  seed: 42
+  duration_ticks: 10000
+  world:
+    width: 100
+    height: 100
+    resource_density: 0.3
+  agents:
+    count: 50
+    personality_distribution: "random"
+    initial_tokens: 100
+  governance:
+    enabled: true
+    tax_rate: 0.1
+  llm:
+    provider: "ollama"
+    model: "qwen2"
+    temperature: 0.7
+  tracing:
+    snapshot_interval: 100
+    export_on_complete: true

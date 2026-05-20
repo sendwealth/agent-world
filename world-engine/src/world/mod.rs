@@ -6,6 +6,7 @@ pub mod event;
 pub mod genesis;
 pub mod intervention;
 pub mod scheduler;
+pub mod seeder;
 pub mod state;
 pub mod subsystem;
 pub mod subsystems;
@@ -16,6 +17,7 @@ pub use event::{EventType, WorldEvent, TrustInteractionType};
 pub use genesis::GenesisConfig;
 pub use intervention::{InterventionCheckerSubsystem, InterventionConfig as InterventionSubsystemConfig, MessageInterventionGuard};
 pub use scheduler::Scheduler;
+pub use seeder::{WorldSeeder, Terrain, Resource};
 pub use state::{EventBus, FilteredReceiver, SharedEventBus, WorldState};
 pub use subsystem::{Subsystem, SubsystemRegistry};
 pub use subsystems::{

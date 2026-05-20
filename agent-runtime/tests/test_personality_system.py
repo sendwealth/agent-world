@@ -4,15 +4,13 @@ Covers: creation, validation, mutation, distance, serialization, prompt generati
 experience recording, value updates, and personality drift.
 """
 
-import json
 import math
 
 import pytest
 
-from agent_runtime.models.personality import PersonalityVector
-from agent_runtime.models.values import ValueWeights, MAX_ADJUSTMENT
 from agent_runtime.core.experience import Experience, ExperienceAccumulator
-
+from agent_runtime.models.personality import PersonalityVector
+from agent_runtime.models.values import MAX_ADJUSTMENT, ValueWeights
 
 # ============================================================
 # PersonalityVector tests

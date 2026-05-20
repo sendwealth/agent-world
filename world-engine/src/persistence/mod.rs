@@ -47,6 +47,8 @@ pub struct SerializableAgentRecord {
     pub phase: AgentPhase,
     pub tokens: u64,
     pub skills: HashMap<String, SkillRecord>,
+    #[serde(default)]
+    pub personality: String,
 }
 
 impl SerializableAgentRecord {
@@ -57,6 +59,7 @@ impl SerializableAgentRecord {
             phase: r.phase,
             tokens: r.tokens,
             skills: r.skills.clone(),
+            personality: r.personality.clone(),
         }
     }
 
@@ -67,6 +70,7 @@ impl SerializableAgentRecord {
             phase: self.phase,
             tokens: self.tokens,
             skills: self.skills.clone(),
+            personality: self.personality.clone(),
         }
     }
 }
@@ -135,6 +139,7 @@ mod tests {
                 phase: AgentPhase::Adult,
                 tokens,
                 skills: HashMap::new(),
+                personality: String::new(),
             },
         )
     }
@@ -196,6 +201,7 @@ mod tests {
             phase: AgentPhase::Elder,
             tokens: 9999,
             skills,
+            personality: String::new(),
         };
 
         let serializable = SerializableAgentRecord::from_agent_record(&record);

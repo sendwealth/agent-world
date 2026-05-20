@@ -132,6 +132,7 @@ impl WorldState {
             phase: AgentPhase::Birth,
             tokens,
             skills: HashMap::new(),
+            personality: String::new(),
         };
 
         {
@@ -159,6 +160,7 @@ impl WorldState {
             phase,
             tokens,
             skills: HashMap::new(),
+            personality: String::new(),
         };
 
         {

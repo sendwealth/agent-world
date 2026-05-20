@@ -1278,6 +1278,7 @@ mod tests {
             phase,
             tokens,
             skills: HashMap::new(),
+            personality: String::new(),
         }
     }
 
@@ -1288,6 +1289,7 @@ mod tests {
             phase,
             tokens,
             skills: HashMap::new(),
+            personality: String::new(),
         }
     }
 
@@ -1811,6 +1813,7 @@ mod tests {
             skills: vec![
                 ("mining".to_string(), SkillRecord { name: "mining".to_string(), level: 5, experience: 0.0 }),
             ].into_iter().collect(),
+            personality: String::new(),
         };
 
         let ctx = RuleContext::new(1, 0);

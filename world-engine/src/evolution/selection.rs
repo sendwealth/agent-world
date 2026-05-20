@@ -287,6 +287,7 @@ mod tests {
                 phase,
                 tokens,
                 skills,
+                personality: String::new(),
             },
         )
     }

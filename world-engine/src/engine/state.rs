@@ -160,6 +160,7 @@ impl WorldState {
             phase,
             tokens: initial_tokens,
             skills: HashMap::new(),
+            personality: String::new(),
         };
 
         match self.agents.entry(id.clone()) {

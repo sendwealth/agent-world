@@ -200,6 +200,7 @@ impl WorldState {
             phase: crate::world::enums::AgentPhase::Adult,
             tokens,
             skills: std::collections::HashMap::new(),
+            personality: String::new(),
         };
 
         self.event_bus.emit(WorldEvent::AgentSpawned {
@@ -539,6 +540,7 @@ mod tests {
                 phase,
                 tokens,
                 skills: HashMap::new(),
+                personality: String::new(),
             },
         )
     }

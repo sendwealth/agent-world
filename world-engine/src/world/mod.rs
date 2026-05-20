@@ -9,6 +9,7 @@ pub mod scheduler;
 pub mod state;
 pub mod subsystem;
 pub mod subsystems;
+pub mod tick_profiler;
 
 pub use agent::{Agent, AgentRegistry};
 pub use event::{EventType, WorldEvent, TrustInteractionType};
@@ -21,3 +22,4 @@ pub use subsystems::{
     TokenBurnSubsystem, DeathJudgmentSubsystem,
     RuleCheckSubsystem, EventBroadcastSubsystem,
 };
+pub use tick_profiler::{TickProfiler, TickPhase, TickProfileReport, TickTiming};

@@ -728,11 +728,15 @@ def _find_llm_queue(provider: Any) -> Any | None:
         q = getattr(current, "_queue", None)
         if q is not None:
             return q
-        # MemoryAwareDecisionProvider wraps base_provider
-        current = getattr(current, "base_provider", None)
-        # AsyncDecisionProvider wraps inner
-        if current is None:
-            current = getattr(provider, "_inner", None)
+        # Try each known wrapper attribute in turn so we don't skip layers
+        for attr in ("base_provider", "_inner"):
+            next_obj = getattr(current, attr, None)
+            if next_obj is not None:
+                current = next_obj
+                break
+        else:
+            # No known attribute found — dead end
+            break
     return None
 
 
@@ -767,8 +771,10 @@ def _create_llm_decision_provider(config: RuntimeConfig) -> Any | None:
         queue = LLMQueue(provider=llm, config=config.llm_queue)
 
         # Wrap with async decision provider so LLM latency doesn't block ticks.
-        # The inner LLMDecisionProvider talks to the queue-wrapped LLM.
-        inner_provider = LLMDecisionProvider(llm_provider=llm)
+        # The inner LLMDecisionProvider talks through the queue (not the raw
+        # provider) so all LLM calls are routed through priority scheduling
+        # and concurrency control.
+        inner_provider = LLMDecisionProvider(llm_provider=queue)
         async_provider = AsyncDecisionProvider(inner=inner_provider)
 
         # Attach the queue so run_agent can stop it during shutdown

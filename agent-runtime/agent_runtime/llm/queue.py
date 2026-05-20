@@ -352,6 +352,27 @@ class LLMQueue:
         # Wait for the result
         return await future
 
+    async def chat(
+        self,
+        messages: list[LLMMessage],
+        *,
+        max_tokens: int | None = None,
+        temperature: float | None = None,
+    ) -> LLMResponse:
+        """LLMProvider-compatible chat interface — enqueues the request.
+
+        This allows ``LLMQueue`` to be passed directly to components that
+        expect an ``LLMProvider`` (e.g. ``LLMDecisionProvider``), routing
+        their calls through the priority queue and concurrency control.
+        """
+        request = LLMRequest(
+            messages=messages,
+            priority="default",
+            max_tokens=max_tokens,
+            temperature=temperature,
+        )
+        return await self.enqueue(request)
+
     def stats(self) -> QueueStats:
         """Return a snapshot of queue statistics."""
         return QueueStats(

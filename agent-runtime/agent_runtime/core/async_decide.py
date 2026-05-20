@@ -164,7 +164,7 @@ class AsyncDecisionProvider:
 
         # Return the best available decision (with staleness check)
         if self._last_decision is not None:
-            ticks_since = perception.tick - self._last_decision_tick
+            ticks_since = max(0, perception.tick - self._last_decision_tick)
             if ticks_since <= self._max_stale_ticks:
                 return self._last_decision
             else:

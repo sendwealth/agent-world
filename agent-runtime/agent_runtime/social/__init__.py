@@ -1,6 +1,7 @@
-"""Social module — group identity, cultural clustering, and intergroup dynamics.
+"""Social module — personality, cultural transmission, group identity, and intergroup dynamics.
 
-Phase 4.3.3: Organization culture, regional clustering, trust, and conflict/fusion.
+Phase 4.3: Personality vectors, knowledge transfer, cultural diffusion, organization culture,
+regional clustering, trust, conflict/fusion, and language emergence.
 """
 
 from .cultural_conflict import (
@@ -8,26 +9,35 @@ from .cultural_conflict import (
     ConflictReport,
     CulturalConflictAndFusion,
 )
+from .cultural_diffusion import CulturalDiffusion
+from .imitation import ImitationEngine
 from .intergroup_trust import (
     InterGroupEvent,
     InterGroupEventType,
     IntergroupTrust,
 )
+from .knowledge_transfer import KnowledgeTransfer
 from .org_culture import CultureVector, OrgCultureSystem
 from .regional_culture import Cluster, RegionalCulture
 
 __all__ = [
-    # org_culture
+    # cultural_diffusion (Phase 4.3.2)
+    "CulturalDiffusion",
+    # imitation (Phase 4.3.2)
+    "ImitationEngine",
+    # knowledge_transfer (Phase 4.3.2)
+    "KnowledgeTransfer",
+    # org_culture (Phase 4.3.3)
     "CultureVector",
     "OrgCultureSystem",
-    # regional_culture
+    # regional_culture (Phase 4.3.3)
     "Cluster",
     "RegionalCulture",
-    # intergroup_trust
+    # intergroup_trust (Phase 4.3.3)
     "InterGroupEvent",
     "InterGroupEventType",
     "IntergroupTrust",
-    # cultural_conflict
+    # cultural_conflict (Phase 4.3.3)
     "AgentInteraction",
     "ConflictReport",
     "CulturalConflictAndFusion",

@@ -146,6 +146,31 @@ impl TraceStore {
     pub fn count_ticks(&self, agent_id: &str) -> usize {
         self.traces.get(agent_id).map(|t| t.len()).unwrap_or(0)
     }
+
+    /// Returns all trace data, optionally filtered by agent IDs and tick range.
+    pub fn get_all_traces(
+        &self,
+        agent_ids: Option<&[String]>,
+        tick_range: Option<(u64, u64)>,
+    ) -> Vec<&TickTraceData> {
+        let mut result = Vec::new();
+        for (id, traces) in &self.traces {
+            if let Some(ids) = agent_ids {
+                if !ids.contains(id) {
+                    continue;
+                }
+            }
+            for trace in traces {
+                if let Some((from, to)) = tick_range {
+                    if trace.tick < from || trace.tick > to {
+                        continue;
+                    }
+                }
+                result.push(trace);
+            }
+        }
+        result
+    }
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

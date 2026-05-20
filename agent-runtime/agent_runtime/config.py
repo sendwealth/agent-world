@@ -67,6 +67,7 @@ import yaml
 
 from agent_runtime.core.think_loop import ThinkLoopConfig
 from agent_runtime.llm.base import LLMConfig, ProviderType
+from agent_runtime.llm.queue import QueueConfig as LLMQueueConfig
 
 logger = logging.getLogger(__name__)
 
@@ -118,6 +119,7 @@ class RuntimeConfig:
 
     agent: AgentSpawnConfig = field(default_factory=AgentSpawnConfig)
     llm: LLMConfig | None = None
+    llm_queue: LLMQueueConfig = field(default_factory=LLMQueueConfig)
     think_loop: ThinkLoopConfig = field(default_factory=ThinkLoopConfig)
     world: WorldConfig = field(default_factory=WorldConfig)
     health_port: int = 9090
@@ -218,6 +220,15 @@ def _parse_world_config(data: dict[str, Any]) -> WorldConfig:
     )
 
 
+def _parse_llm_queue_config(data: dict[str, Any]) -> LLMQueueConfig:
+    """Parse the ``[llm_queue]`` section into a QueueConfig."""
+    return LLMQueueConfig(
+        max_concurrency=data.get("max_concurrency", 2),
+        timeout_seconds=data.get("timeout_seconds", 30.0),
+        fallback_on_timeout=data.get("fallback_on_timeout", True),
+    )
+
+
 def parse_runtime_config(raw: dict[str, Any]) -> RuntimeConfig:
     """Parse a raw dict (from config file) into a RuntimeConfig.
 
@@ -254,12 +265,14 @@ def parse_runtime_config(raw: dict[str, Any]) -> RuntimeConfig:
     )
 
     llm_cfg = _parse_llm_config(raw.get("llm", {}))
+    llm_queue_cfg = _parse_llm_queue_config(raw.get("llm_queue", {}))
     think_loop_cfg = _parse_think_loop_config(raw.get("think_loop", {}))
     world_cfg = _parse_world_config(raw.get("world", {}))
 
     return RuntimeConfig(
         agent=agent_cfg,
         llm=llm_cfg,
+        llm_queue=llm_queue_cfg,
         think_loop=think_loop_cfg,
         world=world_cfg,
     )

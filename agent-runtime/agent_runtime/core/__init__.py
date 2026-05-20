@@ -7,6 +7,7 @@ from agent_runtime.core.act import (
     ActionStatus,
     ActionType,
 )
+from agent_runtime.core.async_decide import AsyncDecisionProvider
 from agent_runtime.core.decide import (
     DecisionAction,
     DecisionEngine,
@@ -37,6 +38,7 @@ __all__ = [
     "ActionResult",
     "ActionStatus",
     "ActionType",
+    "AsyncDecisionProvider",
     "CulturalInfluenceHook",
     "Decision",
     "DecisionAction",

@@ -588,6 +588,17 @@ async def run_agent(config: RuntimeConfig) -> RunStats:
                 except Exception:
                     logger.warning("Failed to close vector memory", exc_info=True)
 
+            # Graceful shutdown: stop async decision provider if present
+            if decision_provider is not None and hasattr(decision_provider, "stop"):
+                try:
+                    await decision_provider.stop()
+                    logger.info(
+                        "AsyncDecisionProvider stopped",
+                        extra={"agent": state.name, "event": "async_decide_stopped"},
+                    )
+                except Exception:
+                    logger.warning("Failed to stop AsyncDecisionProvider", exc_info=True)
+
             # Graceful shutdown: deregister from World Engine
             await deregister_agent(str(state.id), config.world.engine_url)
     finally:
@@ -686,11 +697,17 @@ def _build_decision_provider_with_memory(
 
 
 def _create_llm_decision_provider(config: RuntimeConfig) -> Any | None:
-    """Create an LLMDecisionProvider from config, or None if LLM is not configured."""
+    """Create an LLMDecisionProvider from config, or None if LLM is not configured.
+
+    When LLM is configured, the provider is wrapped in:
+      1. LLMQueue — concurrency control for multi-agent scenarios
+      2. AsyncDecisionProvider — non-blocking decisions that don't stall ticks
+    """
     if config.llm is None:
         return None
 
     try:
+        from agent_runtime.core.async_decide import AsyncDecisionProvider
         from agent_runtime.core.llm_decide import LLMDecisionProvider
         from agent_runtime.llm.factory import create_provider
 
@@ -701,7 +718,15 @@ def _create_llm_decision_provider(config: RuntimeConfig) -> Any | None:
             config.llm.model,
             config.llm.base_url or "(default)",
         )
-        return LLMDecisionProvider(llm_provider=llm)
+
+        # Wrap with async decision provider so LLM latency doesn't block ticks
+        inner_provider = LLMDecisionProvider(llm_provider=llm)
+        async_provider = AsyncDecisionProvider(inner=inner_provider)
+
+        logger.info(
+            "Using AsyncDecisionProvider (tick-decoupled from LLM latency)",
+        )
+        return async_provider
     except Exception:
         logger.warning(
             "Failed to create LLM provider (provider=%s model=%s), will use fallback",

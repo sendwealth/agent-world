@@ -5,6 +5,9 @@ Provides a unified interface for calling different LLM providers:
 - Anthropic (Claude)
 - Ollama (local models, zero cost)
 
+Also provides async request queueing and prompt template system for
+multi-agent LLM-driven decision making.
+
 Usage::
 
     from agent_runtime.llm import create_provider, LLMConfig
@@ -28,18 +31,42 @@ from agent_runtime.llm.cost import CostTracker
 from agent_runtime.llm.factory import create_provider
 from agent_runtime.llm.ollama_provider import OllamaProvider
 from agent_runtime.llm.openai_provider import OpenAIProvider
+from agent_runtime.llm.prompts import (
+    DEFAULT_TEMPLATE,
+    SURVIVAL_TEMPLATE,
+    PromptTemplate,
+    get_template,
+    register_template,
+)
+from agent_runtime.llm.queue import (
+    LLMQueue,
+    LLMRequest,
+    Priority,
+    QueueConfig,
+    QueueStats,
+)
 
 __all__ = [
     "AnthropicProvider",
     "CostTracker",
+    "DEFAULT_TEMPLATE",
     "LLMConfig",
     "LLMError",
     "LLMMessage",
     "LLMProvider",
+    "LLMQueue",
+    "LLMRequest",
     "LLMResponse",
     "LLMStreamChunk",
     "OllamaProvider",
     "OpenAIProvider",
+    "Priority",
+    "PromptTemplate",
+    "QueueConfig",
+    "QueueStats",
+    "SURVIVAL_TEMPLATE",
     "TokenUsage",
     "create_provider",
+    "get_template",
+    "register_template",
 ]

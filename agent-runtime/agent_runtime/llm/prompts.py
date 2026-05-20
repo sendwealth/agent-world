@@ -18,81 +18,11 @@ Usage::
 
 from __future__ import annotations
 
+import logging
 from dataclasses import dataclass, field
-from typing import Any, Protocol
+from typing import Any
 
-logger = __import__("logging").getLogger(__name__)
-
-
-# ---------------------------------------------------------------------------
-# Protocols (decoupled from concrete agent types)
-# ---------------------------------------------------------------------------
-
-
-class _HasState(Protocol):
-    """Minimal state interface the prompt template needs."""
-
-    @property
-    def name(self) -> str: ...
-
-    @property
-    def id(self) -> str: ...
-
-    @property
-    def phase(self) -> Any: ...
-
-    @property
-    def tokens(self) -> int: ...
-
-    @property
-    def money(self) -> float: ...
-
-    @property
-    def health(self) -> float: ...
-
-    @property
-    def reputation(self) -> float: ...
-
-    @property
-    def skills(self) -> Any: ...
-
-
-class _HasPerception(Protocol):
-    @property
-    def tick(self) -> int: ...
-
-    @property
-    def nearby_agents(self) -> list[str]: ...
-
-    @property
-    def available_tasks(self) -> list[str]: ...
-
-    @property
-    def visible_resources(self) -> list[str]: ...
-
-    @property
-    def recent_events(self) -> list[str]: ...
-
-
-class _HasSurvival(Protocol):
-    @property
-    def ticks_until_depletion(self) -> int: ...
-
-    @property
-    def in_danger(self) -> bool: ...
-
-    @property
-    def survival_score(self) -> int: ...
-
-    @property
-    def recommendation(self) -> str: ...
-
-
-class _HasAction(Protocol):
-    @property
-    def value(self) -> str: ...
-
-    def token_cost(self) -> int: ...
+logger = logging.getLogger(__name__)
 
 
 # ---------------------------------------------------------------------------
@@ -217,6 +147,19 @@ class PromptTemplate:
 
     Wraps a format string and provides a ``render`` method that fills in
     agent state, perception, survival, and action data.
+
+    Expected interface for parameters passed to ``render()``:
+
+    - ``state``: Must have ``name``, ``id``, ``phase`` (str or enum with
+      ``.value``), ``tokens`` (int), ``money`` (float), ``health`` (float),
+      ``reputation`` (float), ``skills`` (dict or sequence).
+    - ``perception``: Must have ``tick`` (int), ``nearby_agents`` (list[str]),
+      ``available_tasks`` (list[str]), ``visible_resources`` (list[str]),
+      ``recent_events`` (list[str]).
+    - ``survival``: Must have ``ticks_until_depletion`` (int), ``in_danger``
+      (bool), ``survival_score`` (int), ``recommendation`` (str).
+    - ``actions``: List of objects with ``.value`` (str) and ``.token_cost()``
+      (returns int).
 
     Attributes:
         template: The format string to use.

@@ -12,6 +12,17 @@ Strategy:
     LLM response to arrive in the background.
 - The background LLM call runs as an ``asyncio.Task`` managed internally.
 
+Design trade-off — stale context:
+  When a background LLM result arrives, the returned decision was computed
+  from a *previous tick's* context.  The new background request is kicked
+  off with the *current tick's* context.  This means the agent may act on
+  slightly outdated information for one or more ticks.  This is acceptable
+  for Phase 4.1 because (a) the world state changes incrementally between
+  ticks, (b) the staleness is bounded by LLM latency (typically <2s), and
+  (c) the alternative (blocking the tick) would stall the entire simulation.
+  Future improvement: validate the stale decision against current state
+  before returning it.
+
 This provider satisfies the ``DecisionProvider`` protocol expected by
 :class:`ThinkLoop`, so it can be used as a drop-in replacement.
 
@@ -77,6 +88,9 @@ class AsyncDecisionProvider:
     3. If no background request exists yet (first tick), start one and return
        a fallback immediately.
 
+    Cached decisions expire after ``max_stale_ticks`` ticks to prevent agents
+    from repeatedly executing stale actions that are no longer viable.
+
     This guarantees that ``decide()`` never blocks the tick loop on the LLM.
     """
 
@@ -84,13 +98,16 @@ class AsyncDecisionProvider:
         self,
         inner: Any,
         fallback_actions: list[ActionType] | None = None,
+        max_stale_ticks: int = 3,
     ) -> None:
         self._inner = inner
         self._fallback_actions = fallback_actions or [ActionType.REST, ActionType.EXPLORE]
+        self._max_stale_ticks = max_stale_ticks
 
         # Internal state — accessed only from the asyncio event loop thread
         self._pending_task: asyncio.Task[Decision] | None = None
         self._last_decision: Decision | None = None
+        self._last_decision_tick: int = 0
         self._last_state: AgentState | None = None
         self._last_perception: Perception | None = None
         self._last_survival: SurvivalAction | None = None
@@ -125,6 +142,7 @@ class AsyncDecisionProvider:
             try:
                 fresh_decision = self._pending_task.result()
                 self._last_decision = fresh_decision
+                self._last_decision_tick = perception.tick
                 self._llm_decisions_used += 1
                 logger.debug(
                     "AsyncDecide: LLM decision ready for agent %s: %s",
@@ -144,9 +162,21 @@ class AsyncDecisionProvider:
         if self._pending_task is None:
             self._start_background_request(state, perception, survival)
 
-        # Return the best available decision
+        # Return the best available decision (with staleness check)
         if self._last_decision is not None:
-            return self._last_decision
+            ticks_since = perception.tick - self._last_decision_tick
+            if ticks_since <= self._max_stale_ticks:
+                return self._last_decision
+            else:
+                # Stale decision expired — clear it and use fallback
+                logger.debug(
+                    "AsyncDecide: stale decision expired for agent %s "
+                    "(%d ticks old, max=%d)",
+                    state.id,
+                    ticks_since,
+                    self._max_stale_ticks,
+                )
+                self._last_decision = None
 
         # No LLM decision yet — return fallback
         self._fallback_decisions_used += 1
@@ -193,18 +223,6 @@ class AsyncDecisionProvider:
         self._pending_task = loop.create_task(
             self._inner.decide(state, perception, survival)
         )
-
-        def _on_done(task: asyncio.Task[Decision]) -> None:
-            """Callback: log exceptions from the background task."""
-            if task.cancelled():
-                return
-            if task.exception() is not None:
-                logger.debug(
-                    "AsyncDecide: background task error: %s",
-                    task.exception(),
-                )
-
-        self._pending_task.add_done_callback(_on_done)
 
     def _make_fallback(self, state: AgentState) -> Decision:
         """Return a simple fallback decision."""

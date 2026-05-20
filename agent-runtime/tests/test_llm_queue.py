@@ -13,7 +13,6 @@ from agent_runtime.llm.queue import (
     LLMRequest,
     Priority,
     QueueConfig,
-    _FALLBACK_RESPONSE,
     _resolve_priority,
 )
 
@@ -166,6 +165,7 @@ class TestLLMQueue:
         request = LLMRequest(messages=[LLMMessage(role="user", content="test")])
         response = await queue.enqueue(request)
 
+        # Fallback response has model="fallback" — verify via public behavior
         assert response.model == "fallback"
         stats = queue.stats()
         assert stats.timed_out_requests == 1
@@ -194,7 +194,7 @@ class TestLLMQueue:
         request = LLMRequest(messages=[LLMMessage(role="user", content="test")])
         response = await queue.enqueue(request)
 
-        # Should return fallback since fallback_on_timeout is True
+        # Fallback response has model="fallback" — verify via public behavior
         assert response.model == "fallback"
         await queue.stop()
 
@@ -239,6 +239,69 @@ class TestLLMQueue:
 
         assert response.model == "test-model"
         await queue.stop()
+
+    @pytest.mark.asyncio
+    async def test_priority_ordering(self):
+        """Higher-priority requests should be dispatched first."""
+        call_order: list[str] = []
+
+        class OrderedProvider:
+            async def chat(self, messages: list[LLMMessage], **kwargs) -> LLMResponse:
+                # Extract priority info from messages to record order
+                content = messages[0].content if messages else ""
+                call_order.append(content)
+                await asyncio.sleep(0.01)
+                return LLMResponse(
+                    content=json.dumps({"action": "rest"}),
+                    model="test-model",
+                )
+
+        provider = OrderedProvider()
+        config = QueueConfig(max_concurrency=1)
+        queue = LLMQueue(provider=provider, config=config)
+        await queue.start()
+
+        # Enqueue low priority first, then high priority
+        results = await asyncio.gather(
+            queue.enqueue(LLMRequest(
+                messages=[LLMMessage(role="user", content="default")],
+                priority="default",
+            )),
+            queue.enqueue(LLMRequest(
+                messages=[LLMMessage(role="user", content="survival")],
+                priority="survival",
+            )),
+        )
+
+        # With concurrency=1, survival should be dispatched first
+        assert call_order[0] == "survival"
+        assert call_order[1] == "default"
+        await queue.stop()
+
+    @pytest.mark.asyncio
+    async def test_stop_drains_pending(self):
+        """stop() should resolve or cancel pending requests cleanly."""
+        mock = MockLLMProvider(delay=5.0)
+        queue = LLMQueue(provider=mock, config=QueueConfig(max_concurrency=1))
+        await queue.start()
+
+        # Enqueue a request that will be pending
+        task = asyncio.create_task(queue.enqueue(
+            LLMRequest(messages=[LLMMessage(role="user", content="test")]),
+        ))
+
+        # Give the worker time to pick it up
+        await asyncio.sleep(0.05)
+
+        await queue.stop()
+
+        # The pending request should be resolved (fallback) or cancelled cleanly
+        try:
+            response = await asyncio.wait_for(task, timeout=2.0)
+            assert response.model == "fallback"
+        except (asyncio.CancelledError, asyncio.TimeoutError):
+            # In some Python versions the task is cancelled — that's acceptable
+            pass
 
 
 # ---------------------------------------------------------------------------

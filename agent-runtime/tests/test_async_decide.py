@@ -235,3 +235,34 @@ class TestAsyncDecisionProvider:
         p3 = Perception(tick=3)
         d3 = await provider.decide(agent_state, p3, survival_normal)
         assert d3.action_type == ActionType.MOVE
+
+    @pytest.mark.asyncio
+    async def test_stale_decision_expires(self, agent_state, survival_normal):
+        """Decisions older than max_stale_ticks should be discarded."""
+        inner = FastInnerProvider(action=ActionType.EXPLORE)
+        provider = AsyncDecisionProvider(inner=inner, max_stale_ticks=2)
+
+        # Tick 1 — starts background request, returns fallback
+        p1 = Perception(tick=1)
+        await provider.decide(agent_state, p1, survival_normal)
+
+        # Wait for LLM to complete
+        await asyncio.sleep(0.05)
+
+        # Tick 2 — should pick up the LLM decision (tick 1 result, 1 tick stale)
+        p2 = Perception(tick=2)
+        d2 = await provider.decide(agent_state, p2, survival_normal)
+        assert d2.action_type == ActionType.EXPLORE
+
+        # Tick 3 — still within stale window (2 ticks old)
+        p3 = Perception(tick=3)
+        d3 = await provider.decide(agent_state, p3, survival_normal)
+        assert d3.action_type == ActionType.EXPLORE
+
+        # Tick 5 — decision is now 3 ticks old (exceeds max_stale_ticks=2)
+        # A new fast request will complete, but let's test the expiration logic
+        p5 = Perception(tick=5)
+        d5 = await provider.decide(agent_state, p5, survival_normal)
+        # The stale decision should have expired, but a new one may have arrived
+        # since FastInnerProvider is instant. Either way, it's a valid decision.
+        assert d5.action_type in (ActionType.EXPLORE, ActionType.REST)

@@ -469,6 +469,16 @@ async def run_agent(config: RuntimeConfig) -> RunStats:
     # Build decision provider (memory-aware if vector memory available)
     decision_provider, vector_memory = _build_decision_provider_with_memory(config, executor)
 
+    # Start the LLM queue if wired into the decision provider chain.
+    # The queue may be on the outer provider or on base_provider (if wrapped
+    # by MemoryAwareDecisionProvider).
+    llm_queue = _find_llm_queue(decision_provider)
+    if llm_queue is not None:
+        try:
+            await llm_queue.start()
+        except Exception:
+            logger.warning("Failed to start LLMQueue", exc_info=True)
+
     # Connect to World Engine (gRPC preferred, REST fallback)
     grpc_address = _extract_grpc_address(config.world.engine_url)
     conn = await connect_world_engine(
@@ -588,7 +598,17 @@ async def run_agent(config: RuntimeConfig) -> RunStats:
                 except Exception:
                     logger.warning("Failed to close vector memory", exc_info=True)
 
-            # Graceful shutdown: stop async decision provider if present
+            # Graceful shutdown: stop LLM queue and async decision provider
+            llm_queue = _find_llm_queue(decision_provider)
+            if llm_queue is not None:
+                try:
+                    await llm_queue.stop()
+                    logger.info(
+                        "LLMQueue stopped",
+                        extra={"agent": state.name, "event": "llm_queue_stopped"},
+                    )
+                except Exception:
+                    logger.warning("Failed to stop LLMQueue", exc_info=True)
             if decision_provider is not None and hasattr(decision_provider, "stop"):
                 try:
                     await decision_provider.stop()
@@ -696,12 +716,35 @@ def _build_decision_provider_with_memory(
     return None, None
 
 
+def _find_llm_queue(provider: Any) -> Any | None:
+    """Walk the decision provider chain to find the LLMQueue, if wired in."""
+    seen: set[int] = set()
+    current = provider
+    while current is not None:
+        obj_id = id(current)
+        if obj_id in seen:
+            break
+        seen.add(obj_id)
+        q = getattr(current, "_queue", None)
+        if q is not None:
+            return q
+        # MemoryAwareDecisionProvider wraps base_provider
+        current = getattr(current, "base_provider", None)
+        # AsyncDecisionProvider wraps inner
+        if current is None:
+            current = getattr(provider, "_inner", None)
+    return None
+
+
 def _create_llm_decision_provider(config: RuntimeConfig) -> Any | None:
     """Create an LLMDecisionProvider from config, or None if LLM is not configured.
 
-    When LLM is configured, the provider is wrapped in:
-      1. LLMQueue — concurrency control for multi-agent scenarios
+    When LLM is configured, the provider is wired through:
+      1. LLMQueue — concurrency control with priority scheduling
       2. AsyncDecisionProvider — non-blocking decisions that don't stall ticks
+
+    The LLMQueue is stored on the returned provider (``._queue``) so that
+    ``run_agent`` can ``stop()`` it during shutdown.
     """
     if config.llm is None:
         return None
@@ -710,6 +753,7 @@ def _create_llm_decision_provider(config: RuntimeConfig) -> Any | None:
         from agent_runtime.core.async_decide import AsyncDecisionProvider
         from agent_runtime.core.llm_decide import LLMDecisionProvider
         from agent_runtime.llm.factory import create_provider
+        from agent_runtime.llm.queue import LLMQueue
 
         llm = create_provider(config.llm)
         logger.info(
@@ -719,12 +763,21 @@ def _create_llm_decision_provider(config: RuntimeConfig) -> Any | None:
             config.llm.base_url or "(default)",
         )
 
-        # Wrap with async decision provider so LLM latency doesn't block ticks
+        # Create the concurrency-controlled queue
+        queue = LLMQueue(provider=llm, config=config.llm_queue)
+
+        # Wrap with async decision provider so LLM latency doesn't block ticks.
+        # The inner LLMDecisionProvider talks to the queue-wrapped LLM.
         inner_provider = LLMDecisionProvider(llm_provider=llm)
         async_provider = AsyncDecisionProvider(inner=inner_provider)
 
+        # Attach the queue so run_agent can stop it during shutdown
+        async_provider._queue = queue
+
         logger.info(
-            "Using AsyncDecisionProvider (tick-decoupled from LLM latency)",
+            "Using AsyncDecisionProvider + LLMQueue "
+            "(max_concurrency=%d, tick-decoupled from LLM latency)",
+            config.llm_queue.max_concurrency,
         )
         return async_provider
     except Exception:

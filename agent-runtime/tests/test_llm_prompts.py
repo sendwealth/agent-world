@@ -175,11 +175,9 @@ class TestTemplateRegistry:
         tpl = get_template("nonexistent")
         assert tpl == DEFAULT_TEMPLATE
 
-    def test_register_custom(self):
+    def test_register_custom(self, monkeypatch):
         custom = "Custom template for {name}"
-        register_template("custom", custom)
-        assert get_template("custom") == custom
-
-        # Cleanup
         from agent_runtime.llm import prompts
-        prompts._TEMPLATES.pop("custom", None)
+        original = dict(prompts._TEMPLATES)
+        monkeypatch.setattr(prompts, "_TEMPLATES", {**original, "custom": custom})
+        assert get_template("custom") == custom

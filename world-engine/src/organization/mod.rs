@@ -2,6 +2,7 @@ pub mod charter;
 pub mod competition;
 pub mod diplomacy;
 pub mod governance;
+pub mod governance_metrics;
 pub mod leadership;
 pub mod members;
 pub mod org;
@@ -34,4 +35,7 @@ pub use diplomacy::{
 pub use rule_engine::{
     RuleEngine, RuleEngineError, SoftRule, RuleType, RuleStatus,
     RuleCondition, RuleEffect, apply_effect,
+};
+pub use governance_metrics::{
+    GovernanceMetricsCollector, OrgMetrics, WorldGovernanceSummary, GovernanceEvent,
 };

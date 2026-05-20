@@ -50,7 +50,15 @@ export type EventType =
   | "reputation_changed"
   | "inflation"
   | "investment"
-  | "tax";
+  | "tax"
+  | "tax_collected"
+  | "treasury_distributed"
+  | "leadership_election_started"
+  | "leadership_changed"
+  | "treaty_proposed"
+  | "treaty_signed"
+  | "treaty_broken"
+  | "relation_changed";
 
 export interface LeaderboardEntry {
   agentId: string;
@@ -230,4 +238,42 @@ export interface TickTraceSummary {
   duration_ms: number;
   started_at: string;
   error: string | null;
+}
+
+// Governance types — mirrors Rust API response shapes
+
+export interface OrgMetrics {
+  org_id: string;
+  // Election metrics
+  election_count: number;
+  avg_participation_rate: number;
+  avg_candidate_count: number;
+  avg_term_length_ticks: number;
+  // Tax metrics
+  total_tax_collected: number;
+  tax_per_member: number;
+  tax_collection_count: number;
+  treasury_balance: number;
+  // Diplomacy metrics
+  treaties_signed: number;
+  treaties_broken: number;
+  active_relations_count: number;
+  // Organization health
+  member_count: number;
+  governance_stability_score: number; // 0.0-1.0
+}
+
+export interface WorldGovernanceSummary {
+  total_orgs: number;
+  avg_stability: number;
+  total_tax_collected: number;
+  total_treaties: number;
+  election_activity_rate: number;
+}
+
+export interface GovernanceTimelineEvent {
+  event_type: string;
+  org_id: string;
+  tick: number;
+  summary: string;
 }

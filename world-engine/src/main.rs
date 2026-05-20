@@ -450,6 +450,7 @@ async fn main() {
 
     // ── Initialize HTTP/SSE Server ──────────────────────────
     let (tick_tx, tick_rx) = watch::channel(0u64);
+    let governance_metrics = agent_world_engine::organization::GovernanceMetricsCollector::new(&event_bus);
     let app_state = AppState {
         board: task_board,
         wal: wal_writer.clone(),
@@ -467,6 +468,7 @@ async fn main() {
         banking_system: Some(banking_system),
         trace_store: Some(Arc::new(Mutex::new(agent_world_engine::tracing::TraceStore::new()))),
         external_agents: Arc::new(Mutex::new(std::collections::HashMap::new())),
+        governance_metrics: Some(Arc::new(Mutex::new(governance_metrics))),
     };
     let app = api::build_full_router(app_state);
 

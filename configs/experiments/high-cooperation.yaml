@@ -1,0 +1,23 @@
+experiment:
+  id: "high-cooperation-v1"
+  name: "高合作实验: 低税率 + 资源丰富 + 30 Agent"
+  seed: 42
+  duration_ticks: 10000
+  world:
+    width: 80
+    height: 80
+    resource_density: 0.6
+  agents:
+    count: 30
+    personality_distribution: "clustered"
+    initial_tokens: 200
+  governance:
+    enabled: true
+    tax_rate: 0.02
+  llm:
+    provider: "ollama"
+    model: "qwen2"
+    temperature: 0.5
+  tracing:
+    snapshot_interval: 50
+    export_on_complete: true

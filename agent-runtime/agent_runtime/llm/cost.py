@@ -9,6 +9,7 @@ from __future__ import annotations
 import asyncio
 import logging
 from dataclasses import dataclass, field
+from datetime import datetime, timezone
 from typing import Dict
 
 from .base import LLMResponse
@@ -56,6 +57,11 @@ def _get_pricing(model: str) -> dict[str, float]:
 # ---------------------------------------------------------------------------
 
 
+def _now_iso() -> str:
+    """Return the current UTC time as an ISO 8601 string."""
+    return datetime.now(timezone.utc).isoformat()
+
+
 @dataclass(frozen=True)
 class UsageRecord:
     """A single recorded LLM call with token usage and cost."""
@@ -65,6 +71,8 @@ class UsageRecord:
     completion_tokens: int
     total_tokens: int
     cost_usd: float
+    agent_id: str | None = None
+    timestamp: str = field(default_factory=_now_iso)
 
 
 @dataclass
@@ -77,7 +85,7 @@ class CostTracker:
     _records: list[UsageRecord] = field(default_factory=list)
     _lock: asyncio.Lock = field(default_factory=asyncio.Lock, init=False, repr=False)
 
-    async def record(self, response: LLMResponse) -> UsageRecord:
+    async def record(self, response: LLMResponse, *, agent_id: str | None = None) -> UsageRecord:
         """Record a completed LLM call and return the usage record.
 
         Computes cost based on the built-in pricing table.
@@ -93,6 +101,7 @@ class CostTracker:
             completion_tokens=response.usage.completion_tokens,
             total_tokens=response.usage.total_tokens,
             cost_usd=cost,
+            agent_id=agent_id,
         )
         async with self._lock:
             self._records.append(rec)
@@ -149,6 +158,42 @@ class CostTracker:
             entry["total_tokens"] += rec.total_tokens  # type: ignore[operator]
             entry["cost_usd"] = round(entry["cost_usd"] + rec.cost_usd, 6)  # type: ignore[operator]
         return result
+
+    def by_agent(self) -> Dict[str, Dict[str, float | int]]:
+        """Break down usage and cost by agent."""
+        result: Dict[str, Dict[str, float | int]] = {}
+        for rec in self._records:
+            aid = rec.agent_id or "(unknown)"
+            if aid not in result:
+                result[aid] = {
+                    "calls": 0,
+                    "prompt_tokens": 0,
+                    "completion_tokens": 0,
+                    "total_tokens": 0,
+                    "cost_usd": 0.0,
+                }
+            entry = result[aid]
+            entry["calls"] += 1  # type: ignore[operator]
+            entry["prompt_tokens"] += rec.prompt_tokens  # type: ignore[operator]
+            entry["completion_tokens"] += rec.completion_tokens  # type: ignore[operator]
+            entry["total_tokens"] += rec.total_tokens  # type: ignore[operator]
+            entry["cost_usd"] = round(entry["cost_usd"] + rec.cost_usd, 6)  # type: ignore[operator]
+        return result
+
+    def by_time_range(self, start: str, end: str) -> Dict[str, float | int]:
+        """Aggregate usage and cost for records within an ISO 8601 time window.
+
+        All timestamps are UTC.  Comparison is lexicographic, so callers must
+        ensure consistent offset formats (e.g. all ``+00:00`` or all ``Z``).
+        """
+        filtered = [r for r in self._records if start <= r.timestamp < end]
+        return {
+            "calls": len(filtered),
+            "total_prompt_tokens": sum(r.prompt_tokens for r in filtered),
+            "total_completion_tokens": sum(r.completion_tokens for r in filtered),
+            "total_tokens": sum(r.total_tokens for r in filtered),
+            "total_cost_usd": round(sum(r.cost_usd for r in filtered), 6),
+        }
 
     async def reset(self) -> None:
         """Clear all recorded usage."""

@@ -25,19 +25,28 @@ from agent_runtime.llm.base import (
     TokenUsage,
 )
 from agent_runtime.llm.cost import CostTracker
+from agent_runtime.llm.decision_log import DecisionLog, DecisionLogStore
 from agent_runtime.llm.factory import create_provider
-from agent_runtime.llm.ollama_provider import OllamaProvider
+from agent_runtime.llm.ollama_provider import (
+    OllamaHealthStatus,
+    OllamaModelInfo,
+    OllamaProvider,
+)
 from agent_runtime.llm.openai_provider import OpenAIProvider
 
 __all__ = [
     "AnthropicProvider",
     "CostTracker",
+    "DecisionLog",
+    "DecisionLogStore",
     "LLMConfig",
     "LLMError",
     "LLMMessage",
     "LLMProvider",
     "LLMResponse",
     "LLMStreamChunk",
+    "OllamaHealthStatus",
+    "OllamaModelInfo",
     "OllamaProvider",
     "OpenAIProvider",
     "TokenUsage",

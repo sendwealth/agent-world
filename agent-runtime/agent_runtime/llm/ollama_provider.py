@@ -7,8 +7,11 @@ Uses the Ollama API via httpx.  Ollama exposes an OpenAI-compatible
 
 from __future__ import annotations
 
+import asyncio
 import json
 import logging
+import os
+from dataclasses import dataclass
 from typing import AsyncIterator
 
 import httpx
@@ -28,15 +31,91 @@ logger = logging.getLogger(__name__)
 _DEFAULT_BASE_URL = "http://localhost:11434"
 
 
+@dataclass(frozen=True)
+class OllamaModelInfo:
+    """Information about a loaded Ollama model."""
+
+    name: str
+    size: int = 0
+    digest: str = ""
+
+
+@dataclass(frozen=True)
+class OllamaHealthStatus:
+    """Health check result for the Ollama service."""
+
+    healthy: bool
+    loaded_models: list[str]
+    num_parallel: int = 1
+
+
 class OllamaProvider(LLMProvider):
     """Ollama local model provider.
 
     No API key required.  Expects Ollama to be running locally.
+    Supports runtime model switching and concurrent health checks.
     """
 
     def __init__(self, config: LLMConfig) -> None:
         super().__init__(config)
         self._base_url = (config.base_url or _DEFAULT_BASE_URL).rstrip("/")
+        self._num_parallel = int(os.environ.get("OLLAMA_NUM_PARALLEL", "1"))
+        self._config_lock = asyncio.Lock()
+
+    @property
+    def active_model(self) -> str:
+        """Return the currently configured model name."""
+        return self._config.model
+
+    @property
+    def num_parallel(self) -> int:
+        """Return the configured parallel request count."""
+        return self._num_parallel
+
+    async def check_health(self) -> OllamaHealthStatus:
+        """Query the Ollama ``/api/ps`` endpoint for service health.
+
+        Returns loaded model names and the ``OLLAMA_NUM_PARALLEL`` config.
+        """
+        try:
+            resp = await self._client.get(f"{self._base_url}/api/ps")
+            resp.raise_for_status()
+            data = resp.json()
+            loaded_models = [
+                m.get("name", "") for m in data.get("models", []) if m.get("name")
+            ]
+            return OllamaHealthStatus(
+                healthy=True,
+                loaded_models=loaded_models,
+                num_parallel=self._num_parallel,
+            )
+        except httpx.HTTPError:
+            return OllamaHealthStatus(
+                healthy=False,
+                loaded_models=[],
+                num_parallel=self._num_parallel,
+            )
+
+    async def switch_model(self, new_model: str) -> str:
+        """Switch the active model at runtime.
+
+        Protected by an ``asyncio.Lock`` to prevent TOCTOU races between
+        concurrent ``switch_model`` or ``chat`` calls.
+
+        Returns the previous model name.
+        """
+        async with self._config_lock:
+            old_model = self._config.model
+            self._config = LLMConfig(
+                provider=self._config.provider,
+                model=new_model,
+                api_key=self._config.api_key,
+                base_url=self._config.base_url,
+                timeout=self._config.timeout,
+                max_tokens=self._config.max_tokens,
+                temperature=self._config.temperature,
+            )
+        return old_model
 
     # ------------------------------------------------------------------
     # chat (non-streaming)
@@ -49,12 +128,15 @@ class OllamaProvider(LLMProvider):
         max_tokens: int | None = None,
         temperature: float | None = None,
     ) -> LLMResponse:
-        payload = self._build_payload(
-            messages,
-            stream=False,
-            max_tokens=max_tokens,
-            temperature=temperature,
-        )
+        # Snapshot config under lock to avoid TOCTOU with switch_model
+        async with self._config_lock:
+            payload = self._build_payload(
+                messages,
+                stream=False,
+                max_tokens=max_tokens,
+                temperature=temperature,
+            )
+            current_model = self._config.model
         try:
             resp = await self._client.post(
                 f"{self._base_url}/api/chat",
@@ -65,7 +147,7 @@ class OllamaProvider(LLMProvider):
             raise LLMError(
                 f"Ollama request failed: {exc}",
                 provider="ollama",
-                model=self._config.model,
+                model=current_model,
             ) from exc
         data = resp.json()
         return self._parse_response(data)
@@ -81,12 +163,15 @@ class OllamaProvider(LLMProvider):
         max_tokens: int | None = None,
         temperature: float | None = None,
     ) -> AsyncIterator[LLMStreamChunk]:
-        payload = self._build_payload(
-            messages,
-            stream=True,
-            max_tokens=max_tokens,
-            temperature=temperature,
-        )
+        # Snapshot config under lock to avoid TOCTOU with switch_model
+        async with self._config_lock:
+            payload = self._build_payload(
+                messages,
+                stream=True,
+                max_tokens=max_tokens,
+                temperature=temperature,
+            )
+            current_model = self._config.model
         try:
             async with self._client.stream(
                 "POST",
@@ -102,7 +187,7 @@ class OllamaProvider(LLMProvider):
             raise LLMError(
                 f"Ollama stream failed: {exc}",
                 provider="ollama",
-                model=self._config.model,
+                model=current_model,
             ) from exc
 
     # ------------------------------------------------------------------

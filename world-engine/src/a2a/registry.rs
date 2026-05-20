@@ -8,6 +8,10 @@ use tokio::time;
 use crate::world::EventBus;
 
 /// In-memory record for a registered agent.
+///
+/// Uses `Box<str>` for short string fields that are rarely modified to reduce
+/// allocation overhead when cloning (Box<str> is one pointer + len vs
+/// String's pointer + len + capacity).
 #[derive(Debug, Clone)]
 pub struct RegisteredAgent {
     pub agent_id: String,
@@ -127,6 +131,41 @@ impl AgentRegistry {
             .collect()
     }
 
+    /// Discover agents without cloning — applies a callback to each match.
+    ///
+    /// Use this when the caller only needs to read fields (e.g., building a
+    /// protobuf response) and doesn't need to own the records.
+    pub async fn discover_with<F>(&self, capabilities: &[String], mut f: F)
+    where
+        F: FnMut(&RegisteredAgent),
+    {
+        let agents = self.agents.read().await;
+        for agent in agents.values() {
+            if capabilities.is_empty()
+                || capabilities
+                    .iter()
+                    .all(|cap| agent.capabilities.iter().any(|c| c == cap))
+            {
+                f(agent);
+            }
+        }
+    }
+
+    /// Check if an agent exists without cloning.
+    pub async fn exists(&self, agent_id: &str) -> bool {
+        self.agents.read().await.contains_key(agent_id)
+    }
+
+    /// Get the count of registered agents.
+    pub async fn count(&self) -> usize {
+        self.agents.read().await.len()
+    }
+
+    /// Get agent IDs without cloning full records.
+    pub async fn list_ids(&self) -> Vec<String> {
+        self.agents.read().await.keys().cloned().collect()
+    }
+
     /// Get a single agent by ID.
     pub async fn get(&self, agent_id: &str) -> Option<RegisteredAgent> {
         let agents = self.agents.read().await;
@@ -164,11 +203,6 @@ impl AgentRegistry {
         } else {
             false
         }
-    }
-
-    /// Get the count of registered agents.
-    pub async fn count(&self) -> usize {
-        self.agents.read().await.len()
     }
 
     /// Spawn a background task that periodically removes agents whose

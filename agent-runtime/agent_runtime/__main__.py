@@ -664,6 +664,46 @@ def _build_decision_provider(
     return provider
 
 
+def _create_mock_decision_provider(preset: str) -> Any | None:
+    """Create an AgentMockLLM decision provider from a preset name.
+
+    Returns None if the preset name is unrecognised.
+    """
+    try:
+        import sys
+        from pathlib import Path
+
+        # Ensure tests/ is importable so tests.e2e.mocks can be found
+        project_root = Path(__file__).resolve().parent.parent.parent
+        tests_dir = project_root / "tests"
+        tests_str = str(tests_dir)
+        if tests_str not in sys.path:
+            sys.path.insert(0, tests_str)
+
+        from e2e.mocks.mock_llm import (  # noqa: F811
+            AgentMockLLM,
+            hungry_gather_mock,
+            social_nearby_mock,
+            survival_behaviour_mock,
+        )
+
+        factories = {
+            "hungry_gather": hungry_gather_mock,
+            "social_nearby": social_nearby_mock,
+            "survival": survival_behaviour_mock,
+        }
+        factory = factories.get(preset.lower().strip())
+        if factory is not None:
+            return factory()
+    except Exception:
+        logger.warning(
+            "Failed to create mock LLM provider for preset=%r",
+            preset,
+            exc_info=True,
+        )
+    return None
+
+
 def _build_decision_provider_with_memory(
     config: RuntimeConfig, executor: ActionExecutor
 ) -> tuple[Any | None, Any | None]:
@@ -672,6 +712,13 @@ def _build_decision_provider_with_memory(
     Returns a tuple of (decision_provider, vector_memory) where
     vector_memory may be None if memory deps are unavailable.
     """
+    # ── Mock LLM preset (highest priority) ──
+    if config.mock_llm_preset:
+        provider = _create_mock_decision_provider(config.mock_llm_preset)
+        if provider is not None:
+            logger.info("Using mock LLM preset: %s", config.mock_llm_preset)
+            return provider, None
+
     # Build the LLM-backed decision provider if config is available
     llm_provider = _create_llm_decision_provider(config)
 
@@ -1011,7 +1058,7 @@ def build_parser() -> argparse.ArgumentParser:
     )
     spawn_parser.add_argument(
         "--llm-model", default=None,
-        help="LLM model name (default: llama3)",
+        help="LLM model name (default: qwen3:8b)",
     )
     spawn_parser.add_argument(
         "--llm-base-url", default=None,
@@ -1020,6 +1067,14 @@ def build_parser() -> argparse.ArgumentParser:
     spawn_parser.add_argument(
         "--no-llm", action="store_true",
         help="Disable LLM and use mock random decisions",
+    )
+    spawn_parser.add_argument(
+        "--mock-llm", default=None,
+        help=(
+            "Use preset LLM mock for deterministic decisions. "
+            "Options: hungry_gather, social_nearby, survival. "
+            "Can also be set via MOCK_LLM_PRESET env var."
+        ),
     )
     spawn_parser.add_argument(
         "--health-port", type=int, default=None,
@@ -1096,6 +1151,14 @@ def build_config_from_args(args: argparse.Namespace) -> RuntimeConfig:
     # LLM configuration: CLI args > environment variables > default (Ollama)
     _apply_llm_config(config, args)
 
+    # Mock LLM preset: --mock-llm > MOCK_LLM_PRESET env var
+    mock_llm_preset = getattr(args, "mock_llm", None) or os.environ.get("MOCK_LLM_PRESET")
+    if mock_llm_preset:
+        config.mock_llm_preset = mock_llm_preset
+        # Disable real LLM when using mock
+        config.llm = None
+        logger.info("Using mock LLM preset: %s", mock_llm_preset)
+
     return config
 
 
@@ -1107,7 +1170,7 @@ def _apply_llm_config(config: RuntimeConfig, args: argparse.Namespace) -> None:
       2. CLI flags (--llm-provider, --llm-model, --llm-base-url)
       3. Environment variables (LLM_PROVIDER, LLM_MODEL, LLM_BASE_URL, OLLAMA_BASE_URL)
       4. Existing config file value
-      5. Default: Ollama with llama3 (zero-cost mode)
+      5. Default: Ollama with qwen3:8b (zero-cost mode)
     """
     import os
 
@@ -1131,12 +1194,12 @@ def _apply_llm_config(config: RuntimeConfig, args: argparse.Namespace) -> None:
         zhipu_mode = True
         provider_str = "openai"
 
-    # Determine model: CLI > env > existing > default(llama3)
+    # Determine model: CLI > env > existing > default(qwen3:8b)
     model = (
         args.llm_model
         or os.environ.get("LLM_MODEL")
         or (config.llm.model if config.llm else None)
-        or ("glm-5" if zhipu_mode else "llama3")
+        or ("glm-5" if zhipu_mode else "qwen3:8b")
     )
 
     # Determine base_url: CLI > env > existing > provider-specific defaults

@@ -7,6 +7,7 @@
 use std::collections::HashMap;
 use std::sync::Arc;
 
+use serde::Serialize;
 use tokio::sync::broadcast;
 use tokio::task::JoinHandle;
 use uuid::Uuid;
@@ -17,7 +18,7 @@ use crate::world::state::EventBus;
 // ── Metrics data structures ────────────────────────────────────────────────
 
 /// Governance event record for timeline queries.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize)]
 pub struct GovernanceEvent {
     pub event_type: EventType,
     pub org_id: Uuid,
@@ -26,7 +27,7 @@ pub struct GovernanceEvent {
 }
 
 /// Per-organization metrics snapshot.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize)]
 pub struct OrgMetrics {
     pub org_id: Uuid,
     // Election metrics
@@ -49,7 +50,7 @@ pub struct OrgMetrics {
 }
 
 /// World-wide governance summary across all organizations.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize)]
 pub struct WorldGovernanceSummary {
     pub total_orgs: usize,
     pub avg_stability: f64,

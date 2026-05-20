@@ -87,6 +87,7 @@ async fn test_100_agents_100_ticks_token_burn() {
                 phase: AgentPhase::Adult,
                 tokens: 500_000,
                 skills,
+                personality: String::new(),
             }
         })
         .collect();
@@ -378,6 +379,7 @@ async fn test_full_100_agent_simulation() {
             phase: AgentPhase::Adult,
             tokens: a.tokens,
             skills: HashMap::new(),
+            personality: String::new(),
         })
         .collect();
 

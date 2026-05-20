@@ -232,6 +232,7 @@ impl WorldSimulation {
                 phase: a.phase,
                 tokens: a.tokens,
                 skills: HashMap::new(),
+                personality: String::new(),
             };
             (a.id, a.spawn_tick, record)
         }).collect();

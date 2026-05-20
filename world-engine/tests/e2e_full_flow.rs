@@ -395,6 +395,7 @@ async fn test_token_burn_1000_ticks_consistency() {
                 );
                 m
             },
+            personality: String::new(),
         },
         AgentRecord {
             id: Uuid::new_v4(),
@@ -402,6 +403,7 @@ async fn test_token_burn_1000_ticks_consistency() {
             phase: AgentPhase::Adult,
             tokens: 500_000,
             skills: HashMap::new(),
+            personality: String::new(),
         },
     ];
 

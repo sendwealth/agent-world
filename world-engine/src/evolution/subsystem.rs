@@ -318,6 +318,7 @@ mod tests {
                 phase,
                 tokens,
                 skills: HashMap::new(),
+                personality: String::new(),
             },
         )
     }
@@ -349,6 +350,7 @@ mod tests {
                         )
                     })
                     .collect(),
+                personality: String::new(),
             },
         )
     }

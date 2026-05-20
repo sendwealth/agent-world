@@ -67,6 +67,7 @@ fn make_agent(phase: AgentPhase, tokens: u64) -> (uuid::Uuid, u64, AgentRecord) 
             phase,
             tokens,
             skills: HashMap::new(),
+            personality: String::new(),
         },
     )
 }
@@ -82,6 +83,7 @@ fn make_agent_named(name: &str, phase: AgentPhase, tokens: u64) -> (uuid::Uuid, 
             phase,
             tokens,
             skills: HashMap::new(),
+            personality: String::new(),
         },
     )
 }

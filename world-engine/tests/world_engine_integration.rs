@@ -88,6 +88,7 @@ impl WorldState {
             phase: AgentPhase::Adult,
             tokens,
             skills: HashMap::new(),
+            personality: String::new(),
         };
 
         self.agents.push((id_str.clone(), record));
@@ -234,6 +235,7 @@ economy:
         phase: AgentPhase::Adult,
         tokens: 1000,
         skills: HashMap::new(),
+        personality: String::new(),
     }), 10);
 
     // RewardDistributor should be ready

@@ -22,6 +22,11 @@ pub struct AgentRecord {
     pub phase: AgentPhase,
     pub tokens: u64,
     pub skills: HashMap<String, SkillRecord>,
+    /// Personality vector serialized as JSON. Stored as a string to avoid
+    /// tight coupling with the Python-side model; the agent runtime owns the
+    /// schema.  Empty string means "not yet initialized" (will use defaults).
+    #[serde(default)]
+    pub personality: String,
 }
 
 // ── Consumption Config ───────────────────────────────────
@@ -235,6 +240,7 @@ mod tests {
             phase,
             tokens,
             skills: HashMap::new(),
+            personality: String::new(),
         }
     }
 
@@ -261,6 +267,7 @@ mod tests {
                     )
                 })
                 .collect(),
+            personality: String::new(),
         }
     }
 
@@ -582,6 +589,7 @@ some_other_section:
             phase: AgentPhase::Adult,
             tokens: 100,
             skills: HashMap::new(),
+            personality: String::new(),
         }];
 
         let result = engine.process_tick(42, &mut agents);

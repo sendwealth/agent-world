@@ -325,6 +325,7 @@ mod tests {
                 phase,
                 tokens,
                 skills: HashMap::new(),
+                personality: String::new(),
             },
         )
     }

@@ -26,6 +26,14 @@ pub struct Beneficiary {
     pub share: f64,
 }
 
+/// A key value-related experience to be passed on via inheritance.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ValueExperience {
+    pub event_type: String,
+    pub outcome: f64,
+    pub learned: String,
+}
+
 /// A will created by an agent specifying beneficiaries.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Will {
@@ -35,6 +43,15 @@ pub struct Will {
     pub created_tick: u64,
     pub updated_tick: u64,
     pub executed: bool,
+    /// Snapshot of the testator's value weights at will-creation time.
+    #[serde(default)]
+    pub values_snapshot: HashMap<String, f64>,
+    /// Most important experiences to pass on (capped at 5).
+    #[serde(default)]
+    pub key_experiences: Vec<ValueExperience>,
+    /// LLM-generated life lesson summary.
+    #[serde(default)]
+    pub life_lessons: String,
 }
 
 /// Result of executing an inheritance.
@@ -134,6 +151,9 @@ impl InheritanceSystem {
                 created_tick: tick,
                 updated_tick: tick,
                 executed: false,
+                values_snapshot: HashMap::new(),
+                key_experiences: Vec::new(),
+                life_lessons: String::new(),
             };
             let count = will.beneficiaries.len();
             self.emit(WorldEvent::WillCreated {

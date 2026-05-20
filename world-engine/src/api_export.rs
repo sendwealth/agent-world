@@ -134,7 +134,13 @@ async fn export_world(
             for a in &summaries {
                 csv.push_str(&format!(
                     "{},{},{},{},{},{},{}\n",
-                    a.id, a.name, a.phase, a.tokens, a.money, a.alive, a.ticks_survived
+                    csv_escape(&a.id),
+                    csv_escape(&a.name),
+                    csv_escape(&a.phase),
+                    a.tokens,
+                    a.money,
+                    a.alive,
+                    a.ticks_survived
                 ));
             }
             (
@@ -339,6 +345,29 @@ fn xml_escape(s: &str) -> String {
         .replace('\'', "&apos;")
 }
 
+/// Standard CSV field escaping per RFC 4180.
+///
+/// If the field contains a comma, double-quote, newline, or starts with a
+/// dangerous character (`=`, `+`, `-`, `@`), wrap it in double-quotes and
+/// escape any internal double-quotes by doubling them.
+fn csv_escape(field: &str) -> String {
+    let needs_quoting = field.contains(',')
+        || field.contains('"')
+        || field.contains('\n')
+        || field.contains('\r')
+        || field.starts_with('=')
+        || field.starts_with('+')
+        || field.starts_with('-')
+        || field.starts_with('@');
+
+    if needs_quoting {
+        let escaped = field.replace('"', "\"\"");
+        format!("\"{}\"", escaped)
+    } else {
+        field.to_string()
+    }
+}
+
 // ── Tests ──────────────────────────────────────────────────
 
 #[cfg(test)]
@@ -399,5 +428,33 @@ mod tests {
     fn xml_escape_special_chars() {
         assert_eq!(xml_escape("a&b<c>d"), "a&amp;b&lt;c&gt;d");
         assert_eq!(xml_escape("normal"), "normal");
+    }
+
+    #[test]
+    fn csv_escape_normal_string() {
+        assert_eq!(csv_escape("hello"), "hello");
+    }
+
+    #[test]
+    fn csv_escape_comma() {
+        assert_eq!(csv_escape("hello,world"), "\"hello,world\"");
+    }
+
+    #[test]
+    fn csv_escape_quotes() {
+        assert_eq!(csv_escape("say \"hi\""), "\"say \"\"hi\"\"\"");
+    }
+
+    #[test]
+    fn csv_escape_formula_injection() {
+        assert_eq!(csv_escape("=SUM(A1:A10)"), "\"=SUM(A1:A10)\"");
+        assert_eq!(csv_escape("+cmd"), "\"+cmd\"");
+        assert_eq!(csv_escape("-cmd"), "\"-cmd\"");
+        assert_eq!(csv_escape("@cmd"), "\"@cmd\"");
+    }
+
+    #[test]
+    fn csv_escape_newline() {
+        assert_eq!(csv_escape("line1\nline2"), "\"line1\nline2\"");
     }
 }

@@ -133,27 +133,8 @@ pub fn experiment_routes() -> Router<AppState> {
 
 // ── Helpers ───────────────────────────────────────────────
 
-/// Retrieve or create the shared experiment store.
-fn get_store() -> SharedExperimentStore {
-    static STORE: std::sync::OnceLock<SharedExperimentStore> = std::sync::OnceLock::new();
-    STORE.get_or_init(|| Arc::new(Mutex::new(Vec::new()))).clone()
-}
-
 /// Capture a tick snapshot from current world state.
 async fn capture_tick_snapshot(state: &AppState) -> TickSnapshot {
-    let agents = state.agents.lock().await;
-    let tick = *state.tick_rx.borrow();
-    TickSnapshot {
-        tick,
-        agent_count: agents.len(),
-        alive_count: agents.iter().filter(|a| a.alive).count(),
-        total_money: agents.iter().map(|a| a.money).sum(),
-        total_tokens: agents.iter().map(|a| a.tokens).sum(),
-    }
-}
-
-/// Capture a tick snapshot inline (while holding the experiment lock).
-async fn capture_tick_snapshot_from_state(state: &AppState) -> TickSnapshot {
     let agents = state.agents.lock().await;
     let tick = *state.tick_rx.borrow();
     TickSnapshot {
@@ -191,10 +172,9 @@ struct ExperimentSummary {
 
 /// `POST /api/v2/experiments` — create a new experiment.
 async fn create_experiment(
-    State(_state): State<AppState>,
+    State(state): State<AppState>,
     Json(req): Json<CreateExperimentRequest>,
 ) -> impl IntoResponse {
-    let store = get_store();
     let id = Uuid::new_v4().to_string();
 
     let experiment = Experiment {
@@ -216,17 +196,16 @@ async fn create_experiment(
         tick_snapshots: Vec::new(),
     };
 
-    store.lock().await.push(experiment);
+    state.experiment_store.lock().await.push(experiment);
 
     (StatusCode::CREATED, Json(serde_json::json!({ "experiment_id": id }))).into_response()
 }
 
 /// `GET /api/v2/experiments` — list all experiments.
 async fn list_experiments(
-    State(_state): State<AppState>,
+    State(state): State<AppState>,
 ) -> impl IntoResponse {
-    let store = get_store();
-    let experiments = store.lock().await;
+    let experiments = state.experiment_store.lock().await;
     let summaries: Vec<ExperimentSummary> = experiments
         .iter()
         .map(|exp| ExperimentSummary {
@@ -242,74 +221,114 @@ async fn list_experiments(
 }
 
 /// `POST /api/v2/experiments/{id}/start` — start a created experiment.
+///
+/// Lock ordering: acquire store lock, validate + update status, drop store lock,
+/// then capture snapshot (acquires agents lock), then re-acquire store lock to
+/// append snapshot. This avoids holding both locks simultaneously.
 async fn start_experiment(
     State(state): State<AppState>,
     Path(id): Path<String>,
 ) -> impl IntoResponse {
-    let store = get_store();
-    let mut experiments = store.lock().await;
+    // Phase 1: Validate and update status under store lock.
+    {
+        let experiments = state.experiment_store.lock().await;
+        let experiment = match experiments.iter().find(|exp| exp.id == id) {
+            Some(exp) => exp,
+            None => return not_found(),
+        };
 
-    let experiment = match experiments.iter_mut().find(|exp| exp.id == id) {
-        Some(exp) => exp,
-        None => return not_found(),
-    };
-
-    if experiment.status != ExperimentStatus::Created {
-        return (
-            StatusCode::CONFLICT,
-            Json(ErrorResponse {
-                error: format!(
-                    "experiment is {:?}, expected created",
-                    experiment.status
-                ),
-            }),
-        )
-            .into_response();
+        if experiment.status != ExperimentStatus::Created {
+            return (
+                StatusCode::CONFLICT,
+                Json(ErrorResponse {
+                    error: format!(
+                        "experiment is {:?}, expected created",
+                        experiment.status
+                    ),
+                }),
+            )
+                .into_response();
+        }
     }
 
     let tick = *state.tick_rx.borrow();
-    experiment.status = ExperimentStatus::Running;
-    experiment.started_at = Some(Utc::now());
-    experiment.start_tick = Some(tick);
 
-    let snapshot = capture_tick_snapshot_from_state(&state).await;
-    experiment.tick_snapshots.push(snapshot);
+    // Update status and timestamps.
+    {
+        let mut experiments = state.experiment_store.lock().await;
+        if let Some(experiment) = experiments.iter_mut().find(|exp| exp.id == id) {
+            experiment.status = ExperimentStatus::Running;
+            experiment.started_at = Some(Utc::now());
+            experiment.start_tick = Some(tick);
+        }
+    }
+    // Store lock is dropped here.
+
+    // Phase 2: Capture snapshot (only agents lock held).
+    let snapshot = capture_tick_snapshot(&state).await;
+
+    // Phase 3: Append snapshot under store lock.
+    {
+        let mut experiments = state.experiment_store.lock().await;
+        if let Some(experiment) = experiments.iter_mut().find(|exp| exp.id == id) {
+            experiment.tick_snapshots.push(snapshot);
+        }
+    }
 
     Json(serde_json::json!({ "status": "running" })).into_response()
 }
 
 /// `POST /api/v2/experiments/{id}/stop` — stop a running experiment.
+///
+/// Same lock-ordering strategy as start: validate under store lock, drop,
+/// capture snapshot, re-acquire to append.
 async fn stop_experiment(
     State(state): State<AppState>,
     Path(id): Path<String>,
 ) -> impl IntoResponse {
-    let store = get_store();
-    let mut experiments = store.lock().await;
-
-    let experiment = match experiments.iter_mut().find(|exp| exp.id == id) {
-        Some(exp) => exp,
-        None => return not_found(),
-    };
-
-    if experiment.status != ExperimentStatus::Running
-        && experiment.status != ExperimentStatus::Paused
+    // Phase 1: Validate.
     {
-        return (
-            StatusCode::CONFLICT,
-            Json(ErrorResponse {
-                error: format!("experiment is {:?}, cannot stop", experiment.status),
-            }),
-        )
-            .into_response();
+        let experiments = state.experiment_store.lock().await;
+        let experiment = match experiments.iter().find(|exp| exp.id == id) {
+            Some(exp) => exp,
+            None => return not_found(),
+        };
+
+        if experiment.status != ExperimentStatus::Running
+            && experiment.status != ExperimentStatus::Paused
+        {
+            return (
+                StatusCode::CONFLICT,
+                Json(ErrorResponse {
+                    error: format!("experiment is {:?}, cannot stop", experiment.status),
+                }),
+            )
+                .into_response();
+        }
     }
 
     let tick = *state.tick_rx.borrow();
-    experiment.status = ExperimentStatus::Stopped;
-    experiment.stopped_at = Some(Utc::now());
-    experiment.end_tick = Some(tick);
 
-    let snapshot = capture_tick_snapshot_from_state(&state).await;
-    experiment.tick_snapshots.push(snapshot);
+    // Update status and timestamps.
+    {
+        let mut experiments = state.experiment_store.lock().await;
+        if let Some(experiment) = experiments.iter_mut().find(|exp| exp.id == id) {
+            experiment.status = ExperimentStatus::Stopped;
+            experiment.stopped_at = Some(Utc::now());
+            experiment.end_tick = Some(tick);
+        }
+    }
+
+    // Phase 2: Capture snapshot.
+    let snapshot = capture_tick_snapshot(&state).await;
+
+    // Phase 3: Append snapshot.
+    {
+        let mut experiments = state.experiment_store.lock().await;
+        if let Some(experiment) = experiments.iter_mut().find(|exp| exp.id == id) {
+            experiment.tick_snapshots.push(snapshot);
+        }
+    }
 
     Json(serde_json::json!({ "status": "stopped" })).into_response()
 }
@@ -319,27 +338,36 @@ async fn pause_experiment(
     State(state): State<AppState>,
     Path(id): Path<String>,
 ) -> impl IntoResponse {
-    let store = get_store();
-    let mut experiments = store.lock().await;
+    // Validate.
+    {
+        let experiments = state.experiment_store.lock().await;
+        let experiment = match experiments.iter().find(|exp| exp.id == id) {
+            Some(exp) => exp,
+            None => return not_found(),
+        };
 
-    let experiment = match experiments.iter_mut().find(|exp| exp.id == id) {
-        Some(exp) => exp,
-        None => return not_found(),
-    };
-
-    if experiment.status != ExperimentStatus::Running {
-        return (
-            StatusCode::CONFLICT,
-            Json(ErrorResponse {
-                error: "experiment is not running".into(),
-            }),
-        )
-            .into_response();
+        if experiment.status != ExperimentStatus::Running {
+            return (
+                StatusCode::CONFLICT,
+                Json(ErrorResponse {
+                    error: "experiment is not running".into(),
+                }),
+            )
+                .into_response();
+        }
     }
 
-    let snapshot = capture_tick_snapshot_from_state(&state).await;
-    experiment.tick_snapshots.push(snapshot);
-    experiment.status = ExperimentStatus::Paused;
+    // Capture snapshot (no store lock held).
+    let snapshot = capture_tick_snapshot(&state).await;
+
+    // Update status + append snapshot.
+    {
+        let mut experiments = state.experiment_store.lock().await;
+        if let Some(experiment) = experiments.iter_mut().find(|exp| exp.id == id) {
+            experiment.tick_snapshots.push(snapshot);
+            experiment.status = ExperimentStatus::Paused;
+        }
+    }
 
     Json(serde_json::json!({ "status": "paused" })).into_response()
 }
@@ -349,27 +377,36 @@ async fn resume_experiment(
     State(state): State<AppState>,
     Path(id): Path<String>,
 ) -> impl IntoResponse {
-    let store = get_store();
-    let mut experiments = store.lock().await;
+    // Validate.
+    {
+        let experiments = state.experiment_store.lock().await;
+        let experiment = match experiments.iter().find(|exp| exp.id == id) {
+            Some(exp) => exp,
+            None => return not_found(),
+        };
 
-    let experiment = match experiments.iter_mut().find(|exp| exp.id == id) {
-        Some(exp) => exp,
-        None => return not_found(),
-    };
-
-    if experiment.status != ExperimentStatus::Paused {
-        return (
-            StatusCode::CONFLICT,
-            Json(ErrorResponse {
-                error: "experiment is not paused".into(),
-            }),
-        )
-            .into_response();
+        if experiment.status != ExperimentStatus::Paused {
+            return (
+                StatusCode::CONFLICT,
+                Json(ErrorResponse {
+                    error: "experiment is not paused".into(),
+                }),
+            )
+                .into_response();
+        }
     }
 
-    let snapshot = capture_tick_snapshot_from_state(&state).await;
-    experiment.tick_snapshots.push(snapshot);
-    experiment.status = ExperimentStatus::Running;
+    // Capture snapshot (no store lock held).
+    let snapshot = capture_tick_snapshot(&state).await;
+
+    // Update status + append snapshot.
+    {
+        let mut experiments = state.experiment_store.lock().await;
+        if let Some(experiment) = experiments.iter_mut().find(|exp| exp.id == id) {
+            experiment.tick_snapshots.push(snapshot);
+            experiment.status = ExperimentStatus::Running;
+        }
+    }
 
     Json(serde_json::json!({ "status": "running" })).into_response()
 }
@@ -381,8 +418,7 @@ async fn inject_experiment(
     Path(id): Path<String>,
     Json(req): Json<InjectRequest>,
 ) -> impl IntoResponse {
-    let store = get_store();
-    let mut experiments = store.lock().await;
+    let mut experiments = state.experiment_store.lock().await;
 
     let experiment = match experiments.iter_mut().find(|exp| exp.id == id) {
         Some(exp) => exp,
@@ -417,17 +453,20 @@ async fn get_experiment_results(
     State(state): State<AppState>,
     Path(id): Path<String>,
 ) -> impl IntoResponse {
-    let store = get_store();
-    let experiments = store.lock().await;
+    let experiments = state.experiment_store.lock().await;
 
     match experiments.iter().find(|exp| exp.id == id) {
         Some(experiment) => {
             let mut result = experiment.clone();
             if result.status == ExperimentStatus::Running {
+                // Drop store lock before capturing snapshot.
+                drop(experiments);
                 let snapshot = capture_tick_snapshot(&state).await;
                 result.tick_snapshots.push(snapshot);
+                Json(result).into_response()
+            } else {
+                Json(result).into_response()
             }
-            Json(result).into_response()
         }
         None => not_found(),
     }

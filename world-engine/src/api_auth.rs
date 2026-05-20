@@ -88,6 +88,11 @@ impl ApiKeyStore {
         Some(store)
     }
 
+    /// Returns the number of configured API keys.
+    pub fn key_count(&self) -> usize {
+        self.keys.len()
+    }
+
     /// Validate a key and consume one rate-limit token.
     ///
     /// Returns `Ok(RateLimitHeaders)` on success, `Err(StatusCode)` on failure

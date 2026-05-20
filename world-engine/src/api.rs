@@ -20,6 +20,7 @@ use tokio_stream::StreamExt;
 use uuid::Uuid;
 
 use crate::api_auth::SharedApiKeyStore;
+use crate::api_experiment::SharedExperimentStore;
 use crate::economy::banking::{
     BankingSystem, BankAccountType, Loan, LoanStatus, Collateral,
 };
@@ -94,6 +95,8 @@ pub struct AppState {
     pub trace_store: Option<SharedTraceStore>,
     /// API key store for `/api/v2/*` research endpoints. `None` disables auth.
     pub api_key_store: Option<SharedApiKeyStore>,
+    /// Experiment store for `/api/v2/experiments/*` endpoints.
+    pub experiment_store: SharedExperimentStore,
 }
 
 pub fn create_router(board: SharedTaskBoard) -> Router {
@@ -134,6 +137,7 @@ pub fn create_router_with_wal(board: SharedTaskBoard, wal: SharedWAL) -> Router 
         banking_system: None,
         trace_store: Some(Arc::new(Mutex::new(crate::tracing::TraceStore::new()))),
         api_key_store: None,
+        experiment_store: Arc::new(Mutex::new(Vec::new())),
     };
     build_full_router(state)
 }
@@ -162,6 +166,7 @@ pub fn create_router_with_wal_and_snapshots(board: SharedTaskBoard, wal: SharedW
         banking_system: None,
         trace_store: Some(Arc::new(Mutex::new(crate::tracing::TraceStore::new()))),
         api_key_store: None,
+        experiment_store: Arc::new(Mutex::new(Vec::new())),
     };
     build_full_router(state)
 }
@@ -300,6 +305,7 @@ pub fn create_router_for_test(
         banking_system: None,
         trace_store: Some(Arc::new(Mutex::new(crate::tracing::TraceStore::new()))),
         api_key_store: None,
+        experiment_store: Arc::new(Mutex::new(Vec::new())),
     };
     build_full_router(state)
 }

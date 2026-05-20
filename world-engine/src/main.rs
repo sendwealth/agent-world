@@ -9,6 +9,7 @@ use agent_world_engine::a2a::router::MessageRouter;
 use agent_world_engine::a2a::service::A2aServiceImpl;
 use agent_world_engine::agentworld::a2a::v1::a2a_service_server::A2aServiceServer;
 use agent_world_engine::api::{self, AppState};
+use agent_world_engine::api_auth::ApiKeyStore;
 use agent_world_engine::config::{ConfigManager, GenesisConfig};
 use agent_world_engine::economy::banking::{BankingSystem, CentralBankConfig};
 use agent_world_engine::economy::marketplace::Marketplace;
@@ -339,6 +340,26 @@ async fn main() {
         .expect("Invalid GRPC_ADDR");
     println!("   gRPC server: {}", grpc_addr);
 
+    // ── Initialize API Key Store ───────────────────────────
+    let api_key_store = match ApiKeyStore::from_env() {
+        Some(store) => {
+            println!("   API Auth: enabled ({} keys loaded)", store.key_count());
+            Some(Arc::new(store))
+        }
+        None => {
+            let require_auth = std::env::var("REQUIRE_AUTH")
+                .ok()
+                .map(|v| v.to_lowercase() == "true")
+                .unwrap_or(false);
+            if require_auth {
+                panic!("REQUIRE_AUTH=true but API_KEYS is not set or empty — refusing to start with unauthenticated v2 endpoints");
+            }
+            tracing::warn!("API_KEYS not set, v2 endpoints are unauthenticated");
+            println!("   API Auth: DISABLED (set API_KEYS env var to enable)");
+            None
+        }
+    };
+
     // ── Initialize HTTP/SSE Server ──────────────────────────
     let (tick_tx, tick_rx) = watch::channel(0u64);
     let app_state = AppState {
@@ -357,8 +378,8 @@ async fn main() {
         governance: Some(governance),
         banking_system: Some(banking_system),
         trace_store: Some(Arc::new(Mutex::new(agent_world_engine::tracing::TraceStore::new()))),
-        api_key_store: agent_world_engine::api_auth::ApiKeyStore::from_env()
-            .map(Arc::new),
+        api_key_store,
+        experiment_store: Arc::new(Mutex::new(Vec::new())),
     };
     let app = api::build_full_router(app_state);
 

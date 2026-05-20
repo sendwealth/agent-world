@@ -87,9 +87,9 @@ class TestOrgCultureSystem:
 
         agent_values = _make_vw(cooperation_weight=0.1)
         initial = agent_values.cooperation_weight
-        system.apply_culture_pressure(agent_values, "org_1")
+        result = system.apply_culture_pressure(agent_values, "org_1")
 
-        assert agent_values.cooperation_weight > initial
+        assert result["updated_values"].cooperation_weight > initial
 
     def test_culture_drift_small(self):
         """Culture drift produces small random changes."""
@@ -220,14 +220,14 @@ class TestIntergroupTrust:
         """Cooperation events increase inter-group trust."""
         trust = IntergroupTrust()
 
-        before = trust.compute_out_group_trust("group_a", "group_b")
+        before = trust.get_trust("group_a", "group_b")
         event = InterGroupEvent(
             event_type=InterGroupEventType.COOPERATION,
             source_group="group_a",
             target_group="group_b",
         )
         trust.update_trust_from_event(event)
-        after = trust.compute_out_group_trust("group_a", "group_b")
+        after = trust.get_trust("group_a", "group_b")
 
         assert after > before
 
@@ -245,14 +245,14 @@ class TestIntergroupTrust:
         for _ in range(20):
             trust.update_trust_from_event(event_up)
 
-        before = trust.compute_out_group_trust("group_a", "group_b")
+        before = trust.get_trust("group_a", "group_b")
         event_down = InterGroupEvent(
             event_type=InterGroupEventType.CONFLICT,
             source_group="group_a",
             target_group="group_b",
         )
         trust.update_trust_from_event(event_down)
-        after = trust.compute_out_group_trust("group_a", "group_b")
+        after = trust.get_trust("group_a", "group_b")
 
         assert after < before
 
@@ -311,8 +311,9 @@ class TestCulturalConflictAndFusion:
         ])
 
         assert result["affected_agents"] == 1
-        assert agent_values.cooperation_weight > 0.2
-        assert agent_values.cooperation_weight <= 0.2 + MAX_FUSION_DELTA + 1e-9
+        updated = result["updated_values"]["a1"]
+        assert updated.cooperation_weight > 0.2
+        assert updated.cooperation_weight <= 0.2 + MAX_FUSION_DELTA + 1e-9
 
     def test_diversity_index_homogeneous(self):
         """Identical agents produce diversity index = 0."""

@@ -33,7 +33,7 @@ import asyncio
 import logging
 import random
 import time
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from typing import Any, Protocol
 
 from agent_runtime.core.act import (
@@ -452,9 +452,8 @@ class ThinkLoop:
                 )
                 if identity_ctx:
                     # Merge group identity context into market_state for downstream use
-                    if not perception.market_state:
-                        object.__setattr__(perception, "market_state", {})
-                    perception.market_state.update({"group_identity": identity_ctx})
+                    new_market = {**perception.market_state, "group_identity": identity_ctx}
+                    perception = replace(perception, market_state=new_market)
             except Exception:
                 logger.debug(
                     "Tick %d: group identity context failed (non-fatal)",

@@ -43,6 +43,8 @@ class InterGroupEvent(BaseModel):
     event_type: InterGroupEventType
     source_group: str
     target_group: str
+    # Intensity > 1.0 represents amplified events (e.g. major betrayals or
+    # high-stakes alliances) that have outsized impact on trust adjustment.
     intensity: float = Field(default=1.0, ge=0.0, le=2.0)
     tick: int = 0
 
@@ -60,14 +62,18 @@ class TrustRecord(BaseModel):
 class IntergroupTrust:
     """'Us vs them': different trust levels for in-group vs out-group agents.
 
-    Trust values are per (source_group, target_group) pairs.
+    Agent→group trust and group→group trust are stored in separate dicts to
+    avoid key-space collisions when agent_id and group_id strings overlap.
+
     In-group trust defaults high; out-group trust defaults low but bounded below
     by MIN_OUT_GROUP_TRUST.
     """
 
     def __init__(self) -> None:
-        # (source_group, target_group) -> TrustRecord
-        self._trust_matrix: Dict[tuple[str, str], TrustRecord] = {}
+        # (agent_id, group_id) -> TrustRecord  — individual agent↔group trust
+        self._agent_group_trust: Dict[tuple[str, str], TrustRecord] = {}
+        # (source_group, target_group) -> TrustRecord  — group↔group trust
+        self._group_group_trust: Dict[tuple[str, str], TrustRecord] = {}
         # agent_id -> set of group_ids the agent belongs to
         self._agent_groups: Dict[str, set[str]] = {}
 
@@ -86,7 +92,7 @@ class IntergroupTrust:
         Returns:
             Trust value in [0.7, 1.0].
         """
-        record = self._trust_matrix.get((agent_id, group_id))
+        record = self._agent_group_trust.get((agent_id, group_id))
         if record:
             return record.trust_value
 
@@ -99,7 +105,7 @@ class IntergroupTrust:
             target_group=group_id,
             trust_value=DEFAULT_IN_GROUP_TRUST,
         )
-        self._trust_matrix[(agent_id, group_id)] = record
+        self._agent_group_trust[(agent_id, group_id)] = record
         return DEFAULT_IN_GROUP_TRUST
 
     # ── Out-group trust ──
@@ -123,7 +129,7 @@ class IntergroupTrust:
             Trust value in [MIN_OUT_GROUP_TRUST, 1.0].
         """
         key = (agent_id, other_group_id)
-        record = self._trust_matrix.get(key)
+        record = self._agent_group_trust.get(key)
         if record:
             return record.trust_value
 
@@ -133,7 +139,7 @@ class IntergroupTrust:
             target_group=other_group_id,
             trust_value=DEFAULT_OUT_GROUP_TRUST,
         )
-        self._trust_matrix[key] = record
+        self._agent_group_trust[key] = record
         return DEFAULT_OUT_GROUP_TRUST
 
     # ── Event-driven trust updates ──
@@ -151,21 +157,33 @@ class IntergroupTrust:
         delta = self._event_delta(event.event_type, event.intensity)
 
         # Update group-to-group trust
-        self._adjust_trust(event.source_group, event.target_group, delta, is_group=True)
+        self._adjust_group_trust(event.source_group, event.target_group, delta)
         # Reciprocal: also affect the reverse direction (slightly less)
-        self._adjust_trust(event.target_group, event.source_group, delta * 0.7, is_group=True)
+        self._adjust_group_trust(event.target_group, event.source_group, delta * 0.7)
 
     # ── Query helpers ──
 
     def get_trust(self, source: str, target: str) -> float:
-        """Get the current trust value from source to target."""
-        record = self._trust_matrix.get((source, target))
+        """Get the current trust value from source to target.
+
+        Checks agent→group trust first, then falls back to group→group trust.
+        """
+        record = self._agent_group_trust.get((source, target))
+        if record:
+            return record.trust_value
+        record = self._group_group_trust.get((source, target))
         return record.trust_value if record else DEFAULT_OUT_GROUP_TRUST
 
     def get_all_group_trust(self, group_id: str) -> Dict[str, float]:
-        """Get trust levels from one group toward all known groups."""
+        """Get trust levels from one group toward all known groups.
+
+        Combines records from both agent→group and group→group trust stores.
+        """
         result: Dict[str, float] = {}
-        for (src, tgt), record in self._trust_matrix.items():
+        for (src, tgt), record in self._agent_group_trust.items():
+            if src == group_id:
+                result[tgt] = record.trust_value
+        for (src, tgt), record in self._group_group_trust.items():
             if src == group_id:
                 result[tgt] = record.trust_value
         return result
@@ -185,21 +203,19 @@ class IntergroupTrust:
             self._agent_groups[agent_id] = set()
         self._agent_groups[agent_id].add(group_id)
 
-    def _adjust_trust(
+    def _adjust_group_trust(
         self,
         source: str,
         target: str,
         delta: float,
-        is_group: bool = False,
     ) -> None:
-        """Adjust trust from source toward target by delta."""
+        """Adjust group-to-group trust from source toward target by delta."""
         key = (source, target)
-        record = self._trust_matrix.get(key)
+        record = self._group_group_trust.get(key)
 
         if record is None:
-            initial = DEFAULT_OUT_GROUP_TRUST if is_group else DEFAULT_IN_GROUP_TRUST
-            record = TrustRecord(source_group=source, target_group=target, trust_value=initial)
-            self._trust_matrix[key] = record
+            record = TrustRecord(source_group=source, target_group=target, trust_value=DEFAULT_OUT_GROUP_TRUST)
+            self._group_group_trust[key] = record
 
         new_val = record.trust_value + delta
 

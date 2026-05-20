@@ -114,17 +114,19 @@ class OrgCultureSystem:
         Only adjusts dimensions where the agent deviates from the org norm.
 
         Args:
-            agent_values: The agent's current ValueWeights (mutated in place).
+            agent_values: The agent's current ValueWeights.
             org_id: The organization the agent belongs to.
 
         Returns:
-            Dict with 'adjustments' (per-dimension deltas) and 'org_id'.
+            Dict with 'adjustments' (per-dimension deltas), 'org_id', and
+            'updated_values' (a new ValueWeights instance with the adjustments applied).
         """
         culture = self._org_cultures.get(org_id)
         if culture is None:
-            return {"adjustments": {}, "org_id": org_id}
+            return {"adjustments": {}, "org_id": org_id, "updated_values": agent_values}
 
         adjustments: Dict[str, float] = {}
+        updates: Dict[str, float] = {}
         mapping = {
             "cooperation_weight": "cooperation_norm",
             "competition_weight": "competition_norm",
@@ -142,11 +144,15 @@ class OrgCultureSystem:
             delta = max(-MAX_CULTURE_PRESSURE_PER_TICK, min(MAX_CULTURE_PRESSURE_PER_TICK, diff))
 
             if abs(delta) > 1e-9:
-                new_val = max(0.0, min(1.0, current + delta))
-                object.__setattr__(agent_values, agent_dim, new_val)
+                updates[agent_dim] = max(0.0, min(1.0, current + delta))
                 adjustments[agent_dim] = delta
 
-        return {"adjustments": adjustments, "org_id": org_id}
+        if updates:
+            updated = agent_values.model_copy(update=updates)
+        else:
+            updated = agent_values
+
+        return {"adjustments": adjustments, "org_id": org_id, "updated_values": updated}
 
     # ── Natural culture drift ──
 
@@ -160,11 +166,12 @@ class OrgCultureSystem:
             tick: Current world tick.
 
         Returns:
-            Dict with 'drift' (per-dimension changes) and 'org_id'.
+            Dict with 'drift' (per-dimension changes), 'org_id', and 'tick'.
+            The stored CultureVector is replaced with a new drifted instance.
         """
         culture = self._org_cultures.get(org_id)
         if culture is None:
-            return {"drift": {}, "org_id": org_id}
+            return {"drift": {}, "org_id": org_id, "tick": tick}
 
         dims = [
             "cooperation_norm",
@@ -175,12 +182,15 @@ class OrgCultureSystem:
         ]
 
         drift: Dict[str, float] = {}
+        updates: Dict[str, float] = {}
         for dim in dims:
             current = getattr(culture, dim)
             noise = random.uniform(-NATURAL_DRIFT_RATE, NATURAL_DRIFT_RATE)
-            new_val = max(0.0, min(1.0, current + noise))
-            object.__setattr__(culture, dim, new_val)
+            updates[dim] = max(0.0, min(1.0, current + noise))
             drift[dim] = noise
+
+        drifted = culture.model_copy(update=updates)
+        self._org_cultures[org_id] = drifted
 
         return {"drift": drift, "org_id": org_id, "tick": tick}
 

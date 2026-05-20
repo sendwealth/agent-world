@@ -125,6 +125,8 @@ impl CultureStore {
     }
 
     /// Find which cluster an agent belongs to.
+    // TODO: add reverse index agent_id→cluster_id (DashMap<String, String>) maintained in set_cluster()
+    // to avoid O(C × A) linear scan over all clusters.
     pub fn find_agent_cluster(&self, agent_id: &str) -> Option<CulturalCluster> {
         for entry in self.clusters.iter() {
             if entry.value().agent_ids.contains(&agent_id.to_string()) {

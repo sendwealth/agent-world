@@ -8,6 +8,7 @@ differences may cause conflict (if above a threshold) or fusion
 from __future__ import annotations
 
 import math
+import random
 from typing import Any, Dict, List, Optional, Tuple
 
 from pydantic import BaseModel, Field
@@ -128,10 +129,12 @@ class CulturalConflictAndFusion:
             intensity: Multiplier for fusion strength (0.0 to 1.0).
 
         Returns:
-            Dict with 'affected_agents' count and per-agent adjustments.
+            Dict with 'affected_agents' count, per-agent adjustments, and
+            'updated_values' mapping agent_id -> new ValueWeights instance.
         """
         affected = 0
         adjustments: Dict[str, Dict[str, float]] = {}
+        updated_values: Dict[str, ValueWeights] = {}
 
         for agent_data in border_agents:
             agent_values: ValueWeights = agent_data["values"]
@@ -139,11 +142,13 @@ class CulturalConflictAndFusion:
             agent_id: str = agent_data["id"]
 
             if not neighbors:
+                updated_values[agent_id] = agent_values
                 continue
 
             n = len(neighbors)
             val_names = ValueWeights._dimension_names()
             agent_adjustments: Dict[str, float] = {}
+            updates: Dict[str, float] = {}
 
             for dim in val_names:
                 current = getattr(agent_values, dim)
@@ -157,9 +162,13 @@ class CulturalConflictAndFusion:
                 )
 
                 if abs(delta) > 1e-9:
-                    new_val = max(0.0, min(1.0, current + delta))
-                    object.__setattr__(agent_values, dim, new_val)
+                    updates[dim] = max(0.0, min(1.0, current + delta))
                     agent_adjustments[dim] = delta
+
+            if updates:
+                updated_values[agent_id] = agent_values.model_copy(update=updates)
+            else:
+                updated_values[agent_id] = agent_values
 
             if agent_adjustments:
                 affected += 1
@@ -169,6 +178,7 @@ class CulturalConflictAndFusion:
             "affected_agents": affected,
             "total_border_agents": len(border_agents),
             "adjustments": adjustments,
+            "updated_values": updated_values,
         }
 
     # ── Diversity index ──
@@ -201,13 +211,11 @@ class CulturalConflictAndFusion:
         val_names = ValueWeights._dimension_names()
 
         # For large populations, sample pairs
-        import random as _random
-
         if n > 100:
             n_pairs = 5000
             total_dist = 0.0
             for _ in range(n_pairs):
-                i, j = _random.sample(range(n), 2)
+                i, j = random.sample(range(n), 2)
                 dist = math.sqrt(
                     sum(
                         (getattr(values_list[i], d) - getattr(values_list[j], d)) ** 2

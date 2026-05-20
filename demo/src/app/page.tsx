@@ -2,8 +2,7 @@
 
 import Link from "next/link";
 import { useEffect, useRef } from "react";
-import { loadAgents, loadEvents } from "@/lib/data";
-import type { DemoAgent, EmergenceEvent } from "@/types/demo";
+import { loadAgents, loadEvents, loadOrganizations } from "@/lib/data";
 import { useState } from "react";
 
 function StatBlock({ value, label }: { value: string; label: string }) {
@@ -104,16 +103,19 @@ function ParticleField() {
 }
 
 export default function LandingPage() {
-  const [stats, setStats] = useState({ agents: 50, ticks: 5000, events: 8 });
+  const [stats, setStats] = useState({ agents: 50, ticks: 5000, events: 22, orgs: 7 });
 
   useEffect(() => {
-    Promise.all([loadAgents(), loadEvents()]).then(([agents, events]) => {
-      setStats({
-        agents: agents.length,
-        ticks: 5000,
-        events: events.length,
-      });
-    });
+    Promise.all([loadAgents(), loadEvents(), loadOrganizations()]).then(
+      ([agents, events, orgs]) => {
+        setStats({
+          agents: agents.length,
+          ticks: 5000,
+          events: events.length,
+          orgs: orgs.length,
+        });
+      }
+    );
   }, []);
 
   return (
@@ -137,10 +139,11 @@ export default function LandingPage() {
           </p>
 
           {/* Stats */}
-          <div className="flex justify-center gap-8 md:gap-16 mb-10">
+          <div className="flex justify-center gap-6 md:gap-12 mb-10">
             <StatBlock value={`${stats.agents}`} label="AI Agents" />
             <StatBlock value={`${stats.ticks.toLocaleString()}`} label="World Ticks" />
             <StatBlock value={`${stats.events}`} label="Emergence Events" />
+            <StatBlock value={`${stats.orgs}`} label="Organizations" />
           </div>
 
           {/* CTAs */}
@@ -171,29 +174,29 @@ export default function LandingPage() {
             {[
               {
                 phase: "Exploration",
-                color: "blue",
                 tick: "0 – 1,200",
                 desc: "Agents spawn into an empty world. They explore, learn skills, form first impressions, and discover each other.",
                 emoji: "🧭",
+                borderColor: "border-blue-500/30",
               },
               {
                 phase: "Organization",
-                color: "green",
                 tick: "1,200 – 3,200",
                 desc: "Agents form guilds, companies, and alliances. Trade routes emerge. Economies develop. Power structures crystallize.",
                 emoji: "🏛️",
+                borderColor: "border-green-500/30",
               },
               {
                 phase: "Governance",
-                color: "purple",
                 tick: "3,200 – 5,000",
                 desc: "Organizations propose rules, hold votes, ratify constitutions. Culture diverges. Civilization takes root.",
                 emoji: "⚖️",
+                borderColor: "border-purple-500/30",
               },
             ].map((item) => (
               <div
                 key={item.phase}
-                className={`rounded-xl border border-zinc-800 bg-zinc-900/50 p-6 hover:border-${item.color}-500/30 transition-colors`}
+                className={`rounded-xl border border-zinc-800 ${item.borderColor} bg-zinc-900/50 p-6 transition-colors`}
               >
                 <div className="text-3xl mb-3">{item.emoji}</div>
                 <div className="text-xs text-zinc-500 mb-1">Tick {item.tick}</div>

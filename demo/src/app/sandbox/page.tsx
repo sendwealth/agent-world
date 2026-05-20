@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { loadTemplates } from "@/lib/data";
-import type { SandboxTemplate, PersonalityTraits, ValueProfile } from "@/types/demo";
+import type { SandboxTemplate, PersonalityTraits } from "@/types/demo";
 
 function SliderField({
   label,
@@ -56,14 +56,6 @@ export default function SandboxPage() {
     agreeableness: 0.5,
     neuroticism: 0.5,
   });
-  const [values, setValues] = useState<ValueProfile>({
-    survival: 0.5,
-    power: 0.3,
-    freedom: 0.6,
-    knowledge: 0.5,
-    cooperation: 0.5,
-    tradition: 0.3,
-  });
   const [simStep, setSimStep] = useState<SimulationStep>("idle");
   const [simMessage, setSimMessage] = useState("");
   const [simProgress, setSimProgress] = useState(0);
@@ -72,7 +64,6 @@ export default function SandboxPage() {
     setSelectedTemplate(template.id);
     setName(template.name);
     setPersonality({ ...template.personality });
-    setValues({ ...template.values });
   }
 
   function handleSimulate() {
@@ -100,7 +91,6 @@ export default function SandboxPage() {
     setSelectedTemplate(null);
     setName("");
     setPersonality({ openness: 0.5, conscientiousness: 0.5, extraversion: 0.5, agreeableness: 0.5, neuroticism: 0.5 });
-    setValues({ survival: 0.5, power: 0.3, freedom: 0.6, knowledge: 0.5, cooperation: 0.5, tradition: 0.3 });
   }
 
   if (simStep === "done") {
@@ -220,21 +210,34 @@ export default function SandboxPage() {
             </div>
           </div>
 
-          {/* Values */}
+          {/* Preview */}
           <div className="rounded-xl border border-zinc-800 bg-zinc-900/50 p-4 md:p-6">
             <h2 className="text-sm font-semibold text-zinc-400 uppercase tracking-wider mb-4">
-              Core Values
+              Agent Preview
             </h2>
-            <div className="space-y-3">
-              {(Object.keys(values) as Array<keyof ValueProfile>).map((key) => (
-                <SliderField
-                  key={key}
-                  label={key.charAt(0).toUpperCase() + key.slice(1)}
-                  value={values[key]}
-                  onChange={(v) => setValues({ ...values, [key]: v })}
-                />
-              ))}
+            <div className="flex items-center gap-3 mb-4">
+              <div className="w-12 h-12 rounded-full bg-zinc-800 flex items-center justify-center text-lg font-semibold text-zinc-300">
+                {name ? name.slice(0, 1) : "?"}
+              </div>
+              <div>
+                <div className="font-semibold text-zinc-100">{name || "Unnamed Agent"}</div>
+                <div className="text-xs text-zinc-500">
+                  {templates.find((t) => t.id === selectedTemplate)?.description ?? "Custom agent"}
+                </div>
+              </div>
             </div>
+
+            {/* Values display from template */}
+            {selectedTemplate && (
+              <div className="mb-4">
+                <div className="text-xs text-zinc-500 mb-2">Core Values</div>
+                <div className="flex gap-1.5 flex-wrap">
+                  {templates.find((t) => t.id === selectedTemplate)?.values.map((v) => (
+                    <span key={v} className="text-xs px-2 py-0.5 rounded bg-purple-500/10 text-purple-400">{v}</span>
+                  ))}
+                </div>
+              </div>
+            )}
 
             <div className="mt-6 p-3 rounded-lg bg-zinc-800/30 border border-zinc-800/50">
               <div className="text-xs text-zinc-500 mb-1">Simulation Note</div>

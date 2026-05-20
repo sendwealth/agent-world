@@ -1,14 +1,23 @@
 "use client";
 
-import { useEffect, useState, useRef, useCallback } from "react";
+import { useEffect, useState, useCallback } from "react";
 import { loadEvents, loadSnapshots } from "@/lib/data";
 import type { EmergenceEvent, WorldSnapshot } from "@/types/demo";
 
 const CATEGORY_CONFIG: Record<string, { color: string; bg: string; border: string; label: string }> = {
   organization: { color: "text-blue-400", bg: "bg-blue-500/10", border: "border-blue-500/20", label: "Organization" },
-  trade: { color: "text-green-400", bg: "bg-green-500/10", border: "border-green-500/20", label: "Trade" },
+  economic: { color: "text-green-400", bg: "bg-green-500/10", border: "border-green-500/20", label: "Economic" },
   governance: { color: "text-purple-400", bg: "bg-purple-500/10", border: "border-purple-500/20", label: "Governance" },
   culture: { color: "text-amber-400", bg: "bg-amber-500/10", border: "border-amber-500/20", label: "Culture" },
+  milestone: { color: "text-cyan-400", bg: "bg-cyan-500/10", border: "border-cyan-500/20", label: "Milestone" },
+};
+
+const CATEGORY_DOT_COLORS: Record<string, string> = {
+  organization: "#3b82f6",
+  economic: "#22c55e",
+  governance: "#a855f7",
+  culture: "#f59e0b",
+  milestone: "#06b6d4",
 };
 
 const PHASE_LABELS: Record<string, string> = {
@@ -31,7 +40,6 @@ export default function TimelinePage() {
   const [snapshots, setSnapshots] = useState<WorldSnapshot[]>([]);
   const [selectedTick, setSelectedTick] = useState<number | null>(null);
   const [scrubTick, setScrubTick] = useState(0);
-  const timelineRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     Promise.all([loadEvents(), loadSnapshots()]).then(([ev, sn]) => {
@@ -42,11 +50,7 @@ export default function TimelinePage() {
   }, []);
 
   const currentSnapshot = snapshots.find((s) => s.tick <= scrubTick) ?? snapshots[0] ?? null;
-
-  // Find events near current tick
-  const nearbyEvents = events.filter(
-    (e) => Math.abs(e.tick - scrubTick) < 200
-  );
+  const nearbyEvents = events.filter((e) => Math.abs(e.tick - scrubTick) < 200);
 
   const handleSliderChange = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
     const val = Number(e.target.value);
@@ -95,13 +99,13 @@ export default function TimelinePage() {
           <div className="relative h-6 mt-2">
             {events.map((ev) => (
               <button
-                key={ev.tick}
+                key={ev.id}
                 className={`absolute top-1 w-2 h-2 rounded-full -translate-x-1/2 cursor-pointer transition-transform hover:scale-150 ${
                   CATEGORY_CONFIG[ev.category]?.bg ?? "bg-zinc-500/20"
                 } ${CATEGORY_CONFIG[ev.category]?.border ?? "border-zinc-500/20"} border ${
                   Math.abs(ev.tick - scrubTick) < 100 ? "scale-150" : ""
                 }`}
-                style={{ left: `${(ev.tick / 5000) * 100}%` }}
+                style={{ left: `${(ev.tick / 5000) * 100}%`, backgroundColor: CATEGORY_DOT_COLORS[ev.category] }}
                 onClick={() => {
                   setScrubTick(ev.tick);
                   setSelectedTick(ev.tick);
@@ -121,30 +125,37 @@ export default function TimelinePage() {
               <div className="rounded-xl border border-zinc-800 bg-zinc-900/50 p-4 space-y-3">
                 <div className="grid grid-cols-2 gap-3">
                   <div>
-                    <div className="text-xs text-zinc-500">Alive Agents</div>
+                    <div className="text-xs text-zinc-500">Active Agents</div>
                     <div className="text-lg font-semibold tabular-nums">{currentSnapshot.aliveAgents}</div>
                   </div>
                   <div>
-                    <div className="text-xs text-zinc-500">Organizations</div>
-                    <div className="text-lg font-semibold tabular-nums">{currentSnapshot.organizations}</div>
+                    <div className="text-xs text-zinc-500">Total Population</div>
+                    <div className="text-lg font-semibold tabular-nums">{currentSnapshot.totalPopulation}</div>
                   </div>
                   <div>
-                    <div className="text-xs text-zinc-500">Total Wealth</div>
-                    <div className="text-lg font-semibold tabular-nums">{currentSnapshot.totalWealth.toLocaleString()}</div>
-                  </div>
-                  <div>
-                    <div className="text-xs text-zinc-500">Trade Volume</div>
-                    <div className="text-lg font-semibold tabular-nums">{currentSnapshot.tradeVolume.toLocaleString()}</div>
-                  </div>
-                  <div>
-                    <div className="text-xs text-zinc-500">Cultural Diversity</div>
-                    <div className="text-lg font-semibold tabular-nums">{(currentSnapshot.culturalDiversity * 100).toFixed(0)}%</div>
+                    <div className="text-xs text-zinc-500">GDP</div>
+                    <div className="text-lg font-semibold tabular-nums">{currentSnapshot.gdp.toLocaleString()}</div>
                   </div>
                   <div>
                     <div className="text-xs text-zinc-500">Gini Index</div>
                     <div className="text-lg font-semibold tabular-nums">{currentSnapshot.giniCoefficient.toFixed(2)}</div>
                   </div>
                 </div>
+
+                {/* Top skills */}
+                {currentSnapshot.skillDistribution.length > 0 && (
+                  <div className="mt-3 pt-3 border-t border-zinc-800">
+                    <div className="text-xs text-zinc-500 mb-2">Top Skills</div>
+                    <div className="space-y-1.5">
+                      {currentSnapshot.skillDistribution.slice(0, 5).map((s) => (
+                        <div key={s.skill_name} className="flex items-center justify-between text-xs">
+                          <span className="text-zinc-400 capitalize">{s.skill_name}</span>
+                          <span className="text-zinc-500 tabular-nums">{s.agent_count} agents (lv {s.avg_level.toFixed(1)})</span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
               </div>
             )}
           </div>
@@ -157,17 +168,17 @@ export default function TimelinePage() {
                 <span className="text-zinc-600 font-normal ml-2">near tick {scrubTick}</span>
               )}
             </h2>
-            <div className="space-y-3" ref={timelineRef}>
+            <div className="space-y-3">
               {(selectedTick !== null
                 ? events.filter((e) => e.tick === selectedTick)
                 : nearbyEvents.length > 0
                   ? nearbyEvents
                   : events
               ).map((ev) => {
-                const cfg = CATEGORY_CONFIG[ev.category];
+                const cfg = CATEGORY_CONFIG[ev.category] ?? CATEGORY_CONFIG.milestone;
                 return (
                   <div
-                    key={`${ev.tick}-${ev.title}`}
+                    key={ev.id}
                     className={`rounded-xl border ${cfg.border} ${cfg.bg} p-4 transition-all`}
                   >
                     <div className="flex items-start justify-between gap-3">
@@ -185,10 +196,15 @@ export default function TimelinePage() {
                         <p className="text-xs text-zinc-400 mt-1">{ev.description}</p>
                       </div>
                     </div>
-                    <div className="flex gap-1 mt-2">
-                      {ev.agentsInvolved.map((a) => (
-                        <span key={a} className="text-[10px] px-1.5 py-0.5 rounded bg-zinc-800/60 text-zinc-500">
-                          {a}
+                    <div className="flex flex-wrap gap-1 mt-2">
+                      {ev.agentsDetail.map((a) => (
+                        <span key={a.id} className="text-[10px] px-1.5 py-0.5 rounded bg-zinc-800/60 text-zinc-400">
+                          {a.name}
+                        </span>
+                      ))}
+                      {ev.orgsDetail.map((o) => (
+                        <span key={o.id} className="text-[10px] px-1.5 py-0.5 rounded bg-amber-500/10 text-amber-400">
+                          {o.name}
                         </span>
                       ))}
                     </div>

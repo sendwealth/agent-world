@@ -2,15 +2,13 @@
 
 import { useEffect, useState } from "react";
 import {
-  LineChart,
-  Line,
+  AreaChart,
+  Area,
   XAxis,
   YAxis,
   CartesianGrid,
   Tooltip,
   ResponsiveContainer,
-  Area,
-  AreaChart,
 } from "recharts";
 import { loadMetrics, loadEvents } from "@/lib/data";
 import type { MetricSeries, EmergenceEvent } from "@/types/demo";
@@ -24,9 +22,10 @@ const METRIC_CONFIG = [
 
 const CATEGORY_COLORS: Record<string, string> = {
   organization: "#3b82f6",
-  trade: "#22c55e",
+  economic: "#22c55e",
   governance: "#a855f7",
   culture: "#f59e0b",
+  milestone: "#06b6d4",
 };
 
 function CustomTooltip({ active, payload, label }: { active?: boolean; payload?: Array<{ value: number; dataKey: string }>; label?: number }) {
@@ -130,31 +129,32 @@ export default function DashboardPage() {
         {/* Key Events Timeline */}
         <div className="rounded-xl border border-zinc-800 bg-zinc-900/50 p-4 md:p-6">
           <h2 className="text-sm font-semibold text-zinc-400 uppercase tracking-wider mb-4">
-            Key Events Timeline
+            Key Events Timeline ({events.length} events)
           </h2>
           <div className="relative">
-            {/* Timeline line */}
             <div className="absolute top-3 left-0 right-0 h-px bg-zinc-800" />
 
-            <div className="flex justify-between relative">
+            <div className="flex justify-between relative min-h-16">
               {events.map((ev) => {
                 const left = `${(ev.tick / 5000) * 100}%`;
+                const dotColor = CATEGORY_COLORS[ev.category] ?? "#71717a";
                 return (
                   <div
-                    key={ev.tick}
+                    key={ev.id}
                     className="group relative flex flex-col items-center"
                     style={{ position: "absolute", left, transform: "translateX(-50%)" }}
                   >
-                    {/* Dot */}
                     <div
                       className="w-2.5 h-2.5 rounded-full border-2 border-zinc-900 z-10 transition-transform group-hover:scale-150"
-                      style={{ backgroundColor: CATEGORY_COLORS[ev.category] }}
+                      style={{ backgroundColor: dotColor }}
                     />
-                    {/* Tooltip */}
                     <div className="absolute top-6 left-1/2 -translate-x-1/2 hidden group-hover:block z-20 w-48">
                       <div className="rounded-lg border border-zinc-700 bg-zinc-900 p-2 text-xs shadow-xl">
                         <div className="font-semibold text-zinc-200 mb-0.5">{ev.title}</div>
                         <div className="text-zinc-500 font-mono tabular-nums">Tick {ev.tick.toLocaleString()}</div>
+                        {ev.agentsDetail.length > 0 && (
+                          <div className="text-zinc-600 mt-0.5">{ev.agentsDetail.map((a) => a.name).join(", ")}</div>
+                        )}
                       </div>
                     </div>
                   </div>
@@ -162,7 +162,6 @@ export default function DashboardPage() {
               })}
             </div>
 
-            {/* Phase markers */}
             <div className="flex justify-between mt-8 text-xs text-zinc-600">
               <span>Tick 0</span>
               <span className="text-blue-500/50">Exploration</span>

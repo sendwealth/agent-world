@@ -1,15 +1,29 @@
-"""Organization module — formation, proposal, and recruitment for agent organizations.
+"""Organization module — formation, proposal, recruitment, and governance for agent organizations.
 
 Agents can spontaneously decide to form organizations based on:
 - Shared interests (common skills, goals)
 - Geographic proximity (nearby agents)
 - Economic complementarity (skill synergy, resource exchange potential)
+
+Once formed, agents use the governance module to make leadership, treaty,
+tax, and allocation decisions.
 """
 
 from .formation import (
     FormationConditions,
     FormationEvaluator,
     FormationReason,
+)
+from .governance import (
+    AgentInterests,
+    AllocationStrategy,
+    Candidate,
+    GovernanceDecision,
+    GovernanceDecider,
+    LeadershipAmbition,
+    OrgSnapshot,
+    Treaty,
+    TreatyResponse,
 )
 from .proposal import (
     OrgProposal,
@@ -27,6 +41,16 @@ __all__ = [
     "FormationConditions",
     "FormationEvaluator",
     "FormationReason",
+    # governance
+    "AgentInterests",
+    "AllocationStrategy",
+    "Candidate",
+    "GovernanceDecision",
+    "GovernanceDecider",
+    "LeadershipAmbition",
+    "OrgSnapshot",
+    "Treaty",
+    "TreatyResponse",
     # proposal
     "OrgProposal",
     "OrgType",

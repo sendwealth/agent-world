@@ -92,6 +92,17 @@ pub enum EventType {
     OrgResourceConflict,
     OrgTerritoryClaimed,
     OrgFormationSuggested,
+    // Treasury events
+    TaxCollected,
+    TreasuryDistributed,
+    // Leadership events
+    LeadershipElectionStarted,
+    LeadershipChanged,
+    // Diplomacy events
+    TreatyProposed,
+    TreatySigned,
+    TreatyBroken,
+    RelationChanged,
 }
 
 /// Events emitted by the world engine.
@@ -182,6 +193,17 @@ pub enum WorldEvent {
     OrgResourceConflict { org_a: String, org_b: String, resource_point: String, winner: String, intensity: f64 },
     OrgTerritoryClaimed { org_id: String, region: String, influence: f64 },
     OrgFormationSuggested { agents: Vec<String>, suggested_type: String, reason: String },
+    // Treasury events
+    TaxCollected { org_id: String, payer_id: String, tax_kind: String, rate: f64, gross_amount: u64, tax_amount: u64, tick: u64 },
+    TreasuryDistributed { org_id: String, strategy: String, total_amount: u64, allocations: Vec<(String, u64)>, tick: u64 },
+    // Leadership events
+    LeadershipElectionStarted { org_id: uuid::Uuid, candidates: Vec<String>, voting_method: String },
+    LeadershipChanged { org_id: uuid::Uuid, old_leader_id: Option<String>, new_leader_id: String },
+    // Diplomacy events
+    TreatyProposed { treaty_id: String, org_a: String, org_b: String, treaty_type: String },
+    TreatySigned { treaty_id: String, org_a: String, org_b: String },
+    TreatyBroken { treaty_id: String, breaker: String, reason: String },
+    RelationChanged { org_a: String, org_b: String, old_level: i8, new_level: i8 },
 }
 
 impl WorldEvent {
@@ -262,6 +284,14 @@ impl WorldEvent {
             WorldEvent::OrgResourceConflict { .. } => EventType::OrgResourceConflict,
             WorldEvent::OrgTerritoryClaimed { .. } => EventType::OrgTerritoryClaimed,
             WorldEvent::OrgFormationSuggested { .. } => EventType::OrgFormationSuggested,
+            WorldEvent::TaxCollected { .. } => EventType::TaxCollected,
+            WorldEvent::TreasuryDistributed { .. } => EventType::TreasuryDistributed,
+            WorldEvent::LeadershipElectionStarted { .. } => EventType::LeadershipElectionStarted,
+            WorldEvent::LeadershipChanged { .. } => EventType::LeadershipChanged,
+            WorldEvent::TreatyProposed { .. } => EventType::TreatyProposed,
+            WorldEvent::TreatySigned { .. } => EventType::TreatySigned,
+            WorldEvent::TreatyBroken { .. } => EventType::TreatyBroken,
+            WorldEvent::RelationChanged { .. } => EventType::RelationChanged,
         }
     }
 
@@ -342,6 +372,14 @@ impl WorldEvent {
             WorldEvent::OrgResourceConflict { .. } => None,
             WorldEvent::OrgTerritoryClaimed { .. } => None,
             WorldEvent::OrgFormationSuggested { .. } => None,
+            WorldEvent::TaxCollected { payer_id, .. } => Some(payer_id),
+            WorldEvent::TreasuryDistributed { .. } => None,
+            WorldEvent::LeadershipElectionStarted { .. } => None,
+            WorldEvent::LeadershipChanged { new_leader_id, .. } => Some(new_leader_id),
+            WorldEvent::TreatyProposed { .. } => None,
+            WorldEvent::TreatySigned { .. } => None,
+            WorldEvent::TreatyBroken { breaker, .. } => Some(breaker),
+            WorldEvent::RelationChanged { .. } => None,
         }
     }
 

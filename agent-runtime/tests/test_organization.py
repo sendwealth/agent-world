@@ -12,15 +12,24 @@ import asyncio
 import pytest
 
 from agent_runtime.organization import (
+    AgentInterests,
+    AllocationStrategy,
+    Candidate,
     FormationConditions,
     FormationEvaluator,
     FormationReason,
+    GovernanceDecision,
+    GovernanceDecider,
     Invitation,
     InvitationStatus,
+    LeadershipAmbition,
     OrgProposal,
+    OrgSnapshot,
     OrgType,
     ProposalGenerator,
     RecruitmentEngine,
+    Treaty,
+    TreatyResponse,
 )
 from agent_runtime.organization.formation import (
     AgentProfile,
@@ -645,3 +654,345 @@ class TestOrganizationFormationFlow:
         # The composite may or may not exceed threshold depending on weights
         # The key assertion is that the flow correctly identifies triggers
         assert isinstance(conditions.triggers, list)
+
+
+# ===========================================================================
+# Governance decision tests
+# ===========================================================================
+
+
+def _make_org(
+    org_id: str = "org-001",
+    member_count: int = 5,
+    avg_wealth: float = 100.0,
+    total_wealth: float = 500.0,
+    tax_rate: float = 0.10,
+    has_leader: bool = True,
+    leader_id: str | None = "agent-001",
+    treasury: float = 50.0,
+) -> OrgSnapshot:
+    return OrgSnapshot(
+        org_id=org_id,
+        member_count=member_count,
+        avg_wealth=avg_wealth,
+        total_wealth=total_wealth,
+        tax_rate=tax_rate,
+        has_leader=has_leader,
+        leader_id=leader_id,
+        treasury=treasury,
+    )
+
+
+def _make_interests(
+    agent_id: str = "agent-001",
+    wealth: float = 100.0,
+    skills: dict | None = None,
+    goals: list | None = None,
+    risk_tolerance: float = 0.5,
+) -> AgentInterests:
+    return AgentInterests(
+        agent_id=agent_id,
+        wealth=wealth,
+        skills=skills or {},
+        goals=goals or [],
+        risk_tolerance=risk_tolerance,
+    )
+
+
+def _make_candidate(
+    agent_id: str = "cand-001",
+    wealth: float = 100.0,
+    skills: dict | None = None,
+    goals: list | None = None,
+    reputation: float = 0.5,
+) -> Candidate:
+    return Candidate(
+        agent_id=agent_id,
+        wealth=wealth,
+        skills=skills or {},
+        goals=goals or [],
+        reputation=reputation,
+    )
+
+
+def _make_treaty(
+    treaty_id: str = "treaty-001",
+    proposer_org_id: str = "org-002",
+    terms: dict | None = None,
+    treaty_type: str = "trade",
+) -> Treaty:
+    return Treaty(
+        treaty_id=treaty_id,
+        proposer_org_id=proposer_org_id,
+        terms=terms or {},
+        treaty_type=treaty_type,
+    )
+
+
+class TestGovernanceShouldRunForLeader:
+    """Tests for GovernanceDecider.should_run_for_leader."""
+
+    def test_wealthy_skilled_agent_runs(self) -> None:
+        """Agent with high wealth and skills should run for leader."""
+        decider = GovernanceDecider()
+        org = _make_org(avg_wealth=100.0)
+        interests = _make_interests(
+            wealth=150.0,
+            skills={"mining": 80, "crafting": 70},
+            risk_tolerance=0.7,
+        )
+        decision = decider.should_run_for_leader(org, interests)
+        assert decision.action == LeadershipAmbition.RUN.value
+        assert decision.confidence > 0.5
+
+    def test_poor_unskilled_agent_abstains(self) -> None:
+        """Agent with low wealth and no skills should not run."""
+        decider = GovernanceDecider()
+        org = _make_org(avg_wealth=100.0)
+        interests = _make_interests(wealth=10.0, skills={}, risk_tolerance=0.1)
+        decision = decider.should_run_for_leader(org, interests)
+        assert decision.action == LeadershipAmbition.ABSTAIN.value
+
+    def test_empty_org_abstain(self) -> None:
+        """Should abstain from leading an empty organization."""
+        decider = GovernanceDecider()
+        org = _make_org(member_count=0, avg_wealth=0.0)
+        interests = _make_interests(wealth=100.0, skills={"mining": 90})
+        decision = decider.should_run_for_leader(org, interests)
+        assert decision.action == LeadershipAmbition.ABSTAIN.value
+        assert decision.confidence == 1.0
+
+    def test_high_risk_tolerance_boosts_willingness(self) -> None:
+        """Agent with high risk tolerance more likely to run."""
+        decider = GovernanceDecider()
+        org = _make_org(avg_wealth=100.0)
+        interests = _make_interests(
+            wealth=80.0,
+            skills={"mining": 55},
+            risk_tolerance=0.95,
+        )
+        decision = decider.should_run_for_leader(org, interests)
+        assert decision.action == LeadershipAmbition.RUN.value
+
+    def test_no_leader_bonus(self) -> None:
+        """Agent more likely to run when org has no leader."""
+        decider = GovernanceDecider()
+        org_with_leader = _make_org(has_leader=True, leader_id="other-agent")
+        org_no_leader = _make_org(has_leader=False, leader_id=None)
+        interests = _make_interests(
+            wealth=90.0,
+            skills={"mining": 60},
+            risk_tolerance=0.5,
+        )
+        decision_with = decider.should_run_for_leader(org_with_leader, interests)
+        decision_without = decider.should_run_for_leader(org_no_leader, interests)
+        # No-leader org should have at least as high confidence for running
+        assert decision_without.confidence >= decision_with.confidence
+
+
+class TestGovernanceVoteInElection:
+    """Tests for GovernanceDecider.vote_in_election."""
+
+    def test_no_candidates_abstain(self) -> None:
+        """No candidates → abstain."""
+        decider = GovernanceDecider()
+        interests = _make_interests()
+        decision = decider.vote_in_election([], interests)
+        assert decision.action == "abstain"
+
+    def test_single_candidate_default_support(self) -> None:
+        """Single candidate gets default support."""
+        decider = GovernanceDecider()
+        cand = _make_candidate("cand-001")
+        interests = _make_interests()
+        decision = decider.vote_in_election([cand], interests)
+        assert decision.action == "cand-001"
+        assert decision.confidence == 0.8
+
+    def test_votes_for_best_aligned_candidate(self) -> None:
+        """Should vote for the candidate with most goal/skill overlap."""
+        decider = GovernanceDecider()
+        interests = _make_interests(
+            skills={"mining": 50, "crafting": 30},
+            goals=["build", "trade"],
+        )
+        cand_aligned = _make_candidate(
+            "aligned",
+            skills={"mining": 60},
+            goals=["build"],
+            reputation=0.7,
+        )
+        cand_misaligned = _make_candidate(
+            "misaligned",
+            skills={"farming": 80},
+            goals=["farm"],
+            reputation=0.9,
+        )
+        decision = decider.vote_in_election(
+            [cand_aligned, cand_misaligned], interests
+        )
+        assert decision.action == "aligned"
+
+    def test_reputation_breaks_ties(self) -> None:
+        """When candidates are otherwise similar, reputation matters."""
+        decider = GovernanceDecider()
+        interests = _make_interests(skills={"mining": 50})
+        cand_high_rep = _make_candidate(
+            "high-rep", skills={"mining": 50}, reputation=0.9
+        )
+        cand_low_rep = _make_candidate(
+            "low-rep", skills={"mining": 50}, reputation=0.2
+        )
+        decision = decider.vote_in_election(
+            [cand_high_rep, cand_low_rep], interests
+        )
+        assert decision.action == "high-rep"
+
+
+class TestGovernanceRespondToTreaty:
+    """Tests for GovernanceDecider.respond_to_treaty."""
+
+    def test_trade_treaty_complementary_wealth_accepts(self) -> None:
+        """Trade treaty between complementary orgs → accept."""
+        decider = GovernanceDecider()
+        my_org = _make_org("org-001", avg_wealth=50.0)
+        other_org = _make_org("org-002", avg_wealth=200.0)
+        treaty = _make_treaty(treaty_type="trade")
+        decision = decider.respond_to_treaty(treaty, my_org, other_org)
+        assert decision.action == TreatyResponse.ACCEPT.value
+
+    def test_trade_treaty_similar_wealth_counters(self) -> None:
+        """Trade treaty between similar orgs → counter-propose."""
+        decider = GovernanceDecider()
+        my_org = _make_org("org-001", avg_wealth=100.0)
+        other_org = _make_org("org-002", avg_wealth=110.0)
+        treaty = _make_treaty(treaty_type="trade")
+        decision = decider.respond_to_treaty(treaty, my_org, other_org)
+        assert decision.action == TreatyResponse.COUNTER.value
+
+    def test_defense_treaty_with_larger_org_accepts(self) -> None:
+        """Defense treaty with larger org → accept (they bring more defenders)."""
+        decider = GovernanceDecider()
+        my_org = _make_org("org-001", member_count=3)
+        other_org = _make_org("org-002", member_count=10)
+        treaty = _make_treaty(treaty_type="defense")
+        decision = decider.respond_to_treaty(treaty, my_org, other_org)
+        assert decision.action == TreatyResponse.ACCEPT.value
+
+    def test_defense_treaty_with_smaller_org_rejects(self) -> None:
+        """Defense treaty with smaller org → reject (limited defense value)."""
+        decider = GovernanceDecider()
+        my_org = _make_org("org-001", member_count=10)
+        other_org = _make_org("org-002", member_count=2)
+        treaty = _make_treaty(treaty_type="defense")
+        decision = decider.respond_to_treaty(treaty, my_org, other_org)
+        assert decision.action == TreatyResponse.REJECT.value
+
+    def test_non_aggression_pact_accepts(self) -> None:
+        """Non-aggression pacts are generally accepted."""
+        decider = GovernanceDecider()
+        my_org = _make_org("org-001")
+        other_org = _make_org("org-002")
+        treaty = _make_treaty(treaty_type="non_aggression")
+        decision = decider.respond_to_treaty(treaty, my_org, other_org)
+        assert decision.action == TreatyResponse.ACCEPT.value
+
+    def test_empty_org_rejects(self) -> None:
+        """Empty org should reject any treaty."""
+        decider = GovernanceDecider()
+        my_org = _make_org("org-001", member_count=0, avg_wealth=0.0)
+        other_org = _make_org("org-002", member_count=5)
+        treaty = _make_treaty()
+        decision = decider.respond_to_treaty(treaty, my_org, other_org)
+        assert decision.action == TreatyResponse.REJECT.value
+
+
+class TestGovernanceProposeTaxRate:
+    """Tests for GovernanceDecider.propose_tax_rate."""
+
+    def test_wealthy_agent_proposes_low_tax(self) -> None:
+        """Agent well above average wealth proposes lower taxes."""
+        decider = GovernanceDecider()
+        org = _make_org(avg_wealth=100.0)
+        decision = decider.propose_tax_rate(org, my_wealth=300.0)
+        rate = float(decision.action)
+        assert rate < 0.10  # Below default
+
+    def test_poor_agent_proposes_higher_tax(self) -> None:
+        """Agent below average wealth proposes higher taxes."""
+        decider = GovernanceDecider()
+        org = _make_org(avg_wealth=100.0)
+        decision = decider.propose_tax_rate(org, my_wealth=20.0)
+        rate = float(decision.action)
+        assert rate > 0.10  # Above default
+
+    def test_tax_rate_clamped_to_min(self) -> None:
+        """Proposed tax rate should not go below configured minimum."""
+        decider = GovernanceDecider()
+        org = _make_org(avg_wealth=100.0)
+        decision = decider.propose_tax_rate(org, my_wealth=1000.0)
+        rate = float(decision.action)
+        assert rate >= 0.05
+
+    def test_tax_rate_clamped_to_max(self) -> None:
+        """Proposed tax rate should not exceed configured maximum."""
+        decider = GovernanceDecider()
+        org = _make_org(avg_wealth=100.0)
+        decision = decider.propose_tax_rate(org, my_wealth=0.01)
+        rate = float(decision.action)
+        assert rate <= 0.30
+
+    def test_low_treasury_increases_tax(self) -> None:
+        """Low treasury should push tax rate higher."""
+        decider = GovernanceDecider()
+        org_healthy = _make_org(avg_wealth=100.0, total_wealth=500.0, treasury=100.0)
+        org_low_treasury = _make_org(avg_wealth=100.0, total_wealth=500.0, treasury=5.0)
+        decision_healthy = decider.propose_tax_rate(org_healthy, my_wealth=100.0)
+        decision_low = decider.propose_tax_rate(org_low_treasury, my_wealth=100.0)
+        assert float(decision_low.action) >= float(decision_healthy.action)
+
+
+class TestGovernanceAllocationStrategy:
+    """Tests for GovernanceDecider.choose_allocation_strategy."""
+
+    def test_single_member_equal(self) -> None:
+        """Single-member org always gets equal allocation."""
+        decider = GovernanceDecider()
+        org = _make_org(member_count=1)
+        decision = decider.choose_allocation_strategy(org)
+        assert decision.action == AllocationStrategy.EQUAL.value
+        assert decision.confidence == 1.0
+
+    def test_low_treasury_need_based(self) -> None:
+        """Low treasury triggers need-based allocation."""
+        decider = GovernanceDecider()
+        org = _make_org(member_count=5, avg_wealth=100.0, treasury=10.0)
+        decision = decider.choose_allocation_strategy(org)
+        assert decision.action == AllocationStrategy.NEED_BASED.value
+
+    def test_large_org_proportional(self) -> None:
+        """Large org (>=10 members) gets proportional allocation."""
+        decider = GovernanceDecider()
+        org = _make_org(
+            member_count=15, avg_wealth=100.0, treasury=500.0, tax_rate=0.10
+        )
+        decision = decider.choose_allocation_strategy(org)
+        assert decision.action == AllocationStrategy.PROPORTIONAL.value
+
+    def test_high_tax_merit_based(self) -> None:
+        """High tax rate with moderate size triggers merit-based."""
+        decider = GovernanceDecider()
+        org = _make_org(
+            member_count=5, avg_wealth=100.0, treasury=200.0, tax_rate=0.25
+        )
+        decision = decider.choose_allocation_strategy(org)
+        assert decision.action == AllocationStrategy.MERIT_BASED.value
+
+    def test_small_healthy_org_equal(self) -> None:
+        """Small, healthy org defaults to equal allocation."""
+        decider = GovernanceDecider()
+        org = _make_org(
+            member_count=3, avg_wealth=100.0, treasury=200.0, tax_rate=0.10
+        )
+        decision = decider.choose_allocation_strategy(org)
+        assert decision.action == AllocationStrategy.EQUAL.value

@@ -466,6 +466,7 @@ async fn main() {
         governance: Some(governance),
         banking_system: Some(banking_system),
         trace_store: Some(Arc::new(Mutex::new(agent_world_engine::tracing::TraceStore::new()))),
+        external_agents: Arc::new(Mutex::new(std::collections::HashMap::new())),
     };
     let app = api::build_full_router(app_state);
 

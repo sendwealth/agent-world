@@ -6,6 +6,7 @@ pub mod evolution;
 pub mod grpc_pool;
 pub mod lifecycle;
 pub mod organization;
+pub mod persistence;
 pub mod rules;
 pub mod time_capsule;
 pub mod tracing;
@@ -44,3 +45,8 @@ pub use world::{
 };
 
 pub use evolution::EvolutionSubsystem;
+
+pub use persistence::{
+    SerializableAgentEntry, SerializableAgentRecord, SerializableWorldState,
+    SqlitePersistence, StatePersistence,
+};

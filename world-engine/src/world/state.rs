@@ -177,6 +177,11 @@ impl WorldState {
         self.tick
     }
 
+    /// Set the tick counter (used during state recovery from persistence).
+    pub fn set_tick(&mut self, tick: u64) {
+        self.tick = tick;
+    }
+
     /// Number of living agents.
     pub fn living_agent_count(&self) -> usize {
         self.agents

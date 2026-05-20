@@ -41,7 +41,7 @@ logger = logging.getLogger(__name__)
 
 
 class DecisionAction(str, Enum):
-    """All 10 possible actions an agent can choose in a single tick.
+    """All possible actions an agent can choose in a single tick.
 
     Token costs are aligned with the issue spec and genesis.yaml.
     """
@@ -56,6 +56,8 @@ class DecisionAction(str, Enum):
     GATHER = "gather"  # 8 tokens
     BUILD = "build"  # 20 tokens
     SOCIALIZE = "socialize"  # 5 tokens
+    FORM_ORG = "form_org"  # 25 tokens
+    JOIN_ORG = "join_org"  # 10 tokens
 
     @classmethod
     def all(cls) -> list[DecisionAction]:
@@ -79,6 +81,8 @@ _TOKEN_COSTS: dict[DecisionAction, int] = {
     DecisionAction.GATHER: 8,
     DecisionAction.BUILD: 20,
     DecisionAction.SOCIALIZE: 5,
+    DecisionAction.FORM_ORG: 25,
+    DecisionAction.JOIN_ORG: 10,
 }
 
 

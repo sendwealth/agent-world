@@ -10,10 +10,12 @@ after the test scope ends.
 
 from __future__ import annotations
 
+import json
 import os
 import signal
 import subprocess
 import time
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Generator, Optional
 
@@ -320,3 +322,128 @@ def multi_agent_processes(
     # Teardown in reverse order
     for proc, _ in reversed(agents):
         terminate_process(proc)
+
+
+# ── Failure Diagnostics Collection ──────────────────────────────
+
+REPORTS_DIR = ROOT / "reports" / "failures"
+
+
+def _fetch_json(url: str, timeout: float = 3.0) -> Optional[dict]:
+    """Fetch JSON from *url*, returning parsed dict or None on failure."""
+    try:
+        req = urllib.request.Request(url, method="GET")
+        req.add_header("Accept", "application/json")
+        with urllib.request.urlopen(req, timeout=timeout) as resp:
+            return json.loads(resp.read().decode())
+    except Exception:
+        return None
+
+
+def _read_stderr(proc: subprocess.Popen, tail: int = 2000) -> str:
+    """Read up to *tail* chars of stderr from a subprocess (non-blocking best-effort)."""
+    try:
+        if proc.stderr is None:
+            return ""
+        # Don't block — read whatever is available
+        import select
+        import fcntl
+
+        fd = proc.stderr.fileno()
+        fl = fcntl.fcntl(fd, fcntl.F_GETFL)
+        fcntl.fcntl(fd, fcntl.F_SETFL, fl | os.O_NONBLOCK)
+        try:
+            data = proc.stderr.read()
+            if data:
+                text = data.decode(errors="replace")
+                return text[-tail:] if len(text) > tail else text
+        except (IOError, OSError):
+            pass
+        finally:
+            fcntl.fcntl(fd, fcntl.F_SETFL, fl)
+    except Exception:
+        pass
+    return ""
+
+
+def _get_fixture_safe(request, name: str):
+    """Get a fixture value by name, returning None if not available."""
+    if name not in request.fixturenames:
+        return None
+    try:
+        return request.getfixturevalue(name)
+    except Exception:
+        return None
+
+
+@pytest.fixture(autouse=True)
+def collect_failure_diagnostics(request):
+    """On test failure, collect diagnostic context and write to ``reports/failures/``.
+
+    Inspired by LobeChat's After-hook pattern: screenshot + HTML + console errors.
+    We collect engine/agent stderr, World stats, Tick info, and Agent list.
+
+    Gracefully degrades when engine/agent fixtures are not active (e.g. unit tests).
+    """
+    yield  # Run the test first
+
+    # Only collect on failure
+    if not hasattr(request.node, "rep_call") or not request.node.rep_call.failed:
+        return
+
+    engine_port_val = _get_fixture_safe(request, "engine_port")
+    world_engine_proc = _get_fixture_safe(request, "world_engine_process")
+
+    # If no engine is running, there's nothing to diagnose
+    if engine_port_val is None or world_engine_proc is None:
+        return
+
+    test_name = request.node.nodeid.replace("::", "_").replace("/", "_").replace(" ", "_")
+    timestamp = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
+    report_file = REPORTS_DIR / f"{test_name}.{timestamp}.json"
+
+    diagnostics: dict = {
+        "timestamp": datetime.now(timezone.utc).isoformat(),
+        "test_name": request.node.nodeid,
+        "engine_port": engine_port_val,
+    }
+
+    # 1. World Engine stderr log
+    diagnostics["engine_stderr"] = _read_stderr(world_engine_proc)
+
+    # 2. Agent Runtime stderr — best-effort from active agent fixtures
+    agent_proc = _get_fixture_safe(request, "agent_process")
+    if agent_proc is not None:
+        diagnostics["agent_stderr"] = _read_stderr(agent_proc)
+    else:
+        multi_agents = _get_fixture_safe(request, "multi_agent_processes")
+        if multi_agents:
+            diagnostics["multi_agent_stderr"] = {
+                f"agent-{i}": _read_stderr(p)
+                for i, (p, _) in enumerate(multi_agents)
+            }
+
+    # 3. World state
+    world_stats = _fetch_json(f"http://localhost:{engine_port_val}/api/v1/world/stats")
+    diagnostics["world_stats"] = world_stats
+
+    # 4. Tick information
+    tick_info = _fetch_json(f"http://localhost:{engine_port_val}/api/v1/tick")
+    diagnostics["tick_info"] = tick_info
+
+    # 5. Agent list and status
+    agents_list = _fetch_json(f"http://localhost:{engine_port_val}/api/v1/agents")
+    diagnostics["agents"] = agents_list
+
+    # Write report
+    REPORTS_DIR.mkdir(parents=True, exist_ok=True)
+    report_file.write_text(json.dumps(diagnostics, indent=2, ensure_ascii=False, default=str))
+    print(f"\n[Failure Diagnostics] Written to {report_file}")
+
+
+@pytest.hookimpl(tryfirst=True, hookwrapper=True)
+def pytest_runtest_makereport(item, call):
+    """Hook to store test results on the item for the autouse fixture to read."""
+    outcome = yield
+    rep = outcome.get_result()
+    setattr(item, f"rep_{rep.when}", rep)

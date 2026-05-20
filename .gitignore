@@ -50,3 +50,6 @@ world-engine/target/
 
 # Internal tooling
 scripts/create_multica_issues.sh
+
+# Test failure diagnostics
+reports/failures/

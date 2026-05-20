@@ -7,11 +7,11 @@ monitors tick progress / token health / survival rate in real time, then
 automatically collects data and produces a structured emergence report.
 
 Usage:
-    # One-command start (10 agents, 60 min, llama3)
-    python scripts/emergence_experiment.py --agents 10 --duration 60m --model llama3
+    # One-command start (10 agents, 60 min, qwen3:8b)
+    python scripts/emergence_experiment.py --agents 10 --duration 60m --model qwen3:8b
 
     # Dry-run — validate config without starting containers
-    python scripts/emergence_experiment.py --agents 10 --duration 60m --model llama3 --dry-run
+    python scripts/emergence_experiment.py --agents 10 --duration 60m --model qwen3:8b --dry-run
 
     # Custom Ollama parallelism
     python scripts/emergence_experiment.py --agents 10 --duration 30m --ollama-parallel 5
@@ -52,7 +52,7 @@ CONFIG_AGENTS_DIR = PROJECT_ROOT / "config" / "agents"
 LOGS_BASE_DIR = PROJECT_ROOT / "logs"
 DEFAULT_DURATION_MINUTES = 60
 DEFAULT_AGENT_COUNT = 10
-DEFAULT_MODEL = "llama3"
+DEFAULT_MODEL = "qwen3:8b"
 DEFAULT_TICK_INTERVAL = 1.0
 OLLAMA_DEFAULT_URL = "http://localhost:11434"
 
@@ -786,7 +786,7 @@ def build_arg_parser() -> argparse.ArgumentParser:
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog=(
             "Examples:\n"
-            "  python scripts/emergence_experiment.py --agents 10 --duration 60m --model llama3\n"
+            "  python scripts/emergence_experiment.py --agents 10 --duration 60m --model qwen3:8b\n"
             "  python scripts/emergence_experiment.py --agents 5 --duration 30m --dry-run\n"
             "  python scripts/emergence_experiment.py --agents 10 --duration 1h --ollama-parallel 8\n"
         ),

@@ -89,6 +89,9 @@ pub enum EventType {
     SkillLevelUp,
     SkillMutated,
     FitnessEvaluated,
+    OrgResourceConflict,
+    OrgTerritoryClaimed,
+    OrgFormationSuggested,
 }
 
 /// Events emitted by the world engine.
@@ -176,6 +179,9 @@ pub enum WorldEvent {
     SkillLevelUp { agent_id: String, skill: String, new_level: u32 },
     SkillMutated { agent_id: String, mutation_type: String, skill: String, description: String },
     FitnessEvaluated { agent_id: String, score: f64, token_efficiency: f64, survival_duration: f64, skill_diversity: f64 },
+    OrgResourceConflict { org_a: String, org_b: String, resource_point: String, winner: String, intensity: f64 },
+    OrgTerritoryClaimed { org_id: String, region: String, influence: f64 },
+    OrgFormationSuggested { agents: Vec<String>, suggested_type: String, reason: String },
 }
 
 impl WorldEvent {
@@ -253,6 +259,9 @@ impl WorldEvent {
             WorldEvent::SkillLevelUp { .. } => EventType::SkillLevelUp,
             WorldEvent::SkillMutated { .. } => EventType::SkillMutated,
             WorldEvent::FitnessEvaluated { .. } => EventType::FitnessEvaluated,
+            WorldEvent::OrgResourceConflict { .. } => EventType::OrgResourceConflict,
+            WorldEvent::OrgTerritoryClaimed { .. } => EventType::OrgTerritoryClaimed,
+            WorldEvent::OrgFormationSuggested { .. } => EventType::OrgFormationSuggested,
         }
     }
 
@@ -330,6 +339,9 @@ impl WorldEvent {
             WorldEvent::SkillLevelUp { agent_id, .. } => Some(agent_id),
             WorldEvent::SkillMutated { agent_id, .. } => Some(agent_id),
             WorldEvent::FitnessEvaluated { agent_id, .. } => Some(agent_id),
+            WorldEvent::OrgResourceConflict { .. } => None,
+            WorldEvent::OrgTerritoryClaimed { .. } => None,
+            WorldEvent::OrgFormationSuggested { .. } => None,
         }
     }
 

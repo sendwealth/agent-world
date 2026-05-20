@@ -20,7 +20,7 @@ Config file example (TOML)::
 
     [llm]
     provider = "ollama"
-    model = "llama3"
+    model = "qwen3:8b"
     base_url = "http://localhost:11434"
 
     [think_loop]
@@ -45,7 +45,7 @@ Config file example (YAML)::
           level: 1
     llm:
       provider: ollama
-      model: llama3
+      model: qwen3:8b
       base_url: http://localhost:11434
     think_loop:
       tick_interval: 1.0
@@ -123,6 +123,7 @@ class RuntimeConfig:
     think_loop: ThinkLoopConfig = field(default_factory=ThinkLoopConfig)
     world: WorldConfig = field(default_factory=WorldConfig)
     health_port: int = 9090
+    mock_llm_preset: str | None = None
 
 
 # ---------------------------------------------------------------------------
@@ -193,7 +194,7 @@ def _parse_llm_config(data: dict[str, Any]) -> LLMConfig | None:
 
     return LLMConfig(
         provider=provider,
-        model=data.get("model", "llama3"),
+        model=data.get("model", "qwen3:8b"),
         api_key=api_key,
         base_url=data.get("base_url"),
         timeout=data.get("timeout", 60.0),

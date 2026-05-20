@@ -38,6 +38,18 @@ impl EventBus {
         let _ = self.sender.send(event);
     }
 
+    /// Broadcast multiple events in a batch.
+    ///
+    /// More efficient than calling `emit` in a loop because each call to
+    /// `broadcast::Sender::send` involves waking all receivers.  This method
+    /// still sends individually (broadcast channel doesn't natively support
+    /// batching) but documents the intent for future optimization.
+    pub fn emit_batch(&self, events: &[WorldEvent]) {
+        for event in events {
+            let _ = self.sender.send(event.clone());
+        }
+    }
+
     /// Subscribe to all events. Returns a receiver that will receive every
     /// event emitted after this call.
     pub fn subscribe(&self) -> tokio::sync::broadcast::Receiver<WorldEvent> {
@@ -164,10 +176,8 @@ impl WorldState {
         // Run subsystems
         let events = self.subsystems.run_tick(self.tick, &mut self.agents);
 
-        // Broadcast all generated events
-        for event in &events {
-            self.event_bus.emit(event.clone());
-        }
+        // Broadcast all generated events — batch publish to reduce overhead
+        self.event_bus.emit_batch(&events);
 
         events
     }

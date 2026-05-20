@@ -448,7 +448,12 @@ class VectorMemory:
         memory_type: str | None = None,
         min_relevance: float = 0.0,
     ) -> list[tuple[VectorMemoryEntry, float]]:
-        """Search for similar memories using cosine similarity."""
+        """Search for similar memories using vectorized cosine similarity.
+
+        Loads all matching embeddings as a single numpy matrix and computes
+        cosine similarity against the query vector in one vectorized operation,
+        avoiding the per-row Python loop that was the previous bottleneck.
+        """
         import numpy as np
 
         if memory_type is not None:
@@ -473,26 +478,65 @@ class VectorMemory:
         if query_norm == 0:
             return []
 
-        scored: list[tuple[VectorMemoryEntry, float]] = []
-        for row in rows:
-            entry = self._row_to_entry(row)
-            if entry.embedding is None:
-                continue
+        # Vectorized approach: build a matrix of all embeddings
+        # and compute cosine similarity in one operation
+        n_rows = len(rows)
+        dim = len(query_embedding)
+        emb_matrix = np.zeros((n_rows, dim), dtype=np.float32)
+        valid_mask = np.ones(n_rows, dtype=bool)
 
-            entry_vec = np.array(entry.embedding, dtype=np.float32)
-            entry_norm = np.linalg.norm(entry_vec)
-            if entry_norm == 0:
-                continue
+        for i, row in enumerate(rows):
+            emb_blob = row[4]  # embedding column
+            if emb_blob is not None:
+                emb = _blob_to_floats(emb_blob)
+                if len(emb) == dim:
+                    emb_matrix[i] = emb
+                else:
+                    valid_mask[i] = False
+            else:
+                valid_mask[i] = False
 
-            cosine_sim = float(np.dot(query_vec, entry_vec) / (query_norm * entry_norm))
-            # Clamp to [0, 1] for safety
-            cosine_sim = max(0.0, min(1.0, cosine_sim))
+        # Compute cosine similarities for all valid rows at once
+        norms = np.linalg.norm(emb_matrix, axis=1)
+        nonzero_mask = norms > 0
+        valid_mask &= nonzero_mask
 
-            if cosine_sim >= min_relevance:
-                scored.append((entry, cosine_sim))
+        if not valid_mask.any():
+            return []
 
-        scored.sort(key=lambda x: x[1], reverse=True)
-        return scored[:top_k]
+        # Normalize and compute dot products
+        valid_indices = np.where(valid_mask)[0]
+        valid_norms = norms[valid_indices]
+        valid_embs = emb_matrix[valid_indices]
+
+        # cosine_sim = dot(query, emb) / (norm_query * norm_emb)
+        cosine_sims = np.dot(valid_embs, query_vec) / (query_norm * valid_norms)
+        # Clamp to [0, 1]
+        cosine_sims = np.clip(cosine_sims, 0.0, 1.0)
+
+        # Filter by min_relevance
+        if min_relevance > 0:
+            relevance_mask = cosine_sims >= min_relevance
+            filtered_indices = valid_indices[relevance_mask]
+            filtered_sims = cosine_sims[relevance_mask]
+        else:
+            filtered_indices = valid_indices
+            filtered_sims = cosine_sims
+
+        # Sort by similarity descending and take top_k
+        if len(filtered_sims) > top_k:
+            top_idx = np.argpartition(filtered_sims, -top_k)[-top_k:]
+            top_idx = top_idx[np.argsort(filtered_sims[top_idx])[::-1]]
+        else:
+            top_idx = np.argsort(filtered_sims)[::-1]
+
+        results: list[tuple[VectorMemoryEntry, float]] = []
+        for idx in top_idx:
+            row_idx = filtered_indices[idx]
+            entry = self._row_to_entry(rows[row_idx])
+            results.append((entry, float(filtered_sims[idx])))
+
+        return results
 
     @staticmethod
     def _row_to_entry(row: tuple[Any, ...]) -> VectorMemoryEntry:

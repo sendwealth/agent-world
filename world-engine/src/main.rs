@@ -28,6 +28,7 @@ use agent_world_engine::world::subsystems::{
     ReputationDecaySubsystem, TokenBurnSubsystem,
 };
 use agent_world_engine::evolution::{EvolutionSubsystem, subsystem::EvolutionSubsystemConfig};
+use agent_world_engine::persistence::{SerializableWorldState, SqlitePersistence, StatePersistence};
 use agent_world_engine::world::{Scheduler, WorldState};
 
 #[tokio::main]
@@ -185,12 +186,54 @@ async fn main() {
     );
 
     // ── Initialize WorldState ───────────────────────────────
+    // Try to restore from SQLite persistence first
+    let persistence_db_path = std::env::var("PERSISTENCE_DB")
+        .unwrap_or_else(|_| "./data/world.db".to_string());
+    let persistence: Option<Arc<SqlitePersistence>> = match SqlitePersistence::open(std::path::Path::new(&persistence_db_path)) {
+        Ok(db) => {
+            println!("   Persistence: opened {}", persistence_db_path);
+            Some(Arc::new(db))
+        }
+        Err(e) => {
+            eprintln!("   Persistence: failed to open {}: {}", persistence_db_path, e);
+            None
+        }
+    };
+
+    let (initial_tick, initial_agents) = match &persistence {
+        Some(db) => match db.load_latest_snapshot() {
+            Ok(Some(snapshot)) => {
+                let (tick, agents) = snapshot.to_world_state_parts();
+                println!(
+                    "   Persistence: restored tick={}, agents={}",
+                    tick,
+                    agents.len()
+                );
+                (tick, agents)
+            }
+            Ok(None) => {
+                println!("   Persistence: no previous snapshot found, starting fresh");
+                (0u64, vec![])
+            }
+            Err(e) => {
+                eprintln!("   Persistence: failed to load snapshot: {}", e);
+                (0u64, vec![])
+            }
+        },
+        None => (0u64, vec![]),
+    };
+
     let world_state = Arc::new(Mutex::new(WorldState::new(
         event_bus.clone(),
         subsystem_registry,
-        vec![],
+        initial_agents,
     )));
-    println!("   WorldState: initialized");
+    // Restore tick counter if recovering from a snapshot
+    if initial_tick > 0 {
+        let mut state = world_state.lock().await;
+        state.set_tick(initial_tick);
+    }
+    println!("   WorldState: initialized (tick={})", initial_tick);
 
     // ── Initialize Scheduler ────────────────────────────────
     let scheduler = Scheduler::new(tick_interval, world_state.clone());
@@ -261,6 +304,72 @@ async fn main() {
         // Keep the handle alive for graceful shutdown
         tokio::spawn(async move {
             let _ = snapshot_handle.await;
+        });
+    }
+
+    // ── Initialize Persistence Snapshot Task ─────────────
+    let persistence_interval: u64 = std::env::var("PERSISTENCE_INTERVAL")
+        .ok()
+        .and_then(|v| v.parse().ok())
+        .unwrap_or(1000);
+    let persistence_keep: usize = std::env::var("PERSISTENCE_KEEP")
+        .ok()
+        .and_then(|v| v.parse().ok())
+        .unwrap_or(5);
+
+    if let Some(ref db) = persistence {
+        let persistence_db = Arc::clone(db);
+        let persist_state = world_state.clone();
+        let mut persist_rx = event_bus.subscribe();
+        let persist_cancel = cancel_token.clone();
+
+        let persistence_handle = tokio::spawn(async move {
+            loop {
+                tokio::select! {
+                    result = persist_rx.recv() => {
+                        match result {
+                            Ok(event) => {
+                                if let WorldEvent::TickAdvanced { tick } = event {
+                                    if tick > 0 && tick % persistence_interval == 0 {
+                                        // Clone snapshot data under lock, release before I/O
+                                        let snapshot_data = {
+                                            let state = persist_state.lock().await;
+                                            SerializableWorldState::from_world_state(
+                                                tick,
+                                                &state.agents,
+                                            )
+                                        };
+                                        // Background save via spawn_blocking
+                                        let db = persistence_db.clone();
+                                        let keep = persistence_keep;
+                                        tokio::task::spawn_blocking(move || {
+                                            if let Err(e) = db.save_snapshot(&snapshot_data) {
+                                                eprintln!("[Persistence] Failed to save snapshot: {}", e);
+                                            }
+                                            if let Err(e) = db.prune_snapshots(keep) {
+                                                eprintln!("[Persistence] Failed to prune old snapshots: {}", e);
+                                            }
+                                        }).await.ok();
+                                    }
+                                }
+                            }
+                            Err(tokio::sync::broadcast::error::RecvError::Lagged(n)) => {
+                                eprintln!("[Persistence] Lagged {} events", n);
+                            }
+                            Err(tokio::sync::broadcast::error::RecvError::Closed) => {
+                                break;
+                            }
+                        }
+                    }
+                    _ = persist_cancel.cancelled() => {
+                        break;
+                    }
+                }
+            }
+        });
+        println!("   Persistence: snapshot every {} ticks", persistence_interval);
+        tokio::spawn(async move {
+            let _ = persistence_handle.await;
         });
     }
 
@@ -424,6 +533,22 @@ async fn main() {
             eprintln!("[WAL] Final snapshot failed: {}", e);
         }
         w.close();
+    }
+
+    // Save final persistence snapshot (outside the lock)
+    if let Some(ref db) = persistence {
+        let snapshot = {
+            let state = shutdown_state.lock().await;
+            SerializableWorldState::from_world_state(
+                state.current_tick(),
+                &state.agents,
+            )
+        };
+        if let Err(e) = db.save_snapshot(&snapshot) {
+            eprintln!("[Persistence] Final snapshot failed: {}", e);
+        } else {
+            println!("[Persistence] Final snapshot saved at tick {}", snapshot.tick);
+        }
     }
 
     println!("[Server] Shutdown complete.");

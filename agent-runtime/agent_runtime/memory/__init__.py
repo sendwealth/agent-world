@@ -6,6 +6,7 @@ Memory tiers:
 - LongTermMemory: SQLite-backed long-term memory with keyword search.
 - VectorMemory: Vector-backed long-term memory with semantic retrieval,
   forgetting curve decay, and experience/lesson/fact types.
+- PersistentMemoryStore: Unified persistent storage for agent state and memories.
 """
 
 from agent_runtime.memory.embedding import (
@@ -19,6 +20,7 @@ from agent_runtime.memory.long_term import (
     LongTermMemoryEntry,
     LongTermMemoryProtocol,
 )
+from agent_runtime.memory.persistent_store import PersistentMemoryStore
 from agent_runtime.memory.short_term import (
     ShortTermMemory,
     ShortTermMemoryEntry,
@@ -45,6 +47,7 @@ __all__ = [
     "MemoryEntry",
     "MemoryType",
     "OpenAIEmbeddingProvider",
+    "PersistentMemoryStore",
     "SentenceTransformerEmbeddingProvider",
     "ShortTermMemory",
     "ShortTermMemoryEntry",

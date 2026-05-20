@@ -4,6 +4,7 @@ Phase 4.3: Personality vectors, knowledge transfer, cultural diffusion, organiza
 regional clustering, trust, conflict/fusion, and language emergence.
 """
 
+from .comm_analyzer import CommunicationAnalyzer, DialectReport, MessagePattern
 from .cultural_conflict import (
     AgentInteraction,
     ConflictReport,
@@ -16,7 +17,9 @@ from .intergroup_trust import (
     InterGroupEventType,
     IntergroupTrust,
 )
+from .jargon_detector import JargonDetector, JargonTerm
 from .knowledge_transfer import KnowledgeTransfer
+from .language_experiment import EfficiencyMetrics, LanguageExperiment, VocabConstraint
 from .org_culture import CultureVector, OrgCultureSystem
 from .regional_culture import Cluster, RegionalCulture
 
@@ -41,4 +44,15 @@ __all__ = [
     "AgentInteraction",
     "ConflictReport",
     "CulturalConflictAndFusion",
+    # comm_analyzer (Phase 4.3.4)
+    "CommunicationAnalyzer",
+    "DialectReport",
+    "MessagePattern",
+    # jargon_detector (Phase 4.3.4)
+    "JargonDetector",
+    "JargonTerm",
+    # language_experiment (Phase 4.3.4)
+    "EfficiencyMetrics",
+    "LanguageExperiment",
+    "VocabConstraint",
 ]

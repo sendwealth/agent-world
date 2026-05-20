@@ -33,7 +33,7 @@ import asyncio
 import logging
 import random
 import time
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from typing import Any, Protocol
 
 from agent_runtime.core.act import (
@@ -50,6 +50,21 @@ from agent_runtime.survival.instinct import (
 )
 
 logger = logging.getLogger(__name__)
+
+
+# ---------------------------------------------------------------------------
+# Group identity influence (Phase 4.3.3)
+# ---------------------------------------------------------------------------
+
+
+class GroupIdentityProvider(Protocol):
+    """Provides group identity context for influencing agent decisions.
+
+    Injected into the think loop to apply cultural pressure, trust bias,
+    and diversity awareness during the perceive step.
+    """
+
+    def get_identity_context(self, agent_id: str, tick: int) -> dict[str, Any]: ...
 
 
 # ---------------------------------------------------------------------------
@@ -272,6 +287,7 @@ class ThinkLoop:
         world_client: Any | None = None,
         heartbeat_provider: HeartbeatProvider | None = None,
         cultural_hook: CulturalInfluenceHook | None = None,
+        group_identity: GroupIdentityProvider | None = None,
     ) -> None:
         self.state = state
         self.survival = survival
@@ -291,6 +307,9 @@ class ThinkLoop:
 
         # Cultural influence hook — optional, nudges values/personality each tick
         self._cultural_hook = cultural_hook
+
+        # Group identity provider — optional, injects cultural influence
+        self._group_identity = group_identity
 
         # Runtime state
         self._tick: int = 0
@@ -439,6 +458,24 @@ class ThinkLoop:
 
         # 1. Perceive
         perception = await self._perception.perceive(self.state, self._tick)
+
+        # 1b. Group identity influence (optional — Phase 4.3.3)
+        if self._group_identity is not None:
+            try:
+                identity_ctx = self._group_identity.get_identity_context(
+                    str(self.state.id), self._tick
+                )
+                if identity_ctx:
+                    # Merge group identity context into market_state for downstream use
+                    new_market = {**perception.market_state, "group_identity": identity_ctx}
+                    perception = replace(perception, market_state=new_market)
+            except Exception:
+                logger.debug(
+                    "Tick %d: group identity context failed (non-fatal)",
+                    self._tick,
+                    exc_info=True,
+                )
+
         logger.debug(
             "Tick %d: perceived — token_ratio=%.2f health=%.0f phase=%s",
             self._tick,

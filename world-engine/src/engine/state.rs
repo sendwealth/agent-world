@@ -13,6 +13,8 @@ use crate::world::enums::{AgentPhase, DeathReason};
 use crate::world::event::WorldEvent;
 use crate::world::state::EventBus;
 
+use super::culture::CultureStore;
+
 // ── Errors ───────────────────────────────────────────────
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -87,6 +89,8 @@ pub struct WorldState {
     ledger: Arc<std::sync::RwLock<Ledger>>,
     /// Optional event bus for broadcasting state changes.
     event_bus: Option<EventBus>,
+    /// Culture store for organization cultures, clusters, and trust.
+    culture_store: CultureStore,
 }
 
 impl WorldState {
@@ -98,15 +102,15 @@ impl WorldState {
             tasks: DashMap::new(),
             ledger: Arc::new(std::sync::RwLock::new(Ledger::new())),
             event_bus: None,
+            culture_store: CultureStore::new(),
         }
     }
 
     /// Create a WorldState with an event bus for broadcasting state changes.
     pub fn with_event_bus(event_bus: EventBus) -> Self {
-        Self {
-            event_bus: Some(event_bus),
-            ..Self::new()
-        }
+        let mut state = Self::new();
+        state.event_bus = Some(event_bus);
+        state
     }
 
     // ── Tick Counter ──────────────────────────────────────
@@ -525,6 +529,13 @@ impl WorldState {
     pub fn ledger_entry_count(&self) -> usize {
         let ledger = self.ledger.read().unwrap_or_else(|e| e.into_inner());
         ledger.list().len()
+    }
+
+    // ── Culture Store Access ──────────────────────────────
+
+    /// Get a reference to the culture store.
+    pub fn culture_store(&self) -> &CultureStore {
+        &self.culture_store
     }
 
     // ── Helpers ───────────────────────────────────────────

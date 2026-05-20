@@ -19,6 +19,7 @@ use tokio_stream::wrappers::BroadcastStream;
 use tokio_stream::StreamExt;
 use uuid::Uuid;
 
+use crate::api_auth::SharedApiKeyStore;
 use crate::economy::banking::{
     BankingSystem, BankAccountType, Loan, LoanStatus, Collateral,
 };
@@ -91,6 +92,8 @@ pub struct AppState {
     pub governance: Option<SharedGovernanceSystem>,
     pub banking_system: Option<SharedBankingSystem>,
     pub trace_store: Option<SharedTraceStore>,
+    /// API key store for `/api/v2/*` research endpoints. `None` disables auth.
+    pub api_key_store: Option<SharedApiKeyStore>,
 }
 
 pub fn create_router(board: SharedTaskBoard) -> Router {
@@ -130,6 +133,7 @@ pub fn create_router_with_wal(board: SharedTaskBoard, wal: SharedWAL) -> Router 
         governance: None,
         banking_system: None,
         trace_store: Some(Arc::new(Mutex::new(crate::tracing::TraceStore::new()))),
+        api_key_store: None,
     };
     build_full_router(state)
 }
@@ -157,6 +161,7 @@ pub fn create_router_with_wal_and_snapshots(board: SharedTaskBoard, wal: SharedW
         governance: None,
         banking_system: None,
         trace_store: Some(Arc::new(Mutex::new(crate::tracing::TraceStore::new()))),
+        api_key_store: None,
     };
     build_full_router(state)
 }
@@ -246,7 +251,23 @@ pub fn build_full_router(state: AppState) -> Router {
         .route("/api/v1/agents/:id/traces/latest", get(get_latest_trace))
         .route("/api/v1/agents/:id/traces/:tick", get(get_trace_by_tick))
         .route("/api/v1/agents/:id/traces", post(submit_trace))
+        // Research API v2 (with optional auth middleware)
+        .merge(v2_router(&state))
         .with_state(state)
+}
+
+/// Build the `/api/v2/*` research router, optionally wrapped in auth middleware.
+fn v2_router(state: &AppState) -> Router<AppState> {
+    use axum::middleware;
+
+    let research = crate::api_research::research_routes();
+    match &state.api_key_store {
+        Some(store) => research.layer(middleware::from_fn_with_state(
+            store.clone(),
+            crate::api_auth::auth_middleware,
+        )),
+        None => research,
+    }
 }
 
 /// Create a router for testing with a provided EventBus and tick channel.
@@ -276,6 +297,7 @@ pub fn create_router_for_test(
         governance: None,
         banking_system: None,
         trace_store: Some(Arc::new(Mutex::new(crate::tracing::TraceStore::new()))),
+        api_key_store: None,
     };
     build_full_router(state)
 }
@@ -742,7 +764,7 @@ pub struct SseQuery {
 
 /// Parse a comma-separated string of event type names into `EventType` values.
 /// Returns an error message for any unrecognized names.
-fn parse_event_types(raw: &str) -> Result<Vec<crate::world::event::EventType>, String> {
+pub fn parse_event_types(raw: &str) -> Result<Vec<crate::world::event::EventType>, String> {
     use crate::world::event::EventType;
     let mut types = Vec::new();
     for name in raw.split(',') {

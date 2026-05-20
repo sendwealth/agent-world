@@ -357,6 +357,8 @@ async fn main() {
         governance: Some(governance),
         banking_system: Some(banking_system),
         trace_store: Some(Arc::new(Mutex::new(agent_world_engine::tracing::TraceStore::new()))),
+        api_key_store: agent_world_engine::api_auth::ApiKeyStore::from_env()
+            .map(Arc::new),
     };
     let app = api::build_full_router(app_state);
 

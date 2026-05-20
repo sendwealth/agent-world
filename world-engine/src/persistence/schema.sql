@@ -3,6 +3,7 @@
 
 PRAGMA journal_mode = WAL;
 PRAGMA synchronous = NORMAL;
+PRAGMA foreign_keys = ON;
 
 -- Snapshots metadata: tracks each full world state dump
 CREATE TABLE IF NOT EXISTS snapshots (

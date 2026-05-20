@@ -6,10 +6,7 @@ CulturalInfluenceHook integration in ThinkLoop.
 
 from __future__ import annotations
 
-import random
-from typing import Any, Dict
-
-import pytest
+from typing import Dict
 
 from agent_runtime.core.experience import Experience
 from agent_runtime.models.personality import PersonalityVector
@@ -21,7 +18,6 @@ from agent_runtime.social.cultural_diffusion import (
 )
 from agent_runtime.social.imitation import ImitationEngine
 from agent_runtime.social.knowledge_transfer import KnowledgeTransfer
-
 
 # ── Helpers ──
 
@@ -113,7 +109,9 @@ class TestKnowledgeTransferSkill:
     def test_transfer_skill_adds_experience(self) -> None:
         """Skill transfer should add experience points to student's skill."""
         kt = KnowledgeTransfer()
-        teacher_skill = Skill(name="mining", max_level=10, level=8, experience=0, next_level_exp=100)
+        teacher_skill = Skill(
+            name="mining", max_level=10, level=8, experience=0, next_level_exp=100
+        )
         student_skills: Dict[str, Skill] = {}
         student_p = make_personality(openness=0.7)
 
@@ -125,7 +123,9 @@ class TestKnowledgeTransferSkill:
     def test_transfer_skill_low_teacher_level_no_transfer(self) -> None:
         """Teacher with level < 2 should not transfer."""
         kt = KnowledgeTransfer()
-        teacher_skill = Skill(name="mining", max_level=10, level=1, experience=0, next_level_exp=100)
+        teacher_skill = Skill(
+            name="mining", max_level=10, level=1, experience=0, next_level_exp=100
+        )
         student_skills: Dict[str, Skill] = {}
 
         xp = kt.transfer_skill(teacher_skill, student_skills, make_personality())
@@ -137,7 +137,9 @@ class TestKnowledgeTransferSkill:
         """openness=0 yields 40% base transfer (intentional: skill transfer has
         a practice/physiological component independent of ideological receptiveness)."""
         kt = KnowledgeTransfer()
-        teacher_skill = Skill(name="mining", max_level=10, level=5, experience=0, next_level_exp=100)
+        teacher_skill = Skill(
+            name="mining", max_level=10, level=5, experience=0, next_level_exp=100
+        )
         student_skills: Dict[str, Skill] = {}
         student_p = make_personality(openness=0.0)
 

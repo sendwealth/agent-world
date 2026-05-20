@@ -19,7 +19,7 @@ pub use banking::{
     MintResult, WriteOffResult,
 };
 pub use escrow::{EscrowManager, EscrowRecord, EscrowStatus};
-pub use inheritance::{InheritanceSystem, InheritanceConfig, Will, Beneficiary, InheritanceResult};
+pub use inheritance::{InheritanceSystem, InheritanceConfig, Will, Beneficiary, InheritanceResult, ValueExperience};
 pub use marketplace::{Marketplace, KnowledgeListing, KnowledgeCategory, ListingStatus};
 pub use mentorship::{MentorshipSystem, MentorshipConfig, MentorshipSession, MentorshipStatus};
 pub use reputation::{

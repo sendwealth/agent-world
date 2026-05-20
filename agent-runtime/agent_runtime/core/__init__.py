@@ -21,6 +21,7 @@ from agent_runtime.core.decide import (
 )
 from agent_runtime.core.experience import Experience, ExperienceAccumulator
 from agent_runtime.core.think_loop import (
+    CulturalInfluenceHook,
     Decision,
     DefaultPerceptionProvider,
     DefaultReflectionProvider,
@@ -36,6 +37,7 @@ __all__ = [
     "ActionResult",
     "ActionStatus",
     "ActionType",
+    "CulturalInfluenceHook",
     "Decision",
     "DecisionAction",
     "DecisionEngine",

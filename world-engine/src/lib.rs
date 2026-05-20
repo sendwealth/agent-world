@@ -2,6 +2,7 @@ pub mod a2a;
 pub mod api;
 pub mod config;
 pub mod economy;
+pub mod engine;
 pub mod evolution;
 pub mod grpc_pool;
 pub mod lifecycle;

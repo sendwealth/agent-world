@@ -144,6 +144,7 @@ pub struct EconomicConcentrationMetrics {
 pub fn research_routes() -> Router<AppState> {
     Router::new()
         .route("/api/v2/world/state", get(get_world_state))
+        .route("/api/v2/agents", get(list_agents_v2))
         .route("/api/v2/agents/{id}/profile", get(get_agent_profile))
         .route("/api/v2/world/history", get(get_world_history))
         .route("/api/v2/metrics/emergence", get(get_emergence_metrics))
@@ -200,6 +201,14 @@ async fn get_world_state(
         total_tokens,
         resource_distribution,
     })
+}
+
+/// `GET /api/v2/agents` — list all agents (v2, auth-protected).
+async fn list_agents_v2(
+    State(state): State<AppState>,
+) -> impl IntoResponse {
+    let agents = state.agents.lock().await;
+    Json(&*agents).into_response()
 }
 
 /// `GET /api/v2/agents/{id}/profile`

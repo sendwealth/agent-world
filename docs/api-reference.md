@@ -1959,6 +1959,34 @@ curl -s -H "X-API-Key: my-key" http://localhost:8080/api/v2/world/state | jq .
 
 ---
 
+### GET /api/v2/agents
+
+List all agents. Returns an array of agent records.
+
+**Authentication:** Requires `X-API-Key` header.
+
+**Response:** `200 OK`
+
+```json
+[
+  {
+    "id": "agent-001",
+    "name": "Agent-001",
+    "phase": "active",
+    "tokens": 150,
+    "money": 200,
+    "alive": true,
+    "ticks_survived": 42
+  }
+]
+```
+
+```bash
+curl -s -H "X-API-Key: my-key" http://localhost:8080/api/v2/agents | jq .
+```
+
+---
+
 ### GET /api/v2/agents/{id}/profile
 
 Get a deep profile of a specific agent — status, resources, organization membership, and reputation.
@@ -2600,6 +2628,7 @@ curl -s -H "X-API-Key: my-key" "http://localhost:8080/api/v2/export/metrics/time
 | Method | Path | Description |
 |--------|------|-------------|
 | `GET` | `/api/v2/world/state` | Aggregated world state |
+| `GET` | `/api/v2/agents` | List all agents |
 | `GET` | `/api/v2/agents/{id}/profile` | Deep agent profile |
 | `GET` | `/api/v2/world/history` | Historical snapshots |
 | `GET` | `/api/v2/metrics/emergence` | Emergence metrics |

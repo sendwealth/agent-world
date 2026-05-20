@@ -40,11 +40,8 @@ class AgentsModule:
         self._client = client
 
     def list(self) -> list[dict]:
-        """List all agents (delegates to world state agent list)."""
-        state = self._client._get("/api/v2/world/state")
-        # The world/state endpoint returns aggregate data.
-        # For a full agent list we use the v1 endpoint.
-        return self._client._get("/api/v1/agents")
+        """List all agents via the v2 endpoint (auth-protected)."""
+        return self._client._get("/api/v2/agents")
 
     def profile(self, agent_id: str) -> dict:
         """Get deep agent profile."""

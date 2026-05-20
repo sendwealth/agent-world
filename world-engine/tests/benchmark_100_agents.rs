@@ -66,6 +66,7 @@ async fn test_full_pipeline_100_agents_2000_ticks() {
                 phase: AgentPhase::Adult,
                 tokens: 500_000,
                 skills,
+                personality: String::new(),
             }
         })
         .collect();
@@ -380,6 +381,7 @@ async fn test_token_burn_100_agents_2000_ticks() {
                 phase: AgentPhase::Adult,
                 tokens: 500_000,
                 skills,
+                personality: String::new(),
             }
         })
         .collect();

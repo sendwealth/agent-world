@@ -363,6 +363,7 @@ mod tests {
                     }
                     m
                 },
+                personality: String::new(),
             },
         )
     }
@@ -435,6 +436,7 @@ mod tests {
                     });
                     m
                 },
+                personality: String::new(),
             }),
             (apprentice_uuid, 0, AgentRecord {
                 id: apprentice_uuid,
@@ -442,6 +444,7 @@ mod tests {
                 phase: AgentPhase::Adult,
                 tokens: 1000,
                 skills: HashMap::new(),
+                personality: String::new(),
             }),
         ];
 
@@ -484,6 +487,7 @@ mod tests {
                 phase: AgentPhase::Dead, // Dead mentor
                 tokens: 0,
                 skills: HashMap::new(),
+                personality: String::new(),
             }),
             (apprentice_uuid, 0, AgentRecord {
                 id: apprentice_uuid,
@@ -491,6 +495,7 @@ mod tests {
                 phase: AgentPhase::Adult,
                 tokens: 1000,
                 skills: HashMap::new(),
+                personality: String::new(),
             }),
         ];
 

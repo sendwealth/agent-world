@@ -344,6 +344,7 @@ mod tests {
                     });
                     m
                 },
+                personality: String::new(),
             }),
             (heir, 0, AgentRecord {
                 id: heir,
@@ -351,6 +352,7 @@ mod tests {
                 phase: AgentPhase::Adult,
                 tokens: 100,
                 skills: HashMap::new(),
+                personality: String::new(),
             }),
             (bystander, 0, AgentRecord {
                 id: bystander,
@@ -358,6 +360,7 @@ mod tests {
                 phase: AgentPhase::Adult,
                 tokens: 50,
                 skills: HashMap::new(),
+                personality: String::new(),
             }),
         ]
     }

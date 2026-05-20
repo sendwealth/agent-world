@@ -63,6 +63,7 @@ impl TestWorld {
             phase: AgentPhase::Adult,
             tokens: initial_tokens,
             skills: HashMap::new(),
+            personality: String::new(),
         };
 
         self.agents.push((id_str.clone(), record));

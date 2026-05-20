@@ -12,6 +12,8 @@ pub struct AgentRecord {
     pub skills: Vec<String>,
     pub reputation: f32,
     pub phase: String,
+    #[serde(default)]
+    pub personality: String,
 }
 
 /// Thread-safe registry of agents in the world.
@@ -99,6 +101,7 @@ mod tests {
             skills: vec!["coding".into(), "trading".into()],
             reputation: 4.5,
             phase: "adult".into(),
+            personality: String::new(),
         };
         registry.register(agent).await;
 
@@ -119,6 +122,7 @@ mod tests {
                 skills: vec!["coding".into()],
                 reputation: 0.0,
                 phase: "adult".into(),
+                personality: String::new(),
             })
             .await;
         registry
@@ -130,6 +134,7 @@ mod tests {
                 skills: vec!["trading".into()],
                 reputation: 0.0,
                 phase: "adult".into(),
+                personality: String::new(),
             })
             .await;
 
@@ -150,6 +155,7 @@ mod tests {
                 skills: vec![],
                 reputation: 0.0,
                 phase: "birth".into(),
+                personality: String::new(),
             })
             .await;
         assert!(registry.deregister("a1").await.is_some());

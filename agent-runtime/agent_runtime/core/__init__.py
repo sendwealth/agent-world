@@ -19,6 +19,7 @@ from agent_runtime.core.decide import (
     strip_code_fences,
     validate_decision,
 )
+from agent_runtime.core.experience import Experience, ExperienceAccumulator
 from agent_runtime.core.think_loop import (
     Decision,
     DefaultPerceptionProvider,
@@ -41,6 +42,8 @@ __all__ = [
     "DecisionPerception",
     "DefaultPerceptionProvider",
     "DefaultReflectionProvider",
+    "Experience",
+    "ExperienceAccumulator",
     "MockDecisionProvider",
     "Perception",
     "SurvivalAssessment",

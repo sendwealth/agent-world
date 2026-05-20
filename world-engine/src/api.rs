@@ -60,6 +60,8 @@ pub struct AgentRecord {
     pub money: u64,
     pub alive: bool,
     pub ticks_survived: u64,
+    #[serde(default)]
+    pub personality: String,
 }
 
 /// A2A message record.
@@ -902,6 +904,7 @@ async fn spawn_agent(
         money: body.money,
         alive: true,
         ticks_survived: 0,
+        personality: String::new(),
     };
 
     state.event_bus.emit(WorldEvent::AgentSpawned {
@@ -1091,6 +1094,7 @@ async fn create_snapshot(
             phase: if a.alive { crate::world::enums::AgentPhase::Adult } else { crate::world::enums::AgentPhase::Dead },
             tokens: a.tokens,
             skills: std::collections::HashMap::new(),
+            personality: String::new(),
         };
         (id, a.ticks_survived, record)
     }).collect::<Vec<_>>(), &[]);

@@ -55,6 +55,8 @@ class ActionType(str, Enum):
     MOVE = "move"
     GATHER = "gather"
     BUILD = "build"
+    FORM_ORG = "form_org"
+    JOIN_ORG = "join_org"
 
 
 class ActionStatus(str, Enum):
@@ -110,6 +112,8 @@ _DEFAULT_TOKEN_COSTS: dict[ActionType, int] = {
     ActionType.MOVE: 12,
     ActionType.GATHER: 8,
     ActionType.BUILD: 20,
+    ActionType.FORM_ORG: 25,
+    ActionType.JOIN_ORG: 10,
 }
 
 
@@ -341,6 +345,8 @@ class ActionExecutor:
         ActionType.MOVE: "_handle_move",
         ActionType.GATHER: "_handle_gather",
         ActionType.BUILD: "_handle_build",
+        ActionType.FORM_ORG: "_handle_form_org",
+        ActionType.JOIN_ORG: "_handle_join_org",
     }
 
     async def _dispatch(self, action_type: ActionType, context: ActionContext) -> dict[str, Any]:
@@ -424,6 +430,42 @@ class ActionExecutor:
                 for k, v in context.parameters.items()
                 if k not in ("structure_type",)
             },
+        )
+
+    async def _handle_form_org(self, context: ActionContext) -> dict[str, Any]:
+        """Form a new organization — sent as a WILL message to World Engine."""
+        org_name = context.parameters.get("org_name", "")
+        org_type = context.parameters.get("org_type", "")
+        charter = context.parameters.get("charter", "")
+        founding_members = context.parameters.get("founding_members", [])
+        if not org_name:
+            raise ValueError("form_org requires 'org_name' parameter")
+        return await context.world.send_message(
+            {
+                "type": "WILL",
+                "payload": {
+                    "action": "form_org",
+                    "org_name": org_name,
+                    "org_type": org_type,
+                    "charter": charter,
+                    "founding_members": founding_members,
+                },
+            }
+        )
+
+    async def _handle_join_org(self, context: ActionContext) -> dict[str, Any]:
+        """Join an existing organization — sent as a PROPOSE message to World Engine."""
+        org_id = context.parameters.get("org_id", "")
+        if not org_id:
+            raise ValueError("join_org requires 'org_id' parameter")
+        return await context.world.send_message(
+            {
+                "type": "PROPOSE",
+                "payload": {
+                    "action": "join_org",
+                    "org_id": org_id,
+                },
+            }
         )
 
     # ------------------------------------------------------------------

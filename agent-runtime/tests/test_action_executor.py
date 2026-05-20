@@ -124,6 +124,8 @@ class TestActionType:
             "move",
             "gather",
             "build",
+            "form_org",
+            "join_org",
         }
         assert {t.value for t in ActionType} == expected
 

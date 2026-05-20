@@ -7,28 +7,23 @@ Covers:
 - CulturalConflictAndFusion (conflict detection, fusion, diversity index)
 """
 
-import pytest
-
 from agent_runtime.models.personality import PersonalityVector
 from agent_runtime.models.values import ValueWeights
-from agent_runtime.social.org_culture import OrgCultureSystem, CultureVector, MAX_CULTURE_PRESSURE_PER_TICK
-from agent_runtime.social.regional_culture import RegionalCulture, Cluster
+from agent_runtime.social.cultural_conflict import (
+    MAX_FUSION_DELTA,
+    AgentInteraction,
+    CulturalConflictAndFusion,
+)
 from agent_runtime.social.intergroup_trust import (
-    IntergroupTrust,
-    InterGroupEvent,
-    InterGroupEventType,
-    MIN_OUT_GROUP_TRUST,
     DEFAULT_IN_GROUP_TRUST,
     DEFAULT_OUT_GROUP_TRUST,
+    MIN_OUT_GROUP_TRUST,
+    InterGroupEvent,
+    InterGroupEventType,
+    IntergroupTrust,
 )
-from agent_runtime.social.cultural_conflict import (
-    CulturalConflictAndFusion,
-    AgentInteraction,
-    ConflictReport,
-    CONFLICT_THRESHOLD,
-    MAX_FUSION_DELTA,
-)
-
+from agent_runtime.social.org_culture import MAX_CULTURE_PRESSURE_PER_TICK, OrgCultureSystem
+from agent_runtime.social.regional_culture import Cluster, RegionalCulture
 
 # ── Helpers ──
 
@@ -97,7 +92,7 @@ class TestOrgCultureSystem:
         system.compute_org_culture("org_1", [_make_vw()])
 
         culture_before = system.get_org_culture("org_1")
-        result = system.culture_drift("org_1", tick=100)
+        _result = system.culture_drift("org_1", tick=100)
         culture_after = system.get_org_culture("org_1")
 
         # Drift should be very small
@@ -147,7 +142,11 @@ class TestRegionalCulture:
         """Clustering groups similar agents together."""
         rc = RegionalCulture(n_clusters=2, max_iterations=50)
         agents = [
-            {"id": f"a{i}", "personality": _make_pv(openness=0.1 if i < 5 else 0.9), "values": _make_vw()}
+            {
+                "id": f"a{i}",
+                "personality": _make_pv(openness=0.1 if i < 5 else 0.9),
+                "values": _make_vw(),
+            }
             for i in range(10)
         ]
         clusters = rc.detect_cultural_clusters(agents)
@@ -326,7 +325,11 @@ class TestCulturalConflictAndFusion:
         """Diversity index is always in [0, 1]."""
         ccf = CulturalConflictAndFusion()
         agents = [
-            {"values": _make_vw(**{d: 0.0 if i % 2 == 0 else 1.0 for d in ValueWeights._dimension_names()})}
+            {
+                "values": _make_vw(
+                    **{d: 0.0 if i % 2 == 0 else 1.0 for d in ValueWeights._dimension_names()}
+                )
+            }
             for i in range(10)
         ]
         idx = ccf.compute_cultural_diversity_index(agents)

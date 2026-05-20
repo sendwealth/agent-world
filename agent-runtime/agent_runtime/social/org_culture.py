@@ -13,9 +13,7 @@ from typing import Any, Dict, List, Optional
 
 from pydantic import BaseModel, Field
 
-from agent_runtime.models.personality import PersonalityVector
 from agent_runtime.models.values import ValueWeights
-
 
 # Maximum cultural pressure per tick (0.1% = 0.001).
 MAX_CULTURE_PRESSURE_PER_TICK = 0.001

@@ -7,10 +7,9 @@ Trust is shaped by direct interaction history and group-level events.
 from __future__ import annotations
 
 from enum import Enum
-from typing import Any, Dict, List, Optional
+from typing import Dict
 
 from pydantic import BaseModel, Field
-
 
 # Minimum out-group trust floor — agents never completely distrust outsiders.
 MIN_OUT_GROUP_TRUST = 0.1
@@ -214,7 +213,11 @@ class IntergroupTrust:
         record = self._group_group_trust.get(key)
 
         if record is None:
-            record = TrustRecord(source_group=source, target_group=target, trust_value=DEFAULT_OUT_GROUP_TRUST)
+            record = TrustRecord(
+                source_group=source,
+                target_group=target,
+                trust_value=DEFAULT_OUT_GROUP_TRUST,
+            )
             self._group_group_trust[key] = record
 
         new_val = record.trust_value + delta

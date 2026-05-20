@@ -43,6 +43,7 @@ pub use world::{
     GenesisConfig,
     TokenBurnSubsystem, DeathJudgmentSubsystem,
     RuleCheckSubsystem, EventBroadcastSubsystem,
+    TickProfiler, TickPhase, TickProfileReport, TickTiming,
 };
 
 pub use evolution::EvolutionSubsystem;

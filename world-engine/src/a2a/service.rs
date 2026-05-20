@@ -13,6 +13,9 @@ use crate::agentworld::a2a::v1::{
 use super::registry::AgentRegistry;
 use super::router::MessageRouter;
 
+/// Maximum number of messages that can be sent in a single batch.
+const MAX_BATCH_SIZE: usize = 256;
+
 /// Concrete A2A gRPC service implementation.
 #[derive(Clone)]
 pub struct A2aServiceImpl {
@@ -215,6 +218,85 @@ impl A2aService for A2aServiceImpl {
         let output = Box::pin(rx.map(Ok));
 
         Ok(Response::new(output))
+    }
+}
+
+// ── Batch operations ────────────────────────────────────────────────────
+
+impl A2aServiceImpl {
+    /// Send multiple messages in a single RPC call.
+    ///
+    /// Processes each message through the router, collecting individual ACKs.
+    /// If any message fails validation, it is recorded as a failed ACK but
+    /// does not prevent other messages from being processed.
+    ///
+    /// Returns a vector of `MessageAck` in the same order as the input messages.
+    pub async fn send_message_batch(
+        &self,
+        messages: Vec<A2aMessage>,
+    ) -> Result<Response<Vec<MessageAck>>, Status> {
+        if messages.is_empty() {
+            return Ok(Response::new(vec![]));
+        }
+        if messages.len() > MAX_BATCH_SIZE {
+            return Err(Status::invalid_argument(format!(
+                "Batch size {} exceeds maximum of {}",
+                messages.len(),
+                MAX_BATCH_SIZE
+            )));
+        }
+
+        let mut acks = Vec::with_capacity(messages.len());
+
+        for msg in messages {
+            if msg.from_agent.is_empty() || msg.id.is_empty() {
+                acks.push(MessageAck {
+                    received: false,
+                    error: "from_agent and id are required".into(),
+                });
+                continue;
+            }
+
+            match self.router.route(msg).await {
+                Ok(()) => acks.push(MessageAck {
+                    received: true,
+                    error: String::new(),
+                }),
+                Err(status) => acks.push(MessageAck {
+                    received: false,
+                    error: status.message().to_string(),
+                }),
+            }
+        }
+
+        Ok(Response::new(acks))
+    }
+
+    /// Batch discovery — returns all registered agents in a single call.
+    ///
+    /// Equivalent to calling `discover` with no capability filter, but
+    /// optimized to avoid per-agent allocation overhead when the caller
+    /// needs the full roster.
+    pub async fn discover_all(&self) -> Result<Response<DiscoverResponse>, Status> {
+        let agents = self.registry.discover(&[]).await;
+
+        let agent_infos: Vec<AgentInfo> = agents
+            .into_iter()
+            .map(|a| AgentInfo {
+                agent_id: a.agent_id,
+                name: a.name,
+                tokens: a.tokens,
+                money: a.money,
+                skills: a.skills,
+                reputation: a.reputation,
+                phase: a.phase,
+                last_seen: a.last_seen,
+            })
+            .collect();
+
+        Ok(Response::new(DiscoverResponse {
+            agents: agent_infos,
+        }))
     }
 }
 
@@ -494,5 +576,125 @@ mod tests {
             .unwrap();
 
         assert!(!resp.into_inner().received);
+    }
+
+    #[tokio::test]
+    async fn send_message_batch_success() {
+        let (service, registry, _) = make_service();
+        registry
+            .register("a1".into(), "Alice".into(), vec![], "pk1".into())
+            .await;
+        registry
+            .register("a2".into(), "Bob".into(), vec![], "pk2".into())
+            .await;
+
+        let messages = vec![
+            A2aMessage {
+                id: "msg-1".into(),
+                from_agent: "a1".into(),
+                to_agent: "a2".into(),
+                r#type: 4,
+                payload: b"hello".to_vec(),
+                timestamp: 1000,
+                signature: String::new(),
+                nonce: "n1".into(),
+            },
+            A2aMessage {
+                id: "msg-2".into(),
+                from_agent: "a2".into(),
+                to_agent: "a1".into(),
+                r#type: 4,
+                payload: b"world".to_vec(),
+                timestamp: 1001,
+                signature: String::new(),
+                nonce: "n2".into(),
+            },
+        ];
+
+        let resp = service.send_message_batch(messages).await.unwrap();
+        let acks = resp.into_inner();
+        assert_eq!(acks.len(), 2);
+        assert!(acks[0].received);
+        assert!(acks[1].received);
+    }
+
+    #[tokio::test]
+    async fn send_message_batch_empty() {
+        let (service, _, _) = make_service();
+        let resp = service.send_message_batch(vec![]).await.unwrap();
+        assert!(resp.into_inner().is_empty());
+    }
+
+    #[tokio::test]
+    async fn send_message_batch_too_large() {
+        let (service, _, _) = make_service();
+        let messages: Vec<A2aMessage> = (0..257)
+            .map(|i| A2aMessage {
+                id: format!("msg-{}", i),
+                from_agent: "a1".into(),
+                to_agent: "a2".into(),
+                r#type: 4,
+                payload: Vec::new(),
+                timestamp: 0,
+                signature: String::new(),
+                nonce: String::new(),
+            })
+            .collect();
+
+        let result = service.send_message_batch(messages).await;
+        assert!(result.is_err());
+    }
+
+    #[tokio::test]
+    async fn send_message_batch_partial_failure() {
+        let (service, registry, _) = make_service();
+        registry
+            .register("a1".into(), "Alice".into(), vec![], "pk1".into())
+            .await;
+        // a2 is NOT registered
+
+        let messages = vec![
+            A2aMessage {
+                id: "msg-1".into(),
+                from_agent: "a1".into(),
+                to_agent: "a2".into(),
+                r#type: 4,
+                payload: Vec::new(),
+                timestamp: 0,
+                signature: String::new(),
+                nonce: "n1".into(),
+            },
+            A2aMessage {
+                id: "msg-2".into(),
+                from_agent: String::new(), // missing from_agent
+                to_agent: "a1".into(),
+                r#type: 4,
+                payload: Vec::new(),
+                timestamp: 0,
+                signature: String::new(),
+                nonce: "n2".into(),
+            },
+        ];
+
+        let resp = service.send_message_batch(messages).await.unwrap();
+        let acks = resp.into_inner();
+        assert_eq!(acks.len(), 2);
+        assert!(!acks[0].received); // unknown recipient
+        assert!(!acks[1].received); // missing from_agent
+    }
+
+    #[tokio::test]
+    async fn discover_all_returns_all_agents() {
+        let (service, registry, _) = make_service();
+        registry
+            .register("a1".into(), "Alice".into(), vec!["coding".into()], "pk1".into())
+            .await;
+        registry
+            .register("a2".into(), "Bob".into(), vec!["research".into()], "pk2".into())
+            .await;
+
+        let resp = service.discover_all().await.unwrap();
+        let body = resp.into_inner();
+        assert_eq!(body.agents.len(), 2);
     }
 }

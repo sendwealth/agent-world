@@ -35,6 +35,19 @@ from .recruitment import (
     InvitationStatus,
     RecruitmentEngine,
 )
+from .rule_proposal import (
+    RuleProposalEngine,
+    RuleProposal,
+    RuleCondition,
+    RuleEffect,
+    RuleCategory,
+)
+from .rule_evolution import (
+    RuleEvolutionTracker,
+    RuleLifecycleEvent,
+    RuleLifecycleEventType,
+    RuleStats,
+)
 
 __all__ = [
     # formation
@@ -59,4 +72,15 @@ __all__ = [
     "Invitation",
     "InvitationStatus",
     "RecruitmentEngine",
+    # rule proposal
+    "RuleProposalEngine",
+    "RuleProposal",
+    "RuleCondition",
+    "RuleEffect",
+    "RuleCategory",
+    # rule evolution
+    "RuleEvolutionTracker",
+    "RuleLifecycleEvent",
+    "RuleLifecycleEventType",
+    "RuleStats",
 ]

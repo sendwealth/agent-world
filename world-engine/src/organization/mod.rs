@@ -5,6 +5,7 @@ pub mod governance;
 pub mod leadership;
 pub mod members;
 pub mod org;
+pub mod rule_engine;
 pub mod treasury;
 
 pub use charter::{Charter, GovernanceModel, ProfitSharing};
@@ -29,4 +30,8 @@ pub use treasury::{
 };
 pub use diplomacy::{
     DiplomacyEngine, TreatyType, TreatyStatus, Treaty, RelationLevel, DiplomacyError,
+};
+pub use rule_engine::{
+    RuleEngine, RuleEngineError, SoftRule, RuleType, RuleStatus,
+    RuleCondition, RuleEffect, apply_effect,
 };

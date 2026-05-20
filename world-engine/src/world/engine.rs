@@ -15,6 +15,7 @@ use uuid::Uuid;
 use crate::economy::token_burn::{AgentRecord, ConsumptionConfig, SkillRecord, TokenBurnEngine};
 use crate::economy::task::TaskBoard;
 use crate::lifecycle::{Subsystem, SubsystemResult, run_subsystem_isolated};
+use crate::organization::rule_engine::RuleEngine;
 use crate::rules::RuleRegistry;
 use crate::world::enums::AgentPhase;
 use crate::world::event::WorldEvent;
@@ -34,6 +35,8 @@ pub struct WorldState {
     pub token_engine: TokenBurnEngine,
     /// Rule registry for evaluating world rules.
     pub rule_registry: RuleRegistry,
+    /// Soft rule engine for agent-proposed rules.
+    pub active_rules: Arc<Mutex<RuleEngine>>,
     /// Agent registry: maps agent ID string to (spawn_tick, AgentRecord).
     agents: Mutex<Vec<(Uuid, u64, AgentRecord)>>,
     /// Current tick counter (atomic for lock-free reads).
@@ -56,6 +59,7 @@ impl WorldState {
             task_board: Arc::new(Mutex::new(TaskBoard::new())),
             token_engine,
             rule_registry,
+            active_rules: Arc::new(Mutex::new(RuleEngine::new())),
             agents: Mutex::new(Vec::new()),
             tick: AtomicU64::new(0),
             config,
@@ -74,6 +78,7 @@ impl WorldState {
             task_board: Arc::new(Mutex::new(TaskBoard::new())),
             token_engine,
             rule_registry: crate::rules::default_registry(),
+            active_rules: Arc::new(Mutex::new(RuleEngine::new())),
             agents: Mutex::new(Vec::new()),
             tick: AtomicU64::new(0),
             config,
@@ -93,6 +98,7 @@ impl WorldState {
             task_board: Arc::new(Mutex::new(TaskBoard::new())),
             token_engine,
             rule_registry: crate::rules::default_registry(),
+            active_rules: Arc::new(Mutex::new(RuleEngine::new())),
             agents: Mutex::new(Vec::new()),
             tick: AtomicU64::new(0),
             config,
@@ -277,6 +283,12 @@ impl WorldState {
                     }
                 }
             }
+        }
+
+        // Step 2b: Expire soft rules whose TTL has elapsed
+        {
+            let mut rule_engine = self.active_rules.lock().await;
+            let _expired = rule_engine.expire_rules(new_tick);
         }
 
         // Step 3: Broadcast all collected events

@@ -58,6 +58,8 @@ class DecisionAction(str, Enum):
     SOCIALIZE = "socialize"  # 5 tokens
     FORM_ORG = "form_org"  # 25 tokens
     JOIN_ORG = "join_org"  # 10 tokens
+    PROPOSE_RULE = "propose_rule"  # 15 tokens
+    VOTE_RULE = "vote_rule"  # 5 tokens
 
     @classmethod
     def all(cls) -> list[DecisionAction]:
@@ -83,6 +85,8 @@ _TOKEN_COSTS: dict[DecisionAction, int] = {
     DecisionAction.SOCIALIZE: 5,
     DecisionAction.FORM_ORG: 25,
     DecisionAction.JOIN_ORG: 10,
+    DecisionAction.PROPOSE_RULE: 15,
+    DecisionAction.VOTE_RULE: 5,
 }
 
 

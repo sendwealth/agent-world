@@ -103,6 +103,11 @@ pub enum EventType {
     TreatySigned,
     TreatyBroken,
     RelationChanged,
+    // Soft rule events
+    SoftRuleProposed,
+    SoftRuleActivated,
+    SoftRuleExpired,
+    SoftRuleRepealed,
 }
 
 /// Events emitted by the world engine.
@@ -204,6 +209,11 @@ pub enum WorldEvent {
     TreatySigned { treaty_id: String, org_a: String, org_b: String },
     TreatyBroken { treaty_id: String, breaker: String, reason: String },
     RelationChanged { org_a: String, org_b: String, old_level: i8, new_level: i8 },
+    // Soft rule events
+    SoftRuleProposed { rule_id: String, org_id: String, proposer_id: String, title: String },
+    SoftRuleActivated { rule_id: String, org_id: String },
+    SoftRuleExpired { rule_id: String, org_id: String, tick: u64 },
+    SoftRuleRepealed { rule_id: String, org_id: String, tick: u64 },
 }
 
 impl WorldEvent {
@@ -292,6 +302,10 @@ impl WorldEvent {
             WorldEvent::TreatySigned { .. } => EventType::TreatySigned,
             WorldEvent::TreatyBroken { .. } => EventType::TreatyBroken,
             WorldEvent::RelationChanged { .. } => EventType::RelationChanged,
+            WorldEvent::SoftRuleProposed { .. } => EventType::SoftRuleProposed,
+            WorldEvent::SoftRuleActivated { .. } => EventType::SoftRuleActivated,
+            WorldEvent::SoftRuleExpired { .. } => EventType::SoftRuleExpired,
+            WorldEvent::SoftRuleRepealed { .. } => EventType::SoftRuleRepealed,
         }
     }
 
@@ -380,6 +394,10 @@ impl WorldEvent {
             WorldEvent::TreatySigned { .. } => None,
             WorldEvent::TreatyBroken { breaker, .. } => Some(breaker),
             WorldEvent::RelationChanged { .. } => None,
+            WorldEvent::SoftRuleProposed { proposer_id, .. } => Some(proposer_id),
+            WorldEvent::SoftRuleActivated { .. } => None,
+            WorldEvent::SoftRuleExpired { .. } => None,
+            WorldEvent::SoftRuleRepealed { .. } => None,
         }
     }
 

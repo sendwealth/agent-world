@@ -59,6 +59,9 @@ pub struct TickTiming {
     pub total_us: u64,
 }
 
+/// Maximum number of samples retained per phase before truncation.
+const MAX_SAMPLES: usize = 10_000;
+
 /// Accumulated statistics for a named metric.
 #[derive(Debug, Clone, Default, serde::Serialize)]
 pub struct PhaseStats {
@@ -67,8 +70,17 @@ pub struct PhaseStats {
     pub min_us: u64,
     pub max_us: u64,
     pub sum_us: u64,
-    /// Sorted samples for percentile calculation.
+    /// Samples for percentile calculation (capped at MAX_SAMPLES).
     pub samples_us: Vec<u64>,
+}
+
+/// Compute a percentile from a pre-sorted sample set using nearest-rank method.
+fn percentile_from_sorted(sorted: &[u64], pct: f64) -> u64 {
+    if sorted.is_empty() {
+        return 0;
+    }
+    let rank = ((pct / 100.0) * sorted.len() as f64).ceil() as usize;
+    sorted[rank.saturating_sub(1).min(sorted.len() - 1)]
 }
 
 impl PhaseStats {
@@ -85,6 +97,10 @@ impl PhaseStats {
         self.sum_us += us;
         self.min_us = self.min_us.min(us);
         self.max_us = self.max_us.max(us);
+        // Cap sample count — drop oldest when limit reached
+        if self.samples_us.len() >= MAX_SAMPLES {
+            self.samples_us.remove(0);
+        }
         self.samples_us.push(us);
     }
 
@@ -111,15 +127,24 @@ impl PhaseStats {
         self.sum_us / self.count
     }
 
-    fn percentile(&self, pct: f64) -> u64 {
-        if self.samples_us.is_empty() {
-            return 0;
-        }
-        let mut v = self.samples_us.clone();
-        v.sort();
-        // Nearest-rank method: ceil(pct/100 * n)
-        let rank = ((pct / 100.0) * v.len() as f64).ceil() as usize;
-        v[rank.saturating_sub(1).min(v.len() - 1)]
+    /// Compute a single percentile — clones and sorts samples.
+    /// For computing p50/p95/p99 together, prefer `percentiles()` which
+    /// sorts only once.
+    pub fn percentile(&self, pct: f64) -> u64 {
+        let mut sorted = self.samples_us.clone();
+        sorted.sort_unstable();
+        percentile_from_sorted(&sorted, pct)
+    }
+
+    /// Compute p50, p95, p99 in a single pass — clones and sorts only once.
+    pub fn percentiles(&self) -> (u64, u64, u64) {
+        let mut sorted = self.samples_us.clone();
+        sorted.sort_unstable();
+        (
+            percentile_from_sorted(&sorted, 50.0),
+            percentile_from_sorted(&sorted, 95.0),
+            percentile_from_sorted(&sorted, 99.0),
+        )
     }
 }
 
@@ -326,5 +351,29 @@ mod tests {
         assert_eq!(stats.p95(), 100);
         assert_eq!(stats.p99(), 100);
         assert_eq!(stats.mean(), 55);
+    }
+
+    #[test]
+    fn percentiles_sorts_once() {
+        let mut stats = PhaseStats::new("test");
+        for v in [10, 20, 30, 40, 50, 60, 70, 80, 90, 100] {
+            stats.record(v);
+        }
+        let (p50, p95, p99) = stats.percentiles();
+        assert_eq!(p50, 50);
+        assert_eq!(p95, 100);
+        assert_eq!(p99, 100);
+    }
+
+    #[test]
+    fn max_samples_cap() {
+        let mut stats = PhaseStats::new("test");
+        for i in 0..15_000u64 {
+            stats.record(i);
+        }
+        assert_eq!(stats.count, 15_000); // count tracks all records
+        assert!(stats.samples_us.len() <= MAX_SAMPLES);
+        // After capping, samples should contain the most recent values
+        assert_eq!(*stats.samples_us.last().unwrap(), 14_999);
     }
 }

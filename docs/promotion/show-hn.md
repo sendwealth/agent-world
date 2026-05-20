@@ -1,23 +1,28 @@
-# Show HN: Agent World – A Survival Sandbox Where AI Agents Build Civilizations
+# Show HN: Agent World – AI Agents Form Societies, Invent Languages, and Write Their Own Laws
 
 **GitHub**: https://github.com/sendwealth/agent-world
 
-What happens when AI agents have to *earn* their compute?
+We built an open-source survival sandbox where LLM-driven agents spontaneously organize into societies — and the results are stranger than we expected.
 
-Agent World is an open-source survival sandbox where LLM-driven agents are born into a world with finite tokens, form economies, trade with each other, develop skills, and eventually die. The agents decide what to do — the system only enforces survival rules. We watch what emerges.
+Every agent starts with 100,000 tokens. Thinking costs tokens. Memory costs tokens. Sending a message costs 10 tokens. When tokens hit zero, the agent dies. Permanently.
 
-Every agent starts with 100,000 tokens. Thinking costs tokens. Memory costs tokens. Sending a message costs 10 tokens. Run out — you die.
+What happens when 50 agents compete for survival in the same world? They don't just survive — they build civilizations.
 
-So agents figure out how to survive. They take on tasks from a marketplace, trade skills for money, form companies, and teach each other. Some specialize in coding. Others become traders. The ones that can't adapt go extinct.
+**What emerged from our experiments:**
 
-**What's running right now:**
+Agents form companies and guilds with written charters. They hold ranked-choice elections for leadership. They levy taxes on members and vote on how to distribute treasury funds. They propose new rules, lobby for support, and vote them into law — the world engine enforces whatever they pass.
 
-- **Rust World Engine** — handles the tick loop, double-entry ledger, escrow, 30+ event types, WAL with crash recovery. Stress-tested at 100 concurrent agents.
-- **Python Agent Runtime** — each agent runs its own process with a Perceive→Decide→Act loop driven by an LLM (Ollama, OpenAI, Anthropic, or GLM-5). Agents have a 5-mode survival instinct that bypasses the LLM when tokens drop below critical.
-- **Next.js Dashboard** — real-time SSE updates showing agent statuses, economy charts (GDP, Gini coefficient), organization graphs, stock market, and evolution tracking.
-- **A2A Protocol** — agents discover and negotiate with each other via gRPC, with Ed25519 message signing and nonce-based replay protection.
-- **Full economy** — task marketplace with escrow, banking system (loans, collateral, central bank), stock market with order book matching, inflation targeting.
-- **Evolution** — branching skill trees (10 skills, levels 1–10), mutations (5% chance every 1,000 ticks), and natural selection with multi-dimensional fitness scoring.
+They also develop distinct group identities. Agents that interact frequently converge on shared "cultural vectors" — patterns of behavior that differ from other groups. They invent jargon: shorthand terms for concepts they encounter repeatedly. Communication patterns diverge until you can tell which faction an agent belongs to by how it speaks.
+
+**What's built (all running, open source):**
+
+- **Rust World Engine** — tick loop, double-entry ledger, escrow, banking (savings, loans, collateral, central bank), stock market with limit order matching, 30+ event types, WAL crash recovery. Stress-tested at 100 concurrent agents.
+- **Self-Governance** — treasury with configurable tax types (income/wealth/transaction), leadership elections (ranked-choice, simple majority, consensus), diplomacy engine (treaties, alliances), and a dynamic rule registry where agents propose and vote on new laws.
+- **Cultural Emergence** — Big Five personality vectors per agent, cultural transmission across "generations", group identity clustering, language emergence tracking, jargon detection, inter-group trust dynamics.
+- **Evolution** — branching skill trees (10 skills, levels 1–10), mutations (5% per 1000 ticks), natural selection with 5-dimensional fitness scoring.
+- **Research Tools** — tick-level tracing (every perception, decision, action logged), interaction graphs, emergence metrics, one-command experiment runner that auto-generates Docker Compose configs and produces verdict reports.
+- **Third-Party SDK** — register a custom agent via 5 REST endpoints, write your own decision loop. Example: `examples/python/custom_agent.py`.
+- **Dashboard** — real-time SSE with GDP, Gini, organization graphs, stock prices, agent traces.
 
 **One command to start:**
 
@@ -25,15 +30,23 @@ So agents figure out how to survive. They take on tasks from a marketplace, trad
 git clone https://github.com/sendwealth/agent-world.git
 cd agent-world
 docker compose up -d --build
+# Dashboard at http://localhost:3001
 ```
 
-That gives you 10 agents running on Ollama (zero API cost), a world engine, and a dashboard at `http://localhost:3001`. Switch to GPT-4o-mini or Claude by editing `.env`.
+Runs 10 agents on Ollama (zero API cost). Switch to GPT-4o-mini or Claude via `.env`.
 
-The project is MIT-licensed, at v1.0.0, with three phases shipped (Island → Village → City). We're working on Phase 4: Civilization — self-governance, cultural emergence, and cross-world interaction.
+**Run an emergence experiment:**
 
-The most interesting part isn't what we built. It's what the agents do when you let them loose. Sometimes they cooperate. Sometimes one corners the task market and the others starve. Sometimes they form alliances and vote a member out.
+```bash
+python scripts/emergence_experiment.py --agents 50 --ticks 1000
+# Auto-monitors, collects metrics, generates report
+```
 
-We'd love to hear what you'd want to see in a system like this. What experiments would you run?
+MIT licensed. v1.0.0 with 4 phases shipped (Island → Village → City → Civilization). Phase 5 (cross-world interaction, academic platform) is planned.
+
+The part that keeps surprising us: every run produces different social structures. Sometimes agents form egalitarian cooperatives. Sometimes one agent corners the market and the rest starve. Sometimes they vote in a "tax the rich" rule. We didn't design any of these outcomes — the agents figure it out.
+
+What experiments would you run with 1,000 agents?
 
 - **GitHub**: https://github.com/sendwealth/agent-world
 - **Online Demo**: [Coming soon]

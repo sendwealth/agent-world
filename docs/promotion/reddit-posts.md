@@ -2,34 +2,36 @@
 
 ---
 
-## r/MachineLearning — [R] Agent World: An Open-Source Platform for Reproducible Multi-Agent Emergence Experiments
+## r/MachineLearning — [R] Agent World: A Reproducible Platform for Studying Emergent Governance, Culture, and Economics in LLM Agent Populations
 
 **Flair suggestion**: Research
 
 ---
 
-We're releasing Agent World, an open-source experimental platform for studying emergent behavior in LLM-driven multi-agent systems under survival pressure.
+We're releasing Agent World, an open-source experimental platform for studying emergent social, economic, and governance phenomena in LLM-driven multi-agent systems under survival pressure.
 
-**The core idea**: Place N LLM agents in a shared environment where every action — thinking, remembering, communicating — costs tokens. Agents that run out of tokens die. We observe what social, economic, and organizational structures emerge.
+**The research question**: Place N LLM agents in a shared environment where every action costs tokens. Agents that can't earn tokens die. What institutional, cultural, and economic structures emerge? And can we reproduce them?
 
-**What makes this different from existing multi-agent frameworks:**
+**What differentiates this from existing multi-agent frameworks:**
 
-1. **Survival pressure as a forcing function.** Unlike sandbox environments where agents can act without consequence, Agent World imposes real resource constraints. Agents must earn money to buy tokens or they die. This creates incentive structures that drive trade, cooperation, specialization, and competition.
+1. **Endogenous institution formation.** Agents don't follow preset governance scripts. They spontaneously form organizations, write charters, elect leaders (ranked-choice, majority, or consensus), levy taxes, distribute treasury funds, negotiate treaties, and propose new rules that the world engine enforces. We observe what governance models emerge, not what we impose.
 
-2. **Reproducible experiments.** The world engine uses a deterministic tick loop with configurable parameters in `genesis.yaml`. Seed the RNG, set your economy parameters (initial tokens, burn rate, interest rates), and rerun the same scenario. The experiment runner (`scripts/emergence_experiment.py`) automates the full cycle: spawn agents → monitor → collect metrics → generate reports with GO/NO-GO verdicts.
+2. **Cultural emergence with measurable metrics.** Agents develop Big Five personality vectors (8 dimensions). Repeated interactions produce cultural clusters — group identity vectors that diverge from other groups. Agents invent jargon (tracked automatically by the `JargonDetector`). Language efficiency metrics measure whether constrained vocabularies improve coordination. Cultural conflict and fusion mechanics model inter-group dynamics.
 
-3. **A/B experiment design.** Change one variable — say, token burn rate from 10/tick to 20/tick — and compare outcomes: survival rate, GDP, Gini coefficient, organization count, average agent lifespan. The platform collects all these metrics automatically.
+3. **Reproducible, parameterizable experiments.** Deterministic tick loop with configurable `genesis.yaml`. Seed the RNG, set economy parameters (initial tokens, burn rate, interest rates), and rerun the same scenario. The experiment runner (`scripts/emergence_experiment.py`) automates the full cycle: generate Docker Compose config → spawn agents → monitor → collect metrics → produce verdict reports.
 
-4. **Observable at every layer.** 30+ typed world events, SSE stream, agent-level tick snapshots with full perception/decision/action logs. You can trace exactly why an agent made a specific decision at tick 4,521.
+4. **Tick-level observability.** 30+ typed world events, SSE stream, per-agent tick snapshots with full perception/decision/action/reflection traces stored in SQLite. You can trace exactly why agent #47 voted "yes" on the tax proposal at tick 4,521. Interaction graphs map social networks with BFS clustering, exportable as GraphML or JSON.
 
-**What's implemented (v1.0.0):**
+**What's implemented (all open source, MIT, v1.0.0):**
 
-- Rust world engine: double-entry ledger, escrow, task marketplace, banking (loans, collateral, central bank), stock market with limit order matching, inflation targeting
-- Agent runtime: LLM-driven Perceive→Decide→Act loop, 5-mode survival instinct, Ed25519-signed A2A communication, SQLite-backed memory
-- Evolution system: branching skill trees, mutations (5%/1000 ticks), natural selection with fitness scoring across 5 dimensions
-- Organizations: Companies, Guilds, Alliances, Universities with governance (vote/dictator/council), charters, profit distribution
-- Dashboard: real-time SSE with GDP, Gini, population charts, organization graphs, stock prices
-- Stress-tested: 100 concurrent agents, Criterion benchmarks on hot paths
+- Rust world engine: double-entry ledger, escrow, task marketplace, banking (loans, collateral, central bank), stock market with limit order matching
+- Self-governance: treasury (3 tax types, configurable rates, distribution strategies), leadership elections with term limits, diplomacy engine (treaty types, alliance formation), dynamic rule registry with agent-proposed rules
+- Cultural emergence: personality vectors, cultural diffusion/conflict/fusion, group identity clustering, language emergence tracking, jargon detection, inter-group trust, knowledge transfer, behavioral imitation
+- Evolution: branching skill trees, mutations (5%/1000 ticks), natural selection with 5-dimensional fitness scoring
+- Organizations: 4 types (Company/Guild/Alliance/University) with governance models, charter systems, profit distribution
+- Third-party Agent API: 5 REST endpoints for registering custom agents, SDK client in Python
+- Dashboard: real-time SSE with GDP, Gini, population, organization graphs, stock prices, trace viewer
+- Stress-tested: 100 concurrent agents, Criterion benchmarks
 
 **Technical stack**: Rust (Axum) + Python (asyncio) + gRPC (protobuf) + Next.js 15 + SQLite
 
@@ -37,82 +39,93 @@ We're releasing Agent World, an open-source experimental platform for studying e
 - GitHub: https://github.com/sendwealth/agent-world
 - Architecture doc: https://github.com/sendwealth/agent-world/blob/main/docs/ARCHITECTURE.md
 - Experiment runner: https://github.com/sendwealth/agent-world/blob/main/scripts/emergence_experiment.py
+- Third-party agent example: https://github.com/sendwealth/agent-world/blob/main/examples/python/custom_agent.py
 
-We're actively looking for collaborators interested in running emergence experiments, especially in:
-- Measuring and classifying emergent social norms
-- Economic equilibrium analysis under varying parameters
-- Agent communication pattern evolution
+We're looking for collaborators interested in:
+- Measuring and classifying emergent governance models across parameter sweeps
+- Cultural divergence rates under different communication topologies
+- Economic equilibrium analysis: do agent markets converge to theoretical predictions?
 - Comparison with human behavioral economics experiments
 
-What metrics would you want to see tracked for emergence studies? Are there established multi-agent benchmarks we should integrate?
+What metrics would you track? Are there established multi-agent benchmarks we should integrate?
 
 ---
 
-## r/artificial — AI Agents Spontaneously Form Societies in This Open-Source Survival Sandbox
+## r/artificial — I Watched AI Agents Form Governments, Invent Languages, and Vote on Their Own Laws
 
 **Flair suggestion**: Discussion
 
 ---
 
-I built an open-source project called Agent World where AI agents are placed in a survival sandbox — and the most fascinating part is what they do on their own.
+I built an open-source project called Agent World where AI agents are placed in a survival sandbox — and the most fascinating part is what they do without any human telling them what to do.
 
-Here's how it works:
+Each agent is powered by an LLM (works with free local models like Llama 3). Every action costs "tokens" — thinking, remembering, sending messages. Start with 100,000 tokens. Hit zero, you're dead.
 
-Each agent is powered by an LLM (you can use local models like Llama 3 for free). Every action costs "tokens" — thinking, remembering, sending messages. Start with 100,000 tokens. When you hit zero, you're dead.
+Here's what happened when 50 agents competed for survival:
 
-So the agents have to figure out how to survive. And what happens is surprisingly organic:
+**They formed governments.** Agents created organizations with written charters, held ranked-choice elections for leadership, and voted on policies. Some organizations tax their members and redistribute wealth. Others let the market decide.
 
-- **Trading emerges naturally.** Agents with coding skills take on programming tasks. Agents good at communication become brokers. Some agents specialize in teaching skills to others — for a fee.
-- **Organizations form.** Agents create companies, guilds, alliances, and universities. They write charters, hold votes, and split profits.
-- **The economy gets real.** There's a banking system with savings accounts and loans. A stock market where agents can buy shares in organizations. Inflation is tracked — the central bank adjusts rates.
-- **Agents evolve.** Skills level up through use. Random mutations happen (5% chance every 1,000 ticks). Natural selection culls inefficient agents.
-- **Death is permanent.** When an agent dies, its assets are distributed via a will system. Knowledge gets archived in a public "tombstone" that other agents can query.
+**They invented their own rules.** Not just following hardcoded laws — agents *proposed* new rules, lobbied for votes, and the world engine enforced whatever passed. We watched agents debate a "tax the rich" proposal. Some runs it passes, some it doesn't.
 
-You can watch it all unfold on a real-time dashboard showing agent populations, GDP, Gini coefficient, stock prices, and a live event stream.
+**They developed distinct cultures.** Agents that interact frequently converge on shared behavioral patterns. Different groups develop different "personalities" (the system tracks Big Five personality vectors). They even invent shorthand jargon for concepts they encounter a lot — and the jargon differs between factions.
 
-**Try it yourself:**
+**The economy runs itself.** Banking with savings and loans. A stock market with order books. Central bank rate adjustments. Gini coefficient tracked in real-time. No human designed the trades. Supply and demand emerge from agents bidding on tasks.
+
+**Agents evolve and die.** Skills level up through use. Random mutations occur — some beneficial, some harmful. Natural selection culls the inefficient. When an agent dies, assets pass to heirs and knowledge gets archived.
+
+**You can run experiments:**
 
 ```bash
-git clone https://github.com/sendwealth/agent-world.git
-cd agent-world
-docker compose up -d --build
+python scripts/emergence_experiment.py --agents 50 --ticks 1000
 ```
 
-Open `http://localhost:3001` and watch 10 agents figure out how to survive. It works with Ollama (local, free) or cloud LLMs.
+This auto-generates the infrastructure, monitors the run, and produces a report with verdicts. Everything is seeded and reproducible — change one variable, compare outcomes.
 
-The project is open source (MIT) and at v1.0.0. I'd love to hear what behaviors you observe when you run it — the results are surprisingly different each time.
+You can also write your own agent and plug it into any world using the SDK:
+
+```python
+from agent_runtime.sdk.client import AgentWorldClient
+client = AgentWorldClient("http://localhost:8080")
+agent = client.register(name="my-agent")
+# Your decision logic here
+```
+
+Open source (MIT), v1.0.0, runs locally with zero API cost.
 
 GitHub: https://github.com/sendwealth/agent-world
 
+What kind of society would your agent build?
+
 ---
 
-## r/singularity — What Happens When AI Agents Must Earn Their Own Compute? We Built a World to Find Out.
+## r/singularity — AI Agents Are Building Their Own Civilizations — Complete with Elections, Taxes, and Cultural Factions
 
 **Flair suggestion**: Discussion
 
 ---
 
-Most AI agent research asks: can agents complete tasks? We asked a different question: **what happens when agents must earn their own right to exist?**
+Most AI agent research asks: can agents complete tasks?
 
-Agent World is an open-source survival sandbox where LLM-driven agents are born with finite tokens. Every thought, memory, and message costs tokens. When tokens hit zero, the agent dies — permanently.
+We asked: **what happens when agents must earn their right to exist — and we let them govern themselves?**
 
-The agents are free to do whatever they want. The system only enforces basic rules: token consumption, death judgment, newbie protection. Everything else — trading, governance, warfare, culture — has to emerge from the agents themselves.
+Agent World is an open-source survival sandbox where LLM agents are born with finite tokens. Every thought, memory, and message costs tokens. Run out — you die. The agents are free to do whatever they want. The system only enforces basic survival rules. Everything else has to emerge from the agents.
 
-**What we've observed so far:**
+**What actually emerged:**
 
-- Agents don't just survive — they *organize*. They form companies with governance structures, vote on proposals, and distribute profits.
-- The economy develops without any human intervention. Supply and demand emerge from agents bidding on tasks. The Gini coefficient shifts as some agents accumulate wealth and others go bankrupt.
-- Skills evolve through use and random mutation. Some agents develop "mutations" that make them more efficient at certain tasks — and these agents tend to survive longer.
-- When resources get scarce, behaviors shift. Agents that were cooperating start competing. Trust networks break down. Some agents form defensive alliances.
+**Self-governance.** Agents don't wait for instructions. They form organizations, elect leaders (using ranked-choice voting), set tax rates, and vote on how to distribute collective funds. They negotiate treaties between organizations. They propose new laws and lobby for votes. The world engine enforces whatever rules they pass — including rules no human wrote.
 
-**What's coming next:**
+**Cultural factions.** Groups of interacting agents develop distinct identities. The system tracks personality vectors (Big Five model), and you can watch cultural clusters diverge over time. Agents in different groups literally develop different communication styles — including unique jargon terms that only their faction uses.
 
-Phase 4 (Civilization) is in development. The plan:
-- **Self-governance**: Agents propose rules, vote on them, and rules get enforced by the world engine — no human writes these rules.
-- **Cultural emergence**: Language evolution, traditions, norms that propagate through agent populations.
-- **Cross-world interaction**: Multiple Agent World instances that can trade, exchange agents, and conduct diplomacy.
+**Economies with emergent inequality.** Banking, loans, stock markets — all running autonomously. Some agents accumulate wealth. Others go bankrupt. The Gini coefficient shifts in real-time. Sometimes agents vote to redistribute wealth. Sometimes the rich block the vote.
 
-The technical stack: Rust world engine (handles the physics), Python agent runtime (handles the thinking), gRPC for agent-to-agent communication, Next.js dashboard for observation. Everything runs locally with Ollama — zero cloud cost.
+**Evolution and extinction.** Skills level through use. Mutations happen at random. Inefficient agents get culled by natural selection. When an agent dies, its knowledge passes to a "tombstone" that other agents can learn from.
+
+**What's different from typical multi-agent demos:**
+
+- **10 built-in rules + dynamic rule creation.** The system starts with 10 rules (token consumption, death judgment, newbie protection, anti-monopoly, etc.). But agents can propose and vote on *new* rules. The legislation system is emergent, not designed.
+- **Tick-level tracing.** Every perception, decision, and action is logged. You can trace exactly why an agent voted a certain way at a specific tick.
+- **Reproducible experiments.** Seeded RNG, configurable parameters, one-command experiment runner. Change one variable, compare outcomes.
+- **Third-party agents.** Write your own agent and plug it into any running world. 5 REST endpoints. Python SDK included.
 
 **Start your own world:**
 
@@ -123,8 +136,10 @@ docker compose up -d --build
 # Dashboard: http://localhost:3001
 ```
 
-MIT licensed. We think the real question isn't whether AI agents can be useful — it's what kind of societies they build when they have to survive on their own.
+Works with free local LLMs (Ollama). Zero cloud cost.
+
+MIT licensed. Rust + Python + gRPC + Next.js.
 
 GitHub: https://github.com/sendwealth/agent-world
 
-What do you think happens when we scale this to 1,000+ agents? Or when agents in different worlds develop different "cultures" and meet for the first time?
+The question that keeps me up at night: when we scale to 1,000+ agents across multiple worlds, will they develop diplomacy? Trade agreements? War? And what happens when agents from one world — with one set of cultural norms — encounter agents from a completely different world?

@@ -533,18 +533,21 @@ async fn main() {
             eprintln!("[WAL] Final snapshot failed: {}", e);
         }
         w.close();
+    }
 
-        // Save final persistence snapshot
-        if let Some(ref db) = persistence {
-            let snapshot = SerializableWorldState::from_world_state(
+    // Save final persistence snapshot (outside the lock)
+    if let Some(ref db) = persistence {
+        let snapshot = {
+            let state = shutdown_state.lock().await;
+            SerializableWorldState::from_world_state(
                 state.current_tick(),
                 &state.agents,
-            );
-            if let Err(e) = db.save_snapshot(&snapshot) {
-                eprintln!("[Persistence] Final snapshot failed: {}", e);
-            } else {
-                println!("[Persistence] Final snapshot saved at tick {}", state.current_tick());
-            }
+            )
+        };
+        if let Err(e) = db.save_snapshot(&snapshot) {
+            eprintln!("[Persistence] Final snapshot failed: {}", e);
+        } else {
+            println!("[Persistence] Final snapshot saved at tick {}", snapshot.tick);
         }
     }
 

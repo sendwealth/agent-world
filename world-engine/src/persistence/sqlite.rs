@@ -25,6 +25,7 @@ impl SqlitePersistence {
         }
         let conn = Connection::open(path)?;
         conn.execute_batch(SCHEMA_SQL)?;
+        conn.execute_batch("PRAGMA foreign_keys = ON;")?;
         Ok(Self {
             conn: Mutex::new(conn),
         })
@@ -34,6 +35,7 @@ impl SqlitePersistence {
     pub fn open_in_memory() -> anyhow::Result<Self> {
         let conn = Connection::open_in_memory()?;
         conn.execute_batch(SCHEMA_SQL)?;
+        conn.execute_batch("PRAGMA foreign_keys = ON;")?;
         Ok(Self {
             conn: Mutex::new(conn),
         })
@@ -45,12 +47,14 @@ impl StatePersistence for SqlitePersistence {
         let conn = self.conn.lock().map_err(|e| anyhow::anyhow!("lock poisoned: {}", e))?;
         let tx = conn.unchecked_transaction()?;
 
-        // Insert snapshot row
-        tx.execute(
-            "INSERT OR REPLACE INTO snapshots (tick, agent_count) VALUES (?1, ?2)",
+        // Insert or update snapshot row, returning the id
+        let snapshot_id: i64 = tx.query_row(
+            "INSERT INTO snapshots (tick, agent_count) VALUES (?1, ?2) \
+             ON CONFLICT(tick) DO UPDATE SET agent_count = excluded.agent_count \
+             RETURNING id",
             params![state.tick as i64, state.agents.len() as i64],
+            |row| row.get(0),
         )?;
-        let snapshot_id = tx.last_insert_rowid();
 
         // Delete old agent data for this tick (handles re-save)
         tx.execute(
@@ -62,7 +66,7 @@ impl StatePersistence for SqlitePersistence {
         for entry in &state.agents {
             let skills_json = serde_json::to_string(&entry.record.skills)?;
             tx.execute(
-                "INSERT OR REPLACE INTO agents (id, name, phase, tokens, spawn_tick, skills_json, snapshot_id) \
+                "INSERT INTO agents (id, name, phase, tokens, spawn_tick, skills_json, snapshot_id) \
                  VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)",
                 params![
                     entry.agent_id.to_string(),
@@ -324,5 +328,140 @@ mod tests {
         assert_eq!(loaded.agents.len(), 2);
         let dead = loaded.agents.iter().find(|a| a.record.name == "Dead").unwrap();
         assert_eq!(dead.record.phase, AgentPhase::Dead);
+    }
+
+    #[test]
+    fn sqlite_prune_cascades_to_agents_and_ledger() {
+        let db = SqlitePersistence::open_in_memory().unwrap();
+
+        // Create snapshots at tick 10, 20, 30 with agents
+        let agent = make_agent("Persist", 100, AgentPhase::Adult);
+        for tick in [10u64, 20, 30] {
+            let s = SerializableWorldState::from_world_state(tick, &[agent.clone()]);
+            db.save_snapshot(&s).unwrap();
+        }
+
+        // Verify we have 3 snapshots, 3 agent rows (same agent, 3 snapshots), 3 ledger rows
+        let conn = db.conn.lock().unwrap();
+        let snap_count: i64 = conn
+            .query_row("SELECT COUNT(*) FROM snapshots", [], |row| row.get(0))
+            .unwrap();
+        assert_eq!(snap_count, 3);
+        let agent_count: i64 = conn
+            .query_row("SELECT COUNT(*) FROM agents", [], |row| row.get(0))
+            .unwrap();
+        assert_eq!(agent_count, 3);
+        let ledger_count: i64 = conn
+            .query_row("SELECT COUNT(*) FROM economy_ledger", [], |row| row.get(0))
+            .unwrap();
+        assert_eq!(ledger_count, 3);
+        drop(conn);
+
+        // Prune to keep only 1 snapshot
+        db.prune_snapshots(1).unwrap();
+
+        // Verify CASCADE deleted agents and ledger for pruned snapshots
+        let conn = db.conn.lock().unwrap();
+        let snap_count: i64 = conn
+            .query_row("SELECT COUNT(*) FROM snapshots", [], |row| row.get(0))
+            .unwrap();
+        assert_eq!(snap_count, 1);
+        let agent_count: i64 = conn
+            .query_row("SELECT COUNT(*) FROM agents", [], |row| row.get(0))
+            .unwrap();
+        assert_eq!(agent_count, 1);
+        let ledger_count: i64 = conn
+            .query_row("SELECT COUNT(*) FROM economy_ledger", [], |row| row.get(0))
+            .unwrap();
+        assert_eq!(ledger_count, 1);
+    }
+
+    #[test]
+    fn sqlite_same_agent_across_snapshots() {
+        let db = SqlitePersistence::open_in_memory().unwrap();
+
+        // Same agent ID across two snapshots (composite PK allows this)
+        let id = Uuid::new_v4();
+
+        // Snapshot at tick 10 — agent is Childhood
+        let agent_v1 = (
+            id,
+            0u64,
+            AgentRecord {
+                id,
+                name: "Evolver".to_string(),
+                phase: AgentPhase::Childhood,
+                tokens: 100,
+                skills: HashMap::new(),
+            },
+        );
+        let s1 = SerializableWorldState::from_world_state(10, &[agent_v1]);
+        db.save_snapshot(&s1).unwrap();
+
+        // Snapshot at tick 20 — same agent ID, now Adult
+        let agent_v2 = (
+            id,
+            0u64,
+            AgentRecord {
+                id,
+                name: "Evolver".to_string(),
+                phase: AgentPhase::Adult,
+                tokens: 500,
+                skills: HashMap::new(),
+            },
+        );
+        let s2 = SerializableWorldState::from_world_state(20, &[agent_v2]);
+        db.save_snapshot(&s2).unwrap();
+
+        // Load each snapshot and verify the agent appears with correct phase
+        let conn = db.conn.lock().unwrap();
+        let phase_at_10: String = conn
+            .query_row(
+                "SELECT a.phase FROM agents a JOIN snapshots s ON a.snapshot_id = s.id WHERE s.tick = 10",
+                [],
+                |row| row.get(0),
+            )
+            .unwrap();
+        let phase_at_20: String = conn
+            .query_row(
+                "SELECT a.phase FROM agents a JOIN snapshots s ON a.snapshot_id = s.id WHERE s.tick = 20",
+                [],
+                |row| row.get(0),
+            )
+            .unwrap();
+        drop(conn);
+
+        // Phase is JSON-serialized as lowercase (e.g. "\"childhood\"")
+        assert!(phase_at_10.contains("childhood"));
+        assert!(phase_at_20.contains("adult"));
+    }
+
+    #[test]
+    fn sqlite_on_conflict_returning_id_consistent() {
+        let db = SqlitePersistence::open_in_memory().unwrap();
+
+        // First insert
+        let s1 = SerializableWorldState::from_world_state(42, &[]);
+        db.save_snapshot(&s1).unwrap();
+        let conn = db.conn.lock().unwrap();
+        let id_v1: i64 = conn
+            .query_row("SELECT id FROM snapshots WHERE tick = 42", [], |row| row.get(0))
+            .unwrap();
+        drop(conn);
+
+        // Upsert same tick — ON CONFLICT DO UPDATE should return same id
+        let s2 = SerializableWorldState::from_world_state(42, &[]);
+        db.save_snapshot(&s2).unwrap();
+        let conn = db.conn.lock().unwrap();
+        let id_v2: i64 = conn
+            .query_row("SELECT id FROM snapshots WHERE tick = 42", [], |row| row.get(0))
+            .unwrap();
+        let count: i64 = conn
+            .query_row("SELECT COUNT(*) FROM snapshots WHERE tick = 42", [], |row| row.get(0))
+            .unwrap();
+        drop(conn);
+
+        assert_eq!(id_v1, id_v2, "RETURNING id should be same on update path");
+        assert_eq!(count, 1, "Only one row should exist after upsert");
     }
 }

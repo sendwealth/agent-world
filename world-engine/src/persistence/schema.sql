@@ -14,14 +14,16 @@ CREATE TABLE IF NOT EXISTS snapshots (
 );
 
 -- Agent records within a snapshot
+-- Composite PK: same agent can appear in different snapshots
 CREATE TABLE IF NOT EXISTS agents (
-    id          TEXT    PRIMARY KEY,  -- UUID as text
+    id          TEXT    NOT NULL,  -- UUID as text
     name        TEXT    NOT NULL,
     phase       TEXT    NOT NULL,
     tokens      INTEGER NOT NULL,
     spawn_tick  INTEGER NOT NULL,
     skills_json TEXT    NOT NULL DEFAULT '{}',  -- JSON-serialized HashMap<String, SkillRecord>
-    snapshot_id INTEGER NOT NULL REFERENCES snapshots(id) ON DELETE CASCADE
+    snapshot_id INTEGER NOT NULL REFERENCES snapshots(id) ON DELETE CASCADE,
+    PRIMARY KEY (id, snapshot_id)
 );
 
 CREATE INDEX IF NOT EXISTS idx_agents_snapshot_id ON agents(snapshot_id);

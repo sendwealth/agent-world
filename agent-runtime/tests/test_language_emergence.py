@@ -9,7 +9,7 @@ import pytest
 from agent_runtime.social.comm_analyzer import CommunicationAnalyzer, DialectReport, MessagePattern
 from agent_runtime.social.jargon_detector import JargonDetector, JargonTerm
 from agent_runtime.social.language_experiment import EfficiencyMetrics, LanguageExperiment
-from agent_runtime.tracing.emergence_metrics import EmergenceMetrics, LanguageEmergenceSnapshot
+from agent_runtime.tracing.emergence_metrics import LanguageEmergenceMetrics, LanguageEmergenceSnapshot
 
 
 # ── Fixtures ──
@@ -288,7 +288,7 @@ def test_language_experiment_deactivate(experiment: LanguageExperiment) -> None:
 
 def test_emergence_metrics_snapshot() -> None:
     """EmergenceMetrics produces a valid snapshot with all fields populated."""
-    metrics = EmergenceMetrics()
+    metrics = LanguageEmergenceMetrics()
     groups = {
         "traders": TRADER_MESSAGES,
         "builders": BUILDER_MESSAGES,
@@ -309,7 +309,7 @@ def test_emergence_metrics_snapshot() -> None:
 
 def test_emergence_metrics_history_trend() -> None:
     """History accumulation and trend extraction work correctly."""
-    metrics = EmergenceMetrics()
+    metrics = LanguageEmergenceMetrics()
     groups = {
         "traders": TRADER_MESSAGES,
         "builders": BUILDER_MESSAGES,
@@ -327,7 +327,7 @@ def test_emergence_metrics_history_trend() -> None:
 
 def test_emergence_metrics_single_group() -> None:
     """Single group produces a valid but minimal snapshot."""
-    metrics = EmergenceMetrics()
+    metrics = LanguageEmergenceMetrics()
     snapshot = metrics.compute(tick=1, groups={"solo": ["hello world"]})
 
     assert snapshot.group_count == 1

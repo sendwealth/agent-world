@@ -13,7 +13,7 @@
 | 0:00–0:20 | Hook: The Question | Black screen → typing animation → first agent spawns |
 | 0:20–0:50 | What is Agent World? | Architecture diagram → Dashboard overview |
 | 0:50–1:20 | Economy & Survival | Token burn animation → agents trading |
-| 1:20–1:50 | Society Emerges | Organization formation → first trade route → governance vote |
+| 1:20–1:50 | Society Emerges | Organization formation → first trade agreement → governance vote |
 | 1:50–2:20 | Evolution & Legacy | Skill tree → mutation → natural selection → birth/death cycle |
 | 2:20–2:50 | Dashboard & Data | Real-time SSE stream → charts → emergence timeline |
 | 2:50–3:00 | Call to Action | GitHub star → contribute → "In a world where compute costs something, only the efficient survive." |
@@ -78,18 +78,18 @@ Task → Reward → Money → Tokens → Think/Act → Task → ...
 
 ### [1:20–1:50] Society Emerges — Organization, Trade, Governance
 
-**Visual**: Timeline page showing emergence events. Organization graph animates — five agents form "星辰商会" (Starlight Guild). Cut to: trade route forming between two orgs. Cut to: governance proposal being voted on.
+**Visual**: Timeline page showing emergence events. Organization graph animates — five agents form "星辰商会" (Starlight Guild). Cut to: trade agreement forming between two orgs. Cut to: governance proposal being voted on.
 
 **Narration (VO)**:
 
-> Here's where it gets interesting. At around tick 500, agents start forming organizations — companies, guilds, alliances, universities. Each with its own charter, governance model, and profit-sharing rules.
+> Here's where it gets interesting. At around tick 500（预设值，录制时替换为实际观测值）, agents start forming organizations — companies, guilds, alliances, universities. Each with its own charter, governance model, and profit-sharing rules.
 >
-> They create trade routes. They draft constitutions. They hold votes. None of this was scripted — it emerged from simple survival pressure.
+> They create trade agreements. They draft constitutions. They hold votes. None of this was scripted — it emerged from simple survival pressure.
 
 **On-screen text** (as overlays matching the demo emergence events):
-- 🏛️ "First organization formed" — Tick 247
-- 💰 "First trade route established" — Tick 890
-- 🗳️ "First democratic vote" — Tick 1,450
+- 🏛️ "First organization formed" — Tick 247（预设值，录制时替换为实际观测值）
+- 💰 "First trade agreement signed" — Tick 890（预设值，录制时替换为实际观测值）
+- 🗳️ "First democratic vote" — Tick 1,450（预设值，录制时替换为实际观测值）
 
 ---
 
@@ -164,7 +164,7 @@ MIT Licensed · v1.0.0
 4. **Economy Animation** (10 seconds): Switch to economy page, show token flow, banking, stock market
 5. **Emergence Dashboard** (10 seconds): Show the 4 charts — cultural diversity rising, org count growing
 6. **Timeline** (10 seconds): Drag the scrubber through 5000 ticks, show emergence events appearing
-7. **Sandbox** (5 seconds): Quick demo of creating an agent in the interactive sandbox
+7. **API Agent Creation** (5 seconds): Quick demo of creating an agent via curl / Third-party Agent API
 
 ### Key Emergent Behaviors to Capture (from real simulation)
 
@@ -182,7 +182,7 @@ Run at least 50 ticks with 10+ agents before recording. Look for:
 **Concept**: Split-screen contrast
 
 - **Left half**: Dark, empty void with a single glowing agent dot
-- **Right half**: Complex web of connections — organizations, trade routes, colored by org membership
+- **Right half**: Complex web of connections — organizations, trade agreements, colored by org membership
 - **Center divider**: Text overlay: `"0 → 5000 ticks"`
 - **Bottom text**: `"AI Agents Built Their Own Society"` (white, bold, readable at small sizes)
 

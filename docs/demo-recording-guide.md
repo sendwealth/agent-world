@@ -148,15 +148,15 @@ Action:
 Tip: This is the most visually compelling section — take extra care
 ```
 
-### Take 7: Sandbox (0:55–1:00)
+### Take 7: API Agent Creation (0:55–1:00)
 
 ```
 Action:
-1. Navigate to Sandbox page
-2. Fill in the agent creation form
-3. Submit and show the simulated result
+1. In terminal, run a curl command to create an agent via the Third-party Agent API
+2. Show the API response confirming agent creation
+3. Switch to Dashboard to show the new agent appearing
 
-Tip: Quick and light — just show it exists
+Tip: Quick and light — just show it's possible to create agents programmatically
 ```
 
 ---

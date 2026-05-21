@@ -34,7 +34,7 @@
 | Agent Runtime | crypto/ | **已实现** | Ed25519 密钥生成、签名、验证、Nonce 防重放、密钥注册表 |
 | Agent Runtime | skills/ | **已实现** | SkillRegistry + SkillExecutor + 4 个内置技能（coding, research, teaching, trading） |
 | Agent Runtime | a2a/ | **已实现** | gRPC 客户端（client.py, batch_client.py, world_client.py）、消息路由、Perception Provider |
-| Agent Runtime | tools/ | **未实现** | |
+| Agent Runtime | tools/ | **已实现** | Tool 抽象基类 + ToolRegistry + 3 个内置工具（http_request, file_ops, code_exec）+ 74 个单元测试 |
 | Agent Runtime | config/ | **已实现** | TOML/YAML 配置文件加载与合并（config.py, 291 行） |
 | Agent Runtime | main.py | **已实现** | 完整 CLI 入口（__main__.py, 1358 行）：spawn、密钥生成/加载、注册、gRPC 连接、健康检查 |
 | Dashboard | 全部 | **已实现** | Pages: overview, agents, tasks, timeline, organizations, stocks, evolution, economy, governance, marketplace, briefing, traces; SSE 实时数据 |
@@ -341,9 +341,7 @@ world-engine/
 
 **规划中的模块（未实现）：**
 
-```
-│   └── tools/ (Agent Runtime)   # ❌ 通用工具框架
-```
+> tools/ 和 observability/ 已全部实现，无剩余未实现模块。
 
 > ✅ = 已实现（含测试） | ⏳ = 占位符 | ❌ = 未实现
 

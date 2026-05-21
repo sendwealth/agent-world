@@ -1,10 +1,11 @@
 # ── Build stage ──────────────────────────────────────────────
-FROM rust:1.86-slim AS builder
+FROM rust:1.87-slim AS builder
 
 RUN apt-get update && apt-get install -y protobuf-compiler pkg-config libssl-dev && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /app
 COPY world-engine/Cargo.toml world-engine/Cargo.lock ./
+COPY world-engine/build.rs build.rs
 COPY world-engine/benches/ benches/
 COPY protocol/ /protocol/
 COPY world-engine/src/ src/

@@ -127,8 +127,12 @@ class RESTWorldClient:
     async def _request(self, method: str, path: str, **kwargs: Any) -> dict[str, Any]:
         """Send an HTTP request to the World Engine.
 
-        On connection failure or HTTP error, returns ``{"status": "standalone"}``
-        so the agent can continue running without the World Engine.
+        On connection failure returns ``{"status": "standalone"}`` so the
+        agent can continue running without the World Engine.
+
+        On HTTP errors (4xx/5xx) from the World Engine, raises so the
+        ThinkLoop can track it as a real error instead of silently
+        ignoring it.
         """
         import httpx
 
@@ -147,10 +151,13 @@ class RESTWorldClient:
                 exc.response.status_code, method, path,
                 exc.response.text[:200] if exc.response.text else "(empty)",
             )
-            return {"status": "standalone"}
+            # Re-raise so the ThinkLoop error counter picks it up.
+            # This prevents silent "standalone" masking real failures
+            # like 404 (wrong agent_id) or 500 (server bugs).
+            raise
         except Exception:
             logger.warning("World Engine request failed: %s %s", method, path, exc_info=True)
-            return {"status": "standalone"}
+            raise
 
     async def submit_action(
         self, action: str, params: dict[str, Any]
@@ -308,34 +315,36 @@ async def register_agent(
     *,
     public_key_b64: str | None = None,
     timeout: float = 5.0,
-) -> bool:
-    """Attempt to register the agent with the World Engine REST API.
+) -> str | None:
+    """Register the agent with the World Engine as an *external* agent.
 
-    Non-fatal: if the World Engine is unreachable the agent runs in
-    standalone mode.
+    Uses the ``POST /api/v1/agents/register`` endpoint which stores the
+    agent in the World Engine's ``external_agents`` map — the same map
+    that ``POST /api/v1/agents/:id/action`` looks up.
+
+    Returns the World Engine-assigned ``agent_id`` on success, or ``None``
+    on failure (in which case the agent runs in standalone mode).
     """
     try:
         import httpx
     except ImportError:
         logger.info("httpx not available, skipping agent registration")
-        return False
+        return None
 
-    url = f"{world_url.rstrip('/')}/api/v1/agents"
+    url = f"{world_url.rstrip('/')}/api/v1/agents/register"
 
-    # Build a registration payload matching World Engine's SpawnAgentRequest:
-    #   { name: String, tokens: u64, money: u64 }
-    # The full to_sync_payload() cannot be used directly because it sends
-    # money as a float and includes extra fields that the Rust API may not
-    # deserialize (money: 50.0 fails serde's u64 expectation).
-    payload = {
-        "name": state.name,
-        "tokens": int(state.tokens),
-        "money": int(state.money),
-    }
-
-    # Attach Ed25519 public key if available
+    # Build payload matching World Engine's RegisterAgentRequest:
+    #   { name: String, capabilities: Vec<String>, config: Value }
+    capabilities = [s.name for s in state.skills.values()]
+    config: dict[str, Any] = {}
     if public_key_b64 is not None:
-        payload["public_key"] = public_key_b64
+        config["public_key"] = public_key_b64
+
+    payload: dict[str, Any] = {
+        "name": state.name,
+        "capabilities": capabilities,
+        "config": config,
+    }
 
     logger.info(
         "Registering agent %s (%s) with World Engine at %s",
@@ -346,23 +355,29 @@ async def register_agent(
         async with httpx.AsyncClient(timeout=timeout, trust_env=False) as client:
             resp = await client.post(url, json=payload)
             if resp.status_code in (200, 201):
-                logger.info("Agent registered successfully")
-                return True
+                body = resp.json()
+                world_agent_id = body.get("agent_id")
+                logger.info(
+                    "Agent registered successfully (world_id=%s)",
+                    world_agent_id,
+                    extra={"agent": state.name, "event": "registered"},
+                )
+                return world_agent_id
             logger.warning(
                 "World Engine returned %d: %s",
                 resp.status_code,
                 resp.text[:200] if resp.text else "(empty)",
             )
-            return False
+            return None
     except httpx.ConnectError:
         logger.warning(
             "World Engine unreachable at %s — running in standalone mode",
             world_url,
         )
-        return False
+        return None
     except Exception:
         logger.exception("Failed to register with World Engine")
-        return False
+        return None
 
 
 async def deregister_agent(
@@ -554,12 +569,20 @@ async def run_agent(config: RuntimeConfig) -> RunStats:
             except Exception:
                 logger.warning("Failed to start A2A streaming, perception will be limited")
 
-        # Attempt registration (with public key)
-        await register_agent(
+        # Attempt registration (with public key).
+        # If the World Engine returns its own agent_id, update the
+        # RESTWorldClient so subsequent action calls use the correct ID.
+        world_agent_id = await register_agent(
             state,
             config.world.engine_url,
             public_key_b64=public_key_b64,
         )
+        if world_agent_id is not None:
+            # Update the REST client to use the World Engine-assigned ID
+            if isinstance(world_client, RESTWorldClient):
+                world_client._agent_id = world_agent_id
+            # Also update stats so deregister uses the right ID
+            stats.agent_id = world_agent_id
 
         # Build heartbeat provider if A2A client is available
         heartbeat_provider: Any | None = None
@@ -669,7 +692,9 @@ async def run_agent(config: RuntimeConfig) -> RunStats:
                     logger.warning("Failed to stop AsyncDecisionProvider", exc_info=True)
 
             # Graceful shutdown: deregister from World Engine
-            await deregister_agent(str(state.id), config.world.engine_url)
+            # Use stats.agent_id which tracks the World Engine-assigned ID
+            # after registration (falls back to state.id for standalone).
+            await deregister_agent(stats.agent_id, config.world.engine_url)
     finally:
         # Close A2A connection if active — this runs regardless of which
         # stage threw an exception (including before think_task starts).

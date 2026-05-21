@@ -218,17 +218,46 @@ class DefaultPerceptionProvider:
 class MockDecisionProvider:
     """Random decision provider for testing.
 
-    Picks a random affordable action.  No LLM involved.
+    Picks a random affordable action with realistic parameter generation.
+    No LLM involved.  Includes GATHER and MOVE so that World Engine state
+    (money, position) actually changes, making integration tests observable.
     """
 
-    # Actions that need no external parameters
-    _SIMPLE_ACTIONS: list[ActionType] = [
-        ActionType.REST,
-        ActionType.EXPLORE,
+    # Weighted action pool: GATHER and MOVE are more frequent so they
+    # produce visible state changes in the World Engine.
+    _ACTION_WEIGHTS: list[tuple[ActionType, int]] = [
+        (ActionType.GATHER, 3),   # adds money in World Engine
+        (ActionType.MOVE, 3),     # changes position in World Engine
+        (ActionType.EXPLORE, 2),
+        (ActionType.REST, 1),
     ]
+
+    _RESOURCE_TYPES: list[str] = ["food", "wood", "stone", "iron"]
+    _DIRECTIONS: list[str] = ["north", "south", "east", "west"]
 
     def __init__(self, executor: ActionExecutor) -> None:
         self._executor = executor
+
+    def _weighted_choice(self, affordable: list[ActionType]) -> ActionType:
+        """Pick a random action weighted by _ACTION_WEIGHTS."""
+        weights = {
+            at: w for at, w in self._ACTION_WEIGHTS if at in affordable
+        }
+        if not weights:
+            return affordable[0]
+        actions = list(weights.keys())
+        ws = [weights[a] for a in actions]
+        return random.choices(actions, weights=ws, k=1)[0]
+
+    def _build_params(self, action_type: ActionType) -> dict[str, Any]:
+        """Generate action-appropriate parameters."""
+        if action_type == ActionType.GATHER:
+            return {"resource_type": random.choice(self._RESOURCE_TYPES)}
+        if action_type == ActionType.MOVE:
+            return {"direction": random.choice(self._DIRECTIONS)}
+        if action_type == ActionType.EXPLORE:
+            return {"explore_params": {"radius": random.randint(1, 5)}}
+        return {}
 
     async def decide(
         self,
@@ -236,8 +265,9 @@ class MockDecisionProvider:
         perception: Perception,
         survival: SurvivalAction,
     ) -> Decision:
+        all_actions = [at for at, _ in self._ACTION_WEIGHTS]
         affordable = [
-            at for at in self._SIMPLE_ACTIONS if self._executor.can_afford(at, state)
+            at for at in all_actions if self._executor.can_afford(at, state)
         ]
 
         if not affordable:
@@ -247,9 +277,11 @@ class MockDecisionProvider:
                 reasoning="No affordable actions — resting.",
             )
 
-        chosen = random.choice(affordable)
+        chosen = self._weighted_choice(affordable)
+        params = self._build_params(chosen)
         return Decision(
             action_type=chosen,
+            parameters=params,
             reasoning=f"Mock decision: chose {chosen.value} (tick {perception.tick}).",
         )
 

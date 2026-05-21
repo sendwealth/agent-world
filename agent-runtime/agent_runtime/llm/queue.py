@@ -81,7 +81,7 @@ class QueueConfig:
     """
 
     max_concurrency: int = 2
-    timeout_seconds: float = 30.0
+    timeout_seconds: float = 120.0
     fallback_on_timeout: bool = True
 
 

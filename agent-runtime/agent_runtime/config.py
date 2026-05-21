@@ -225,7 +225,7 @@ def _parse_llm_queue_config(data: dict[str, Any]) -> LLMQueueConfig:
     """Parse the ``[llm_queue]`` section into a QueueConfig."""
     return LLMQueueConfig(
         max_concurrency=data.get("max_concurrency", 2),
-        timeout_seconds=data.get("timeout_seconds", 30.0),
+        timeout_seconds=data.get("timeout_seconds", 120.0),
         fallback_on_timeout=data.get("fallback_on_timeout", True),
     )
 

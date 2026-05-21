@@ -3200,6 +3200,26 @@ async fn execute_agent_action(
         _ => false,
     };
 
+    // Auto-advance the World Engine tick on every agent action.
+    // This ensures that `GET /api/v1/world/stats` reflects agent activity
+    // even when no external tick scheduler is driving the game loop.
+    {
+        let current = *state.tick_rx.borrow();
+        let new_tick = current + 1;
+        state.event_bus.emit(WorldEvent::TickAdvanced { tick: new_tick });
+        let _ = state.tick_tx.send(new_tick);
+    }
+
+    // Sync changes back to the shared agents list so GET /api/v1/agents reflects updates
+    {
+        let mut agents = state.agents.lock().await;
+        if let Some(record) = agents.iter_mut().find(|a| a.id == id) {
+            record.money = agent.money;
+            record.tokens = agent.tokens;
+            record.alive = agent.alive;
+        }
+    }
+
     let action_name = body.action.clone();
 
     (StatusCode::OK, Json(serde_json::json!({

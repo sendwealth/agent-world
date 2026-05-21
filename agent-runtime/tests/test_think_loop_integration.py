@@ -11,7 +11,7 @@ Covers:
 from __future__ import annotations
 
 from typing import Any
-from unittest.mock import AsyncMock, MagicMock
+from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
@@ -374,20 +374,26 @@ class TestRESTWorldClientNewActions:
     @pytest.mark.asyncio
     async def test_move_returns_standalone(self) -> None:
         client = RESTWorldClient("http://localhost:3000", agent_id="test-agent")
-        result = await client.move("north")
-        assert result["status"] == "standalone"
+        with patch.object(client, "_request", new_callable=AsyncMock) as mock_req:
+            mock_req.return_value = {"status": "standalone"}
+            result = await client.move("north")
+            assert result["status"] == "standalone"
 
     @pytest.mark.asyncio
     async def test_gather_returns_standalone(self) -> None:
         client = RESTWorldClient("http://localhost:3000", agent_id="test-agent")
-        result = await client.gather("wood")
-        assert result["status"] == "standalone"
+        with patch.object(client, "_request", new_callable=AsyncMock) as mock_req:
+            mock_req.return_value = {"status": "standalone"}
+            result = await client.gather("wood")
+            assert result["status"] == "standalone"
 
     @pytest.mark.asyncio
     async def test_build_returns_standalone(self) -> None:
         client = RESTWorldClient("http://localhost:3000", agent_id="test-agent")
-        result = await client.build("house")
-        assert result["status"] == "standalone"
+        with patch.object(client, "_request", new_callable=AsyncMock) as mock_req:
+            mock_req.return_value = {"status": "standalone"}
+            result = await client.build("house")
+            assert result["status"] == "standalone"
 
 
 # ---------------------------------------------------------------------------

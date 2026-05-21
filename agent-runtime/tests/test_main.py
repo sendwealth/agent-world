@@ -344,8 +344,8 @@ class TestRESTWorldClientFallback:
                 side_effect=httpx.HTTPStatusError("500", request=MagicMock(), response=mock_response)
             )
             mock_instance.request = AsyncMock(return_value=mock_response)
-            result = await client.submit_action("gather", {"resource_type": "wood"})
-            assert result["status"] == "standalone"
+            with pytest.raises(httpx.HTTPStatusError):
+                await client.submit_action("gather", {"resource_type": "wood"})
 
 
 # ---------------------------------------------------------------------------

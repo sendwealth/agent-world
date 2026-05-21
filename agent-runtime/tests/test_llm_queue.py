@@ -88,7 +88,7 @@ class TestQueueConfig:
     def test_defaults(self):
         cfg = QueueConfig()
         assert cfg.max_concurrency == 2
-        assert cfg.timeout_seconds == 30.0
+        assert cfg.timeout_seconds == 120.0
         assert cfg.fallback_on_timeout is True
 
     def test_custom(self):

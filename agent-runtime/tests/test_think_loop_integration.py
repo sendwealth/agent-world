@@ -373,19 +373,19 @@ class TestWorldConnection:
 class TestRESTWorldClientNewActions:
     @pytest.mark.asyncio
     async def test_move_returns_standalone(self) -> None:
-        client = RESTWorldClient("http://localhost:3000")
+        client = RESTWorldClient("http://localhost:3000", agent_id="test-agent")
         result = await client.move("north")
         assert result["status"] == "standalone"
 
     @pytest.mark.asyncio
     async def test_gather_returns_standalone(self) -> None:
-        client = RESTWorldClient("http://localhost:3000")
+        client = RESTWorldClient("http://localhost:3000", agent_id="test-agent")
         result = await client.gather("wood")
         assert result["status"] == "standalone"
 
     @pytest.mark.asyncio
     async def test_build_returns_standalone(self) -> None:
-        client = RESTWorldClient("http://localhost:3000")
+        client = RESTWorldClient("http://localhost:3000", agent_id="test-agent")
         result = await client.build("house")
         assert result["status"] == "standalone"
 

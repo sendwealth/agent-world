@@ -270,19 +270,19 @@ class TestDeregisterAgent:
 class TestRESTWorldClient:
     @pytest.mark.asyncio
     async def test_send_message_returns_standalone(self) -> None:
-        client = RESTWorldClient("http://localhost:3000")
+        client = RESTWorldClient("http://localhost:3000", agent_id="test-agent")
         result = await client.send_message({"text": "hello"})
         assert result["status"] == "standalone"
 
     @pytest.mark.asyncio
     async def test_claim_task_returns_standalone(self) -> None:
-        client = RESTWorldClient("http://localhost:3000")
+        client = RESTWorldClient("http://localhost:3000", agent_id="test-agent")
         result = await client.claim_task("task-123")
         assert result["status"] == "standalone"
 
     @pytest.mark.asyncio
     async def test_explore_returns_standalone(self) -> None:
-        client = RESTWorldClient("http://localhost:3000")
+        client = RESTWorldClient("http://localhost:3000", agent_id="test-agent")
         result = await client.explore({})
         assert result["status"] == "standalone"
 

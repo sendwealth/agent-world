@@ -106,78 +106,87 @@ def setup_logging(verbose: bool = False, json_output: bool = True) -> None:
 
 
 class RESTWorldClient:
-    """REST-based World Client that sends real HTTP requests to the World Engine.
+    """REST-based World Client using httpx.AsyncClient.
 
-    Uses httpx for async HTTP calls.  When the World Engine is unreachable
-    (connection refused, timeout, DNS failure) the client falls back to
-    standalone mode and returns a placeholder response so the agent can
-    continue running offline.
+    Routes each method to the correct World Engine REST endpoint:
 
-    Action methods (move, gather, explore, build, rest, etc.) route through
-    ``submit_action()`` which hits the unified World Engine endpoint:
-        POST /api/v1/agents/{agent_id}/action
+    - gather / move / explore / build / claim_task / submit_task
+      → ``POST /api/v1/agents/{agent_id}/action``  (unified action endpoint)
+    - propose_deal  → ``submit_action("trade", ...)``
+    - teach_skill   → ``submit_action("communicate", ...)``
+    - send_message  → ``POST /api/v1/messages``
+    - form_org      → ``POST /api/v1/orgs``
+    - join_org      → ``POST /api/v1/orgs/{org_id}/join``
+    - broadcast     → standalone (no World Engine endpoint)
     """
 
-    def __init__(self, base_url: str, agent_id: str | None = None) -> None:
+    def __init__(self, base_url: str, agent_id: str) -> None:
         self._base_url = base_url.rstrip("/")
         self._agent_id = agent_id
 
-    # ------------------------------------------------------------------
-    # Core transport
-    # ------------------------------------------------------------------
-
     async def _request(self, method: str, path: str, **kwargs: Any) -> dict[str, Any]:
-        """Send a real HTTP request.  Falls back to standalone on network errors."""
+        """Send an HTTP request to the World Engine.
+
+        On connection failure or HTTP error, returns ``{"status": "standalone"}``
+        so the agent can continue running without the World Engine.
+        """
         import httpx
 
         url = f"{self._base_url}{path}"
         try:
-            async with httpx.AsyncClient(timeout=10.0) as client:
-                response = await client.request(method, url, **kwargs)
-                response.raise_for_status()
-                return response.json()
+            async with httpx.AsyncClient(timeout=5.0, trust_env=False) as client:
+                resp = await client.request(method, url, **kwargs)
+                resp.raise_for_status()
+                return resp.json()
+        except httpx.ConnectError:
+            logger.warning("World Engine unreachable at %s — running standalone", url)
+            return {"status": "standalone"}
         except httpx.HTTPStatusError as exc:
-            # HTTP 4xx/5xx — return structured error info
-            logger.debug(
-                "REST: HTTP %d for %s %s — %s",
-                exc.response.status_code, method, path, exc,
+            logger.warning(
+                "World Engine returned %d for %s %s: %s",
+                exc.response.status_code, method, path,
+                exc.response.text[:200] if exc.response.text else "(empty)",
             )
-            return {
-                "status": "error",
-                "method": method,
-                "path": path,
-                "status_code": exc.response.status_code,
-                "detail": str(exc),
-            }
-        except httpx.HTTPError as exc:
-            # Covers ConnectError, TimeoutException, RemoteProtocolError, etc.
-            logger.debug("REST: request failed (%s %s) — %s", method, path, exc)
-            return {"status": "standalone", "method": method, "path": path}
-
-    # ------------------------------------------------------------------
-    # Unified action endpoint
-    # ------------------------------------------------------------------
+            return {"status": "standalone"}
+        except Exception:
+            logger.warning("World Engine request failed: %s %s", method, path, exc_info=True)
+            return {"status": "standalone"}
 
     async def submit_action(
-        self, action: str, params: dict[str, Any] | None = None
+        self, action: str, params: dict[str, Any]
     ) -> dict[str, Any]:
-        """Send an action through the unified World Engine action endpoint.
-
-        Endpoint: ``POST /api/v1/agents/{agent_id}/action``
-        Body: ``{"action": "<name>", "params": {...}}``
-        """
-        if self._agent_id is None:
-            logger.warning("REST: submit_action called without agent_id, standalone")
-            return {"status": "standalone", "action": action}
+        """Submit an action via the unified ``POST /api/v1/agents/{id}/action``."""
         return await self._request(
             "POST",
             f"/api/v1/agents/{self._agent_id}/action",
-            json={"action": action, "params": params or {}},
+            json={"action": action, "params": params},
         )
 
-    # ------------------------------------------------------------------
-    # Action methods (routed through submit_action)
-    # ------------------------------------------------------------------
+    async def send_message(self, payload: dict[str, Any]) -> dict[str, Any]:
+        return await self._request("POST", "/api/v1/messages", json=payload)
+
+    async def claim_task(self, task_id: str) -> dict[str, Any]:
+        return await self.submit_action("claim_task", {"task_id": task_id})
+
+    async def submit_task(
+        self, task_id: str, result: dict[str, Any]
+    ) -> dict[str, Any]:
+        return await self.submit_action("submit_task", {"task_id": task_id, "result": result})
+
+    async def propose_deal(self, proposal: dict[str, Any]) -> dict[str, Any]:
+        return await self.submit_action("trade", proposal)
+
+    async def teach_skill(
+        self, target_agent_id: str, skill_name: str, level: int
+    ) -> dict[str, Any]:
+        return await self.submit_action("communicate", {
+            "target_agent_id": target_agent_id,
+            "skill_name": skill_name,
+            "level": level,
+        })
+
+    async def explore(self, parameters: dict[str, Any]) -> dict[str, Any]:
+        return await self.submit_action("explore", parameters)
 
     async def move(self, direction: str) -> dict[str, Any]:
         return await self.submit_action("move", {"direction": direction})
@@ -185,43 +194,25 @@ class RESTWorldClient:
     async def gather(self, resource_type: str) -> dict[str, Any]:
         return await self.submit_action("gather", {"resource_type": resource_type})
 
-    async def explore(self, parameters: dict[str, Any]) -> dict[str, Any]:
-        return await self.submit_action("explore", parameters)
-
     async def build(self, structure_type: str, **kwargs: Any) -> dict[str, Any]:
-        params: dict[str, Any] = {"structure_type": structure_type, **kwargs}
-        return await self.submit_action("build", params)
-
-    # ------------------------------------------------------------------
-    # Task / market methods (direct REST endpoints)
-    # ------------------------------------------------------------------
-
-    async def send_message(self, payload: dict[str, Any]) -> dict[str, Any]:
-        return await self._request("POST", "/messages", json=payload)
-
-    async def claim_task(self, task_id: str) -> dict[str, Any]:
-        return await self._request("POST", f"/tasks/{task_id}/claim")
-
-    async def submit_task(
-        self, task_id: str, result: dict[str, Any]
-    ) -> dict[str, Any]:
-        return await self._request("POST", f"/tasks/{task_id}/submit", json=result)
-
-    async def propose_deal(self, proposal: dict[str, Any]) -> dict[str, Any]:
-        return await self._request("POST", "/deals", json=proposal)
-
-    async def teach_skill(
-        self, target_agent_id: str, skill_name: str, level: int
-    ) -> dict[str, Any]:
-        return await self._request(
-            "POST", f"/agents/{target_agent_id}/skills/{skill_name}",
-            json={"level": level},
+        return await self.submit_action(
+            "build", {"structure_type": structure_type, **kwargs},
         )
 
     async def broadcast_message(
         self, payload: dict[str, object]
     ) -> dict[str, object]:
-        return await self._request("POST", "/broadcast", json=payload)  # type: ignore[return-value]
+        """No World Engine broadcast endpoint — runs standalone."""
+        logger.warning("broadcast_message: no World Engine endpoint, running standalone")
+        return {"status": "standalone"}  # type: ignore[return-value]
+
+    async def form_org(self, org_data: dict[str, Any]) -> dict[str, Any]:
+        return await self._request("POST", "/api/v1/orgs", json=org_data)
+
+    async def join_org(self, org_id: str, member_data: dict[str, Any]) -> dict[str, Any]:
+        return await self._request(
+            "POST", f"/api/v1/orgs/{org_id}/join", json=member_data,
+        )
 
 
 # ---------------------------------------------------------------------------

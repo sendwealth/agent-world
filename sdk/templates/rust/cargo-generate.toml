@@ -1,0 +1,9 @@
+[template]
+# cargo-generate configuration
+cargo_generate_version = ">=0.17.0"
+
+[placeholders]
+project-description = { type = "string", prompt = "Plugin description", default = "An Agent World skill plugin" }
+plugin-id = { type = "string", prompt = "Plugin ID (e.g. 'author/plugin-name')", default = "myorg/my-plugin" }
+skill-id = { type = "string", prompt = "Primary skill ID", default = "my-skill" }
+authors = { type = "string", prompt = "Author name", default = "Your Name" }

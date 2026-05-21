@@ -106,22 +106,95 @@ def setup_logging(verbose: bool = False, json_output: bool = True) -> None:
 
 
 class RESTWorldClient:
-    """REST-based fallback World Client for when gRPC is unavailable.
+    """REST-based World Client that sends real HTTP requests to the World Engine.
 
-    All methods log warnings because the REST API is not yet implemented
-    on the server side. This is a placeholder that allows the agent to
-    run in standalone mode.
+    Uses httpx for async HTTP calls.  When the World Engine is unreachable
+    (connection refused, timeout, DNS failure) the client falls back to
+    standalone mode and returns a placeholder response so the agent can
+    continue running offline.
+
+    Action methods (move, gather, explore, build, rest, etc.) route through
+    ``submit_action()`` which hits the unified World Engine endpoint:
+        POST /api/v1/agents/{agent_id}/action
     """
 
-    def __init__(self, base_url: str) -> None:
+    def __init__(self, base_url: str, agent_id: str | None = None) -> None:
         self._base_url = base_url.rstrip("/")
+        self._agent_id = agent_id
+
+    # ------------------------------------------------------------------
+    # Core transport
+    # ------------------------------------------------------------------
 
     async def _request(self, method: str, path: str, **kwargs: Any) -> dict[str, Any]:
-        logger.warning(
-            "REST fallback: %s %s (not implemented, running standalone)",
-            method, path,
+        """Send a real HTTP request.  Falls back to standalone on network errors."""
+        import httpx
+
+        url = f"{self._base_url}{path}"
+        try:
+            async with httpx.AsyncClient(timeout=10.0) as client:
+                response = await client.request(method, url, **kwargs)
+                response.raise_for_status()
+                return response.json()
+        except httpx.HTTPStatusError as exc:
+            # HTTP 4xx/5xx — return structured error info
+            logger.debug(
+                "REST: HTTP %d for %s %s — %s",
+                exc.response.status_code, method, path, exc,
+            )
+            return {
+                "status": "error",
+                "method": method,
+                "path": path,
+                "status_code": exc.response.status_code,
+                "detail": str(exc),
+            }
+        except httpx.HTTPError as exc:
+            # Covers ConnectError, TimeoutException, RemoteProtocolError, etc.
+            logger.debug("REST: request failed (%s %s) — %s", method, path, exc)
+            return {"status": "standalone", "method": method, "path": path}
+
+    # ------------------------------------------------------------------
+    # Unified action endpoint
+    # ------------------------------------------------------------------
+
+    async def submit_action(
+        self, action: str, params: dict[str, Any] | None = None
+    ) -> dict[str, Any]:
+        """Send an action through the unified World Engine action endpoint.
+
+        Endpoint: ``POST /api/v1/agents/{agent_id}/action``
+        Body: ``{"action": "<name>", "params": {...}}``
+        """
+        if self._agent_id is None:
+            logger.warning("REST: submit_action called without agent_id, standalone")
+            return {"status": "standalone", "action": action}
+        return await self._request(
+            "POST",
+            f"/api/v1/agents/{self._agent_id}/action",
+            json={"action": action, "params": params or {}},
         )
-        return {"status": "standalone", "method": method, "path": path}
+
+    # ------------------------------------------------------------------
+    # Action methods (routed through submit_action)
+    # ------------------------------------------------------------------
+
+    async def move(self, direction: str) -> dict[str, Any]:
+        return await self.submit_action("move", {"direction": direction})
+
+    async def gather(self, resource_type: str) -> dict[str, Any]:
+        return await self.submit_action("gather", {"resource_type": resource_type})
+
+    async def explore(self, parameters: dict[str, Any]) -> dict[str, Any]:
+        return await self.submit_action("explore", parameters)
+
+    async def build(self, structure_type: str, **kwargs: Any) -> dict[str, Any]:
+        params: dict[str, Any] = {"structure_type": structure_type, **kwargs}
+        return await self.submit_action("build", params)
+
+    # ------------------------------------------------------------------
+    # Task / market methods (direct REST endpoints)
+    # ------------------------------------------------------------------
 
     async def send_message(self, payload: dict[str, Any]) -> dict[str, Any]:
         return await self._request("POST", "/messages", json=payload)
@@ -143,21 +216,6 @@ class RESTWorldClient:
         return await self._request(
             "POST", f"/agents/{target_agent_id}/skills/{skill_name}",
             json={"level": level},
-        )
-
-    async def explore(self, parameters: dict[str, Any]) -> dict[str, Any]:
-        return await self._request("GET", "/explore", params=parameters)
-
-    async def move(self, direction: str) -> dict[str, Any]:
-        return await self._request("POST", "/move", json={"direction": direction})
-
-    async def gather(self, resource_type: str) -> dict[str, Any]:
-        return await self._request("POST", "/gather", json={"resource_type": resource_type})
-
-    async def build(self, structure_type: str, **kwargs: Any) -> dict[str, Any]:
-        return await self._request(
-            "POST", "/build",
-            json={"structure_type": structure_type, **kwargs},
         )
 
     async def broadcast_message(
@@ -244,7 +302,7 @@ async def connect_world_engine(
         )
 
     # REST fallback
-    rest_client = RESTWorldClient(rest_url)
+    rest_client = RESTWorldClient(rest_url, agent_id=agent_id)
     logger.info(
         "Using REST fallback for World Engine at %s",
         rest_url,

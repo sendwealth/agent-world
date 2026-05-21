@@ -40,7 +40,8 @@ services:
   # ── World Engine (Rust) ──────────────────────────────────────
   world-engine:
     build:
-      context: ./world-engine
+      context: .
+      dockerfile: world-engine/Dockerfile
     container_name: world-engine
     ports:
       - "${ENGINE_PORT:-8080}:${ENGINE_PORT:-8080}"   # REST API

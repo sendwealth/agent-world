@@ -1,0 +1,8 @@
+target/
+.git/
+world-engine/target/
+agent-runtime/
+dashboard/node_modules/
+*.pyc
+__pycache__/
+.env

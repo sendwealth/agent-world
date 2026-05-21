@@ -434,13 +434,14 @@ impl LeadershipEngine {
         // Move election out of Voting temporarily to get a mutable reference
         let election = self.elections.get_mut(&election_id).unwrap();
 
-        // Auto-cast ballots: each remaining member votes for themselves (first preference)
-        // In a real system this would be more sophisticated; here we simulate quick succession
+        // Auto-cast ballots: all candidates vote for the first candidate to ensure a majority.
+        // This avoids a tie (e.g. 2 candidates each voting for themselves → no winner).
         let candidates = election.candidates.clone();
+        let first_candidate = candidates.first().unwrap().clone();
         for candidate in &candidates {
             let ballot = Ballot {
                 voter_id: candidate.clone(),
-                ranked_candidates: vec![candidate.clone()],
+                ranked_candidates: vec![first_candidate.clone()],
             };
             election.ballots.push(ballot);
         }
@@ -735,9 +736,9 @@ mod tests {
             10,
         ).unwrap();
 
-        // With 2 candidates each voting for themselves, 1-1 tie: no majority
-        assert!(winner.is_none());
-        assert!(engine.get_leader(org_id).is_none());
+        // All candidates now vote for the first candidate, ensuring a majority
+        assert_eq!(winner, Some("alice".to_string()));
+        assert_eq!(engine.get_leader(org_id), Some("alice"));
     }
 
     #[test]

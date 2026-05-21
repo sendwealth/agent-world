@@ -18,18 +18,18 @@
 - [x] Basic rule engine -- 3 rules implemented (R001-R003: TokenConsumption, DeathJudgment, NewbieProtection)
 - [x] Skill registry -- 4 built-in skills (Explore, Trade, Rest, Communicate)
 - [x] Ed25519 crypto -- signing, verification, nonce replay prevention, key registry
-- [ ] Tick-based scheduler with configurable interval *(deferred to Phase 2)*
-- [ ] Money ledger with central bank exchange *(deferred to Phase 2)*
-- [ ] gRPC server scaffold (A2A protocol) *(deferred to Phase 2)*
+- [x] Tick-based scheduler with configurable interval *(implemented in world/scheduler.rs)*
+- [x] Money ledger with central bank exchange *(implemented in economy/ledger.rs, economy/banking.rs)*
+- [x] gRPC server scaffold (A2A protocol) *(implemented in a2a/ module)*
 
 ### Milestone 1.2: A2A Protocol (Week 3-5)
 - [x] Protobuf definitions (`a2a.proto`)
 - [x] Message signing -- ed25519 crypto module implemented in both Rust and Python
-- [ ] Discovery mechanism (agent registration) *(deferred to Phase 2)*
-- [ ] Proposal/Accept/Reject flow *(deferred to Phase 2)*
-- [ ] Python gRPC client *(deferred to Phase 2)*
-- [ ] Integration tests: two agents exchange messages *(deferred to Phase 2)*
-- [ ] `discovery.proto` definition *(deferred to Phase 2)*
+- [x] Discovery mechanism (agent registration) *(implemented in a2a/discovery.rs, world_engine.proto)*
+- [x] Proposal/Accept/Reject flow *(implemented in a2a/ module)*
+- [x] Python gRPC client *(implemented in agent_runtime/a2a/client.py)*
+- [x] Integration tests: two agents exchange messages *(E2E tests passing)*
+- [x] `discovery.proto` definition *(merged into world_engine.proto)*
 
 ### Milestone 1.3: Agent Runtime (Week 5-8)
 - [x] Python project scaffold (pyproject.toml, module structure)
@@ -43,15 +43,15 @@
 - [x] Agent state model -- full Pydantic model with world sync
 - [x] Skill model -- dataclass with XP thresholds and level-up logic
 - [x] LLM cost tracking per provider and model
-- [ ] Basic CLI entry point *(deferred to Phase 2)*
-- [ ] A2A client integration *(deferred to Phase 2)*
-- [ ] Task execution (simple predefined tasks) *(deferred to Phase 2)*
+- [x] Basic CLI entry point *(implemented: __main__.py with spawn subcommand)*
+- [x] A2A client integration *(implemented in agent_runtime/a2a/)*
+- [x] Task execution (simple predefined tasks) *(implemented via world_client.py)*
 
 ### Milestone 1.4: Marketplace (Week 8-10)
 - [x] Task marketplace in world engine (Rust) with escrow integration
 - [x] Bounty posting and claiming via REST API
 - [x] Reward distribution via world engine
-- [ ] Reputation scoring (basic) *(deferred to Phase 2)*
+- [x] Reputation scoring (basic) *(implemented in economy/reputation.rs)*
 
 ### Milestone 1.5: Dashboard (Week 10-12)
 - [x] React project scaffold (Next.js 15 + React 19 + Tailwind 4)
@@ -65,8 +65,8 @@
 - [x] SSE hook for live data (useWorldState)
 - [x] REST API client and TypeScript type definitions
 - [x] Timeline dashboard page
-- [ ] Task board view (connected to live data) *(deferred to Phase 2)*
-- [ ] WebSocket/SSE connection to world engine *(deferred to Phase 2)*
+- [x] Task board view (connected to live data) *(implemented in dashboard/src/app/tasks/)*
+- [x] WebSocket/SSE connection to world engine *(implemented: SSEProvider, useWorldState, useAgentStream hooks)*
 
 ### Milestone 1.0: MVP Release
 - [x] E2E full-flow tests and integration tests

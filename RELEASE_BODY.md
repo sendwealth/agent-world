@@ -1,30 +1,28 @@
-## Agent World v0.3.0 -- Phase 3 (City)
+## Agent World v1.0.0 — Phase 1 (Island) Complete
 
-Phase 3 milestone: organizations, governance, banking, stock market, evolution, and 100-agent stress tests. The world now supports complex economies, democratic decision-making, financial instruments, and natural selection -- all validated at 100-agent concurrency.
+Phase 1 milestone: a complete, production-ready AI agent survival simulation. Two or more agents can talk, trade, complete tasks, form organizations, and survive together in a shared world.
 
-### What's New
+### What's New (since v0.3.0)
 
-- **Organizations** -- Four types (Company, Guild, Alliance, University) with full lifecycle, charter system, membership management, and automatic bankruptcy detection
-- **Governance** -- Three decision modes (Vote, Dictator, Council) with weighted voting, five proposal types, configurable quorum/thresholds, and three profit distribution modes
-- **Banking** -- Savings and checking accounts, complete loan lifecycle with collateral and interest accrual, central bank operations (rate adjustment, minting, bad-debt write-off)
-- **Stock Market** -- Stock issuance with IPO process, order book with limit/market orders and price-time priority matching, 0.5% trading fee, dividend distribution, and share transfers
-- **Evolution** -- Branching skill tree (4 branches, 10 skills, levels 1-10), passive XP accumulation, skill mutation engine (5% chance per agent every 1,000 ticks), and natural selection with multi-dimensional fitness scoring
-- **Advanced Dashboard** -- Organizations page with force-directed graph, stock market price charts, evolution skill breakdown charts, and economy overview with GDP/Gini coefficient tracking
-- **100-Agent Stress Tests** -- 5 stress tests and 7 Criterion benchmark groups validating hot-path performance at 100-agent concurrency
-- **SSE Event Stream** -- `/events` endpoint with filtering and backpressure for real-time dashboard updates; 30+ event types across all phases
+- **Agent CLI** — Complete spawn workflow: key generation, World Engine registration, gRPC connection, health check server, graceful shutdown
+- **A2A gRPC Communication** — Protobuf-based protocol: Discover, SendMessage, StreamMessages with ed25519 signature verification and nonce replay prevention
+- **Think Loop E2E** — Full Think-Act-Reflect cycle with LLM-driven decisions (10 action types), perception from World Engine, and action execution with retry
+- **Lifecycle Management** — Agent lifecycle state machine (Birth → Active → Aging → Death) synced with World Engine
+- **Agent Tracing Dashboard** — TickSnapshot tracking with SQLite storage, decision visualization (perception/decision/action/reflection per tick)
+- **Context Engine Pipeline** — Token-budgeted, priority-driven context assembly from world state, memory, and skills
+- **Safety Intervention** — InterventionChecker that blocks dangerous actions before execution
+- **10-Agent E2E Stability** — 8/8 E2E tests passing, 1038 Python unit tests, validated concurrent 10-agent runs
+- **Docker Compose Production-Ready** — 10-agent config with health checks, restart policies, network isolation, `.env.example` for LLM providers (Ollama/OpenAI/Anthropic/GLM-5)
+
+### Previous Releases
+
+**v0.3.0 (Phase 3 / City):**
+- Organizations (Company/Guild/Alliance/University), governance, banking, stock market, evolution, 100-agent stress tests
 
 ### Quick Start
 
-**10 agents (standard):**
-
 ```bash
 docker compose up --build
-```
-
-**100 agents (full City simulation):**
-
-```bash
-docker compose -f docker-compose-v3.yml up --build
 ```
 
 | Service | URL |
@@ -62,8 +60,8 @@ Download the pre-built `agent-world-engine` binary for your platform:
 
 Images are published to GHCR:
 
-- `ghcr.io/sendwealth/agent-world/world-engine:0.3.0`
-- `ghcr.io/sendwealth/agent-world/agent-runtime:0.3.0`
-- `ghcr.io/sendwealth/agent-world/dashboard:0.3.0`
+- `ghcr.io/sendwealth/agent-world/world-engine:1.0.0`
+- `ghcr.io/sendwealth/agent-world/agent-runtime:1.0.0`
+- `ghcr.io/sendwealth/agent-world/dashboard:1.0.0`
 
-**Full Changelog**: https://github.com/sendwealth/agent-world/compare/v1.0.0...v0.3.0
+**Full Changelog**: https://github.com/sendwealth/agent-world/compare/v0.3.0...v1.0.0

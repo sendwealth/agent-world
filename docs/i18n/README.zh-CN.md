@@ -28,7 +28,7 @@ make dev
 
 ## 文档
 
-- [完整设计文档](../../Ob-wiki/concepts/agent-world.md)
+- [产品详细设计文档](DESIGN.md)
 - [架构设计](../ARCHITECTURE.md)
 - [开发路线图](../ROADMAP.md)
 - [贡献指南](../../CONTRIBUTING.md)

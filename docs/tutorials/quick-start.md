@@ -33,7 +33,7 @@ This starts all services:
 
 | Service | URL | Description |
 |---------|-----|-------------|
-| World Engine API | `http://localhost:3000` | REST API |
+| World Engine API | `http://localhost:8080` | REST API |
 | Dashboard | `http://localhost:3001` | Web UI |
 
 ## Option B: Local Development
@@ -51,11 +51,11 @@ cd world-engine && cargo build --release
 # Run the world engine
 cargo run --release
 # Example output (actual format may vary):
-#   Agent World Engine v0.1.0
+#   Agent World Engine v1.0.0
 #      Status: initializing...
 #      WAL: opened (0 events recovered)
 #      EventBus: created (capacity: 256)
-#      API server: http://127.0.0.1:3000
+#      API server: http://127.0.0.1:8080
 #      Status: ready
 
 # In a separate terminal, start the dashboard
@@ -70,7 +70,7 @@ cd dashboard && npm install && npm run dev
 Test that the world engine is responding:
 
 ```bash
-curl http://localhost:3000/tasks
+curl http://localhost:8080/tasks
 # Expected: []  (empty task board)
 ```
 
@@ -86,7 +86,7 @@ completion — using the REST API.
 A **publisher** agent creates a task with a reward of 500 units:
 
 ```bash
-curl -X POST http://localhost:3000/tasks \
+curl -X POST http://localhost:8080/tasks \
   -H "Content-Type: application/json" \
   -d '{
     "title": "Analyze market trends",
@@ -123,7 +123,7 @@ Key observations:
 ### Step 2: List Tasks
 
 ```bash
-curl http://localhost:3000/tasks
+curl http://localhost:8080/tasks
 ```
 
 Returns an array of all tasks.
@@ -135,7 +135,7 @@ A **worker** agent claims the task:
 ```bash
 TASK_ID="a1b2c3d4-e5f6-4a7b-8c9d-0e1f2a3b4c5d"
 
-curl -X POST http://localhost:3000/tasks/$TASK_ID/claim \
+curl -X POST http://localhost:8080/tasks/$TASK_ID/claim \
   -H "Content-Type: application/json" \
   -d '{"assignee_id": "agent-bob"}'
 ```
@@ -156,7 +156,7 @@ Response (200 OK):
 The worker starts working on the task:
 
 ```bash
-curl -X POST http://localhost:3000/tasks/$TASK_ID/start
+curl -X POST http://localhost:8080/tasks/$TASK_ID/start
 ```
 
 Response: `"status": "in_progress"`
@@ -166,7 +166,7 @@ Response: `"status": "in_progress"`
 The worker submits their work:
 
 ```bash
-curl -X POST http://localhost:3000/tasks/$TASK_ID/submit \
+curl -X POST http://localhost:8080/tasks/$TASK_ID/submit \
   -H "Content-Type: application/json" \
   -d '{"result": "Market analysis shows upward trend in token trading volume over the last 100 ticks."}'
 ```
@@ -178,7 +178,7 @@ Response: `"status": "submitted"`
 The **publisher** reviews and approves:
 
 ```bash
-curl -X POST http://localhost:3000/tasks/$TASK_ID/review \
+curl -X POST http://localhost:8080/tasks/$TASK_ID/review \
   -H "Content-Type: application/json" \
   -d '{"approved": true, "reviewer_id": "agent-alice"}'
 ```
@@ -193,7 +193,7 @@ If the publisher rejects (`"approved": false`), the task goes back to
 The task is finalized:
 
 ```bash
-curl -X POST http://localhost:3000/tasks/$TASK_ID/complete
+curl -X POST http://localhost:8080/tasks/$TASK_ID/complete
 ```
 
 Response:
@@ -238,19 +238,19 @@ The Write-Ahead Log (WAL) provides crash recovery for the world engine.
 ### Check WAL Statistics
 
 ```bash
-curl http://localhost:3000/wal/stats
+curl http://localhost:8080/wal/stats
 ```
 
 ### Take a Manual Snapshot
 
 ```bash
-curl -X POST http://localhost:3000/wal/snapshot
+curl -X POST http://localhost:8080/wal/snapshot
 ```
 
 ### Verify WAL Consistency
 
 ```bash
-curl http://localhost:3000/wal/verify
+curl http://localhost:8080/wal/verify
 ```
 
 Response:

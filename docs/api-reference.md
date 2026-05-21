@@ -27,7 +27,7 @@ The API has eight groups of endpoints:
 
 ## Authentication
 
-The current version (v0.3.0) does not require authentication. All endpoints
+The current version (v1.0.0) does not require authentication. All endpoints
 are publicly accessible. Authorization (e.g., verifying that only the task
 publisher can review) is planned for a future release.
 

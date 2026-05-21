@@ -14,7 +14,7 @@ agent-world/
 │   │   ├── main.rs        # Entry point: WAL init → Axum HTTP server
 │   │   ├── lib.rs         # Module re-exports
 │   │   ├── api.rs         # REST API routes + handlers
-│   │   ├── lifecycle.rs   # Placeholder for lifecycle subsystem
+│   │   ├── lifecycle.rs   # LifecycleMachine: Birth→Childhood→Adulthood→Elder→Death
 │   │   ├── rules.rs       # Rule engine (TokenConsumption, DeathJudgment, NewbieProtection)
 │   │   ├── economy/       # Economy subsystem
 │   │   │   ├── mod.rs    # Module re-exports
@@ -24,7 +24,7 @@ agent-world/
 │   │   │   └── token_burn.rs  # Token burn engine
 │   │   ├── world/         # World core
 │   │   │   ├── enums.rs   # Currency, AgentPhase, DeathReason
-│   │   │   ├── event.rs   # 23 WorldEvent variants
+│   │   │   ├── event.rs   # 30+ WorldEvent variants
 │   │   │   └── state.rs   # EventBus (tokio broadcast)
 │   │   └── wal/           # Write-Ahead Log
 │   │       ├── mod.rs     # WAL implementation (CRC32, snapshots, recovery)

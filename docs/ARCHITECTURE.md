@@ -1,6 +1,6 @@
 # Agent World — Architecture Design Document
 
-> **版本**: v0.3.0 | **日期**: 2026-05-19 | **状态**: current
+> **版本**: v1.0.0 | **日期**: 2026-05-21 | **状态**: current
 > 与 [DESIGN.md](DESIGN.md)（产品规格）和 [ROADMAP.md](ROADMAP.md)（路线图）配合阅读
 
 ---
@@ -15,31 +15,46 @@
 | World Engine | world/ | **已实现** | EventBus（30+ 种事件类型）、enums、state、SSE endpoint |
 | World Engine | api.rs | **已实现** | Axum REST API，包含 tasks、WAL、organizations、governance、stocks、banking 端点 |
 | World Engine | config/ | **已实现** | genesis.yaml with economy, lifecycle, evolution parameters |
-| World Engine | engine/ | **未实现** | Tick 调度器未实现 |
+| World Engine | engine/ | **已实现** | WorldState、CultureStore；Tick 调度器在 world/scheduler.rs 中实现 |
 | World Engine | lifecycle/ | **已实现** | LifecycleMachine: Birth→Childhood→Adulthood→Elder→Death |
 | World Engine | rules/ | **已实现** | 3 条规则：TokenConsumption（R001）、DeathJudgment（R002）、NewbieProtection（R003） |
-| World Engine | social/ | **已实现** | Trust network, mentorship, inheritance |
+| World Engine | social/ | **已实现** | Trust network (economy/trust.rs), mentorship (economy/mentorship.rs), inheritance (economy/inheritance.rs) — 位于 economy/ 模块内 |
 | World Engine | evolution/ | **已实现** | Skill trees, mutations, natural selection, EvolutionSubsystem |
 | World Engine | market/ | **已实现** | Banking system, stock market with order book |
 | World Engine | organization/ | **已实现** | Organizations (Company/Guild/Alliance/University), governance, charters, members |
-| World Engine | a2a/ | **未实现** | gRPC 服务器未实现 |
-| World Engine | storage/ | **未实现** | |
+| World Engine | a2a/ | **已实现** | gRPC 服务器（server.rs, grpc.rs, service.rs）、Discovery、Router、AgentRegistry、ClientPool |
+| World Engine | storage/ | **已实现** | persistence/ 模块：SQLite 快照持久化（persistence/sqlite.rs, 472 行） |
 | World Engine | wal/ | **已实现** | Write-Ahead Log：CRC32 校验、崩溃恢复、快照、1000 条自动轮转 |
-| World Engine | observability/ | **未实现** | |
+| World Engine | observability/ | **部分** | tracing.rs（TickTrace 数据模型）已实现；完整可观测性（metrics、OpenTelemetry）待建设 |
 | Agent Runtime | core/ | **已实现** | think_loop、decide、act 均有完整实现和测试 |
 | Agent Runtime | survival/ | **已实现** | 5 模式生存本能，11 种紧急行动 |
-| Agent Runtime | memory/ | **部分** | WorkingMemory 已实现；ShortTermMemory（SQLite）已实现；long_term 未实现 |
-| Agent Runtime | models/ | **已实现** | AgentState Pydantic 模型、enums、skill |
+| Agent Runtime | memory/ | **已实现** | WorkingMemory（FIFO）、ShortTermMemory（SQLite）、LongTermMemory（SQLite）均已实现；嵌入/向量记忆也有实现 |
+| Agent Runtime | models/ | **已实现** | AgentState Pydantic 模型、enums、skill、personality、phase_abilities、values |
 | Agent Runtime | llm/ | **已实现** | OpenAI、Anthropic、Ollama 三个 provider |
 | Agent Runtime | crypto/ | **已实现** | Ed25519 密钥生成、签名、验证、Nonce 防重放、密钥注册表 |
 | Agent Runtime | skills/ | **已实现** | SkillRegistry + SkillExecutor + 4 个内置技能（coding, research, teaching, trading） |
-| Agent Runtime | a2a/ | **未实现** | gRPC 客户端未实现 |
+| Agent Runtime | a2a/ | **已实现** | gRPC 客户端（client.py, batch_client.py, world_client.py）、消息路由、Perception Provider |
 | Agent Runtime | tools/ | **未实现** | |
-| Agent Runtime | config/ | **未实现** | |
-| Agent Runtime | main.py | **未实现** | 无 CLI 入口 |
-| Dashboard | 全部 | **已实现** | Pages: overview, agents, tasks, timeline, organizations, stocks, evolution, economy; SSE 实时数据 |
+| Agent Runtime | config/ | **已实现** | TOML/YAML 配置文件加载与合并（config.py, 291 行） |
+| Agent Runtime | main.py | **已实现** | 完整 CLI 入口（__main__.py, 1358 行）：spawn、密钥生成/加载、注册、gRPC 连接、健康检查 |
+| Dashboard | 全部 | **已实现** | Pages: overview, agents, tasks, timeline, organizations, stocks, evolution, economy, governance, marketplace, briefing, traces; SSE 实时数据 |
 | Protocol | a2a.proto | **已实现** | 定义了 Discover、SendMessage、StreamMessages |
-| Protocol | discovery.proto | **未实现** | |
+| Protocol | discovery.proto | **已实现** | 发现功能集成到 world_engine.proto（Register/Spawn/Heartbeat RPCs）；discovery.proto 未单独定义 |
+| Agent Runtime | lifecycle/ | **已实现** | LifecycleSyncService：阶段同步、转换守卫、死亡处理（lifecycle/__init__.py, 338 行） |
+| Agent Runtime | context/ | **已实现** | ContextEnginePipeline：token 预算、优先级驱动的上下文组装（context/engine.py, 613 行） |
+| Agent Runtime | reflection/ | **已实现** | 反思引擎：记忆反思、自我评估、策略调整（reflection/ 模块） |
+| Agent Runtime | social/ | **已实现** | 10 个社会模块：文化冲突/扩散、模仿、群体信任、语言实验等 |
+| Agent Runtime | organization/ | **已实现** | 组织形成、治理、招募、规则演化（organization/ 模块） |
+| Agent Runtime | tracing/ | **已实现** | TickTrace 采集、存储、推送、涌现指标、交互图谱 |
+| Agent Runtime | experiment/ | **已实现** | A/B 实验框架、可复现性、实验报告 |
+| Agent Runtime | export/ | **已实现** | 行为日志、经济数据、网络数据导出 |
+| Agent Runtime | sdk/ | **已实现** | SDK 客户端（sdk/client.py, 236 行） |
+| World Engine | persistence/ | **已实现** | SQLite 快照持久化层（persistence/sqlite.rs, 472 行） |
+| World Engine | time_capsule/ | **已实现** | 时间胶囊系统（time_capsule.rs, 665 行） |
+| World Engine | tracing/ | **已实现** | TickTrace 数据模型（tracing.rs） |
+| World Engine | grpc_pool/ | **已实现** | gRPC 连接池管理 |
+| World Engine | world/scheduler | **已实现** | Tick 调度器（world/scheduler.rs, 153 行），可配置间隔、优雅关闭 |
+| World Engine | world/engine | **已实现** | WorldState 世界状态容器（world/engine.rs, 472 行） |
 
 > 标记为**已实现**的模块包含完整的功能代码和单元测试。标记为**部分**的模块有部分功能。标记为**占位**的模块仅有空结构体。标记为**未实现**的模块完全没有代码。
 
@@ -171,7 +186,7 @@ Agent World 采用 **微内核 + 插件式** 架构：
 │  │ SQLite DB   │   ┌─────────────┐               │
 │  │ world.db    │   │ Dashboard   │               │
 │  └─────────────┘   │ (next dev)  │               │
-│                    │  :3000       │               │
+│                    │  :3001       │               │
 │                    └─────────────┘               │
 └─────────────────────────────────────────────────┘
 ```
@@ -209,7 +224,7 @@ services:
   dashboard:
     build: ./dashboard
     ports:
-      - "3000:3000"
+      - "3001:3000"
     depends_on:
       - world-engine
     environment:
@@ -240,12 +255,12 @@ Namespace: agent-world
 
 ### 3.1 模块图
 
-**当前实际文件结构（v0.3.0）：**
+**当前实际文件结构（v1.0.0）：**
 
 ```
 world-engine/
 ├── src/
-│   ├── main.rs                  # ✅ 入口：加载配置 → 启动 HTTP 服务器
+│   ├── main.rs                  # ✅ 入口：加载配置 → 启动 HTTP + gRPC 服务器
 │   ├── lib.rs                   # ✅ 模块重导出
 │   ├── api.rs                   # ✅ Axum REST API（tasks, WAL, orgs, governance, banking, stocks, SSE）
 │   ├── config.rs                # ✅ Genesis YAML 配置加载
@@ -253,8 +268,11 @@ world-engine/
 │   ├── rules.rs                 # ✅ 3 条规则（R001-R003），RuleRegistry + RuleContext
 │   ├── grpc_pool.rs             # ✅ gRPC 连接池
 │   ├── time_capsule.rs          # ✅ 时间胶囊
+│   ├── tracing.rs               # ✅ TickTrace 数据模型
 │   ├── engine/                  # ✅ 引擎模块
-│   │   └── mod.rs               # ✅ Tick 调度器 + 子系统管理
+│   │   ├── mod.rs               # ✅ WorldState + CultureStore
+│   │   ├── state.rs             # ✅ 世界状态（DashMap，Agent/Org/Task 注册）
+│   │   └── culture.rs           # ✅ 组织文化向量 + 区域文化集群
 │   ├── economy/
 │   │   ├── mod.rs               # ✅ 模块重导出
 │   │   ├── token_burn.rs        # ✅ Token 消耗引擎（阶段乘数 + 技能成本）
@@ -263,7 +281,12 @@ world-engine/
 │   │   ├── task.rs              # ✅ 任务市场（状态机 + 托管集成）
 │   │   ├── ledger.rs            # ✅ 双式记账账本
 │   │   ├── banking.rs           # ✅ 银行系统（储蓄/支票账户、贷款、央行操作）
-│   │   └── stock_market.rs      # ✅ 股票市场（发行、IPO、订单簿、撮合引擎、分红）
+│   │   ├── stock_market.rs      # ✅ 股票市场（发行、IPO、订单簿、撮合引擎、分红）
+│   │   ├── marketplace.rs       # ✅ 自由市场
+│   │   ├── trust.rs             # ✅ 信任网络
+│   │   ├── mentorship.rs        # ✅ 导师关系
+│   │   ├── inheritance.rs       # ✅ 遗产继承
+│   │   └── reputation.rs        # ✅ 信誉系统
 │   ├── world/
 │   │   ├── mod.rs               # ✅ 模块重导出
 │   │   ├── enums.rs             # ✅ Currency, AgentPhase, DeathReason
@@ -271,17 +294,26 @@ world-engine/
 │   │   ├── state.rs             # ✅ EventBus（tokio broadcast）
 │   │   ├── agent.rs             # ✅ AgentRecord 数据结构
 │   │   ├── genesis.rs           # ✅ GenesisConfig 加载
-│   │   ├── engine.rs            # ✅ WorldEngine 核心引擎
-│   │   ├── scheduler.rs         # ✅ Tick 调度器
+│   │   ├── engine.rs            # ✅ WorldState 世界状态容器
+│   │   ├── scheduler.rs         # ✅ Tick 调度器（可配置间隔、优雅关闭）
 │   │   ├── subsystem.rs         # ✅ Subsystem trait
 │   │   ├── subsystems.rs        # ✅ 子系统注册
-│   │   └── discovery.rs         # ✅ Agent 发现
+│   │   ├── discovery.rs         # ✅ Agent 发现
+│   │   ├── seeder.rs            # ✅ Agent 种子数据
+│   │   ├── intervention.rs      # ✅ 人类干预
+│   │   └── tick_profiler.rs     # ✅ Tick 性能分析
 │   ├── organization/
 │   │   ├── mod.rs               # ✅ 组织模块（Company/Guild/Alliance/University）
 │   │   ├── org.rs               # ✅ 组织 CRUD + 生命周期
 │   │   ├── charter.rs           # ✅ 章程管理
 │   │   ├── governance.rs        # ✅ 治理系统（提案、投票、利润分配）
-│   │   └── members.rs           # ✅ 成员管理
+│   │   ├── governance_metrics.rs # ✅ 治理指标
+│   │   ├── members.rs           # ✅ 成员管理
+│   │   ├── treasury.rs          # ✅ 组织金库
+│   │   ├── leadership.rs        # ✅ 领导权管理
+│   │   ├── competition.rs       # ✅ 组织间竞争
+│   │   ├── diplomacy.rs         # ✅ 外交关系
+│   │   └── rule_engine.rs       # ✅ 组织规则引擎
 │   ├── evolution/
 │   │   ├── mod.rs               # ✅ 进化模块
 │   │   ├── skill_tree.rs        # ✅ 分支技能树（4 根分支 10 技能）
@@ -291,18 +323,26 @@ world-engine/
 │   ├── wal/
 │   │   ├── mod.rs               # ✅ WAL（CRC32、崩溃恢复、快照、1000 条轮转）
 │   │   └── crc.rs               # ✅ CRC32（ISO 3309 查表实现）
-│   └── a2a/                     # ❌ gRPC 服务器未实现
+│   ├── a2a/                     # ✅ gRPC A2A 服务
+│   │   ├── mod.rs               # ✅ 模块重导出
+│   │   ├── server.rs            # ✅ gRPC 服务器（A2aService trait 实现）
+│   │   ├── grpc.rs              # ✅ gRPC 服务注册
+│   │   ├── service.rs           # ✅ 消息处理逻辑（Discover, Send, Stream）
+│   │   ├── discovery.rs         # ✅ AgentRegistry 发现服务
+│   │   ├── router.rs            # ✅ MessageRouter 消息路由
+│   │   ├── registry.rs          # ✅ Agent 注册表
+│   │   └── client_pool.rs       # ✅ gRPC 客户端连接池
+│   └── persistence/             # ✅ 持久化层
+│       ├── mod.rs               # ✅ 持久化接口
+│       └── sqlite.rs            # ✅ SQLite 快照存储
 ```
 
 **规划中的模块（未实现）：**
 
 ```
-│   ├── a2a/                     # ❌ 完整目录
-│   │   ├── server.rs, router.rs, discovery.rs, auth.rs
-│   ├── storage/                 # ❌ 完整目录
-│   │   ├── sqlite.rs, snapshot.rs, recovery.rs
 │   └── observability/           # ❌ 完整目录
-│       ├── metrics.rs, tracing_setup.rs
+│       ├── metrics.rs, tracing_setup.rs, opentelemetry.rs
+│   └── tools/ (Agent Runtime)   # ❌ 通用工具框架
 ```
 
 > ✅ = 已实现（含测试） | ⏳ = 占位符 | ❌ = 未实现
@@ -598,76 +638,148 @@ impl RestApi {
 
 ### 4.1 模块图
 
-**当前实际文件结构（v0.3.0）：**
+**当前实际文件结构（v1.0.0）：**
 
 ```
 agent-runtime/
 ├── agent_runtime/
 │   ├── __init__.py
+│   ├── __main__.py               # ✅ CLI 入口（spawn 子命令，gRPC 连接，健康检查）
+│   ├── config.py                 # ✅ TOML/YAML 配置加载与合并
+│   ├── env_loader.py             # ✅ 环境变量加载
 │   ├── core/
 │   │   ├── __init__.py
-│   │   ├── think_loop.py        # ✅ 主思考循环（可插拔 Provider）
-│   │   ├── decide.py            # ✅ LLM 决策引擎（10 种行动类型）
-│   │   └── act.py               # ✅ 行动执行器（7 种行动类型 + 重试）
+│   │   ├── think_loop.py         # ✅ 主思考循环（可插拔 Provider）
+│   │   ├── decide.py             # ✅ LLM 决策引擎（10 种行动类型）
+│   │   ├── act.py                # ✅ 行动执行器（7 种行动类型 + 重试）
+│   │   ├── async_decide.py       # ✅ 异步决策引擎
+│   │   ├── llm_decide.py         # ✅ LLM 驱动决策
+│   │   ├── memory_aware_decide.py # ✅ 记忆感知决策
+│   │   ├── experience.py         # ✅ 经验积累
+│   │   ├── intervention_checker.py # ✅ 安全拦截器
+│   │   └── reflect.py            # ✅ 反思模块
 │   ├── memory/
 │   │   ├── __init__.py
-│   │   ├── working_memory.py    # ✅ FIFO 缓存（重要性感知淘汰）
-│   │   └── short_term.py        # ✅ SQLite 持久化记忆（关键词搜索）
+│   │   ├── working_memory.py     # ✅ FIFO 缓存（重要性感知淘汰）
+│   │   ├── short_term.py         # ✅ SQLite 持久化记忆（关键词搜索）
+│   │   ├── long_term.py          # ✅ 长期记忆（SQLite，经验/策略/反思）
+│   │   ├── persistent_store.py   # ✅ 通用持久化存储
+│   │   ├── embedding.py          # ✅ 嵌入向量生成
+│   │   ├── vector_memory.py      # ✅ 向量记忆（相似性检索）
+│   │   └── memory_recall.py      # ✅ 记忆召回
 │   ├── survival/
 │   │   ├── __init__.py
-│   │   └── instinct.py          # ✅ 5 模式生存本能（11 种紧急行动）
+│   │   └── instinct.py           # ✅ 5 模式生存本能（11 种紧急行动）
 │   ├── models/
 │   │   ├── __init__.py
-│   │   ├── agent_state.py       # ✅ Pydantic Agent 状态模型
-│   │   ├── enums.py             # ✅ AgentPhase, SurvivalMode
-│   │   └── skill.py             # ✅ Skill 数据类（XP 阈值 + 升级）
+│   │   ├── agent_state.py        # ✅ Pydantic Agent 状态模型
+│   │   ├── enums.py              # ✅ AgentPhase, SurvivalMode
+│   │   ├── skill.py              # ✅ Skill 数据类（XP 阈值 + 升级）
+│   │   ├── personality.py        # ✅ 人格特质系统
+│   │   ├── phase_abilities.py    # ✅ 阶段能力定义
+│   │   └── values.py             # ✅ 价值体系
 │   ├── llm/
 │   │   ├── __init__.py
-│   │   ├── base.py              # ✅ LLMProvider 抽象基类
-│   │   ├── factory.py           # ✅ Provider 工厂
-│   │   ├── openai_provider.py   # ✅ OpenAI 实现
+│   │   ├── base.py               # ✅ LLMProvider 抽象基类
+│   │   ├── factory.py            # ✅ Provider 工厂
+│   │   ├── openai_provider.py    # ✅ OpenAI 实现
 │   │   ├── anthropic_provider.py # ✅ Anthropic 实现
-│   │   ├── ollama_provider.py   # ✅ Ollama 实现
-│   │   └── cost.py              # ✅ 成本追踪
+│   │   ├── ollama_provider.py    # ✅ Ollama 实现
+│   │   ├── cost.py               # ✅ 成本追踪
+│   │   ├── prompts.py            # ✅ Prompt 模板
+│   │   ├── decision_log.py       # ✅ 决策日志
+│   │   └── queue.py              # ✅ LLM 请求队列
 │   ├── crypto/
 │   │   ├── __init__.py
-│   │   ├── keys.py              # ✅ Ed25519 密钥生成
-│   │   ├── signing.py           # ✅ 确定性 JSON 签名 + 验证
-│   │   ├── nonce.py             # ✅ TTL 防重放缓存
-│   │   └── registry.py          # ✅ 代理公钥注册表
+│   │   ├── keys.py               # ✅ Ed25519 密钥生成
+│   │   ├── signing.py            # ✅ 确定性 JSON 签名 + 验证
+│   │   ├── nonce.py              # ✅ TTL 防重放缓存
+│   │   └── registry.py           # ✅ 代理公钥注册表
 │   ├── skills/
 │   │   ├── __init__.py
-│   │   ├── registry.py          # ✅ SkillRegistry（冻结数据类）
-│   │   ├── executor.py          # ✅ SkillExecutor（XP 奖励）
-│   │   ├── coding.py            # ✅ 编程技能
-│   │   ├── research.py          # ✅ 研究技能
-│   │   ├── teaching.py          # ✅ 教学技能
-│   │   └── trading.py           # ✅ 交易技能
-├── tests/
-└── pyproject.toml
+│   │   ├── registry.py           # ✅ SkillRegistry（冻结数据类）
+│   │   ├── executor.py           # ✅ SkillExecutor（XP 奖励）
+│   │   ├── coding.py             # ✅ 编程技能
+│   │   ├── research.py           # ✅ 研究技能
+│   │   ├── teaching.py           # ✅ 教学技能
+│   │   └── trading.py            # ✅ 交易技能
+│   ├── a2a/
+│   │   ├── __init__.py
+│   │   ├── client.py             # ✅ gRPC 客户端（重试 + 双向流）
+│   │   ├── batch_client.py       # ✅ 批量消息客户端
+│   │   ├── world_client.py       # ✅ World Engine REST/gRPC 客户端
+│   │   ├── message.py            # ✅ 消息模型
+│   │   ├── perception.py         # ✅ 感知 Provider
+│   │   └── config.py             # ✅ A2A 配置
+│   ├── agent/
+│   │   ├── __init__.py
+│   │   └── capability.py         # ✅ Agent 能力定义
+│   ├── lifecycle/
+│   │   └── __init__.py           # ✅ 生命周期同步、转换守卫、死亡处理
+│   ├── context/
+│   │   ├── __init__.py
+│   │   └── engine.py             # ✅ 上下文引擎 Pipeline（token 预算、优先级驱动）
+│   ├── reflection/
+│   │   ├── __init__.py
+│   │   ├── reflection.py         # ✅ 反思引擎
+│   │   ├── memory.py             # ✅ 记忆反思
+│   │   ├── self_assess.py        # ✅ 自我评估
+│   │   └── strategy.py           # ✅ 策略调整
+│   ├── social/
+│   │   ├── __init__.py
+│   │   ├── comm_analyzer.py      # ✅ 通信分析
+│   │   ├── cultural_conflict.py  # ✅ 文化冲突
+│   │   ├── cultural_diffusion.py # ✅ 文化扩散
+│   │   ├── imitation.py          # ✅ 模仿学习
+│   │   ├── intergroup_trust.py   # ✅ 群体间信任
+│   │   ├── jargon_detector.py    # ✅ 术语检测
+│   │   ├── knowledge_transfer.py # ✅ 知识传递
+│   │   ├── language_experiment.py # ✅ 语言涌现实验
+│   │   ├── org_culture.py        # ✅ 组织文化
+│   │   └── regional_culture.py   # ✅ 区域文化
+│   ├── organization/
+│   │   ├── __init__.py
+│   │   ├── formation.py          # ✅ 组织形成
+│   │   ├── governance.py         # ✅ 治理参与
+│   │   ├── governance_analysis.py # ✅ 治理分析
+│   │   ├── proposal.py           # ✅ 提案系统
+│   │   ├── recruitment.py        # ✅ 招募系统
+│   │   ├── rule_evolution.py     # ✅ 规则演化
+│   │   └── rule_proposal.py      # ✅ 规则提案
+│   ├── tracing/
+│   │   ├── __init__.py
+│   │   ├── collector.py          # ✅ 追踪采集
+│   │   ├── store.py              # ✅ 追踪存储（SQLite）
+│   │   ├── pusher.py             # ✅ 追踪推送
+│   │   ├── models.py             # ✅ 追踪数据模型
+│   │   ├── emergence_metrics.py  # ✅ 涌现指标
+│   │   ├── interaction_graph.py  # ✅ 交互图谱
+│   │   └── query.py              # ✅ 追踪查询
+│   ├── experiment/
+│   │   ├── __init__.py
+│   │   ├── ab_framework.py       # ✅ A/B 实验框架
+│   │   ├── config.py             # ✅ 实验配置
+│   │   ├── report.py             # ✅ 实验报告
+│   │   └── reproducibility.py    # ✅ 可复现性
+│   ├── export/
+│   │   ├── __init__.py
+│   │   ├── behavior_log.py       # ✅ 行为日志导出
+│   │   ├── economy_export.py     # ✅ 经济数据导出
+│   │   └── network_export.py     # ✅ 网络数据导出
+│   └── sdk/
+│       ├── __init__.py
+│       └── client.py             # ✅ SDK 客户端
+├── tests/                        # ✅ 1038+ 测试
+└── pyproject.toml                # version 1.0.0l
 ```
 
 **规划中的模块（未实现）：**
 
 ```
-│   ├── main.py                  # ❌ CLI 入口（无 spawn 命令）
-│   ├── core/
-│   │   ├── perceive.py          # ❌ 独立感知模块
-│   │   └── reflect.py           # ❌ 反思模块
-│   ├── memory/
-│   │   ├── long_term.py         # ❌ 长期记忆（向量 DB）
-│   │   └── consolidation.py     # ❌ 记忆整理
-│   ├── survival/
-│   │   ├── threat_detector.py   # ❌ 威胁检测
-│   │   └── budget_planner.py    # ❌ Token 预算规划
-│   ├── skills/
-│   │   ├── builtin/             # ❌ 更多内置技能（planned）
-│   ├── a2a/                     # ❌ 完整目录
-│   │   ├── client.py, message_builder.py, crypto.py, handler.py
-│   ├── tools/                   # ❌ 完整目录
-│   │   ├── tool_registry.py, code_execution.py, api_client.py
-│   └── config/                  # ❌ 完整目录
-│       └── settings.py
+│   └── tools/                   # ❌ 通用工具框架
+│       ├── base.py              # Tool 抽象
+│       ├── registry.py          # ToolRegistry
+│       └── builtin/             # 内置工具集
 ```
 
 > ✅ = 已实现（含测试） | ❌ = 未实现
@@ -1425,7 +1537,7 @@ impl TaskBoard {
 
 ### 11.1 技术栈
 
-**当前实现（v0.3.0）：**
+**当前实现（v1.0.0）：**
 
 ```
 dashboard/
@@ -1448,15 +1560,30 @@ dashboard/
 │   │   ├── organizations/     # ✅ 组织列表 + 力导向图 + 详情页
 │   │   ├── stocks/            # ✅ 股票市场仪表盘（价格图表）
 │   │   ├── evolution/         # ✅ 进化仪表盘（技能分布图）
-│   │   └── economy/           # ✅ 经济概览（GDP, Gini, 人口时序图）
+│   │   ├── economy/           # ✅ 经济概览（GDP, Gini, 人口时序图）
+│   │   ├── governance/        # ✅ 治理页面 + 比较 + 组织详情
+│   │   ├── marketplace/       # ✅ 市场页面
+│   │   ├── briefing/          # ✅ 简报页面
+│   │   └── traces/            # ✅ Agent 追踪页面（每 tick 决策记录）
+│   │       └── [agentId]/[tick]/
+│   │           └── page.tsx   # ✅ 单 tick 追踪详情
 │   ├── components/
 │   │   ├── EventStream.tsx    # ✅ 实时事件展示
 │   │   ├── Leaderboard.tsx    # ✅ Agent 排行榜
 │   │   ├── Sidebar.tsx        # ✅ 导航侧边栏
 │   │   ├── StatCard.tsx       # ✅ 统计卡片
-│   │   └── StatCards.tsx      # ✅ 统计卡片组
+│   │   ├── StatCards.tsx      # ✅ 统计卡片组
+│   │   ├── SSEProvider.tsx    # ✅ SSE 连接 Provider
+│   │   └── agent/
+│   │       ├── ActivityTimeline.tsx  # ✅ Agent 活动时间线
+│   │       ├── MemoryStats.tsx      # ✅ Agent 记忆统计
+│   │       ├── RelationshipGraph.tsx # ✅ 关系图谱
+│   │       └── SkillTree.tsx        # ✅ 技能树展示
 │   ├── hooks/
-│   │   └── useWorldState.ts   # ✅ SSE 连接 hook
+│   │   ├── useWorldState.ts   # ✅ SSE 连接 hook
+│   │   ├── useAgentStream.ts  # ✅ Agent SSE hook
+│   │   ├── useGovernanceStream.ts # ✅ 治理 SSE hook
+│   │   └── useTaskStream.ts   # ✅ 任务 SSE hook
 │   ├── lib/
 │   │   └── api.ts             # ✅ REST API 客户端
 │   └── types/
@@ -1472,8 +1599,6 @@ dashboard/
 │   ├── components/
 │   │   ├── WorldMap.tsx       # ❌ D3.js 力导向图
 │   │   ├── TokenGauge.tsx     # ❌ Token 仪表
-│   │   ├── SkillBar.tsx       # ❌ 技能条
-│   │   ├── ReputationBadge.tsx # ❌ 声望徽章
 │   │   └── TransactionFeed.tsx # ❌ 交易流
 ```
 
@@ -1849,4 +1974,4 @@ class CustomLLMProvider(LLMProvider):
 
 ---
 
-*文档版本: v0.3.0 | 最后更新: 2026-05-19 | 下次评审: Phase 4 规划阶段*
+*文档版本: v1.0.0 | 最后更新: 2026-05-21 | 下次评审: Phase 2 规划阶段*

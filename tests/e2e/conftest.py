@@ -4,15 +4,18 @@ E2E integration test fixtures.
 Manages subprocess lifecycles for World Engine, Agent Runtime, and Dashboard
 using pytest fixtures with parametrized ports and timeouts.
 
-Each fixture starts a process, waits for a health check, and tears it down
-after the test scope ends.
+Uses ``fcntl.flock()`` file-lock coordination so multiple pytest workers
+(``pytest -n N``) share a single World Engine instance safely:
+  - The first worker to acquire the lock starts the Engine subprocess.
+  - Subsequent workers wait for the health check, then yield ``None``.
+  - On teardown the lock owner terminates the Engine and releases the lock.
 """
 
 from __future__ import annotations
 
+import fcntl
 import json
 import os
-import signal
 import subprocess
 import time
 from datetime import datetime, timezone
@@ -32,6 +35,10 @@ WORLD_ENGINE_DIR = ROOT / "world-engine"
 AGENT_RUNTIME_DIR = ROOT / "agent-runtime"
 DASHBOARD_DIR = ROOT / "dashboard"
 CONFIG_DIR = ROOT / "config"
+
+# File-lock path for multi-worker Engine coordination
+_LOCK_DIR = Path(os.environ.get("TMPDIR", "/tmp"))
+ENGINE_LOCK_PATH = _LOCK_DIR / "agent-world-e2e-engine.lock"
 
 
 # ── Default configuration ───────────────────────────────────────
@@ -83,20 +90,7 @@ def terminate_process(proc: subprocess.Popen, timeout: float = 5.0) -> None:
         pass
 
 
-def kill_port(port: int) -> None:
-    """Kill any process listening on *port* to avoid stale-process conflicts."""
-    import subprocess as _sp
-    try:
-        pids = _sp.check_output(
-            ["lsof", "-t", "-i", f":{port}"], stderr=_sp.DEVNULL
-        ).decode()
-        for pid in pids.split():
-            _sp.run(["kill", pid], stderr=_sp.DEVNULL)
-    except (_sp.CalledProcessError, FileNotFoundError):
-        pass  # nothing on that port — all good
-
-
-# ── Fixture: World Engine ───────────────────────────────────────
+# ── Fixture: World Engine (file-lock coordinated) ─────────────
 
 @pytest.fixture(scope="session")
 def engine_port() -> int:
@@ -118,50 +112,76 @@ def world_engine_process(
     engine_port: int,
     grpc_port: int,
     startup_timeout: float,
-) -> Generator[subprocess.Popen, None, None]:
+) -> Generator[Optional[subprocess.Popen], None, None]:
     """Start the World Engine (Rust binary) as a subprocess.
 
+    Uses ``fcntl.flock(LOCK_EX | LOCK_NB)`` for multi-worker coordination:
+      - **Lock owner** acquires the exclusive lock, starts the Engine,
+        waits for health, yields the ``Popen`` handle, and terminates
+        the process on teardown.
+      - **Lock workers** (other pytest-xdist workers) skip the lock,
+        wait for the health check to pass, and yield ``None``.
+
     Uses the genesis config from ``config/genesis.yaml``.
-    The process is torn down when the session ends.
     """
-    env = os.environ.copy()
-    env.update({
-        "PORT": str(engine_port),
-        "GRPC_ADDR": f"0.0.0.0:{grpc_port}",
-        "RUST_LOG": "warn",
-        "GENESIS_PATH": str(CONFIG_DIR / "genesis.yaml"),
-        # Isolate data to avoid conflicting with dev runs
-        "WAL_DIR": "/tmp/agent-world-e2e-test/wal",
-    })
+    lock_fd = os.open(str(ENGINE_LOCK_PATH), os.O_CREAT | os.O_RDWR)
+    try:
+        fcntl.flock(lock_fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
+    except (OSError, BlockingIOError):
+        # Another worker already holds the lock — we are a worker.
+        # Wait for the engine to become healthy, then yield None.
+        health_url = f"http://localhost:{engine_port}/api/v1/world/stats"
+        healthy = wait_for_health(health_url, timeout=startup_timeout)
+        if not healthy:
+            os.close(lock_fd)
+            pytest.fail(
+                f"Worker waited {startup_timeout}s for engine health check — "
+                f"the lock-owning worker may have failed to start the Engine."
+            )
+        yield None
+        os.close(lock_fd)
+        return
 
-    # Kill any stale process on our ports before starting
-    kill_port(engine_port)
-    kill_port(grpc_port)
+    # ── We are the lock owner ──────────────────────────────────
+    try:
+        env = os.environ.copy()
+        env.update({
+            "PORT": str(engine_port),
+            "GRPC_ADDR": f"0.0.0.0:{grpc_port}",
+            "RUST_LOG": "warn",
+            "GENESIS_PATH": str(CONFIG_DIR / "genesis.yaml"),
+            # Isolate data to avoid conflicting with dev runs
+            "WAL_DIR": "/tmp/agent-world-e2e-test/wal",
+        })
 
-    ENGINE_BIN = WORLD_ENGINE_DIR / "target" / "debug" / "agent-world-engine"
-    proc = subprocess.Popen(
-        [str(ENGINE_BIN)],
-        cwd=str(ROOT),
-        env=env,
-        stdout=subprocess.PIPE,
-        stderr=subprocess.PIPE,
-    )
-
-    health_url = f"http://localhost:{engine_port}/api/v1/world/stats"
-    healthy = wait_for_health(health_url, timeout=startup_timeout)
-
-    if not healthy:
-        terminate_process(proc)
-        stdout = proc.stdout.read().decode(errors="replace") if proc.stdout else ""
-        stderr = proc.stderr.read().decode(errors="replace") if proc.stderr else ""
-        pytest.fail(
-            f"World Engine did not become healthy within {startup_timeout}s.\n"
-            f"stdout: {stdout[-500:]}\nstderr: {stderr[-500:]}"
+        ENGINE_BIN = WORLD_ENGINE_DIR / "target" / "debug" / "agent-world-engine"
+        proc = subprocess.Popen(
+            [str(ENGINE_BIN)],
+            cwd=str(ROOT),
+            env=env,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
         )
 
-    yield proc
+        health_url = f"http://localhost:{engine_port}/api/v1/world/stats"
+        healthy = wait_for_health(health_url, timeout=startup_timeout)
 
-    terminate_process(proc)
+        if not healthy:
+            terminate_process(proc)
+            stdout = proc.stdout.read().decode(errors="replace") if proc.stdout else ""
+            stderr = proc.stderr.read().decode(errors="replace") if proc.stderr else ""
+            pytest.fail(
+                f"World Engine did not become healthy within {startup_timeout}s.\n"
+                f"stdout: {stdout[-500:]}\nstderr: {stderr[-500:]}"
+            )
+
+        yield proc
+
+        terminate_process(proc)
+    finally:
+        # Release the exclusive lock (and close fd) regardless of outcome.
+        fcntl.flock(lock_fd, fcntl.LOCK_UN)
+        os.close(lock_fd)
 
 
 # ── Fixture: Agent Process ──────────────────────────────────────

@@ -148,6 +148,25 @@ pub struct EvolutionConfig {
     pub inactivity_threshold: u64,
     #[serde(default = "default_passive_xp_per_tick")]
     pub passive_xp_per_tick: f64,
+    // Offspring mutation parameters
+    #[serde(default = "default_offspring_mutation_rate")]
+    pub offspring_mutation_rate: f64,
+    #[serde(default = "default_max_offspring_mutations")]
+    pub max_offspring_mutations: usize,
+    #[serde(default = "default_personality_dimensions")]
+    pub personality_dimensions: usize,
+    #[serde(default = "default_personality_shift_magnitude")]
+    pub personality_shift_magnitude: f64,
+    #[serde(default = "default_skill_level_jump_range")]
+    pub skill_level_jump_range: u32,
+    #[serde(default = "default_skill_level_drop_range")]
+    pub skill_level_drop_range: u32,
+    #[serde(default = "default_env_pressure_multiplier")]
+    pub env_pressure_multiplier: f64,
+    #[serde(default = "default_heritable_strengthen_chance")]
+    pub heritable_strengthen_chance: f64,
+    #[serde(default = "default_heritable_disappear_chance")]
+    pub heritable_disappear_chance: f64,
 }
 
 impl Default for EvolutionConfig {
@@ -159,6 +178,15 @@ impl Default for EvolutionConfig {
             evaluation_interval: default_evaluation_interval(),
             inactivity_threshold: default_inactivity_threshold(),
             passive_xp_per_tick: default_passive_xp_per_tick(),
+            offspring_mutation_rate: default_offspring_mutation_rate(),
+            max_offspring_mutations: default_max_offspring_mutations(),
+            personality_dimensions: default_personality_dimensions(),
+            personality_shift_magnitude: default_personality_shift_magnitude(),
+            skill_level_jump_range: default_skill_level_jump_range(),
+            skill_level_drop_range: default_skill_level_drop_range(),
+            env_pressure_multiplier: default_env_pressure_multiplier(),
+            heritable_strengthen_chance: default_heritable_strengthen_chance(),
+            heritable_disappear_chance: default_heritable_disappear_chance(),
         }
     }
 }
@@ -169,6 +197,15 @@ fn default_inheritance_ratio() -> f64 { 0.5 }
 fn default_evaluation_interval() -> u64 { 1000 }
 fn default_inactivity_threshold() -> u64 { 500 }
 fn default_passive_xp_per_tick() -> f64 { 1.0 }
+fn default_offspring_mutation_rate() -> f64 { 0.15 }
+fn default_max_offspring_mutations() -> usize { 3 }
+fn default_personality_dimensions() -> usize { 5 }
+fn default_personality_shift_magnitude() -> f64 { 0.2 }
+fn default_skill_level_jump_range() -> u32 { 2 }
+fn default_skill_level_drop_range() -> u32 { 1 }
+fn default_env_pressure_multiplier() -> f64 { 2.0 }
+fn default_heritable_strengthen_chance() -> f64 { 0.3 }
+fn default_heritable_disappear_chance() -> f64 { 0.2 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub struct A2aConfig {

@@ -28,6 +28,7 @@ use agent_world_engine::world::subsystems::{
     ReputationDecaySubsystem, TokenBurnSubsystem,
 };
 use agent_world_engine::evolution::{EvolutionSubsystem, subsystem::EvolutionSubsystemConfig};
+use agent_world_engine::evolution::mutation::OffspringMutationConfig;
 use agent_world_engine::persistence::{SerializableWorldState, SqlitePersistence, StatePersistence};
 use agent_world_engine::world::{Scheduler, WorldState};
 
@@ -178,6 +179,18 @@ async fn main() {
         mutation_boost_xp: 75.0,
         mutation_decay_xp: 30.0,
         mutation_new_skill_xp: 50.0,
+        offspring_mutation: OffspringMutationConfig {
+            base_offspring_mutation_rate: genesis_config.evolution.offspring_mutation_rate,
+            max_offspring_mutations: genesis_config.evolution.max_offspring_mutations,
+            personality_dimensions: genesis_config.evolution.personality_dimensions,
+            personality_shift_magnitude: genesis_config.evolution.personality_shift_magnitude,
+            skill_level_jump_range: genesis_config.evolution.skill_level_jump_range,
+            skill_level_drop_range: genesis_config.evolution.skill_level_drop_range,
+            env_pressure_multiplier: genesis_config.evolution.env_pressure_multiplier,
+            heritable_strengthen_chance: genesis_config.evolution.heritable_strengthen_chance,
+            heritable_disappear_chance: genesis_config.evolution.heritable_disappear_chance,
+        },
+        crossover_personality_blend: 0.5,
     };
     subsystem_registry.register(Box::new(EvolutionSubsystem::new(evolution_config)));
     println!(

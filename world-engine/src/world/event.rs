@@ -103,6 +103,8 @@ pub enum EventType {
     TreatySigned,
     TreatyBroken,
     RelationChanged,
+    // Offspring mutation events
+    OffspringMutated,
 }
 
 /// Events emitted by the world engine.
@@ -204,6 +206,15 @@ pub enum WorldEvent {
     TreatySigned { treaty_id: String, org_a: String, org_b: String },
     TreatyBroken { treaty_id: String, breaker: String, reason: String },
     RelationChanged { org_a: String, org_b: String, old_level: i8, new_level: i8 },
+    // Offspring mutation events
+    OffspringMutated {
+        offspring_id: String,
+        parent_a_id: String,
+        parent_b_id: String,
+        mutations_count: usize,
+        mutation_types: Vec<String>,
+        effective_mutation_rate: f64,
+    },
 }
 
 impl WorldEvent {
@@ -292,6 +303,7 @@ impl WorldEvent {
             WorldEvent::TreatySigned { .. } => EventType::TreatySigned,
             WorldEvent::TreatyBroken { .. } => EventType::TreatyBroken,
             WorldEvent::RelationChanged { .. } => EventType::RelationChanged,
+            WorldEvent::OffspringMutated { .. } => EventType::OffspringMutated,
         }
     }
 
@@ -380,6 +392,7 @@ impl WorldEvent {
             WorldEvent::TreatySigned { .. } => None,
             WorldEvent::TreatyBroken { breaker, .. } => Some(breaker),
             WorldEvent::RelationChanged { .. } => None,
+            WorldEvent::OffspringMutated { offspring_id, .. } => Some(offspring_id),
         }
     }
 

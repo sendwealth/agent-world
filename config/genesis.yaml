@@ -34,6 +34,16 @@ evolution:
   evaluation_interval: 1000   # 每1000 tick评估一次
   inactivity_threshold: 500   # 500 tick无活动进入衰退
   passive_xp_per_tick: 1.0    # 每tick被动获得的经验值
+  # 后代突变配置
+  offspring_mutation_rate: 0.15   # 后代基础突变率 15%
+  max_offspring_mutations: 3      # 每个后代最多3个突变
+  personality_dimensions: 5       # 人格维度数
+  personality_shift_magnitude: 0.2  # 人格维度单次偏移幅度
+  skill_level_jump_range: 2       # 技能等级跳升范围
+  skill_level_drop_range: 1       # 技能等级下降范围
+  env_pressure_multiplier: 2.0    # 环境压力乘数（资源稀缺时突变率增加）
+  heritable_strengthen_chance: 0.3  # 遗传突变强化概率
+  heritable_disappear_chance: 0.2   # 遗传突变消失概率
 
 a2a:
   protocol_version: "v1"

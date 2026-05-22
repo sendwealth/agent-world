@@ -15,6 +15,8 @@ use crate::world::subsystem::Subsystem;
 
 use super::mutation::MutationEngine;
 use super::mutation::MutationType;
+use super::mutation::OffspringMutationConfig;
+use super::crossover::{CrossoverConfig, CrossoverEngine};
 use super::selection::SelectionEngine;
 use super::skill_tree::{SkillNode, SkillTree};
 
@@ -23,10 +25,13 @@ use super::skill_tree::{SkillNode, SkillTree};
 /// On each tick it:
 /// 1. Passively accumulates skill XP for living agents.
 /// 2. On evaluation cycles (every N ticks), runs mutation and natural selection.
-/// 3. Emits evolution-related events.
+/// 3. Provides crossover/offspring mutation for reproduction events.
+/// 4. Emits evolution-related events.
 pub struct EvolutionSubsystem {
     /// Mutation engine (internally holds the skill tree).
     mutation: MutationEngine,
+    /// Crossover engine for offspring generation.
+    crossover: CrossoverEngine,
     /// Natural selection engine.
     selection: Mutex<SelectionEngine>,
     /// RNG state.
@@ -59,6 +64,10 @@ pub struct EvolutionSubsystemConfig {
     pub mutation_decay_xp: f64,
     /// XP granted for a new skill mutation.
     pub mutation_new_skill_xp: f64,
+    /// Offspring mutation configuration.
+    pub offspring_mutation: OffspringMutationConfig,
+    /// Crossover strategy for offspring skill inheritance.
+    pub crossover_personality_blend: f64,
 }
 
 impl Default for EvolutionSubsystemConfig {
@@ -74,6 +83,8 @@ impl Default for EvolutionSubsystemConfig {
             mutation_boost_xp: 75.0,
             mutation_decay_xp: 30.0,
             mutation_new_skill_xp: 50.0,
+            offspring_mutation: OffspringMutationConfig::default(),
+            crossover_personality_blend: 0.5,
         }
     }
 }
@@ -82,6 +93,14 @@ impl EvolutionSubsystem {
     pub fn new(config: EvolutionSubsystemConfig) -> Self {
         let skill_tree = SkillTree::new(config.skill_max_level);
         let mutation = MutationEngine::new(config.mutation_rate, skill_tree.clone());
+
+        let crossover_config = CrossoverConfig {
+            personality_blend: config.crossover_personality_blend,
+            apply_mutations: true,
+            mutation_config: config.offspring_mutation.clone(),
+            ..Default::default()
+        };
+        let crossover = CrossoverEngine::new(crossover_config, mutation.clone());
 
         let selection_config = super::selection::SelectionConfig {
             evaluation_interval: config.evaluation_interval,
@@ -93,6 +112,7 @@ impl EvolutionSubsystem {
 
         Self {
             mutation,
+            crossover,
             selection: Mutex::new(selection),
             rng: Mutex::new(StdRng::from_entropy()),
             config,

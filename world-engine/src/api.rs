@@ -37,6 +37,7 @@ use crate::organization::governance_metrics::GovernanceMetricsCollector;
 use crate::time_capsule::SnapshotStore;
 use crate::wal::WAL;
 use crate::world::event::WorldEvent;
+use crate::world::map::building::BuildingManager;
 use crate::world::state::EventBus;
 
 // ── Shared State ──────────────────────────────────────────
@@ -98,6 +99,8 @@ pub struct AppState {
     pub trace_store: Option<SharedTraceStore>,
     pub external_agents: SharedExternalAgents,
     pub governance_metrics: Option<SharedGovernanceMetricsCollector>,
+    pub building_manager: Arc<Mutex<BuildingManager>>,
+
 }
 
 pub fn create_router(board: SharedTaskBoard) -> Router {
@@ -139,6 +142,7 @@ pub fn create_router_with_wal(board: SharedTaskBoard, wal: SharedWAL) -> Router 
         trace_store: Some(Arc::new(Mutex::new(crate::tracing::TraceStore::new()))),
         external_agents: Arc::new(Mutex::new(HashMap::new())),
         governance_metrics: None,
+            building_manager: Arc::new(Mutex::new(BuildingManager::new())),
     };
     build_full_router(state)
 }
@@ -168,6 +172,7 @@ pub fn create_router_with_wal_and_snapshots(board: SharedTaskBoard, wal: SharedW
         trace_store: Some(Arc::new(Mutex::new(crate::tracing::TraceStore::new()))),
         external_agents: Arc::new(Mutex::new(HashMap::new())),
         governance_metrics: None,
+            building_manager: Arc::new(Mutex::new(BuildingManager::new())),
     };
     build_full_router(state)
 }
@@ -268,6 +273,13 @@ pub fn build_full_router(state: AppState) -> Router {
         .route("/api/v1/agents/:id/perception", get(get_agent_perception))
         .route("/api/v1/agents/:id/status", get(get_agent_status))
         // Modify existing agent GET to also support DELETE for deregister
+        // Building routes
+        .route("/api/v1/agents/:id/build", post(build_building))
+        .route("/api/v1/map/buildings", get(list_buildings))
+        .route("/api/v1/map/:x/:y/buildings", get(list_buildings_at))
+        .route("/api/v1/buildings/:id", get(get_building))
+        .route("/api/v1/buildings/:id/maintain", post(maintain_building))
+        .route("/api/v1/buildings/:id/demolish", post(demolish_building))
         // Governance Metrics routes
         .route("/api/v1/governance/summary", get(governance_summary))
         .route("/api/v1/governance/orgs/:org_id", get(governance_org_metrics))
@@ -305,6 +317,7 @@ pub fn create_router_for_test(
         trace_store: Some(Arc::new(Mutex::new(crate::tracing::TraceStore::new()))),
         external_agents: Arc::new(Mutex::new(HashMap::new())),
         governance_metrics: None,
+            building_manager: Arc::new(Mutex::new(BuildingManager::new())),
     };
     build_full_router(state)
 }
@@ -3406,8 +3419,158 @@ async fn governance_comparison(
 
 // ── Governance API Tests ──────────────────────────────────────────────────
 
+// ── Building API Handlers ──────────────────────────────────
+
+#[derive(Debug, Deserialize)]
+struct BuildRequest {
+    building_type: String,
+    #[serde(default)]
+    x: i32,
+    #[serde(default)]
+    y: i32,
+    #[serde(default = "default_owner_type")]
+    owner_type: String,
+}
+
+fn default_owner_type() -> String {
+    "personal".to_string()
+}
+
+async fn build_building(
+    State(state): State<AppState>,
+    Path(agent_id): Path<String>,
+    Json(body): Json<BuildRequest>,
+) -> impl IntoResponse {
+    let building_type = match body.building_type.as_str() {
+        "warehouse" => crate::world::map::building::BuildingType::Warehouse,
+        "market" => crate::world::map::building::BuildingType::Market,
+        "workshop" => crate::world::map::building::BuildingType::Workshop,
+        "defense_tower" => crate::world::map::building::BuildingType::DefenseTower,
+        "housing" => crate::world::map::building::BuildingType::Housing,
+        _ => return (StatusCode::BAD_REQUEST, Json(ErrorResponse { error: format!("unknown building_type '{}'", body.building_type) })).into_response(),
+    };
+
+    let owner_type = match body.owner_type.as_str() {
+        "personal" => crate::world::map::building::OwnerType::Personal,
+        "organization" => crate::world::map::building::OwnerType::Organization,
+        _ => crate::world::map::building::OwnerType::Personal,
+    };
+
+    // Deduct tokens from agent
+    {
+        let mut external = state.external_agents.lock().await;
+        if let Some(agent) = external.get_mut(&agent_id) {
+            if !agent.alive {
+                return (StatusCode::GONE, Json(ErrorResponse { error: "agent is dead".into() })).into_response();
+            }
+            let cost = crate::world::map::building::BuildingCost::for_type(building_type);
+            if agent.tokens < cost.tokens {
+                return (StatusCode::PAYMENT_REQUIRED, Json(ErrorResponse { error: format!("insufficient tokens: need {}, have {}", cost.tokens, agent.tokens) })).into_response();
+            }
+            agent.tokens -= cost.tokens;
+        } else {
+            return (StatusCode::NOT_FOUND, Json(ErrorResponse { error: "agent not found".into() })).into_response();
+        }
+    }
+
+    let tick = *state.tick_rx.borrow();
+    let mut mgr = state.building_manager.lock().await;
+    match mgr.construct(building_type, (body.x, body.y), owner_type, agent_id.clone(), tick) {
+        Ok(building) => {
+            state.event_bus.emit(WorldEvent::BuildingConstructed {
+                building_id: building.id.clone(),
+                building_type: format!("{:?}", building.building_type).to_lowercase(),
+                owner_id: agent_id,
+                position: (body.x, body.y),
+            });
+            (StatusCode::CREATED, Json(serde_json::to_value(&building).unwrap())).into_response()
+        }
+        Err(e) => (StatusCode::CONFLICT, Json(ErrorResponse { error: e })).into_response(),
+    }
+}
+
+async fn list_buildings(
+    State(state): State<AppState>,
+    Query(params): Query<HashMap<String, String>>,
+) -> impl IntoResponse {
+    let mgr = state.building_manager.lock().await;
+    let buildings: Vec<_> = if let Some(owner) = params.get("owner") {
+        mgr.get_by_owner(owner).into_iter().collect()
+    } else {
+        mgr.list_all()
+    };
+    (StatusCode::OK, Json(buildings)).into_response()
+}
+
+async fn list_buildings_at(
+    State(state): State<AppState>,
+    Path((x, y)): Path<(i32, i32)>,
+) -> impl IntoResponse {
+    let mgr = state.building_manager.lock().await;
+    let buildings = mgr.get_at((x, y));
+    (StatusCode::OK, Json(buildings)).into_response()
+}
+
+async fn get_building(
+    State(state): State<AppState>,
+    Path(id): Path<String>,
+) -> impl IntoResponse {
+    let mgr = state.building_manager.lock().await;
+    match mgr.get(&id) {
+        Some(b) => (StatusCode::OK, Json(serde_json::to_value(b).unwrap())).into_response(),
+        None => (StatusCode::NOT_FOUND, Json(ErrorResponse { error: "building not found".into() })).into_response(),
+    }
+}
+
+#[derive(Debug, Deserialize)]
+struct MaintainRequest {
+    #[serde(default = "default_health_restore")]
+    health_restore: u32,
+}
+
+fn default_health_restore() -> u32 {
+    50
+}
+
+async fn maintain_building(
+    State(state): State<AppState>,
+    Path(id): Path<String>,
+    Json(body): Json<MaintainRequest>,
+) -> impl IntoResponse {
+    let mut mgr = state.building_manager.lock().await;
+    match mgr.maintain(&id, body.health_restore) {
+        Ok(building) => {
+            state.event_bus.emit(WorldEvent::BuildingMaintained {
+                building_id: id,
+                health_restored: body.health_restore,
+                new_health: building.health,
+            });
+            (StatusCode::OK, Json(serde_json::to_value(&building).unwrap())).into_response()
+        }
+        Err(e) => (StatusCode::BAD_REQUEST, Json(ErrorResponse { error: e })).into_response(),
+    }
+}
+
+async fn demolish_building(
+    State(state): State<AppState>,
+    Path(id): Path<String>,
+) -> impl IntoResponse {
+    let mut mgr = state.building_manager.lock().await;
+    match mgr.demolish(&id) {
+        Ok(building) => {
+            let owner_id = building.owner_id.clone();
+            state.event_bus.emit(WorldEvent::BuildingDemolished {
+                building_id: id,
+                owner_id,
+            });
+            (StatusCode::OK, Json(serde_json::to_value(&building).unwrap())).into_response()
+        }
+        Err(e) => (StatusCode::BAD_REQUEST, Json(ErrorResponse { error: e })).into_response(),
+    }
+}
+
 #[cfg(test)]
-mod governance_api_tests {
+mod tests {
     use super::*;
     use axum::body::Body;
     use http_body_util::BodyExt;
@@ -3443,6 +3606,7 @@ mod governance_api_tests {
             trace_store: None,
             external_agents: Arc::new(Mutex::new(std::collections::HashMap::new())),
             governance_metrics: Some(Arc::new(Mutex::new(collector))),
+            building_manager: Arc::new(Mutex::new(BuildingManager::new())),
         };
         (state, tmp)
     }
@@ -3726,6 +3890,7 @@ mod governance_api_tests {
             trace_store: None,
             external_agents: Arc::new(Mutex::new(std::collections::HashMap::new())),
             governance_metrics: None,
+            building_manager: Arc::new(Mutex::new(BuildingManager::new())),
         };
 
         let app = build_full_router(state);

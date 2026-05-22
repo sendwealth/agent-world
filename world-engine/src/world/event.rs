@@ -105,6 +105,14 @@ pub enum EventType {
     RelationChanged,
     // Offspring mutation events
     OffspringMutated,
+    // Building events
+    BuildingConstructed,
+    BuildingCompleted,
+    BuildingDamaged,
+    BuildingDestroyed,
+    BuildingDemolished,
+    BuildingMaintained,
+    BuildingUpgraded,
 }
 
 /// Events emitted by the world engine.
@@ -215,6 +223,14 @@ pub enum WorldEvent {
         mutation_types: Vec<String>,
         effective_mutation_rate: f64,
     },
+    // Building events
+    BuildingConstructed { building_id: String, building_type: String, owner_id: String, position: (i32, i32) },
+    BuildingCompleted { building_id: String, building_type: String },
+    BuildingDamaged { building_id: String, health: u32 },
+    BuildingDestroyed { building_id: String },
+    BuildingDemolished { building_id: String, owner_id: String },
+    BuildingMaintained { building_id: String, health_restored: u32, new_health: u32 },
+    BuildingUpgraded { building_id: String, new_level: u32 },
 }
 
 impl WorldEvent {
@@ -304,6 +320,13 @@ impl WorldEvent {
             WorldEvent::TreatyBroken { .. } => EventType::TreatyBroken,
             WorldEvent::RelationChanged { .. } => EventType::RelationChanged,
             WorldEvent::OffspringMutated { .. } => EventType::OffspringMutated,
+            WorldEvent::BuildingConstructed { .. } => EventType::BuildingConstructed,
+            WorldEvent::BuildingCompleted { .. } => EventType::BuildingCompleted,
+            WorldEvent::BuildingDamaged { .. } => EventType::BuildingDamaged,
+            WorldEvent::BuildingDestroyed { .. } => EventType::BuildingDestroyed,
+            WorldEvent::BuildingDemolished { .. } => EventType::BuildingDemolished,
+            WorldEvent::BuildingMaintained { .. } => EventType::BuildingMaintained,
+            WorldEvent::BuildingUpgraded { .. } => EventType::BuildingUpgraded,
         }
     }
 
@@ -393,6 +416,13 @@ impl WorldEvent {
             WorldEvent::TreatyBroken { breaker, .. } => Some(breaker),
             WorldEvent::RelationChanged { .. } => None,
             WorldEvent::OffspringMutated { offspring_id, .. } => Some(offspring_id),
+            WorldEvent::BuildingConstructed { owner_id, .. } => Some(owner_id),
+            WorldEvent::BuildingCompleted { .. } => None,
+            WorldEvent::BuildingDamaged { .. } => None,
+            WorldEvent::BuildingDestroyed { .. } => None,
+            WorldEvent::BuildingDemolished { owner_id, .. } => Some(owner_id),
+            WorldEvent::BuildingMaintained { .. } => None,
+            WorldEvent::BuildingUpgraded { .. } => None,
         }
     }
 

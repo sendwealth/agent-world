@@ -482,6 +482,7 @@ async fn main() {
         trace_store: Some(Arc::new(Mutex::new(agent_world_engine::tracing::TraceStore::new()))),
         external_agents: Arc::new(Mutex::new(std::collections::HashMap::new())),
         governance_metrics: Some(Arc::new(Mutex::new(governance_metrics))),
+        building_manager: Arc::new(Mutex::new(agent_world_engine::world::map::building::BuildingManager::new())),
     };
     let app = api::build_full_router(app_state);
 

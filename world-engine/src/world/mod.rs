@@ -5,6 +5,7 @@ pub mod enums;
 pub mod event;
 pub mod genesis;
 pub mod intervention;
+pub mod map;
 pub mod scheduler;
 pub mod seeder;
 pub mod state;

@@ -13,6 +13,12 @@ from .cultural_conflict import (
     CulturalConflictAndFusion,
 )
 from .cultural_diffusion import CulturalDiffusion
+from .dialect_divergence import (
+    DialectDivergenceAnalyzer,
+    DialectDistanceMatrix,
+    DialectRegion,
+    DivergenceReport,
+)
 from .imitation import ImitationEngine
 from .intergroup_trust import (
     DEFAULT_IN_GROUP_TRUST,
@@ -72,4 +78,9 @@ __all__ = [
     "EfficiencyMetrics",
     "LanguageExperiment",
     "VocabConstraint",
+    # dialect_divergence (Phase 4.8)
+    "DialectDivergenceAnalyzer",
+    "DialectDistanceMatrix",
+    "DialectRegion",
+    "DivergenceReport",
 ]

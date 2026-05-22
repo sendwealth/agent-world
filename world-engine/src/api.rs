@@ -78,6 +78,8 @@ pub struct A2AMessage {
     pub tick: u64,
 }
 
+pub type SharedDialectStore = Arc<Mutex<crate::tracing::DialectStore>>;
+
 /// Combined state for the API with WAL + EventBus + agents + messages + snapshot store.
 #[derive(Clone)]
 pub struct AppState {
@@ -96,6 +98,7 @@ pub struct AppState {
     pub governance: Option<SharedGovernanceSystem>,
     pub banking_system: Option<SharedBankingSystem>,
     pub trace_store: Option<SharedTraceStore>,
+    pub dialect_store: Option<SharedDialectStore>,
     pub external_agents: SharedExternalAgents,
     pub governance_metrics: Option<SharedGovernanceMetricsCollector>,
 }
@@ -137,6 +140,7 @@ pub fn create_router_with_wal(board: SharedTaskBoard, wal: SharedWAL) -> Router 
         governance: None,
         banking_system: None,
         trace_store: Some(Arc::new(Mutex::new(crate::tracing::TraceStore::new()))),
+        dialect_store: Some(Arc::new(Mutex::new(crate::tracing::DialectStore::new()))),
         external_agents: Arc::new(Mutex::new(HashMap::new())),
         governance_metrics: None,
     };
@@ -166,6 +170,7 @@ pub fn create_router_with_wal_and_snapshots(board: SharedTaskBoard, wal: SharedW
         governance: None,
         banking_system: None,
         trace_store: Some(Arc::new(Mutex::new(crate::tracing::TraceStore::new()))),
+        dialect_store: Some(Arc::new(Mutex::new(crate::tracing::DialectStore::new()))),
         external_agents: Arc::new(Mutex::new(HashMap::new())),
         governance_metrics: None,
     };
@@ -273,6 +278,11 @@ pub fn build_full_router(state: AppState) -> Router {
         .route("/api/v1/governance/orgs/:org_id", get(governance_org_metrics))
         .route("/api/v1/governance/orgs/:org_id/timeline", get(governance_org_timeline))
         .route("/api/v1/governance/comparison", get(governance_comparison))
+        // Language / Dialect Divergence routes
+        .route("/api/v1/language/dialect-matrix", get(get_dialect_matrix))
+        .route("/api/v1/language/dialect-regions", get(get_dialect_regions))
+        .route("/api/v1/language/dialect-timeline", get(get_dialect_timeline))
+        .route("/api/v1/language/dialect-report", post(submit_dialect_report))
         .with_state(state)
 }
 
@@ -303,6 +313,7 @@ pub fn create_router_for_test(
         governance: None,
         banking_system: None,
         trace_store: Some(Arc::new(Mutex::new(crate::tracing::TraceStore::new()))),
+        dialect_store: Some(Arc::new(Mutex::new(crate::tracing::DialectStore::new()))),
         external_agents: Arc::new(Mutex::new(HashMap::new())),
         governance_metrics: None,
     };
@@ -3441,6 +3452,7 @@ mod governance_api_tests {
             governance: None,
             banking_system: None,
             trace_store: None,
+            dialect_store: None,
             external_agents: Arc::new(Mutex::new(std::collections::HashMap::new())),
             governance_metrics: Some(Arc::new(Mutex::new(collector))),
         };
@@ -3724,6 +3736,7 @@ mod governance_api_tests {
             governance: None,
             banking_system: None,
             trace_store: None,
+            dialect_store: None,
             external_agents: Arc::new(Mutex::new(std::collections::HashMap::new())),
             governance_metrics: None,
         };
@@ -3741,4 +3754,73 @@ mod governance_api_tests {
 
         assert_eq!(response.status(), StatusCode::SERVICE_UNAVAILABLE);
     }
+}
+
+// ── Language / Dialect Divergence Handlers ──────────────
+
+#[derive(Debug, Default, Deserialize)]
+#[serde(default)]
+pub struct DialectQuery {
+    pub tick: Option<u64>,
+}
+
+#[derive(Debug, Default, Deserialize)]
+#[serde(default)]
+pub struct DialectTimelineQuery {
+    pub limit: Option<usize>,
+    pub offset: Option<usize>,
+}
+
+async fn get_dialect_matrix(
+    State(state): State<AppState>,
+    Query(query): Query<DialectQuery>,
+) -> impl IntoResponse {
+    let store = match &state.dialect_store {
+        Some(s) => s.clone(),
+        None => return (StatusCode::SERVICE_UNAVAILABLE, Json(ErrorResponse { error: "dialect store not configured".into() })).into_response(),
+    };
+    let store = store.lock().await;
+    let result = store.get_matrix(query.tick);
+    Json(result).into_response()
+}
+
+async fn get_dialect_regions(
+    State(state): State<AppState>,
+    Query(query): Query<DialectQuery>,
+) -> impl IntoResponse {
+    let store = match &state.dialect_store {
+        Some(s) => s.clone(),
+        None => return (StatusCode::SERVICE_UNAVAILABLE, Json(ErrorResponse { error: "dialect store not configured".into() })).into_response(),
+    };
+    let store = store.lock().await;
+    let result = store.get_regions(query.tick);
+    Json(result).into_response()
+}
+
+async fn get_dialect_timeline(
+    State(state): State<AppState>,
+    Query(query): Query<DialectTimelineQuery>,
+) -> impl IntoResponse {
+    let store = match &state.dialect_store {
+        Some(s) => s.clone(),
+        None => return (StatusCode::SERVICE_UNAVAILABLE, Json(ErrorResponse { error: "dialect store not configured".into() })).into_response(),
+    };
+    let store = store.lock().await;
+    let limit = query.limit.unwrap_or(100);
+    let offset = query.offset.unwrap_or(0);
+    let timeline = store.get_timeline(limit, offset);
+    Json(timeline).into_response()
+}
+
+async fn submit_dialect_report(
+    State(state): State<AppState>,
+    Json(report): Json<crate::tracing::DialectReportData>,
+) -> impl IntoResponse {
+    let store = match &state.dialect_store {
+        Some(s) => s.clone(),
+        None => return (StatusCode::SERVICE_UNAVAILABLE, Json(ErrorResponse { error: "dialect store not configured".into() })).into_response(),
+    };
+    let mut store = store.lock().await;
+    store.save(report);
+    (StatusCode::OK, Json(serde_json::json!({"status": "ok"}))).into_response()
 }

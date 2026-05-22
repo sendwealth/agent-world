@@ -467,6 +467,7 @@ async fn main() {
         governance: Some(governance),
         banking_system: Some(banking_system),
         trace_store: Some(Arc::new(Mutex::new(agent_world_engine::tracing::TraceStore::new()))),
+        dialect_store: Some(Arc::new(Mutex::new(agent_world_engine::tracing::DialectStore::new()))),
         external_agents: Arc::new(Mutex::new(std::collections::HashMap::new())),
         governance_metrics: Some(Arc::new(Mutex::new(governance_metrics))),
     };

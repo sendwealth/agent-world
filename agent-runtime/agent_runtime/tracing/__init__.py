@@ -16,6 +16,7 @@ Usage::
 """
 
 from agent_runtime.tracing.collector import TraceCollector
+from agent_runtime.tracing.dialect_store import DialectStore
 from agent_runtime.tracing.emergence_metrics import (
     EmergenceMetrics,
     LanguageEmergenceMetrics,
@@ -32,6 +33,7 @@ from agent_runtime.tracing.query import TraceQuery, TraceQueryService
 from agent_runtime.tracing.store import TraceStore
 
 __all__ = [
+    "DialectStore",
     "EmergenceMetrics",
     "LanguageEmergenceMetrics",
     "LanguageEmergenceSnapshot",

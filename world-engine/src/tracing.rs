@@ -179,3 +179,139 @@ pub struct AgentTraceStats {
     pub total_ticks: usize,
     pub latest_tick: u64,
 }
+
+// ---------------------------------------------------------------------------
+// Dialect divergence data structures
+// ---------------------------------------------------------------------------
+
+/// A single dialect region detected from agent communication analysis.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct DialectRegionData {
+    pub region_id: String,
+    #[serde(default)]
+    pub agent_ids: Vec<String>,
+    #[serde(default)]
+    pub signature_terms: Vec<String>,
+    pub coherence: f64,
+    pub isolation: f64,
+}
+
+/// A complete dialect divergence report submitted by the agent runtime.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct DialectReportData {
+    pub tick: u64,
+    pub grouping_method: String,
+    pub avg_inter_group_distance: f64,
+    pub avg_intra_group_distance: f64,
+    pub divergence_index: f64,
+    /// Nested dict: group_a -> group_b -> distance
+    #[serde(default)]
+    pub distance_matrix: serde_json::Value,
+    /// List of dialect regions
+    #[serde(default)]
+    pub regions: Vec<DialectRegionData>,
+}
+
+/// In-memory store for the latest dialect divergence report.
+pub struct DialectStore {
+    latest: Option<DialectReportData>,
+    history: Vec<DialectReportData>,
+}
+
+impl Default for DialectStore {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+impl DialectStore {
+    pub fn new() -> Self {
+        Self {
+            latest: None,
+            history: Vec::new(),
+        }
+    }
+
+    pub fn save(&mut self, report: DialectReportData) {
+        self.latest = Some(report.clone());
+        // Insert in sorted order by tick
+        let pos = self.history.binary_search_by(|r| r.tick.cmp(&report.tick));
+        match pos {
+            Ok(idx) => self.history[idx] = report,
+            Err(idx) => self.history.insert(idx, report),
+        }
+    }
+
+    pub fn get_latest(&self) -> Option<&DialectReportData> {
+        self.latest.as_ref()
+    }
+
+    pub fn get_by_tick(&self, tick: u64) -> Option<&DialectReportData> {
+        self.history
+            .binary_search_by(|r| r.tick.cmp(&tick))
+            .ok()
+            .map(|i| &self.history[i])
+    }
+
+    pub fn get_matrix(&self, tick: Option<u64>) -> serde_json::Value {
+        let report = match tick {
+            Some(t) => self.get_by_tick(t),
+            None => self.get_latest(),
+        };
+        match report {
+            Some(r) => serde_json::json!({
+                "tick": r.tick,
+                "method": "cosine",
+                "distances": r.distance_matrix,
+            }),
+            None => serde_json::json!({
+                "tick": 0,
+                "method": "cosine",
+                "distances": {},
+            }),
+        }
+    }
+
+    pub fn get_regions(&self, tick: Option<u64>) -> serde_json::Value {
+        let report = match tick {
+            Some(t) => self.get_by_tick(t),
+            None => self.get_latest(),
+        };
+        match report {
+            Some(r) => serde_json::json!({
+                "tick": r.tick,
+                "grouping_method": r.grouping_method,
+                "regions": r.regions,
+                "avg_inter_group_distance": r.avg_inter_group_distance,
+                "avg_intra_group_distance": r.avg_intra_group_distance,
+                "divergence_index": r.divergence_index,
+            }),
+            None => serde_json::json!({
+                "tick": 0,
+                "grouping_method": "region",
+                "regions": [],
+                "avg_inter_group_distance": 0.0,
+                "avg_intra_group_distance": 0.0,
+                "divergence_index": 0.0,
+            }),
+        }
+    }
+
+    pub fn get_timeline(&self, limit: usize, offset: usize) -> Vec<serde_json::Value> {
+        self.history
+            .iter()
+            .rev()
+            .skip(offset)
+            .take(limit)
+            .map(|r| {
+                serde_json::json!({
+                    "tick": r.tick,
+                    "grouping_method": r.grouping_method,
+                    "avg_inter_group_distance": r.avg_inter_group_distance,
+                    "avg_intra_group_distance": r.avg_intra_group_distance,
+                    "divergence_index": r.divergence_index,
+                })
+            })
+            .collect()
+    }
+}

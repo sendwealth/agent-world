@@ -203,6 +203,9 @@ pub struct Proposal {
     pub created_at: u64,
     /// Optional data payload (e.g. target agent_id for AcceptMember/ExpelMember).
     pub payload: Option<serde_json::Value>,
+    /// Structured debate arguments submitted during Discussion phase.
+    #[serde(default)]
+    pub arguments: Vec<DebateArgument>,
 }
 
 impl Proposal {
@@ -215,6 +218,45 @@ impl Proposal {
     pub fn votes_against(&self) -> u32 {
         self.votes.iter().filter(|v| !v.in_favor).map(|v| v.weight).sum()
     }
+}
+
+// ── Debate / Discussion ──────────────────────────────────
+
+/// Stance a debater takes on a proposal.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum DebateStance {
+    /// Supports the proposal.
+    InFavor,
+    /// Opposes the proposal.
+    Against,
+    /// Neutral / informational — neither for nor against.
+    Neutral,
+}
+
+impl std::fmt::Display for DebateStance {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            DebateStance::InFavor => write!(f, "in_favor"),
+            DebateStance::Against => write!(f, "against"),
+            DebateStance::Neutral => write!(f, "neutral"),
+        }
+    }
+}
+
+/// A structured argument in a proposal discussion.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct DebateArgument {
+    pub id: Uuid,
+    pub proposal_id: Uuid,
+    pub author_id: String,
+    pub stance: DebateStance,
+    pub content: String,
+    /// If this is a reply, the parent argument ID.
+    pub parent_argument_id: Option<Uuid>,
+    /// IDs of replies to this argument.
+    pub replies: Vec<Uuid>,
+    pub created_at: u64,
 }
 
 /// An organization with its members and governance config.
@@ -230,6 +272,8 @@ pub struct Organization {
     /// Custom profit sharing weights (agent_id -> weight), only used when mode is Custom.
     pub custom_weights: HashMap<String, u64>,
     pub created_at: u64,
+    /// Per-org governance config override. If None, the system-level config is used.
+    pub governance_config: Option<GovernanceConfig>,
 }
 
 impl Organization {
@@ -253,6 +297,7 @@ impl Organization {
             dissolved: false,
             custom_weights: HashMap::new(),
             created_at,
+            governance_config: None,
         }
     }
 
@@ -375,6 +420,7 @@ pub enum GovernanceError {
     OrganizationDissolved(Uuid),
     CannotRemoveFounder,
     EmptyName,
+    DiscussionPeriodNotElapsed { proposal_id: Uuid, remaining_ticks: u64 },
 }
 
 impl std::fmt::Display for GovernanceError {
@@ -410,6 +456,9 @@ impl std::fmt::Display for GovernanceError {
                 write!(f, "cannot remove the founder; transfer ownership first")
             }
             GovernanceError::EmptyName => write!(f, "organization name cannot be empty"),
+            GovernanceError::DiscussionPeriodNotElapsed { proposal_id, remaining_ticks } => {
+                write!(f, "discussion period not elapsed for proposal {}: {} ticks remaining", proposal_id, remaining_ticks)
+            }
         }
     }
 }
@@ -667,6 +716,7 @@ impl GovernanceSystem {
                 votes: vec![],
                 created_at: tick,
                 payload,
+                arguments: vec![],
             };
             let proposal_id = proposal.id;
             self.proposals.insert(proposal_id, proposal);
@@ -685,6 +735,7 @@ impl GovernanceSystem {
             votes: vec![],
             created_at: tick,
             payload,
+            arguments: vec![],
         };
 
         let proposal_id = proposal.id;
@@ -701,7 +752,7 @@ impl GovernanceSystem {
     }
 
     /// Move a proposal from Discussion to Voting phase.
-    pub fn start_voting(&mut self, proposal_id: Uuid, requester_id: &str) -> Result<(), GovernanceError> {
+    pub fn start_voting(&mut self, proposal_id: Uuid, requester_id: &str, current_tick: u64) -> Result<(), GovernanceError> {
         let proposal = self.proposals.get(&proposal_id)
             .ok_or(GovernanceError::NotFound(proposal_id.to_string()))?;
 
@@ -718,6 +769,21 @@ impl GovernanceSystem {
 
         if !org.is_member(requester_id) {
             return Err(GovernanceError::NotMember { org_id, agent_id: requester_id.to_string() });
+        }
+
+        // Enforce discussion period: use org-level override if set, otherwise system config
+        let discussion_period = org.governance_config
+            .as_ref()
+            .map(|c| c.discussion_period_ticks)
+            .unwrap_or(self.config.discussion_period_ticks);
+
+        let elapsed = current_tick.saturating_sub(proposal.created_at);
+        if elapsed < discussion_period {
+            let remaining = discussion_period - elapsed;
+            return Err(GovernanceError::DiscussionPeriodNotElapsed {
+                proposal_id,
+                remaining_ticks: remaining,
+            });
         }
 
         let proposal = self.proposals.get_mut(&proposal_id).unwrap();
@@ -803,8 +869,11 @@ impl GovernanceSystem {
             .ok_or(GovernanceError::OrganizationNotFound(org_id))?;
         let total_weight = org.total_vote_weight();
 
+        // Use org-level override if set, otherwise system config
+        let gov_config = org.governance_config.as_ref().unwrap_or(&self.config);
+
         // Check quorum
-        let quorum_needed = (total_weight as f64 * self.config.quorum_fraction).ceil() as u32;
+        let quorum_needed = (total_weight as f64 * gov_config.quorum_fraction).ceil() as u32;
         if total_votes < quorum_needed {
             let proposal = self.proposals.get_mut(&proposal_id).unwrap();
             proposal.status = ProposalStatus::Rejected;
@@ -819,7 +888,7 @@ impl GovernanceSystem {
         }
 
         let passed = if total_votes > 0 {
-            (votes_for as f64 / total_votes as f64) >= self.config.pass_threshold
+            (votes_for as f64 / total_votes as f64) >= gov_config.pass_threshold
         } else {
             false
         };
@@ -966,14 +1035,21 @@ impl GovernanceSystem {
             }
             ProposalType::SoftRuleProposal => {
                 if let Some(payload) = payload {
-                    // Extract rule data from payload and activate in the rule engine
+                    // Check if payload has a pre-existing rule_id (backward compat)
+                    // or full rule definition to create + activate
                     let rule_id = payload.get("rule_id")
                         .and_then(|v| v.as_str())
                         .unwrap_or("")
                         .to_string();
 
                     if !rule_id.is_empty() {
-                        let _ = self.active_rules.activate_rule(&rule_id);
+                        // Try activating a pre-proposed rule first
+                        if self.active_rules.get_rule(&rule_id).is_some() {
+                            let _ = self.active_rules.activate_rule(&rule_id);
+                        } else {
+                            // Rule doesn't exist yet — create it from the payload
+                            self.create_and_activate_rule_from_payload(&rule_id, org_id, &payload);
+                        }
                     }
                 }
             }
@@ -983,6 +1059,198 @@ impl GovernanceSystem {
     }
 
     // ── Helpers ────────────────────────────────────────────
+
+    /// Create and activate a soft rule from a proposal payload.
+    fn create_and_activate_rule_from_payload(
+        &mut self,
+        _rule_id: &str,
+        org_id: Uuid,
+        payload: &serde_json::Value,
+    ) {
+        use crate::organization::rule_engine::{RuleCondition, RuleEffect, RuleType};
+
+        let proposer_id = payload.get("proposer_id")
+            .and_then(|v| v.as_str())
+            .unwrap_or("")
+            .to_string();
+
+        let title = payload.get("title")
+            .and_then(|v| v.as_str())
+            .unwrap_or("Proposed Rule")
+            .to_string();
+
+        let description = payload.get("description")
+            .and_then(|v| v.as_str())
+            .unwrap_or("")
+            .to_string();
+
+        let rule_type = match payload.get("rule_type").and_then(|v| v.as_str()).unwrap_or("custom") {
+            "tax" => RuleType::Tax,
+            "behavior" => RuleType::Behavior,
+            "trade" => RuleType::Trade,
+            "diplomacy" => RuleType::Diplomacy,
+            _ => RuleType::Custom,
+        };
+
+        let conditions: Vec<RuleCondition> = payload.get("conditions")
+            .and_then(|v| v.as_array())
+            .map(|arr| {
+                arr.iter().filter_map(|c| serde_json::from_value(c.clone()).ok()).collect()
+            })
+            .unwrap_or_default();
+
+        let effects: Vec<RuleEffect> = payload.get("effects")
+            .and_then(|v| v.as_array())
+            .map(|arr| {
+                arr.iter().filter_map(|e| serde_json::from_value(e.clone()).ok()).collect()
+            })
+            .unwrap_or_default();
+
+        let expires_tick = payload.get("expires_tick")
+            .and_then(|v| v.as_u64());
+
+        let created_tick = payload.get("created_tick")
+            .and_then(|v| v.as_u64())
+            .unwrap_or(0);
+
+        let new_id = self.active_rules.propose_rule(
+            proposer_id,
+            org_id.to_string(),
+            title,
+            description,
+            rule_type,
+            conditions,
+            effects,
+            created_tick,
+            expires_tick,
+        );
+
+        // Activate immediately since the proposal already passed governance vote
+        let _ = self.active_rules.activate_rule(&new_id);
+    }
+
+    // ── Debate / Discussion Arguments ─────────────────────────
+
+    /// Add a debate argument to a proposal in Discussion phase.
+    pub fn add_argument(
+        &mut self,
+        proposal_id: Uuid,
+        author_id: String,
+        stance: DebateStance,
+        content: String,
+        tick: u64,
+    ) -> Result<Uuid, GovernanceError> {
+        let proposal = self.proposals.get(&proposal_id)
+            .ok_or(GovernanceError::NotFound(proposal_id.to_string()))?;
+
+        if proposal.status != ProposalStatus::Discussion {
+            return Err(GovernanceError::ProposalNotOpen(proposal_id));
+        }
+
+        let org_id = proposal.org_id;
+        let org = self.organizations.get(&org_id)
+            .ok_or(GovernanceError::OrganizationNotFound(org_id))?;
+
+        if !org.is_member(&author_id) {
+            return Err(GovernanceError::NotMember { org_id, agent_id: author_id });
+        }
+
+        let argument = DebateArgument {
+            id: Uuid::new_v4(),
+            proposal_id,
+            author_id: author_id.clone(),
+            stance,
+            content,
+            parent_argument_id: None,
+            replies: Vec::new(),
+            created_at: tick,
+        };
+
+        let arg_id = argument.id;
+        let proposal = self.proposals.get_mut(&proposal_id).unwrap();
+        proposal.arguments.push(argument);
+
+        self.emit(crate::world::event::WorldEvent::ArgumentAdded {
+            argument_id: arg_id,
+            proposal_id,
+            org_id,
+            author_id,
+            tick,
+        });
+
+        Ok(arg_id)
+    }
+
+    /// Reply to an existing argument.
+    pub fn reply_to_argument(
+        &mut self,
+        proposal_id: Uuid,
+        parent_argument_id: Uuid,
+        author_id: String,
+        stance: DebateStance,
+        content: String,
+        tick: u64,
+    ) -> Result<Uuid, GovernanceError> {
+        let proposal = self.proposals.get(&proposal_id)
+            .ok_or(GovernanceError::NotFound(proposal_id.to_string()))?;
+
+        if proposal.status != ProposalStatus::Discussion {
+            return Err(GovernanceError::ProposalNotOpen(proposal_id));
+        }
+
+        let org_id = proposal.org_id;
+        let org = self.organizations.get(&org_id)
+            .ok_or(GovernanceError::OrganizationNotFound(org_id))?;
+
+        if !org.is_member(&author_id) {
+            return Err(GovernanceError::NotMember { org_id, agent_id: author_id });
+        }
+
+        // Verify parent argument exists
+        let parent_exists = proposal.arguments.iter().any(|a| a.id == parent_argument_id);
+        if !parent_exists {
+            return Err(GovernanceError::NotFound(format!("argument {}", parent_argument_id)));
+        }
+
+        let reply = DebateArgument {
+            id: Uuid::new_v4(),
+            proposal_id,
+            author_id: author_id.clone(),
+            stance,
+            content,
+            parent_argument_id: Some(parent_argument_id),
+            replies: Vec::new(),
+            created_at: tick,
+        };
+
+        let reply_id = reply.id;
+
+        // Add the reply to the top-level arguments list for flat access,
+        // and also push it into the parent's replies
+        let proposal = self.proposals.get_mut(&proposal_id).unwrap();
+        if let Some(parent) = proposal.arguments.iter_mut().find(|a| a.id == parent_argument_id) {
+            parent.replies.push(reply_id);
+        }
+        proposal.arguments.push(reply);
+
+        self.emit(crate::world::event::WorldEvent::ArgumentAdded {
+            argument_id: reply_id,
+            proposal_id,
+            org_id,
+            author_id,
+            tick,
+        });
+
+        Ok(reply_id)
+    }
+
+    /// List all arguments for a proposal.
+    pub fn list_arguments(&self, proposal_id: Uuid) -> Result<Vec<&DebateArgument>, GovernanceError> {
+        let proposal = self.proposals.get(&proposal_id)
+            .ok_or(GovernanceError::NotFound(proposal_id.to_string()))?;
+
+        Ok(proposal.arguments.iter().collect())
+    }
 
     fn emit(&self, event: crate::world::event::WorldEvent) {
         if let Some(ref bus) = self.event_bus {
@@ -1002,6 +1270,7 @@ impl Default for GovernanceSystem {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::organization::rule_engine::RuleStatus;
 
     fn make_system() -> GovernanceSystem {
         GovernanceSystem::new()
@@ -1107,7 +1376,7 @@ mod tests {
         assert_eq!(proposal.status, ProposalStatus::Discussion);
 
         // Start voting
-        sys.start_voting(proposal_id, "member1").unwrap();
+        sys.start_voting(proposal_id, "member1", 10).unwrap();
         let proposal = sys.get_proposal(proposal_id).unwrap();
         assert_eq!(proposal.status, ProposalStatus::Voting);
 
@@ -1140,7 +1409,7 @@ mod tests {
             Some(serde_json::json!({ "charter": "Bad" })),
         ).unwrap();
 
-        sys.start_voting(proposal_id, "member1").unwrap();
+        sys.start_voting(proposal_id, "member1", 10).unwrap();
         sys.vote(proposal_id, "founder".to_string(), false, 10).unwrap();
         sys.vote(proposal_id, "member1".to_string(), true, 10).unwrap();
 
@@ -1187,7 +1456,7 @@ mod tests {
             Some(serde_json::json!({ "agent_id": "bob" })),
         ).unwrap();
 
-        sys.start_voting(proposal_id, "founder").unwrap();
+        sys.start_voting(proposal_id, "founder", 10).unwrap();
         sys.vote(proposal_id, "founder".to_string(), true, 10).unwrap();
         sys.tally_proposal(proposal_id).unwrap();
 
@@ -1211,7 +1480,7 @@ mod tests {
             Some(serde_json::json!({ "agent_id": "bad_actor" })),
         ).unwrap();
 
-        sys.start_voting(proposal_id, "founder").unwrap();
+        sys.start_voting(proposal_id, "founder", 10).unwrap();
         sys.vote(proposal_id, "founder".to_string(), true, 10).unwrap();
         sys.tally_proposal(proposal_id).unwrap();
 
@@ -1234,7 +1503,7 @@ mod tests {
             None,
         ).unwrap();
 
-        sys.start_voting(proposal_id, "founder").unwrap();
+        sys.start_voting(proposal_id, "founder", 10).unwrap();
         sys.vote(proposal_id, "founder".to_string(), true, 10).unwrap();
         sys.tally_proposal(proposal_id).unwrap();
 
@@ -1257,7 +1526,7 @@ mod tests {
             Some(serde_json::json!({ "mode": "proportional" })),
         ).unwrap();
 
-        sys.start_voting(proposal_id, "founder").unwrap();
+        sys.start_voting(proposal_id, "founder", 10).unwrap();
         sys.vote(proposal_id, "founder".to_string(), true, 10).unwrap();
         sys.tally_proposal(proposal_id).unwrap();
 
@@ -1297,7 +1566,7 @@ mod tests {
             None,
         ).unwrap();
 
-        sys.start_voting(proposal_id, "founder").unwrap();
+        sys.start_voting(proposal_id, "founder", 10).unwrap();
         sys.vote(proposal_id, "founder".to_string(), true, 10).unwrap();
 
         let result = sys.vote(proposal_id, "founder".to_string(), true, 10);
@@ -1461,5 +1730,328 @@ mod tests {
             }
             _ => panic!("Expected OrganizationCreated event"),
         }
+    }
+
+    // ── Discussion Period Enforcement ───────────────────────
+
+    #[test]
+    fn test_discussion_period_blocks_early_voting() {
+        let mut sys = make_system();
+        sys.config.discussion_period_ticks = 10;
+        let org_id = make_org(&mut sys);
+
+        let proposal_id = sys.create_proposal(
+            org_id,
+            "founder".to_string(),
+            ProposalType::AmendCharter,
+            "Test".to_string(),
+            "Wait for discussion".to_string(),
+            5, // created at tick 5
+            None,
+        ).unwrap();
+
+        // Attempt to start voting at tick 8 (only 3 ticks elapsed, need 10)
+        let result = sys.start_voting(proposal_id, "founder", 8);
+        assert!(result.is_err());
+        match result.unwrap_err() {
+            GovernanceError::DiscussionPeriodNotElapsed { remaining_ticks, .. } => {
+                assert_eq!(remaining_ticks, 7); // 10 - (8 - 5) = 7
+            }
+            e => panic!("Expected DiscussionPeriodNotElapsed, got: {}", e),
+        }
+
+        // At tick 15 (10 ticks elapsed), should succeed
+        sys.start_voting(proposal_id, "founder", 15).unwrap();
+        let proposal = sys.get_proposal(proposal_id).unwrap();
+        assert_eq!(proposal.status, ProposalStatus::Voting);
+    }
+
+    #[test]
+    fn test_discussion_period_zero_allows_immediate_voting() {
+        let mut sys = make_system();
+        sys.config.discussion_period_ticks = 0;
+        let org_id = make_org(&mut sys);
+
+        let proposal_id = sys.create_proposal(
+            org_id,
+            "founder".to_string(),
+            ProposalType::AmendCharter,
+            "Test".to_string(),
+            "No wait".to_string(),
+            5,
+            None,
+        ).unwrap();
+
+        // Should succeed immediately with discussion_period_ticks = 0
+        sys.start_voting(proposal_id, "founder", 5).unwrap();
+        assert_eq!(sys.get_proposal(proposal_id).unwrap().status, ProposalStatus::Voting);
+    }
+
+    #[test]
+    fn test_per_org_governance_config_override() {
+        let mut sys = make_system();
+        // System-level: discussion period = 0 (default)
+        sys.config.discussion_period_ticks = 0;
+
+        let org_id = make_org(&mut sys);
+
+        // Override org to require 5 ticks discussion
+        sys.get_org_mut(org_id).unwrap().governance_config = Some(GovernanceConfig {
+            discussion_period_ticks: 5,
+            quorum_fraction: 0.3,
+            pass_threshold: 0.6,
+        });
+
+        let proposal_id = sys.create_proposal(
+            org_id,
+            "founder".to_string(),
+            ProposalType::AmendCharter,
+            "Test".to_string(),
+            "Org override".to_string(),
+            10,
+            None,
+        ).unwrap();
+
+        // System default allows immediate voting, but org override requires 5 ticks
+        let result = sys.start_voting(proposal_id, "founder", 12);
+        assert!(result.is_err());
+
+        // After 5 ticks, should succeed
+        sys.start_voting(proposal_id, "founder", 15).unwrap();
+        assert_eq!(sys.get_proposal(proposal_id).unwrap().status, ProposalStatus::Voting);
+    }
+
+    #[test]
+    fn test_per_org_quorum_and_threshold_override() {
+        let mut sys = make_system();
+        let org_id = make_org(&mut sys);
+        sys.join_org(org_id, "m1".to_string(), 1).unwrap();
+
+        // Override org to have lower quorum and higher threshold
+        sys.get_org_mut(org_id).unwrap().governance_config = Some(GovernanceConfig {
+            discussion_period_ticks: 0,
+            quorum_fraction: 0.25, // only 25% needed
+            pass_threshold: 0.75,  // 75% must be in favor
+        });
+
+        let proposal_id = sys.create_proposal(
+            org_id,
+            "founder".to_string(),
+            ProposalType::AmendCharter,
+            "Test".to_string(),
+            "High threshold".to_string(),
+            0,
+            None,
+        ).unwrap();
+
+        sys.start_voting(proposal_id, "founder", 0).unwrap();
+        // Only founder votes in favor (weight=3), no one against
+        sys.vote(proposal_id, "founder".to_string(), true, 1).unwrap();
+
+        // Founder alone should pass (3/4 total weight = 75% quorum met, 3/3 votes = 100% >= 75%)
+        let result = sys.tally_proposal(proposal_id).unwrap();
+        assert_eq!(result, ProposalStatus::Executed);
+    }
+
+    // ── Debate Arguments ─────────────────────────────────────
+
+    #[test]
+    fn test_add_argument_to_proposal() {
+        let bus = crate::world::state::EventBus::new(64);
+        let mut rx = bus.subscribe();
+        let mut sys = GovernanceSystem::with_event_bus(bus);
+        let org_id = sys.create_org("Test".to_string(), "founder".to_string(), DecisionMode::Vote, 0).unwrap();
+        sys.join_org(org_id, "m1".to_string(), 1).unwrap();
+
+        let proposal_id = sys.create_proposal(
+            org_id,
+            "founder".to_string(),
+            ProposalType::AmendCharter,
+            "Debate me".to_string(),
+            "Let's discuss".to_string(),
+            0,
+            None,
+        ).unwrap();
+
+        // Drain all preceding events (OrganizationCreated, OrganizationMemberJoined, ProposalCreated)
+        while rx.try_recv().is_ok() {}
+
+        // Add argument in favor
+        let arg_id = sys.add_argument(
+            proposal_id,
+            "founder".to_string(),
+            DebateStance::InFavor,
+            "This proposal is great because...".to_string(),
+            1,
+        ).unwrap();
+
+        // Verify event was emitted
+        let event = rx.try_recv().unwrap();
+        match event {
+            crate::world::event::WorldEvent::ArgumentAdded {
+                argument_id, proposal_id: pid, author_id, tick, ..
+            } => {
+                assert_eq!(argument_id, arg_id);
+                assert_eq!(pid, proposal_id);
+                assert_eq!(author_id, "founder");
+                assert_eq!(tick, 1);
+            }
+            _ => panic!("Expected ArgumentAdded event"),
+        }
+
+        // Verify argument stored
+        let args = sys.list_arguments(proposal_id).unwrap();
+        assert_eq!(args.len(), 1);
+        assert_eq!(args[0].stance, DebateStance::InFavor);
+        assert_eq!(args[0].content, "This proposal is great because...");
+        assert!(args[0].parent_argument_id.is_none());
+    }
+
+    #[test]
+    fn test_reply_to_argument() {
+        let mut sys = make_system();
+        let org_id = make_org(&mut sys);
+        sys.join_org(org_id, "m1".to_string(), 1).unwrap();
+
+        let proposal_id = sys.create_proposal(
+            org_id,
+            "founder".to_string(),
+            ProposalType::AmendCharter,
+            "Debate".to_string(),
+            "Discuss".to_string(),
+            0,
+            None,
+        ).unwrap();
+
+        let arg_id = sys.add_argument(
+            proposal_id,
+            "founder".to_string(),
+            DebateStance::InFavor,
+            "Pro argument".to_string(),
+            1,
+        ).unwrap();
+
+        // Reply to the argument
+        let reply_id = sys.reply_to_argument(
+            proposal_id,
+            arg_id,
+            "m1".to_string(),
+            DebateStance::Against,
+            "Counter-argument".to_string(),
+            2,
+        ).unwrap();
+
+        let args = sys.list_arguments(proposal_id).unwrap();
+        assert_eq!(args.len(), 2);
+
+        // Find the reply
+        let reply = args.iter().find(|a| a.id == reply_id).unwrap();
+        assert_eq!(reply.parent_argument_id, Some(arg_id));
+        assert_eq!(reply.stance, DebateStance::Against);
+
+        // Verify parent has the reply ID
+        let parent = args.iter().find(|a| a.id == arg_id).unwrap();
+        assert!(parent.replies.contains(&reply_id));
+    }
+
+    #[test]
+    fn test_argument_only_in_discussion_phase() {
+        let mut sys = make_system();
+        let org_id = make_org(&mut sys);
+
+        let proposal_id = sys.create_proposal(
+            org_id,
+            "founder".to_string(),
+            ProposalType::AmendCharter,
+            "Test".to_string(),
+            "Test".to_string(),
+            0,
+            None,
+        ).unwrap();
+
+        // Move to Voting
+        sys.start_voting(proposal_id, "founder", 0).unwrap();
+
+        // Arguments should be rejected during Voting
+        let result = sys.add_argument(
+            proposal_id,
+            "founder".to_string(),
+            DebateStance::Neutral,
+            "Too late".to_string(),
+            1,
+        );
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_non_member_cannot_add_argument() {
+        let mut sys = make_system();
+        let org_id = make_org(&mut sys);
+
+        let proposal_id = sys.create_proposal(
+            org_id,
+            "founder".to_string(),
+            ProposalType::AmendCharter,
+            "Test".to_string(),
+            "Test".to_string(),
+            0,
+            None,
+        ).unwrap();
+
+        let result = sys.add_argument(
+            proposal_id,
+            "outsider".to_string(),
+            DebateStance::Neutral,
+            "Nope".to_string(),
+            1,
+        );
+        assert!(result.is_err());
+    }
+
+    // ── SoftRule Proposal Side Effect ────────────────────────
+
+    #[test]
+    fn test_soft_rule_proposal_creates_and_activates_rule() {
+        let mut sys = make_system();
+        let org_id = make_org(&mut sys);
+        sys.join_org(org_id, "m1".to_string(), 1).unwrap();
+
+        // Create a SoftRuleProposal with full rule definition in payload
+        let rule_payload = serde_json::json!({
+            "rule_id": "test-rule-001",
+            "proposer_id": "founder",
+            "title": "Outsider Tax",
+            "description": "10% extra tax on outsiders",
+            "rule_type": "tax",
+            "conditions": [
+                { "field": "agent.is_outsider", "operator": "==", "value": true }
+            ],
+            "effects": [
+                { "target": "agent.tax_bonus", "action": "set", "value": 0.1 }
+            ],
+            "created_tick": 5
+        });
+
+        let proposal_id = sys.create_proposal(
+            org_id,
+            "founder".to_string(),
+            ProposalType::SoftRuleProposal,
+            "Tax outsiders".to_string(),
+            "10% extra tax".to_string(),
+            5,
+            Some(rule_payload),
+        ).unwrap();
+
+        sys.start_voting(proposal_id, "founder", 10).unwrap();
+        sys.vote(proposal_id, "founder".to_string(), true, 10).unwrap();
+        sys.vote(proposal_id, "m1".to_string(), true, 10).unwrap();
+        let result = sys.tally_proposal(proposal_id).unwrap();
+        assert_eq!(result, ProposalStatus::Executed);
+
+        // The rule should now be active in the engine
+        assert_eq!(sys.active_rules.active_rule_count(), 1);
+        let rules = sys.active_rules.list_rules();
+        assert_eq!(rules[0].title, "Outsider Tax");
+        assert_eq!(rules[0].status, RuleStatus::Active);
     }
 }

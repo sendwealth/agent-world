@@ -5,6 +5,7 @@
 //!   plugin-pack ./target/wasm32-unknown-unknown/release/my_plugin.wasm --manifest skills.yaml
 //!   plugin-pack ./target/wasm32-unknown-unknown/release/my_plugin.wasm --output my_plugin.awp
 
+use std::io::{Read, Write};
 use std::path::{Path, PathBuf};
 
 use anyhow::{bail, Context, Result};
@@ -186,7 +187,7 @@ fn verify_bundle(path: &Path, expected: &BundleManifest) -> Result<()> {
     // Verify WASM hash
     let mut wasm_file = archive.by_name("plugin.wasm")?;
     let mut wasm_bytes = Vec::new();
-    std::io::Read::read_to_end(&mut wasm_file, &mut wasm_bytes)?;
+    wasm_file.read_to_end(&mut wasm_bytes)?;
 
     let mut hasher = Sha256::new();
     hasher.update(&wasm_bytes);
@@ -205,12 +206,5 @@ fn verify_bundle(path: &Path, expected: &BundleManifest) -> Result<()> {
 }
 
 fn chrono_now_or_fallback() -> String {
-    // Simple RFC3339-like timestamp without requiring chrono
-    let output = std::process::Command::new("date")
-        .arg("+%Y-%m-%dT%H:%M:%SZ")
-        .output();
-    match output {
-        Ok(o) if o.status.success() => String::from_utf8_lossy(&o.stdout).trim().to_string(),
-        _ => "2026-01-01T00:00:00Z".to_string(),
-    }
+    chrono::Utc::now().to_rfc3339_opts(chrono::SecondsFormat::Secs, true)
 }

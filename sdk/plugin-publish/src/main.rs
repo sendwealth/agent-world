@@ -5,7 +5,7 @@
 //!   plugin-publish my_plugin.awp --registry https://marketplace.agentworld.dev
 //!   plugin-publish my_plugin.awp --dry-run
 
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 
 use anyhow::{bail, Context, Result};
 use clap::Parser;
@@ -109,38 +109,37 @@ struct BundleManifest {
     wasm_hash: String,
 }
 
-fn validate_bundle(data: &[u8], path: &PathBuf) -> Result<BundleManifest> {
+fn validate_bundle(data: &[u8], path: &Path) -> Result<BundleManifest> {
     let cursor = std::io::Cursor::new(data);
     let mut archive = zip::ZipArchive::new(cursor)
         .with_context(|| format!("Invalid .awp bundle: {}", path.display()))?;
 
-    // Read bundle.json
-    let mut bundle_file = archive.by_name("bundle.json")
-        .with_context(|| "Bundle missing bundle.json")?;
-    let mut bundle_json = String::new();
-    std::io::Read::read_to_end(&mut bundle_file, &mut bundle_json.as_bytes().to_vec().as_mut_slice())
-        .ok();
-    // Use read_to_string instead
-    let mut bundle_file = archive.by_name("bundle.json")?;
-    let mut buf = Vec::new();
-    std::io::Read::read_to_end(&mut bundle_file, &mut buf)?;
-    let bundle_json_str = String::from_utf8(buf)?;
+    // Read bundle.json — scope to release the ZipFile borrow before next archive access
+    let bundle_value: serde_json::Value = {
+        let mut bundle_file = archive.by_name("bundle.json")
+            .with_context(|| "Bundle missing bundle.json")?;
+        let mut buf = Vec::new();
+        std::io::Read::read_to_end(&mut bundle_file, &mut buf)?;
+        let bundle_json_str = String::from_utf8(buf)?;
+        serde_json::from_str(&bundle_json_str)?
+    };
 
-    let bundle_value: serde_json::Value = serde_json::from_str(&bundle_json_str)?;
+    let expected_hash = bundle_value["wasm_hash"].as_str().unwrap_or("");
 
     // Verify WASM hash
-    let expected_hash = bundle_value["wasm_hash"].as_str().unwrap_or("");
-    let mut wasm_file = archive.by_name("plugin.wasm")?;
-    let mut wasm_bytes = Vec::new();
-    std::io::Read::read_to_end(&mut wasm_file, &mut wasm_bytes)?;
+    {
+        let mut wasm_file = archive.by_name("plugin.wasm")?;
+        let mut wasm_bytes = Vec::new();
+        std::io::Read::read_to_end(&mut wasm_file, &mut wasm_bytes)?;
 
-    use sha2::{Digest, Sha256};
-    let mut hasher = Sha256::new();
-    hasher.update(&wasm_bytes);
-    let actual_hash = format!("{:x}", hasher.finalize());
+        use sha2::{Digest, Sha256};
+        let mut hasher = Sha256::new();
+        hasher.update(&wasm_bytes);
+        let actual_hash = format!("{:x}", hasher.finalize());
 
-    if actual_hash != expected_hash {
-        bail!("WASM hash mismatch in bundle! Expected {}, got {}", expected_hash, actual_hash);
+        if actual_hash != expected_hash {
+            bail!("WASM hash mismatch in bundle! Expected {}, got {}", expected_hash, actual_hash);
+        }
     }
 
     Ok(BundleManifest {
@@ -150,5 +149,3 @@ fn validate_bundle(data: &[u8], path: &PathBuf) -> Result<BundleManifest> {
         wasm_hash: expected_hash.to_string(),
     })
 }
-
-use std::path::Path;

@@ -4,7 +4,7 @@
 //! Implements the SkillPlugin trait via WASM ABI.
 
 use std::collections::HashMap;
-use std::alloc::{alloc, dealloc, Layout};
+use std::alloc::{alloc, Layout};
 
 use serde::{Deserialize, Serialize};
 
@@ -138,7 +138,7 @@ fn read_input(ptr: *const u8, len: usize) -> String {
 
 fn plugin_init(config: HashMap<String, String>) -> Result<PluginInfo, PluginError> {
     // Validate configuration
-    let greeting = config.get("greeting").cloned().unwrap_or_else(|| "Hello".into());
+    let _greeting = config.get("greeting").cloned().unwrap_or_else(|| "Hello".into());
 
     // Store config for later use (in a real plugin, you'd use a static or thread-local)
     // For this template, we just validate and return metadata.

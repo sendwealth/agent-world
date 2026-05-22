@@ -1,13 +1,12 @@
 //! Test runner — executes plugin lifecycle and reports results.
 
-use std::collections::HashMap;
 use std::path::Path;
 use std::time::Instant;
 
-use anyhow::{Context, Result};
+use anyhow::Result;
 use serde_json::Value;
 
-use crate::mock::{MockActionContextBuilder, scenarios};
+use crate::mock::scenarios;
 use crate::report::{TestReport, TestResult, TestStatus};
 
 /// The test runner. Loads a WASM plugin and runs standard test suites.
@@ -46,9 +45,14 @@ impl TestRunner {
         // via wasmtime and call the exported functions.
         // For now, we test the JSON protocol compatibility.
 
+        // Clone fields needed by closures to avoid borrowing conflicts.
+        let config = self.config.clone();
+        let manifest_path = self.manifest_path.clone();
+        let wasm_path = self.wasm_path.clone();
+
         // Test 1: Config → Init JSON
         self.run_test("init_config_valid", || {
-            let config_json = serde_json::Value::Object(self.config.clone()).to_string();
+            let config_json = serde_json::Value::Object(config).to_string();
             if config_json.is_empty() {
                 return Err("Config JSON is empty".into());
             }
@@ -57,7 +61,7 @@ impl TestRunner {
 
         // Test 2: Manifest parsing
         self.run_test("manifest_parse", || {
-            let content = std::fs::read_to_string(&self.manifest_path)
+            let content = std::fs::read_to_string(&manifest_path)
                 .map_err(|e| format!("Cannot read manifest: {}", e))?;
             let _: serde_yaml::Value = serde_yaml::from_str(&content)
                 .map_err(|e| format!("Invalid YAML: {}", e))?;
@@ -66,13 +70,13 @@ impl TestRunner {
 
         // Test 3: WASM file exists and is valid
         self.run_test("wasm_file_valid", || {
-            let metadata = std::fs::metadata(&self.wasm_path)
+            let metadata = std::fs::metadata(&wasm_path)
                 .map_err(|e| format!("Cannot read WASM file: {}", e))?;
             if metadata.len() == 0 {
                 return Err("WASM file is empty".into());
             }
             // Check WASM magic bytes
-            let bytes = std::fs::read(&self.wasm_path)
+            let bytes = std::fs::read(&wasm_path)
                 .map_err(|e| format!("Cannot read WASM bytes: {}", e))?;
             if bytes.len() < 4 || &bytes[0..4] != b"\x00asm" {
                 return Err("Not a valid WASM file (bad magic bytes)".into());
@@ -96,11 +100,13 @@ impl TestRunner {
 
     /// Run default execute tests using built-in scenarios.
     pub fn run_default_execute_tests(&mut self) -> Result<()> {
+        let verbose = self.verbose;
+
         // Test: Basic execution scenario
         self.run_test("execute_basic_scenario", || {
             let ctx_json = scenarios::basic().build_json();
             // In full impl: call plugin execute(ctx_json)
-            if self.verbose {
+            if verbose {
                 eprintln!("  Context JSON: {} bytes", ctx_json.len());
             }
             Ok(())
@@ -109,7 +115,8 @@ impl TestRunner {
         // Test: Low token scenario
         self.run_test("execute_low_token_scenario", || {
             let ctx_json = scenarios::low_token_agent().build_json();
-            let parsed: Value = serde_json::from_str(&ctx_json)?;
+            let parsed: Value = serde_json::from_str(&ctx_json)
+                .map_err(|e| format!("JSON parse error: {}", e))?;
             if parsed["world"]["agent"]["tokens"].as_u64() != Some(2) {
                 return Err("Low token scenario not configured correctly".into());
             }
@@ -119,7 +126,8 @@ impl TestRunner {
         // Test: Multi-agent scenario
         self.run_test("execute_multi_agent_scenario", || {
             let ctx_json = scenarios::multi_agent().build_json();
-            let parsed: Value = serde_json::from_str(&ctx_json)?;
+            let parsed: Value = serde_json::from_str(&ctx_json)
+                .map_err(|e| format!("JSON parse error: {}", e))?;
             if parsed["world"]["visible_agents"].as_array().map(|a| a.len()) != Some(1) {
                 return Err("Multi-agent scenario not configured correctly".into());
             }
@@ -129,7 +137,8 @@ impl TestRunner {
         // Test: No agent scenario
         self.run_test("execute_no_agent_scenario", || {
             let ctx_json = scenarios::no_agent().build_json();
-            let parsed: Value = serde_json::from_str(&ctx_json)?;
+            let parsed: Value = serde_json::from_str(&ctx_json)
+                .map_err(|e| format!("JSON parse error: {}", e))?;
             if !parsed["world"]["agent"].is_null() {
                 return Err("No-agent scenario should have null agent".into());
             }
@@ -143,13 +152,16 @@ impl TestRunner {
     pub fn run_scenario(&mut self, scenario: &Value) -> Result<()> {
         let name = scenario["name"].as_str().unwrap_or("custom");
         let description = scenario["description"].as_str().unwrap_or("");
+        let verbose = self.verbose;
+        let has_context = !scenario["context"].is_null();
+        let test_name = format!("scenario_{}", name);
 
-        self.run_test(&format!("scenario_{}", name), || {
-            if self.verbose {
+        self.run_test(&test_name, || {
+            if verbose {
                 eprintln!("  Scenario: {} — {}", name, description);
             }
             // Validate scenario structure
-            if scenario["context"].is_null() {
+            if !has_context {
                 return Err("Scenario missing 'context' field".into());
             }
             Ok(())

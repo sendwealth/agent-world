@@ -30,6 +30,7 @@ reqwest = { version = "0.12", features = ["stream"] }
 rusqlite = { version = "0.31", features = ["bundled"] }
 rand = "0.8"
 dashmap = "6"
+zstd = "0.13"
 
 [dev-dependencies]
 tower = { version = "0.5", features = ["util"] }

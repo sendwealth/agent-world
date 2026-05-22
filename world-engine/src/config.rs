@@ -37,6 +37,8 @@ pub struct GenesisConfig {
     pub mentorship: MentorshipConfigSection,
     #[serde(default)]
     pub inheritance: InheritanceConfigSection,
+    #[serde(default)]
+    pub snapshot: crate::snapshot::SnapshotConfig,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]

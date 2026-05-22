@@ -6,7 +6,7 @@ use crate::world::enums::AgentPhase;
 
 // ── Skill Record ─────────────────────────────────────────
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub struct SkillRecord {
     pub name: String,
     pub level: u32,

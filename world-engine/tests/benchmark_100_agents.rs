@@ -199,7 +199,7 @@ async fn test_full_pipeline_100_agents_2000_ticks() {
                     None,
                 ) {
                     // Start voting
-                    let _ = gov.start_voting(proposal_id, &proposer_id);
+                    let _ = gov.start_voting(proposal_id, &proposer_id, tick);
 
                     // Vote from all members
                     for member_id in &members {

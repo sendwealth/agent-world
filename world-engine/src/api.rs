@@ -230,6 +230,8 @@ pub fn build_full_router(state: AppState) -> Router {
         .route("/api/v1/proposals/:id/start-voting", post(start_voting))
         .route("/api/v1/proposals/:id/tally", post(tally_proposal))
         .route("/api/v1/proposals/:id/cancel", post(cancel_proposal))
+        .route("/api/v1/proposals/:id/arguments", post(add_argument))
+        .route("/api/v1/proposals/:id/arguments", get(list_arguments))
         // Stock Market routes
         .route("/api/v1/stocks", get(list_stocks))
         .route("/api/v1/stocks", post(issue_shares))
@@ -1381,6 +1383,27 @@ pub struct CancelProposalRequest {
 }
 
 #[derive(Debug, Deserialize)]
+pub struct AddArgumentRequest {
+    pub author_id: String,
+    pub stance: String,
+    pub content: String,
+    #[serde(default)]
+    pub parent_argument_id: Option<String>,
+}
+
+#[derive(Debug, Serialize)]
+pub struct ArgumentResponse {
+    pub id: String,
+    pub proposal_id: String,
+    pub author_id: String,
+    pub stance: String,
+    pub content: String,
+    pub parent_argument_id: Option<String>,
+    pub replies: Vec<String>,
+    pub created_at: u64,
+}
+
+#[derive(Debug, Deserialize)]
 pub struct DistributionRequest {
     pub total_profit: u64,
 }
@@ -1543,6 +1566,7 @@ fn governance_error_status(e: &crate::organization::governance::GovernanceError)
         GovernanceError::OrganizationDissolved(_) => StatusCode::GONE,
         GovernanceError::CannotRemoveFounder => StatusCode::FORBIDDEN,
         GovernanceError::EmptyName => StatusCode::BAD_REQUEST,
+        GovernanceError::DiscussionPeriodNotElapsed { .. } => StatusCode::CONFLICT,
     }
 }
 
@@ -2295,8 +2319,9 @@ async fn start_voting(
         return (StatusCode::BAD_REQUEST, Json(ErrorResponse { error: "invalid proposal id".into() })).into_response();
     };
 
+    let current_tick = *state.tick_rx.borrow();
     let mut gov = governance.lock().await;
-    match gov.start_voting(uuid, &body.requester_id) {
+    match gov.start_voting(uuid, &body.requester_id, current_tick) {
         Ok(()) => {
             let proposal = gov.get_proposal(uuid).unwrap();
             Json(proposal_to_response(proposal)).into_response()
@@ -2348,6 +2373,82 @@ async fn cancel_proposal(
             let proposal = gov.get_proposal(uuid).unwrap();
             Json(proposal_to_response(proposal)).into_response()
         }
+        Err(e) => (governance_error_status(&e), Json(ErrorResponse { error: e.to_string() })).into_response(),
+    }
+}
+
+fn argument_to_response(arg: &crate::organization::governance::DebateArgument) -> ArgumentResponse {
+    ArgumentResponse {
+        id: arg.id.to_string(),
+        proposal_id: arg.proposal_id.to_string(),
+        author_id: arg.author_id.clone(),
+        stance: arg.stance.to_string(),
+        content: arg.content.clone(),
+        parent_argument_id: arg.parent_argument_id.map(|id| id.to_string()),
+        replies: arg.replies.iter().map(|id| id.to_string()).collect(),
+        created_at: arg.created_at,
+    }
+}
+
+async fn add_argument(
+    State(state): State<AppState>,
+    Path(id): Path<String>,
+    Json(body): Json<AddArgumentRequest>,
+) -> impl IntoResponse {
+    let governance = match &state.governance {
+        Some(g) => g.clone(),
+        None => return (StatusCode::SERVICE_UNAVAILABLE, Json(ErrorResponse { error: "governance system not configured".into() })).into_response(),
+    };
+
+    let Ok(uuid) = Uuid::parse_str(&id) else {
+        return (StatusCode::BAD_REQUEST, Json(ErrorResponse { error: "invalid proposal id".into() })).into_response();
+    };
+
+    let stance = match body.stance.as_str() {
+        "in_favor" => crate::organization::governance::DebateStance::InFavor,
+        "against" => crate::organization::governance::DebateStance::Against,
+        "neutral" => crate::organization::governance::DebateStance::Neutral,
+        _ => return (StatusCode::BAD_REQUEST, Json(ErrorResponse { error: "invalid stance: must be 'in_favor', 'against', or 'neutral'".into() })).into_response(),
+    };
+
+    let current_tick = *state.tick_rx.borrow();
+    let mut gov = governance.lock().await;
+
+    let result = if let Some(parent_id_str) = body.parent_argument_id {
+        let Ok(parent_uuid) = Uuid::parse_str(&parent_id_str) else {
+            return (StatusCode::BAD_REQUEST, Json(ErrorResponse { error: "invalid parent_argument_id".into() })).into_response();
+        };
+        gov.reply_to_argument(uuid, parent_uuid, body.author_id, stance, body.content, current_tick)
+    } else {
+        gov.add_argument(uuid, body.author_id, stance, body.content, current_tick)
+    };
+
+    match result {
+        Ok(arg_id) => {
+            let proposal = gov.get_proposal(uuid).unwrap();
+            let arg = proposal.arguments.iter().find(|a| a.id == arg_id).unwrap();
+            Json(argument_to_response(arg)).into_response()
+        }
+        Err(e) => (governance_error_status(&e), Json(ErrorResponse { error: e.to_string() })).into_response(),
+    }
+}
+
+async fn list_arguments(
+    State(state): State<AppState>,
+    Path(id): Path<String>,
+) -> impl IntoResponse {
+    let governance = match &state.governance {
+        Some(g) => g.clone(),
+        None => return (StatusCode::SERVICE_UNAVAILABLE, Json(ErrorResponse { error: "governance system not configured".into() })).into_response(),
+    };
+
+    let Ok(uuid) = Uuid::parse_str(&id) else {
+        return (StatusCode::BAD_REQUEST, Json(ErrorResponse { error: "invalid proposal id".into() })).into_response();
+    };
+
+    let gov = governance.lock().await;
+    match gov.list_arguments(uuid) {
+        Ok(args) => Json(args.into_iter().map(argument_to_response).collect::<Vec<_>>()).into_response(),
         Err(e) => (governance_error_status(&e), Json(ErrorResponse { error: e.to_string() })).into_response(),
     }
 }

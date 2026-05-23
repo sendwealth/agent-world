@@ -237,15 +237,20 @@ impl RuleRegistry {
     }
 
     /// Execute all rules for all agents, collecting results.
+    ///
+    /// Computes `total_world_tokens` from all agents so that rules like
+    /// `AntiMonopolyRule` (R011) can correctly evaluate token concentration.
     pub fn evaluate_all(
         &self,
         tick: u64,
         agents: &mut [(Uuid, u64, AgentRecord)],
     ) -> Vec<(Uuid, Vec<RuleResult>)> {
+        let total_world_tokens: u64 = agents.iter().map(|(_, _, a)| a.tokens).sum();
+
         let mut all_results = Vec::new();
 
         for (agent_id, spawn_tick, agent) in agents.iter_mut() {
-            let ctx = RuleContext::new(tick, *spawn_tick);
+            let ctx = RuleContext::with_world_tokens(tick, *spawn_tick, total_world_tokens);
             let results = self.evaluate_agent(&ctx, agent);
             all_results.push((*agent_id, results));
         }

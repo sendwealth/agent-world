@@ -1,6 +1,7 @@
 pub mod a2a;
 pub mod api;
 pub mod config;
+pub mod dsl;
 pub mod economy;
 pub mod engine;
 pub mod evolution;
@@ -48,6 +49,15 @@ pub use world::{
 };
 
 pub use evolution::EvolutionSubsystem;
+
+pub use dsl::{
+    DslRule, DslCondition, DslAction, RuleScope, TriggerConfig,
+    ParseResult, RuleTemplate,
+    parse_yaml, parse_yaml_multi, parse_json,
+    to_rule_conditions, to_rule_effects, to_rule_type,
+    to_yaml, to_json,
+    builtin_templates, get_template,
+};
 
 pub use persistence::{
     SerializableAgentEntry, SerializableAgentRecord, SerializableWorldState,

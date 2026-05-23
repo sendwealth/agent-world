@@ -492,6 +492,7 @@ async fn main() {
         building_manager: Arc::new(Mutex::new(agent_world_engine::world::map::building::BuildingManager::new())),
         human_store: Arc::new(Mutex::new(agent_world_engine::human::store::HumanParticipationStore::new())),
         investment_system: Some(investment_system),
+        rule_engine: Some(Arc::new(Mutex::new(agent_world_engine::organization::rule_engine::RuleEngine::with_event_bus(event_bus.clone())))),
     };
     let app = api::build_full_router(app_state);
 

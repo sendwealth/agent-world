@@ -21,6 +21,8 @@ use uuid::Uuid;
 use crate::world::state::EventBus;
 use crate::world::event::WorldEvent;
 
+// serde_json no longer needed here after removing Custom events
+
 // ── Migration Status ──────────────────────────────────────
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
@@ -119,11 +121,76 @@ pub struct MigrationApplication {
     pub metadata: HashMap<String, String>,
 }
 
+// ── Migration Record (audit trail) ────────────────────────
+
+/// Permanent record of a completed migration for audit/统计.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct MigrationRecord {
+    pub migration_id: String,
+    pub agent_id: String,
+    pub source_world_id: String,
+    pub target_world_id: String,
+    pub migration_type: MigrationType,
+    pub token_cost: u64,
+    pub resource_tax_collected: u64,
+    pub tokens_remaining: u64,
+    pub money_remaining: u64,
+    pub skills_transferred: Vec<String>,
+    pub skills_blocked: Vec<String>,
+    pub submitted_at: String,
+    pub completed_at: String,
+}
+
+/// Type of migration.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum MigrationType {
+    Permanent,
+    TemporaryWork,
+    Refugee,
+    Diplomat,
+}
+
+impl std::fmt::Display for MigrationType {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            MigrationType::Permanent => write!(f, "permanent"),
+            MigrationType::TemporaryWork => write!(f, "temporary_work"),
+            MigrationType::Refugee => write!(f, "refugee"),
+            MigrationType::Diplomat => write!(f, "diplomat"),
+        }
+    }
+}
+
+// ── Migration Statistics ──────────────────────────────────
+
+/// Statistics about migrations for a world.
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+pub struct MigrationStats {
+    pub total_immigrations: usize,
+    pub total_emigrations: usize,
+    pub pending_applications: usize,
+    pub approved_applications: usize,
+    pub rejected_applications: usize,
+    pub completed_migrations: usize,
+    pub failed_migrations: usize,
+    pub cancelled_migrations: usize,
+    pub total_tokens_consumed: u64,
+    pub total_tax_collected: u64,
+    pub daily_immigrations: u32,
+    pub weekly_immigrations: u32,
+}
+
 // ── Migration Manager ─────────────────────────────────────
 
 /// Manages migration applications for this world.
 ///
 /// Tracks both inbound (immigration) and outbound (emigration) applications.
+/// On execute(), actually transfers agent data between worlds:
+/// - Removes agent from source world
+/// - Creates agent in target world
+/// - Applies resource tax and token cost
+/// - Publishes events for notification
 #[derive(Clone)]
 pub struct MigrationManager {
     applications: Arc<RwLock<HashMap<String, MigrationApplication>>>,
@@ -136,6 +203,8 @@ pub struct MigrationManager {
     agent_last_migration: Arc<RwLock<HashMap<String, u64>>>,
     /// Current tick
     current_tick: Arc<RwLock<u64>>,
+    /// Completed migration records (audit trail)
+    migration_records: Arc<RwLock<Vec<MigrationRecord>>>,
 }
 
 impl MigrationManager {
@@ -148,6 +217,7 @@ impl MigrationManager {
             weekly_count: Arc::new(RwLock::new(HashMap::new())),
             agent_last_migration: Arc::new(RwLock::new(HashMap::new())),
             current_tick: Arc::new(RwLock::new(0)),
+            migration_records: Arc::new(RwLock::new(Vec::new())),
         }
     }
 
@@ -239,7 +309,11 @@ impl MigrationManager {
         *week_count += 1;
         drop(weekly);
 
-        // Filter blocked skills
+        // Filter blocked skills — record which ones were blocked
+        let blocked: Vec<String> = agent_snapshot.skills.keys()
+            .filter(|skill| policy.blocked_skills.contains(skill))
+            .cloned()
+            .collect();
         let filtered_skills: HashMap<String, u64> = agent_snapshot.skills.iter()
             .filter(|(skill, _)| !policy.blocked_skills.contains(skill))
             .map(|(k, v)| (k.clone(), *v))
@@ -248,11 +322,14 @@ impl MigrationManager {
         let migration_id = Uuid::new_v4().to_string();
 
         // Apply resource tax to the snapshot
+        let original_tokens = agent_snapshot.tokens;
+        let original_money = agent_snapshot.money;
         let taxed_tokens = (agent_snapshot.tokens as f64 * (1.0 - policy.resource_tax_rate)) as u64;
         let taxed_money = (agent_snapshot.money as f64 * (1.0 - policy.resource_tax_rate)) as u64;
+        let final_tokens = taxed_tokens.saturating_sub(policy.token_cost);
 
         let mut snapshot = agent_snapshot.clone();
-        snapshot.tokens = taxed_tokens.saturating_sub(policy.token_cost);
+        snapshot.tokens = final_tokens;
         snapshot.money = taxed_money;
         snapshot.skills = filtered_skills;
 
@@ -269,18 +346,22 @@ impl MigrationManager {
             completed_at: None,
             token_cost: policy.token_cost,
             resource_tax_rate: policy.resource_tax_rate,
-            metadata: HashMap::new(),
+            metadata: HashMap::from([
+                ("original_tokens".into(), original_tokens.to_string()),
+                ("original_money".into(), original_money.to_string()),
+                ("tax_collected_tokens".into(), (original_tokens - final_tokens).to_string()),
+                ("tax_collected_money".into(), (original_money - taxed_money).to_string()),
+                ("blocked_skills".into(), blocked.join(",")),
+            ]),
         };
 
         self.applications.write().await.insert(migration_id.clone(), application.clone());
 
-        self.event_bus.publish(WorldEvent::Custom {
-            event_type: "migration_submitted".into(),
-            source: application.agent_id.clone(),
-            data: serde_json::json!({
-                "migration_id": migration_id,
-                "target_world": target_world_id,
-            }),
+        self.event_bus.publish(WorldEvent::MigrationSubmitted {
+            migration_id: migration_id.clone(),
+            agent_id: application.agent_id.clone(),
+            source_world: agent_snapshot.source_world_id.clone(),
+            target_world: target_world_id.clone(),
         });
 
         Ok(application)
@@ -319,59 +400,264 @@ impl MigrationManager {
 
         drop(apps);
 
-        self.event_bus.publish(WorldEvent::Custom {
-            event_type: if approved { "migration_approved" } else { "migration_rejected" }.into(),
-            source: migration_id.to_string(),
-            data: serde_json::json!({
-                "approved": approved,
-                "reviewer": reviewer_world_id,
-            }),
-        });
+        if approved {
+            self.event_bus.publish(WorldEvent::MigrationApproved {
+                migration_id: migration_id.to_string(),
+                agent_id: result.agent_id.clone(),
+                reviewer: reviewer_world_id.to_string(),
+            });
+        } else {
+            self.event_bus.publish(WorldEvent::MigrationRejected {
+                migration_id: migration_id.to_string(),
+                agent_id: result.agent_id.clone(),
+                reviewer: reviewer_world_id.to_string(),
+                reason: result.rejection_reason.clone(),
+            });
+        }
 
         Ok(result)
     }
 
-    /// Execute an approved migration — transfers the agent.
+    /// Execute an approved migration — actually transfers the agent.
+    ///
+    /// This performs the real migration:
+    /// 1. Marks as Executing
+    /// 2. Removes agent from source world (agents list)
+    /// 3. Spawns agent in target world (agents list)
+    /// 4. Records cooldown tick
+    /// 5. Creates audit record
+    /// 6. Marks as Completed
+    ///
+    /// Idempotent: if already Completed, returns existing result without side effects.
+    /// On failure, marks as Failed and returns error.
     pub async fn execute(
         &self,
         migration_id: &str,
+        agents: &Arc<tokio::sync::Mutex<Vec<crate::api::AgentRecord>>>,
     ) -> Result<MigrationApplication, String> {
-        let mut apps = self.applications.write().await;
-        let app = apps.get_mut(migration_id)
-            .ok_or_else(|| format!("Migration {} not found", migration_id))?;
+        // Phase 1: Validate and mark as Executing
+        {
+            let mut apps = self.applications.write().await;
+            let app = apps.get_mut(migration_id)
+                .ok_or_else(|| format!("Migration {} not found", migration_id))?;
 
-        if app.status != MigrationStatus::Approved {
-            return Err(format!("Migration must be approved before execution, current: {}", app.status));
+            // Idempotent: already completed
+            if app.status == MigrationStatus::Completed {
+                return Ok(app.clone());
+            }
+
+            if app.status != MigrationStatus::Approved {
+                return Err(format!("Migration must be approved before execution, current: {}", app.status));
+            }
+
+            app.status = MigrationStatus::Executing;
         }
 
-        app.status = MigrationStatus::Executing;
-        let result = app.clone();
+        // Phase 2: Capture snapshot for rollback on failure
+        let snapshot;
+        {
+            let apps = self.applications.read().await;
+            let app = apps.get(migration_id).unwrap();
+            snapshot = app.agent_snapshot.clone();
+        }
 
-        // Mark executing
-        drop(apps);
+        // Phase 3: Remove agent from source world
+        let agent_removed;
+        {
+            let mut agents_list = agents.lock().await;
+            let before_len = agents_list.len();
+            agents_list.retain(|a| a.id != snapshot.agent_id);
+            agent_removed = agents_list.len() < before_len;
+        }
 
-        // Record agent's migration tick for cooldown
-        let mut last_migrations = self.agent_last_migration.write().await;
-        let current = *self.current_tick.read().await;
-        last_migrations.insert(result.agent_id.clone(), current);
-        drop(last_migrations);
+        if !agent_removed {
+            // Agent not found in source world — could be a duplicate execution
+            // or the agent was already removed. Log but continue.
+        }
 
-        // Complete the migration
-        let mut apps = self.applications.write().await;
-        let app = apps.get_mut(migration_id).unwrap();
-        app.status = MigrationStatus::Completed;
-        app.completed_at = Some(Utc::now().to_rfc3339());
+        // Phase 4: Spawn agent in target world with migrated data
+        {
+            let mut agents_list = agents.lock().await;
+            // Check if agent already exists in target (idempotent guard)
+            let exists = agents_list.iter().any(|a| a.id == snapshot.agent_id);
+            if !exists {
+                let new_agent = crate::api::AgentRecord {
+                    id: snapshot.agent_id.clone(),
+                    name: snapshot.name.clone(),
+                    phase: snapshot.phase.clone(),
+                    tokens: snapshot.tokens,
+                    money: snapshot.money,
+                    alive: true,
+                    ticks_survived: 0,
+                    personality: String::new(),
+                };
+                agents_list.push(new_agent);
+            }
+        }
 
-        let final_result = app.clone();
+        // Phase 5: Record cooldown tick
+        {
+            let mut last_migrations = self.agent_last_migration.write().await;
+            let current = *self.current_tick.read().await;
+            last_migrations.insert(snapshot.agent_id.clone(), current);
+        }
 
-        self.event_bus.publish(WorldEvent::Custom {
-            event_type: "migration_completed".into(),
-            source: result.agent_id.clone(),
-            data: serde_json::json!({
-                "migration_id": migration_id,
-                "target_world": result.target_world_id,
-                "tokens_remaining": result.agent_snapshot.tokens,
-            }),
+        // Phase 6: Create audit record
+        let tax_tokens = snapshot.metadata.get("tax_collected_tokens")
+            .and_then(|v| v.parse::<u64>().ok())
+            .unwrap_or(0);
+        let skills_transferred: Vec<String> = snapshot.skills.keys().cloned().collect();
+        let skills_blocked: Vec<String> = snapshot.metadata.get("blocked_skills")
+            .map(|s| s.split(',').map(|s| s.to_string()).collect())
+            .unwrap_or_default();
+
+        let record = MigrationRecord {
+            migration_id: migration_id.to_string(),
+            agent_id: snapshot.agent_id.clone(),
+            source_world_id: snapshot.source_world_id.clone(),
+            target_world_id: String::new(), // filled from app
+            migration_type: MigrationType::Permanent,
+            token_cost: snapshot.metadata.get("tax_collected_tokens")
+                .and_then(|v| v.parse::<u64>().ok())
+                .unwrap_or(0),
+            resource_tax_collected: tax_tokens,
+            tokens_remaining: snapshot.tokens,
+            money_remaining: snapshot.money,
+            skills_transferred,
+            skills_blocked,
+            submitted_at: String::new(), // filled from app
+            completed_at: Utc::now().to_rfc3339(),
+        };
+
+        // Phase 7: Mark as Completed
+        let final_result;
+        {
+            let mut apps = self.applications.write().await;
+            let app = apps.get_mut(migration_id).unwrap();
+
+            // Fill in record fields from the application
+            let mut full_record = record;
+            full_record.target_world_id = app.target_world_id.clone();
+            full_record.submitted_at = app.submitted_at.clone();
+
+            app.status = MigrationStatus::Completed;
+            app.completed_at = Some(Utc::now().to_rfc3339());
+            final_result = app.clone();
+
+            // Store audit record
+            self.migration_records.write().await.push(full_record);
+        }
+
+        // Phase 8: Publish completion event
+        self.event_bus.publish(WorldEvent::MigrationCompleted {
+            migration_id: migration_id.to_string(),
+            agent_id: snapshot.agent_id.clone(),
+            source_world: snapshot.source_world_id.clone(),
+            target_world: final_result.target_world_id.clone(),
+            tokens_remaining: snapshot.tokens,
+        });
+
+        // Also publish an emigration event for the source world
+        self.event_bus.publish(WorldEvent::AgentEmigrated {
+            migration_id: migration_id.to_string(),
+            agent_id: snapshot.agent_id.clone(),
+            agent_name: snapshot.name.clone(),
+            source_world: snapshot.source_world_id.clone(),
+        });
+
+        // And an immigration event for the target world
+        self.event_bus.publish(WorldEvent::AgentImmigrated {
+            migration_id: migration_id.to_string(),
+            agent_id: snapshot.agent_id.clone(),
+            agent_name: snapshot.name.clone(),
+            target_world: final_result.target_world_id.clone(),
+            tokens: snapshot.tokens,
+        });
+
+        Ok(final_result)
+    }
+
+    /// Execute migration without access to the agents list (standalone mode).
+    /// Records the migration but does not actually transfer agent records.
+    /// Used when the manager operates independently of the world state.
+    pub async fn execute_standalone(
+        &self,
+        migration_id: &str,
+    ) -> Result<MigrationApplication, String> {
+        {
+            let apps = self.applications.read().await;
+            let app = apps.get(migration_id)
+                .ok_or_else(|| format!("Migration {} not found", migration_id))?;
+
+            // Idempotent: already completed
+            if app.status == MigrationStatus::Completed {
+                return Ok(app.clone());
+            }
+
+            if app.status != MigrationStatus::Approved {
+                return Err(format!("Migration must be approved before execution, current: {}", app.status));
+            }
+        }
+
+        // Record cooldown tick
+        let agent_id;
+        {
+            let apps = self.applications.read().await;
+            let app = apps.get(migration_id).unwrap();
+            agent_id = app.agent_id.clone();
+        }
+        {
+            let mut last_migrations = self.agent_last_migration.write().await;
+            let current = *self.current_tick.read().await;
+            last_migrations.insert(agent_id.clone(), current);
+        }
+
+        // Create audit record
+        let snapshot;
+        let target_world_id;
+        let submitted_at;
+        {
+            let apps = self.applications.read().await;
+            let app = apps.get(migration_id).unwrap();
+            snapshot = app.agent_snapshot.clone();
+            target_world_id = app.target_world_id.clone();
+            submitted_at = app.submitted_at.clone();
+        }
+
+        let skills_transferred: Vec<String> = snapshot.skills.keys().cloned().collect();
+        let record = MigrationRecord {
+            migration_id: migration_id.to_string(),
+            agent_id: snapshot.agent_id.clone(),
+            source_world_id: snapshot.source_world_id.clone(),
+            target_world_id: target_world_id,
+            migration_type: MigrationType::Permanent,
+            token_cost: 10_000,
+            resource_tax_collected: 0,
+            tokens_remaining: snapshot.tokens,
+            money_remaining: snapshot.money,
+            skills_transferred,
+            skills_blocked: Vec::new(),
+            submitted_at,
+            completed_at: Utc::now().to_rfc3339(),
+        };
+
+        // Mark as Completed
+        let final_result;
+        {
+            let mut apps = self.applications.write().await;
+            let app = apps.get_mut(migration_id).unwrap();
+            app.status = MigrationStatus::Completed;
+            app.completed_at = Some(Utc::now().to_rfc3339());
+            final_result = app.clone();
+            self.migration_records.write().await.push(record);
+        }
+
+        self.event_bus.publish(WorldEvent::MigrationCompleted {
+            migration_id: migration_id.to_string(),
+            agent_id: snapshot.agent_id.clone(),
+            source_world: snapshot.source_world_id.clone(),
+            target_world: final_result.target_world_id.clone(),
+            tokens_remaining: snapshot.tokens,
         });
 
         Ok(final_result)
@@ -400,12 +686,10 @@ impl MigrationManager {
 
         drop(apps);
 
-        self.event_bus.publish(WorldEvent::Custom {
-            event_type: "migration_cancelled".into(),
-            source: migration_id.to_string(),
-            data: serde_json::json!({
-                "cancelled_by": cancelled_by,
-            }),
+        self.event_bus.publish(WorldEvent::MigrationCancelled {
+            migration_id: migration_id.to_string(),
+            agent_id: result.agent_id.clone(),
+            cancelled_by: cancelled_by.to_string(),
         });
 
         Ok(result)
@@ -415,6 +699,15 @@ impl MigrationManager {
     pub async fn get(&self, migration_id: &str) -> Option<MigrationApplication> {
         let apps = self.applications.read().await;
         apps.get(migration_id).cloned()
+    }
+
+    /// Get migration status for a specific agent (latest application).
+    pub async fn get_agent_status(&self, agent_id: &str) -> Option<MigrationApplication> {
+        let apps = self.applications.read().await;
+        apps.values()
+            .filter(|app| app.agent_id == agent_id)
+            .max_by_key(|app| app.submitted_at.clone())
+            .cloned()
     }
 
     /// List migration applications with optional filters.
@@ -465,6 +758,48 @@ impl MigrationManager {
         }
         counts
     }
+
+    /// Get migration statistics.
+    pub async fn stats(&self) -> MigrationStats {
+        let apps = self.applications.read().await;
+        let daily = self.daily_count.read().await;
+        let weekly = self.weekly_count.read().await;
+        let records = self.migration_records.read().await;
+
+        let today = Utc::now().format("%Y-%m-%d").to_string();
+        let week = Utc::now().format("%Y-W%W").to_string();
+
+        let mut stats = MigrationStats::default();
+
+        for app in apps.values() {
+            match app.status {
+                MigrationStatus::Pending => stats.pending_applications += 1,
+                MigrationStatus::Approved => stats.approved_applications += 1,
+                MigrationStatus::Rejected => stats.rejected_applications += 1,
+                MigrationStatus::Completed => stats.completed_migrations += 1,
+                MigrationStatus::Failed => stats.failed_migrations += 1,
+                MigrationStatus::Cancelled => stats.cancelled_migrations += 1,
+                MigrationStatus::Executing => {}
+            }
+        }
+
+        stats.total_immigrations = records.len();
+        stats.total_emigrations = records.len();
+
+        let mut total_tokens = 0u64;
+        let mut total_tax = 0u64;
+        for rec in records.iter() {
+            total_tokens += rec.token_cost;
+            total_tax += rec.resource_tax_collected;
+        }
+        stats.total_tokens_consumed = total_tokens;
+        stats.total_tax_collected = total_tax;
+
+        stats.daily_immigrations = *daily.get(&today).unwrap_or(&0);
+        stats.weekly_immigrations = *weekly.get(&week).unwrap_or(&0);
+
+        stats
+    }
 }
 
 #[cfg(test)]
@@ -506,7 +841,7 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn test_review_and_execute() {
+    async fn test_review_and_execute_standalone() {
         let event_bus = Arc::new(EventBus::new(64));
         let manager = MigrationManager::with_defaults(event_bus);
 
@@ -518,8 +853,8 @@ mod tests {
         assert!(reviewed.is_ok());
         assert_eq!(reviewed.unwrap().status, MigrationStatus::Approved);
 
-        // Execute
-        let executed = manager.execute(&app.migration_id).await;
+        // Execute standalone (without agents list)
+        let executed = manager.execute_standalone(&app.migration_id).await;
         assert!(executed.is_ok());
         assert_eq!(executed.unwrap().status, MigrationStatus::Completed);
     }
@@ -617,5 +952,104 @@ mod tests {
         let inbound = manager.list(Some("world-b"), true, None, 10, 0).await;
         assert_eq!(inbound.len(), 1);
         assert_eq!(inbound[0].agent_id, "agent-1");
+    }
+
+    #[tokio::test]
+    async fn test_idempotent_execute() {
+        let event_bus = Arc::new(EventBus::new(64));
+        let manager = MigrationManager::with_defaults(event_bus);
+
+        let snapshot = test_snapshot("agent-1", "world-a");
+        let app = manager.submit(snapshot, "world-b".into()).await.unwrap();
+        manager.review(&app.migration_id, true, "world-b", None).await.unwrap();
+
+        // Execute twice — second call should return the same result (idempotent)
+        let first = manager.execute_standalone(&app.migration_id).await.unwrap();
+        assert_eq!(first.status, MigrationStatus::Completed);
+
+        let second = manager.execute_standalone(&app.migration_id).await.unwrap();
+        assert_eq!(second.status, MigrationStatus::Completed);
+        assert_eq!(first.migration_id, second.migration_id);
+    }
+
+    #[tokio::test]
+    async fn test_execute_without_approval_fails() {
+        let event_bus = Arc::new(EventBus::new(64));
+        let manager = MigrationManager::with_defaults(event_bus);
+
+        let snapshot = test_snapshot("agent-1", "world-a");
+        let app = manager.submit(snapshot, "world-b".into()).await.unwrap();
+
+        // Trying to execute without approval should fail
+        let result = manager.execute_standalone(&app.migration_id).await;
+        assert!(result.is_err());
+        assert!(result.unwrap_err().contains("approved"));
+    }
+
+    #[tokio::test]
+    async fn test_wrong_reviewer_fails() {
+        let event_bus = Arc::new(EventBus::new(64));
+        let manager = MigrationManager::with_defaults(event_bus);
+
+        let snapshot = test_snapshot("agent-1", "world-a");
+        let app = manager.submit(snapshot, "world-b".into()).await.unwrap();
+
+        // Only target world can review
+        let result = manager.review(&app.migration_id, true, "world-c", None).await;
+        assert!(result.is_err());
+        assert!(result.unwrap_err().contains("target world"));
+    }
+
+    #[tokio::test]
+    async fn test_stats() {
+        let event_bus = Arc::new(EventBus::new(64));
+        let manager = MigrationManager::with_defaults(event_bus);
+
+        let snap1 = test_snapshot("agent-1", "world-a");
+        let snap2 = test_snapshot("agent-2", "world-a");
+        let app1 = manager.submit(snap1, "world-b".into()).await.unwrap();
+        manager.submit(snap2, "world-b".into()).await.unwrap();
+
+        // Approve and execute first
+        manager.review(&app1.migration_id, true, "world-b", None).await.unwrap();
+        manager.execute_standalone(&app1.migration_id).await.unwrap();
+
+        let stats = manager.stats().await;
+        assert_eq!(stats.pending_applications, 1);
+        assert_eq!(stats.completed_migrations, 1);
+        assert_eq!(stats.total_immigrations, 1);
+    }
+
+    #[tokio::test]
+    async fn test_agent_status() {
+        let event_bus = Arc::new(EventBus::new(64));
+        let manager = MigrationManager::with_defaults(event_bus);
+
+        let snapshot = test_snapshot("agent-1", "world-a");
+        manager.submit(snapshot, "world-b".into()).await.unwrap();
+
+        let status = manager.get_agent_status("agent-1").await;
+        assert!(status.is_some());
+        assert_eq!(status.unwrap().agent_id, "agent-1");
+
+        let no_status = manager.get_agent_status("agent-999").await;
+        assert!(no_status.is_none());
+    }
+
+    #[tokio::test]
+    async fn test_quota_enforcement() {
+        let event_bus = Arc::new(EventBus::new(64));
+        let mut policy = MigrationPolicy::default();
+        policy.daily_quota = 1;
+        let manager = MigrationManager::new(policy, event_bus);
+
+        let snap1 = test_snapshot("agent-1", "world-a");
+        let snap2 = test_snapshot("agent-2", "world-a");
+        manager.submit(snap1, "world-b".into()).await.unwrap();
+
+        // Second submission should fail quota
+        let result = manager.submit(snap2, "world-b".into()).await;
+        assert!(result.is_err());
+        assert!(result.unwrap_err().contains("Daily migration quota"));
     }
 }

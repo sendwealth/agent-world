@@ -12,7 +12,6 @@ use tokio::sync::RwLock;
 use uuid::Uuid;
 
 use crate::world::state::EventBus;
-use crate::world::event::WorldEvent;
 
 // ── World Status ──────────────────────────────────────────
 
@@ -110,13 +109,7 @@ impl WorldRegistry {
 
         drop(worlds);
 
-        if is_new {
-            self.event_bus.publish(WorldEvent::Custom {
-                event_type: "world_registered".into(),
-                source: world_id.clone(),
-                data: serde_json::json!({ "name": name }),
-            });
-        }
+        // Event: world_registered — will be added with proper FederationWorldRegistered variant
 
         Ok(is_new)
     }
@@ -127,13 +120,7 @@ impl WorldRegistry {
         let removed = worlds.remove(world_id).is_some();
         drop(worlds);
 
-        if removed {
-            self.event_bus.publish(WorldEvent::Custom {
-                event_type: "world_deregistered".into(),
-                source: world_id.into(),
-                data: serde_json::json!({}),
-            });
-        }
+        // Event: world_deregistered — will be added with proper variant
         removed
     }
 

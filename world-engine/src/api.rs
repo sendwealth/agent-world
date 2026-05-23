@@ -11,7 +11,7 @@ use axum::{
         sse::{Event as SseEvent, Sse},
         IntoResponse,
     },
-    routing::{delete, get, post},
+    routing::{delete, get, post, put},
 };
 use futures::stream::Stream;
 use serde::{Deserialize, Serialize};
@@ -146,8 +146,6 @@ pub fn create_router_with_wal(board: SharedTaskBoard, wal: SharedWAL) -> Router 
         external_agents: Arc::new(Mutex::new(HashMap::new())),
         governance_metrics: None,
             building_manager: Arc::new(Mutex::new(BuildingManager::new())),
-            federation_registry: None,
-            migration_manager: None,
         federation_registry: None,
         migration_manager: None,
     };
@@ -180,8 +178,6 @@ pub fn create_router_with_wal_and_snapshots(board: SharedTaskBoard, wal: SharedW
         external_agents: Arc::new(Mutex::new(HashMap::new())),
         governance_metrics: None,
             building_manager: Arc::new(Mutex::new(BuildingManager::new())),
-            federation_registry: None,
-            migration_manager: None,
         federation_registry: None,
         migration_manager: None,
     };
@@ -311,6 +307,9 @@ pub fn build_full_router(state: AppState) -> Router {
         .route("/api/v1/migration/:migration_id", get(migration_get_status))
         .route("/api/v1/migration/list", post(migration_list))
         .route("/api/v1/migration/policy", get(migration_get_policy))
+        .route("/api/v1/migration/policy", put(migration_update_policy))
+        .route("/api/v1/migration/stats", get(migration_stats))
+        .route("/api/v1/agents/:id/immigration-status", get(agent_immigration_status))
         .with_state(state)
 }
 
@@ -344,8 +343,6 @@ pub fn create_router_for_test(
         external_agents: Arc::new(Mutex::new(HashMap::new())),
         governance_metrics: None,
             building_manager: Arc::new(Mutex::new(BuildingManager::new())),
-            federation_registry: None,
-            migration_manager: None,
         federation_registry: None,
         migration_manager: None,
     };
@@ -3704,6 +3701,26 @@ use crate::federation::registry::{WorldEntry, WorldEndpoint, WorldMetrics};
 use crate::federation::migration::{AgentSnapshot, MigrationStatus as MigStatus};
 use crate::federation::service::{RestMigrationSubmit, RestMigrationReview, RestWorldRegister};
 
+/// Helper: wrap success response in { data, error: null, request_id } format.
+fn api_ok(data: impl serde::Serialize) -> axum::response::Response {
+    let request_id = Uuid::new_v4().to_string();
+    Json(serde_json::json!({
+        "data": data,
+        "error": null,
+        "request_id": request_id,
+    })).into_response()
+}
+
+/// Helper: wrap error response in { data: null, error, request_id } format.
+fn api_err(status: StatusCode, error: impl Into<String>) -> axum::response::Response {
+    let request_id = Uuid::new_v4().to_string();
+    (status, Json(serde_json::json!({
+        "data": null,
+        "error": error.into(),
+        "request_id": request_id,
+    }))).into_response()
+}
+
 /// POST /api/v1/federation/worlds — Register a new world.
 async fn federation_register_world(
     State(state): State<AppState>,
@@ -3711,7 +3728,7 @@ async fn federation_register_world(
 ) -> impl IntoResponse {
     let registry = match &state.federation_registry {
         Some(r) => r.clone(),
-        None => return (StatusCode::SERVICE_UNAVAILABLE, Json(ErrorResponse { error: "federation registry not configured".into() })).into_response(),
+        None => return api_err(StatusCode::SERVICE_UNAVAILABLE, "federation registry not configured"),
     };
     let entry = WorldEntry {
         world_id: body.world_id,
@@ -3733,8 +3750,8 @@ async fn federation_register_world(
     };
     let mut reg = registry.lock().await;
     match reg.register(entry).await {
-        Ok(is_new) => Json(serde_json::json!({ "registered": true, "is_new": is_new })).into_response(),
-        Err(e) => (StatusCode::BAD_REQUEST, Json(ErrorResponse { error: e })).into_response(),
+        Ok(is_new) => api_ok(serde_json::json!({ "registered": true, "is_new": is_new })),
+        Err(e) => api_err(StatusCode::BAD_REQUEST, e),
     }
 }
 
@@ -3744,11 +3761,11 @@ async fn federation_list_worlds(
 ) -> impl IntoResponse {
     let registry = match &state.federation_registry {
         Some(r) => r.clone(),
-        None => return (StatusCode::SERVICE_UNAVAILABLE, Json(ErrorResponse { error: "federation registry not configured".into() })).into_response(),
+        None => return api_err(StatusCode::SERVICE_UNAVAILABLE, "federation registry not configured"),
     };
     let reg = registry.lock().await;
     let worlds = reg.list_all().await;
-    Json(&worlds).into_response()
+    api_ok(&worlds)
 }
 
 /// GET /api/v1/federation/worlds/:world_id — Get a specific world.
@@ -3758,12 +3775,12 @@ async fn federation_get_world(
 ) -> impl IntoResponse {
     let registry = match &state.federation_registry {
         Some(r) => r.clone(),
-        None => return (StatusCode::SERVICE_UNAVAILABLE, Json(ErrorResponse { error: "federation registry not configured".into() })).into_response(),
+        None => return api_err(StatusCode::SERVICE_UNAVAILABLE, "federation registry not configured"),
     };
     let reg = registry.lock().await;
     match reg.get_world(&world_id).await {
-        Some(entry) => Json(&entry).into_response(),
-        None => (StatusCode::NOT_FOUND, Json(ErrorResponse { error: "world not found".into() })).into_response(),
+        Some(entry) => api_ok(&entry),
+        None => api_err(StatusCode::NOT_FOUND, "world not found"),
     }
 }
 
@@ -3774,11 +3791,11 @@ async fn federation_deregister_world(
 ) -> impl IntoResponse {
     let registry = match &state.federation_registry {
         Some(r) => r.clone(),
-        None => return (StatusCode::SERVICE_UNAVAILABLE, Json(ErrorResponse { error: "federation registry not configured".into() })).into_response(),
+        None => return api_err(StatusCode::SERVICE_UNAVAILABLE, "federation registry not configured"),
     };
     let reg = registry.lock().await;
     let removed = reg.deregister(&world_id).await;
-    Json(serde_json::json!({ "removed": removed })).into_response()
+    api_ok(serde_json::json!({ "removed": removed }))
 }
 
 /// POST /api/v1/federation/worlds/:world_id/heartbeat — Record a heartbeat.
@@ -3789,14 +3806,14 @@ async fn federation_heartbeat(
 ) -> impl IntoResponse {
     let registry = match &state.federation_registry {
         Some(r) => r.clone(),
-        None => return (StatusCode::SERVICE_UNAVAILABLE, Json(ErrorResponse { error: "federation registry not configured".into() })).into_response(),
+        None => return api_err(StatusCode::SERVICE_UNAVAILABLE, "federation registry not configured"),
     };
     let reg = registry.lock().await;
     let ok = reg.heartbeat(&world_id, metrics).await;
     if ok {
-        Json(serde_json::json!({ "ok": true })).into_response()
+        api_ok(serde_json::json!({ "ok": true }))
     } else {
-        (StatusCode::NOT_FOUND, Json(ErrorResponse { error: "world not found".into() })).into_response()
+        api_err(StatusCode::NOT_FOUND, "world not found")
     }
 }
 
@@ -3807,7 +3824,7 @@ async fn migration_submit(
 ) -> impl IntoResponse {
     let manager = match &state.migration_manager {
         Some(m) => m.clone(),
-        None => return (StatusCode::SERVICE_UNAVAILABLE, Json(ErrorResponse { error: "migration manager not configured".into() })).into_response(),
+        None => return api_err(StatusCode::SERVICE_UNAVAILABLE, "migration manager not configured"),
     };
     let snapshot = AgentSnapshot {
         agent_id: body.agent_id,
@@ -3824,8 +3841,8 @@ async fn migration_submit(
     };
     let mgr = manager.lock().await;
     match mgr.submit(snapshot, body.target_world_id).await {
-        Ok(app) => Json(&app).into_response(),
-        Err(e) => (StatusCode::BAD_REQUEST, Json(ErrorResponse { error: e })).into_response(),
+        Ok(app) => api_ok(&app),
+        Err(e) => api_err(StatusCode::BAD_REQUEST, e),
     }
 }
 
@@ -3837,7 +3854,7 @@ async fn migration_review(
 ) -> impl IntoResponse {
     let manager = match &state.migration_manager {
         Some(m) => m.clone(),
-        None => return (StatusCode::SERVICE_UNAVAILABLE, Json(ErrorResponse { error: "migration manager not configured".into() })).into_response(),
+        None => return api_err(StatusCode::SERVICE_UNAVAILABLE, "migration manager not configured"),
     };
     let mgr = manager.lock().await;
     match mgr.review(
@@ -3846,8 +3863,8 @@ async fn migration_review(
         &body.reviewer_world_id,
         body.rejection_reason,
     ).await {
-        Ok(app) => Json(&app).into_response(),
-        Err(e) => (StatusCode::BAD_REQUEST, Json(ErrorResponse { error: e })).into_response(),
+        Ok(app) => api_ok(&app),
+        Err(e) => api_err(StatusCode::BAD_REQUEST, e),
     }
 }
 
@@ -3858,12 +3875,12 @@ async fn migration_execute(
 ) -> impl IntoResponse {
     let manager = match &state.migration_manager {
         Some(m) => m.clone(),
-        None => return (StatusCode::SERVICE_UNAVAILABLE, Json(ErrorResponse { error: "migration manager not configured".into() })).into_response(),
+        None => return api_err(StatusCode::SERVICE_UNAVAILABLE, "migration manager not configured"),
     };
     let mgr = manager.lock().await;
-    match mgr.execute(&migration_id).await {
-        Ok(app) => Json(&app).into_response(),
-        Err(e) => (StatusCode::BAD_REQUEST, Json(ErrorResponse { error: e })).into_response(),
+    match mgr.execute_standalone(&migration_id).await {
+        Ok(app) => api_ok(&app),
+        Err(e) => api_err(StatusCode::BAD_REQUEST, e),
     }
 }
 
@@ -3875,14 +3892,14 @@ async fn migration_cancel(
 ) -> impl IntoResponse {
     let manager = match &state.migration_manager {
         Some(m) => m.clone(),
-        None => return (StatusCode::SERVICE_UNAVAILABLE, Json(ErrorResponse { error: "migration manager not configured".into() })).into_response(),
+        None => return api_err(StatusCode::SERVICE_UNAVAILABLE, "migration manager not configured"),
     };
     let cancelled_by = body.get("cancelled_by").and_then(|v| v.as_str()).unwrap_or("").to_string();
     let reason = body.get("reason").and_then(|v| v.as_str()).map(|s| s.to_string());
     let mgr = manager.lock().await;
     match mgr.cancel(&migration_id, &cancelled_by, reason).await {
-        Ok(app) => Json(&app).into_response(),
-        Err(e) => (StatusCode::BAD_REQUEST, Json(ErrorResponse { error: e })).into_response(),
+        Ok(app) => api_ok(&app),
+        Err(e) => api_err(StatusCode::BAD_REQUEST, e),
     }
 }
 
@@ -3893,12 +3910,12 @@ async fn migration_get_status(
 ) -> impl IntoResponse {
     let manager = match &state.migration_manager {
         Some(m) => m.clone(),
-        None => return (StatusCode::SERVICE_UNAVAILABLE, Json(ErrorResponse { error: "migration manager not configured".into() })).into_response(),
+        None => return api_err(StatusCode::SERVICE_UNAVAILABLE, "migration manager not configured"),
     };
     let mgr = manager.lock().await;
     match mgr.get(&migration_id).await {
-        Some(app) => Json(&app).into_response(),
-        None => (StatusCode::NOT_FOUND, Json(ErrorResponse { error: "migration not found".into() })).into_response(),
+        Some(app) => api_ok(&app),
+        None => api_err(StatusCode::NOT_FOUND, "migration not found"),
     }
 }
 
@@ -3909,7 +3926,7 @@ async fn migration_list(
 ) -> impl IntoResponse {
     let manager = match &state.migration_manager {
         Some(m) => m.clone(),
-        None => return (StatusCode::SERVICE_UNAVAILABLE, Json(ErrorResponse { error: "migration manager not configured".into() })).into_response(),
+        None => return api_err(StatusCode::SERVICE_UNAVAILABLE, "migration manager not configured"),
     };
     let world_id: Option<String> = body.get("world_id").and_then(|v| v.as_str()).map(|s| s.to_string());
     let inbound = body.get("inbound").and_then(|v| v.as_bool()).unwrap_or(true);
@@ -3929,7 +3946,7 @@ async fn migration_list(
     let mgr = manager.lock().await;
     let world_id_ref = world_id.as_deref();
     let results = mgr.list(world_id_ref, inbound, status_filter, limit, offset).await;
-    Json(&results).into_response()
+    api_ok(&results)
 }
 
 /// GET /api/v1/migration/policy — Get the current migration policy.
@@ -3938,12 +3955,58 @@ async fn migration_get_policy(
 ) -> impl IntoResponse {
     let manager = match &state.migration_manager {
         Some(m) => m.clone(),
-        None => return (StatusCode::SERVICE_UNAVAILABLE, Json(ErrorResponse { error: "migration manager not configured".into() })).into_response(),
+        None => return api_err(StatusCode::SERVICE_UNAVAILABLE, "migration manager not configured"),
     };
     let mgr = manager.lock().await;
     let policy = mgr.get_policy().await;
     let rest_policy = crate::federation::service::RestMigrationPolicy::from(policy);
-    Json(&rest_policy).into_response()
+    api_ok(&rest_policy)
+}
+
+/// PUT /api/v1/migration/policy — Update migration policy.
+async fn migration_update_policy(
+    State(state): State<AppState>,
+    Json(body): Json<crate::federation::service::RestMigrationPolicy>,
+) -> impl IntoResponse {
+    let manager = match &state.migration_manager {
+        Some(m) => m.clone(),
+        None => return api_err(StatusCode::SERVICE_UNAVAILABLE, "migration manager not configured"),
+    };
+    let mgr = manager.lock().await;
+    let policy: crate::federation::MigrationPolicy = body.into();
+    mgr.set_policy(policy).await;
+    let updated = mgr.get_policy().await;
+    let rest_policy = crate::federation::service::RestMigrationPolicy::from(updated);
+    api_ok(&rest_policy)
+}
+
+/// GET /api/v1/migration/stats — Get migration statistics.
+async fn migration_stats(
+    State(state): State<AppState>,
+) -> impl IntoResponse {
+    let manager = match &state.migration_manager {
+        Some(m) => m.clone(),
+        None => return api_err(StatusCode::SERVICE_UNAVAILABLE, "migration manager not configured"),
+    };
+    let mgr = manager.lock().await;
+    let stats = mgr.stats().await;
+    api_ok(&stats)
+}
+
+/// GET /api/v1/agents/:id/immigration-status — Get agent immigration status.
+async fn agent_immigration_status(
+    State(state): State<AppState>,
+    Path(agent_id): Path<String>,
+) -> impl IntoResponse {
+    let manager = match &state.migration_manager {
+        Some(m) => m.clone(),
+        None => return api_err(StatusCode::SERVICE_UNAVAILABLE, "migration manager not configured"),
+    };
+    let mgr = manager.lock().await;
+    match mgr.get_agent_status(&agent_id).await {
+        Some(app) => api_ok(&app),
+        None => api_ok(serde_json::json!({ "agent_id": agent_id, "status": "none", "message": "no migration applications found" })),
+    }
 }
 
 #[cfg(test)]
@@ -3984,8 +4047,6 @@ mod tests {
             external_agents: Arc::new(Mutex::new(std::collections::HashMap::new())),
             governance_metrics: Some(Arc::new(Mutex::new(collector))),
             building_manager: Arc::new(Mutex::new(BuildingManager::new())),
-            federation_registry: None,
-            migration_manager: None,
             federation_registry: None,
             migration_manager: None,
         };
@@ -4272,8 +4333,6 @@ mod tests {
             external_agents: Arc::new(Mutex::new(std::collections::HashMap::new())),
             governance_metrics: None,
             building_manager: Arc::new(Mutex::new(BuildingManager::new())),
-            federation_registry: None,
-            migration_manager: None,
             federation_registry: None,
             migration_manager: None,
         };

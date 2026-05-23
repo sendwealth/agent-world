@@ -483,6 +483,8 @@ async fn main() {
         external_agents: Arc::new(Mutex::new(std::collections::HashMap::new())),
         governance_metrics: Some(Arc::new(Mutex::new(governance_metrics))),
         building_manager: Arc::new(Mutex::new(agent_world_engine::world::map::building::BuildingManager::new())),
+        federation_registry: None,
+        migration_manager: None,
     };
     let app = api::build_full_router(app_state);
 

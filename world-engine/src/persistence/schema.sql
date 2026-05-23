@@ -68,3 +68,80 @@ CREATE TABLE IF NOT EXISTS tasks (
 );
 
 CREATE INDEX IF NOT EXISTS idx_tasks_snapshot_id ON tasks(snapshot_id);
+
+-- ═══════════════════════════════════════════════════════════
+-- Federation / Cross-World Migration Tables (SEN-320)
+-- ═══════════════════════════════════════════════════════════
+
+-- Registered foreign worlds in the federation
+CREATE TABLE IF NOT EXISTS federation_worlds (
+    world_id        TEXT    PRIMARY KEY,
+    name            TEXT    NOT NULL,
+    description     TEXT    NOT NULL DEFAULT '',
+    host            TEXT    NOT NULL,
+    grpc_port       INTEGER NOT NULL DEFAULT 50051,
+    http_port       INTEGER NOT NULL DEFAULT 8080,
+    status          TEXT    NOT NULL DEFAULT 'online',
+    capabilities    TEXT    NOT NULL DEFAULT '[]',  -- JSON array of strings
+    max_agents      INTEGER NOT NULL DEFAULT 100,
+    current_agents  INTEGER NOT NULL DEFAULT 0,
+    labels          TEXT    NOT NULL DEFAULT '{}',  -- JSON object
+    metrics_json    TEXT    NOT NULL DEFAULT '{}',  -- JSON WorldMetrics
+    registered_at   TEXT    NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now')),
+    last_heartbeat  TEXT    NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))
+);
+
+-- Migration applications (immigration requests)
+CREATE TABLE IF NOT EXISTS migration_applications (
+    migration_id    TEXT    PRIMARY KEY,
+    agent_id        TEXT    NOT NULL,
+    source_world_id TEXT    NOT NULL,
+    target_world_id TEXT    NOT NULL,
+    status          TEXT    NOT NULL DEFAULT 'pending',
+    agent_snapshot  TEXT    NOT NULL DEFAULT '{}',  -- JSON AgentSnapshot
+    rejection_reason TEXT,
+    submitted_at    TEXT    NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now')),
+    reviewed_at     TEXT,
+    completed_at    TEXT,
+    token_cost      INTEGER NOT NULL DEFAULT 0,
+    resource_tax_rate REAL  NOT NULL DEFAULT 0.0,
+    metadata_json   TEXT    NOT NULL DEFAULT '{}'
+);
+
+CREATE INDEX IF NOT EXISTS idx_migration_agent_id ON migration_applications(agent_id);
+CREATE INDEX IF NOT EXISTS idx_migration_source ON migration_applications(source_world_id);
+CREATE INDEX IF NOT EXISTS idx_migration_target ON migration_applications(target_world_id);
+CREATE INDEX IF NOT EXISTS idx_migration_status ON migration_applications(status);
+
+-- Completed migration records (audit trail)
+CREATE TABLE IF NOT EXISTS migration_records (
+    migration_id    TEXT    PRIMARY KEY,
+    agent_id        TEXT    NOT NULL,
+    source_world_id TEXT    NOT NULL,
+    target_world_id TEXT    NOT NULL,
+    migration_type  TEXT    NOT NULL DEFAULT 'permanent',
+    token_cost      INTEGER NOT NULL DEFAULT 0,
+    resource_tax_collected INTEGER NOT NULL DEFAULT 0,
+    tokens_remaining INTEGER NOT NULL DEFAULT 0,
+    money_remaining INTEGER NOT NULL DEFAULT 0,
+    skills_transferred TEXT NOT NULL DEFAULT '[]',  -- JSON array
+    skills_blocked  TEXT    NOT NULL DEFAULT '[]',  -- JSON array
+    submitted_at    TEXT    NOT NULL,
+    completed_at    TEXT    NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))
+);
+
+CREATE INDEX IF NOT EXISTS idx_migration_records_agent ON migration_records(agent_id);
+
+-- Migration policy per world
+CREATE TABLE IF NOT EXISTS migration_policy (
+    world_id                    TEXT    PRIMARY KEY,
+    enabled                     INTEGER NOT NULL DEFAULT 1,
+    daily_quota                 INTEGER NOT NULL DEFAULT 10,
+    weekly_quota                INTEGER NOT NULL DEFAULT 50,
+    min_reputation              REAL    NOT NULL DEFAULT 0.0,
+    token_cost                  INTEGER NOT NULL DEFAULT 10000,
+    resource_tax_rate           REAL    NOT NULL DEFAULT 0.2,
+    require_skill_certification INTEGER NOT NULL DEFAULT 0,
+    blocked_skills              TEXT    NOT NULL DEFAULT '[]',
+    cooldown_ticks              INTEGER NOT NULL DEFAULT 100
+);

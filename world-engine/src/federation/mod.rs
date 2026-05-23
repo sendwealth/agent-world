@@ -10,4 +10,7 @@ pub mod migration;
 pub mod service;
 
 pub use registry::{WorldRegistry, WorldEntry, WorldStatus};
-pub use migration::{MigrationManager, MigrationApplication, MigrationPolicy, MigrationStatus};
+pub use migration::{
+    MigrationManager, MigrationApplication, MigrationPolicy, MigrationStatus,
+    AgentSnapshot, MigrationRecord, MigrationType, MigrationStats,
+};

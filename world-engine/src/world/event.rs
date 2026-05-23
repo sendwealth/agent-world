@@ -114,6 +114,14 @@ pub enum EventType {
     BuildingDemolished,
     BuildingMaintained,
     BuildingUpgraded,
+    // Migration events
+    MigrationSubmitted,
+    MigrationApproved,
+    MigrationRejected,
+    MigrationCompleted,
+    MigrationCancelled,
+    AgentEmigrated,
+    AgentImmigrated,
 }
 
 /// Events emitted by the world engine.
@@ -233,6 +241,14 @@ pub enum WorldEvent {
     BuildingDemolished { building_id: String, owner_id: String },
     BuildingMaintained { building_id: String, health_restored: u32, new_health: u32 },
     BuildingUpgraded { building_id: String, new_level: u32 },
+    // Migration events
+    MigrationSubmitted { migration_id: String, agent_id: String, source_world: String, target_world: String },
+    MigrationApproved { migration_id: String, agent_id: String, reviewer: String },
+    MigrationRejected { migration_id: String, agent_id: String, reviewer: String, reason: Option<String> },
+    MigrationCompleted { migration_id: String, agent_id: String, source_world: String, target_world: String, tokens_remaining: u64 },
+    MigrationCancelled { migration_id: String, agent_id: String, cancelled_by: String },
+    AgentEmigrated { migration_id: String, agent_id: String, agent_name: String, source_world: String },
+    AgentImmigrated { migration_id: String, agent_id: String, agent_name: String, target_world: String, tokens: u64 },
 }
 
 impl WorldEvent {
@@ -330,6 +346,13 @@ impl WorldEvent {
             WorldEvent::BuildingDemolished { .. } => EventType::BuildingDemolished,
             WorldEvent::BuildingMaintained { .. } => EventType::BuildingMaintained,
             WorldEvent::BuildingUpgraded { .. } => EventType::BuildingUpgraded,
+            WorldEvent::MigrationSubmitted { .. } => EventType::MigrationSubmitted,
+            WorldEvent::MigrationApproved { .. } => EventType::MigrationApproved,
+            WorldEvent::MigrationRejected { .. } => EventType::MigrationRejected,
+            WorldEvent::MigrationCompleted { .. } => EventType::MigrationCompleted,
+            WorldEvent::MigrationCancelled { .. } => EventType::MigrationCancelled,
+            WorldEvent::AgentEmigrated { .. } => EventType::AgentEmigrated,
+            WorldEvent::AgentImmigrated { .. } => EventType::AgentImmigrated,
         }
     }
 
@@ -427,6 +450,13 @@ impl WorldEvent {
             WorldEvent::BuildingDemolished { owner_id, .. } => Some(owner_id),
             WorldEvent::BuildingMaintained { .. } => None,
             WorldEvent::BuildingUpgraded { .. } => None,
+            WorldEvent::MigrationSubmitted { agent_id, .. } => Some(agent_id),
+            WorldEvent::MigrationApproved { agent_id, .. } => Some(agent_id),
+            WorldEvent::MigrationRejected { agent_id, .. } => Some(agent_id),
+            WorldEvent::MigrationCompleted { agent_id, .. } => Some(agent_id),
+            WorldEvent::MigrationCancelled { agent_id, .. } => Some(agent_id),
+            WorldEvent::AgentEmigrated { agent_id, .. } => Some(agent_id),
+            WorldEvent::AgentImmigrated { agent_id, .. } => Some(agent_id),
         }
     }
 

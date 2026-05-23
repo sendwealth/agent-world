@@ -9,7 +9,7 @@ import httpx
 
 
 class FederationClient:
-    """HTTP client for the World Engine federation endpoints."""
+    """HTTP client for the World Engine federation and migration endpoints."""
 
     def __init__(self, base_url: str = "http://localhost:8080") -> None:
         self.base_url = base_url.rstrip("/")
@@ -17,6 +17,14 @@ class FederationClient:
 
     def _url(self, path: str) -> str:
         return f"{self.base_url}{path}"
+
+    def _unwrap(self, resp: httpx.Response) -> Dict[str, Any]:
+        """Parse the { data, error, request_id } envelope."""
+        resp.raise_for_status()
+        body = resp.json()
+        if body.get("error"):
+            raise RuntimeError(f"[{body.get('request_id')}] {body['error']}")
+        return body.get("data", body)
 
     # ── World Registry ──────────────────────────────────────
 
@@ -32,7 +40,7 @@ class FederationClient:
         max_agents: int = 100,
         labels: Optional[Dict[str, str]] = None,
     ) -> Dict[str, Any]:
-        payload = {
+        resp = self._client.post(self._url("/api/v1/federation/worlds"), json={
             "world_id": world_id,
             "name": name,
             "host": host,
@@ -42,33 +50,27 @@ class FederationClient:
             "capabilities": capabilities or [],
             "max_agents": max_agents,
             "labels": labels or {},
-        }
-        resp = self._client.post(self._url("/api/v1/federation/worlds"), json=payload)
-        resp.raise_for_status()
-        return resp.json()
+        })
+        return self._unwrap(resp)
 
     def list_worlds(self) -> List[Dict[str, Any]]:
         resp = self._client.get(self._url("/api/v1/federation/worlds"))
-        resp.raise_for_status()
-        return resp.json()
+        return self._unwrap(resp)
 
     def get_world(self, world_id: str) -> Dict[str, Any]:
         resp = self._client.get(self._url(f"/api/v1/federation/worlds/{world_id}"))
-        resp.raise_for_status()
-        return resp.json()
+        return self._unwrap(resp)
 
     def deregister_world(self, world_id: str) -> Dict[str, Any]:
         resp = self._client.delete(self._url(f"/api/v1/federation/worlds/{world_id}"))
-        resp.raise_for_status()
-        return resp.json()
+        return self._unwrap(resp)
 
     def heartbeat(self, world_id: str, metrics: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
         resp = self._client.post(
             self._url(f"/api/v1/federation/worlds/{world_id}/heartbeat"),
-            json={"metrics": metrics or {}},
+            json=metrics or {},
         )
-        resp.raise_for_status()
-        return resp.json()
+        return self._unwrap(resp)
 
     # ── Migration ────────────────────────────────────────────
 
@@ -85,7 +87,7 @@ class FederationClient:
         skills: Optional[Dict[str, int]] = None,
         public_key: str = "",
     ) -> Dict[str, Any]:
-        payload = {
+        resp = self._client.post(self._url("/api/v1/migration/submit"), json={
             "agent_id": agent_id,
             "source_world_id": source_world_id,
             "target_world_id": target_world_id,
@@ -96,10 +98,8 @@ class FederationClient:
             "reputation": reputation,
             "skills": skills or {},
             "public_key": public_key,
-        }
-        resp = self._client.post(self._url("/api/v1/migration/submit"), json=payload)
-        resp.raise_for_status()
-        return resp.json()
+        })
+        return self._unwrap(resp)
 
     def review_migration(
         self,
@@ -108,24 +108,20 @@ class FederationClient:
         reviewer_world_id: str,
         rejection_reason: Optional[str] = None,
     ) -> Dict[str, Any]:
-        payload = {
-            "migration_id": migration_id,
-            "approved": approved,
-            "reviewer_world_id": reviewer_world_id,
-            "rejection_reason": rejection_reason,
-        }
         resp = self._client.post(
-            self._url(f"/api/v1/migration/{migration_id}/review"), json=payload
+            self._url(f"/api/v1/migration/{migration_id}/review"),
+            json={
+                "migration_id": migration_id,
+                "approved": approved,
+                "reviewer_world_id": reviewer_world_id,
+                "rejection_reason": rejection_reason,
+            },
         )
-        resp.raise_for_status()
-        return resp.json()
+        return self._unwrap(resp)
 
     def execute_migration(self, migration_id: str) -> Dict[str, Any]:
-        resp = self._client.post(
-            self._url(f"/api/v1/migration/{migration_id}/execute")
-        )
-        resp.raise_for_status()
-        return resp.json()
+        resp = self._client.post(self._url(f"/api/v1/migration/{migration_id}/execute"))
+        return self._unwrap(resp)
 
     def cancel_migration(
         self,
@@ -133,22 +129,15 @@ class FederationClient:
         cancelled_by: str,
         reason: Optional[str] = None,
     ) -> Dict[str, Any]:
-        payload = {
-            "cancelled_by": cancelled_by,
-            "reason": reason,
-        }
         resp = self._client.post(
-            self._url(f"/api/v1/migration/{migration_id}/cancel"), json=payload
+            self._url(f"/api/v1/migration/{migration_id}/cancel"),
+            json={"cancelled_by": cancelled_by, "reason": reason},
         )
-        resp.raise_for_status()
-        return resp.json()
+        return self._unwrap(resp)
 
     def get_migration_status(self, migration_id: str) -> Dict[str, Any]:
-        resp = self._client.get(
-            self._url(f"/api/v1/migration/{migration_id}")
-        )
-        resp.raise_for_status()
-        return resp.json()
+        resp = self._client.get(self._url(f"/api/v1/migration/{migration_id}"))
+        return self._unwrap(resp)
 
     def list_migrations(
         self,
@@ -157,28 +146,31 @@ class FederationClient:
         status_filter: Optional[str] = None,
         limit: int = 10,
         offset: int = 0,
-    ) -> Dict[str, Any]:
-        payload = {
-            "world_id": world_id,
+    ) -> List[Dict[str, Any]]:
+        body: Dict[str, Any] = {
             "inbound": inbound,
-            "status_filter": status_filter,
             "limit": limit,
             "offset": offset,
         }
-        resp = self._client.post(self._url("/api/v1/migration/list"), json=payload)
-        resp.raise_for_status()
-        return resp.json()
+        if world_id:
+            body["world_id"] = world_id
+        if status_filter:
+            body["status_filter"] = status_filter
+        resp = self._client.post(self._url("/api/v1/migration/list"), json=body)
+        return self._unwrap(resp)
 
     def get_migration_policy(self) -> Dict[str, Any]:
         resp = self._client.get(self._url("/api/v1/migration/policy"))
-        resp.raise_for_status()
-        return resp.json()
+        return self._unwrap(resp)
 
-    def close(self) -> None:
-        self._client.close()
+    def update_migration_policy(self, **kwargs: Any) -> Dict[str, Any]:
+        resp = self._client.put(self._url("/api/v1/migration/policy"), json=kwargs)
+        return self._unwrap(resp)
 
-    def __enter__(self) -> "FederationClient":
-        return self
+    def get_migration_stats(self) -> Dict[str, Any]:
+        resp = self._client.get(self._url("/api/v1/migration/stats"))
+        return self._unwrap(resp)
 
-    def __exit__(self, *args: Any) -> None:
-        self.close()
+    def get_agent_immigration_status(self, agent_id: str) -> Dict[str, Any]:
+        resp = self._client.get(self._url(f"/api/v1/agents/{agent_id}/immigration-status"))
+        return self._unwrap(resp)

@@ -7,6 +7,7 @@ use tokio_util::sync::CancellationToken;
 use agent_world_engine::a2a::registry::AgentRegistry;
 use agent_world_engine::a2a::router::MessageRouter;
 use agent_world_engine::a2a::service::A2aServiceImpl;
+use agent_world_engine::a2a::federation::FederationEngine;
 use agent_world_engine::agentworld::a2a::v1::a2a_service_server::A2aServiceServer;
 use agent_world_engine::api::{self, AppState};
 use agent_world_engine::config::{ConfigManager, GenesisConfig};
@@ -440,6 +441,12 @@ async fn main() {
     )));
     println!("   InvestmentSystem: initialized");
 
+    // ── Initialize Federation Engine ──────────────────────
+    let federation = Arc::new(Mutex::new(FederationEngine::with_shared_event_bus(
+        event_bus.clone(),
+    )));
+    println!("   FederationEngine: initialized");
+
     // ── Initialize ConfigManager (hot-reload) ───────────────
     if std::path::Path::new(&genesis_path).exists() {
         match ConfigManager::new(&genesis_path, Some(event_bus.clone())) {
@@ -492,6 +499,7 @@ async fn main() {
         building_manager: Arc::new(Mutex::new(agent_world_engine::world::map::building::BuildingManager::new())),
         human_store: Arc::new(Mutex::new(agent_world_engine::human::store::HumanParticipationStore::new())),
         investment_system: Some(investment_system),
+        federation: Some(federation),
     };
     let app = api::build_full_router(app_state);
 

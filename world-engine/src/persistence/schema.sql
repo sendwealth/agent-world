@@ -68,3 +68,31 @@ CREATE TABLE IF NOT EXISTS tasks (
 );
 
 CREATE INDEX IF NOT EXISTS idx_tasks_snapshot_id ON tasks(snapshot_id);
+
+-- Foreign worlds: registry of discovered cross-world endpoints
+CREATE TABLE IF NOT EXISTS foreign_worlds (
+    id                  TEXT    PRIMARY KEY,
+    name                TEXT    NOT NULL,
+    endpoint            TEXT    NOT NULL,
+    diplomatic_status   TEXT    NOT NULL DEFAULT 'neutral',
+    relation_score      INTEGER NOT NULL DEFAULT 0,
+    online              INTEGER NOT NULL DEFAULT 1,
+    discovered_tick     INTEGER NOT NULL DEFAULT 0,
+    last_seen_tick      INTEGER NOT NULL DEFAULT 0
+);
+
+-- Cross-world treaties: diplomatic agreements with foreign worlds
+CREATE TABLE IF NOT EXISTS cross_world_treaties (
+    id                  TEXT    PRIMARY KEY,
+    foreign_world_id    TEXT    NOT NULL REFERENCES foreign_worlds(id) ON DELETE CASCADE,
+    treaty_type         TEXT    NOT NULL,
+    status              TEXT    NOT NULL DEFAULT 'proposed',
+    proposed_tick       INTEGER NOT NULL DEFAULT 0,
+    accepted_tick       INTEGER,
+    ended_tick          INTEGER,
+    duration_ticks      INTEGER,
+    terms               TEXT    NOT NULL DEFAULT ''
+);
+
+CREATE INDEX IF NOT EXISTS idx_cross_world_treaties_world ON cross_world_treaties(foreign_world_id);
+CREATE INDEX IF NOT EXISTS idx_cross_world_treaties_status ON cross_world_treaties(status);

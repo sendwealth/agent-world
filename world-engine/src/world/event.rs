@@ -119,6 +119,23 @@ pub enum EventType {
     InvestmentPurchased,
     InvestmentSold,
     InvestmentDividend,
+    // Cross-world federation events
+    ForeignWorldDiscovered,
+    ForeignWorldDeregistered,
+    DiplomaticRelationsEstablished,
+    DiplomaticStatusChanged,
+    CrossWorldRelationChanged,
+    CrossWorldTreatyProposed,
+    CrossWorldTreatySigned,
+    CrossWorldTreatyRejected,
+    CrossWorldTreatyBroken,
+    CrossWorldTreatyExpired,
+    SanctionsImposed,
+    SanctionsLifted,
+    DiplomaticTiesSevered,
+    WarDeclared,
+    PeaceProposed,
+    PeaceEstablished,
 }
 
 /// Events emitted by the world engine.
@@ -243,6 +260,23 @@ pub enum WorldEvent {
     InvestmentPurchased { product_id: String, investor_id: String, shares: u64, total_amount: u64 },
     InvestmentSold { product_id: String, investor_id: String, shares: u64, total_amount: u64 },
     InvestmentDividend { dividend_id: String, product_id: String, target_id: String, total_profit: u64, recipient_count: usize },
+    // Cross-world federation events
+    ForeignWorldDiscovered { world_id: String, name: String, endpoint: String },
+    ForeignWorldDeregistered { world_id: String, name: String },
+    DiplomaticRelationsEstablished { world_id: String, old_status: super::super::a2a::federation::DiplomaticStatus, new_status: super::super::a2a::federation::DiplomaticStatus },
+    DiplomaticStatusChanged { world_id: String, old_status: super::super::a2a::federation::DiplomaticStatus, new_status: super::super::a2a::federation::DiplomaticStatus },
+    CrossWorldRelationChanged { world_id: String, old_score: i16, new_score: i16 },
+    CrossWorldTreatyProposed { treaty_id: String, world_id: String, treaty_type: String },
+    CrossWorldTreatySigned { treaty_id: String, world_id: String, treaty_type: String },
+    CrossWorldTreatyRejected { treaty_id: String, world_id: String, treaty_type: String },
+    CrossWorldTreatyBroken { treaty_id: String, world_id: String, treaty_type: String },
+    CrossWorldTreatyExpired { treaty_id: String, world_id: String, treaty_type: String },
+    SanctionsImposed { world_id: String, reason: String, old_status: super::super::a2a::federation::DiplomaticStatus, new_status: super::super::a2a::federation::DiplomaticStatus },
+    SanctionsLifted { world_id: String, old_status: super::super::a2a::federation::DiplomaticStatus, new_status: super::super::a2a::federation::DiplomaticStatus },
+    DiplomaticTiesSevered { world_id: String, old_status: super::super::a2a::federation::DiplomaticStatus, new_status: super::super::a2a::federation::DiplomaticStatus },
+    WarDeclared { world_id: String, old_status: super::super::a2a::federation::DiplomaticStatus },
+    PeaceProposed { world_id: String, treaty_id: String },
+    PeaceEstablished { world_id: String, treaty_id: String },
 }
 
 impl WorldEvent {
@@ -344,6 +378,22 @@ impl WorldEvent {
             WorldEvent::InvestmentPurchased { .. } => EventType::InvestmentPurchased,
             WorldEvent::InvestmentSold { .. } => EventType::InvestmentSold,
             WorldEvent::InvestmentDividend { .. } => EventType::InvestmentDividend,
+            WorldEvent::ForeignWorldDiscovered { .. } => EventType::ForeignWorldDiscovered,
+            WorldEvent::ForeignWorldDeregistered { .. } => EventType::ForeignWorldDeregistered,
+            WorldEvent::DiplomaticRelationsEstablished { .. } => EventType::DiplomaticRelationsEstablished,
+            WorldEvent::DiplomaticStatusChanged { .. } => EventType::DiplomaticStatusChanged,
+            WorldEvent::CrossWorldRelationChanged { .. } => EventType::CrossWorldRelationChanged,
+            WorldEvent::CrossWorldTreatyProposed { .. } => EventType::CrossWorldTreatyProposed,
+            WorldEvent::CrossWorldTreatySigned { .. } => EventType::CrossWorldTreatySigned,
+            WorldEvent::CrossWorldTreatyRejected { .. } => EventType::CrossWorldTreatyRejected,
+            WorldEvent::CrossWorldTreatyBroken { .. } => EventType::CrossWorldTreatyBroken,
+            WorldEvent::CrossWorldTreatyExpired { .. } => EventType::CrossWorldTreatyExpired,
+            WorldEvent::SanctionsImposed { .. } => EventType::SanctionsImposed,
+            WorldEvent::SanctionsLifted { .. } => EventType::SanctionsLifted,
+            WorldEvent::DiplomaticTiesSevered { .. } => EventType::DiplomaticTiesSevered,
+            WorldEvent::WarDeclared { .. } => EventType::WarDeclared,
+            WorldEvent::PeaceProposed { .. } => EventType::PeaceProposed,
+            WorldEvent::PeaceEstablished { .. } => EventType::PeaceEstablished,
         }
     }
 
@@ -445,6 +495,22 @@ impl WorldEvent {
             WorldEvent::InvestmentPurchased { investor_id, .. } => Some(investor_id),
             WorldEvent::InvestmentSold { investor_id, .. } => Some(investor_id),
             WorldEvent::InvestmentDividend { .. } => None,
+            WorldEvent::ForeignWorldDiscovered { .. } => None,
+            WorldEvent::ForeignWorldDeregistered { .. } => None,
+            WorldEvent::DiplomaticRelationsEstablished { .. } => None,
+            WorldEvent::DiplomaticStatusChanged { .. } => None,
+            WorldEvent::CrossWorldRelationChanged { .. } => None,
+            WorldEvent::CrossWorldTreatyProposed { .. } => None,
+            WorldEvent::CrossWorldTreatySigned { .. } => None,
+            WorldEvent::CrossWorldTreatyRejected { .. } => None,
+            WorldEvent::CrossWorldTreatyBroken { .. } => None,
+            WorldEvent::CrossWorldTreatyExpired { .. } => None,
+            WorldEvent::SanctionsImposed { .. } => None,
+            WorldEvent::SanctionsLifted { .. } => None,
+            WorldEvent::DiplomaticTiesSevered { .. } => None,
+            WorldEvent::WarDeclared { .. } => None,
+            WorldEvent::PeaceProposed { .. } => None,
+            WorldEvent::PeaceEstablished { .. } => None,
         }
     }
 

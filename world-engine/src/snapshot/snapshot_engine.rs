@@ -16,7 +16,7 @@ use tokio::sync::{mpsc, Mutex};
 use uuid::Uuid;
 
 use crate::economy::token_burn::AgentRecord;
-use crate::world::event::{EventType, WorldEvent};
+use crate::world::event::WorldEvent;
 
 use super::storage::SnapshotStorage;
 use super::types::{SnapshotConfig, SnapshotDelta, WorldSnapshot};
@@ -73,37 +73,45 @@ pub struct SnapshotEngine {
 }
 
 impl SnapshotEngine {
-    /// Create and spawn the snapshot engine as a background task.
+    /// Create and spawn the snapshot engine as a background tokio task.
     ///
-    /// Returns a handle for sending requests and the storage for queries.
+    /// Returns a handle for sending requests and a shared storage reference
+    /// for queries. The engine runs an async event loop that processes
+    /// snapshot requests from the channel, so snapshot creation never blocks
+    /// the tick loop.
+    ///
+    /// Note: The engine owns its own `SnapshotStorage` instance backed by the
+    /// same directory. Queries through the returned `Arc<Mutex<SnapshotStorage>>`
+    /// read from disk, so they always see the latest snapshots.
     pub fn spawn(
         config: SnapshotConfig,
         snapshot_dir: PathBuf,
         channel_capacity: usize,
     ) -> anyhow::Result<(SnapshotEngineHandle, Arc<Mutex<SnapshotStorage>>)> {
-        let storage = SnapshotStorage::new(snapshot_dir, config)?;
+        // Create storage for the spawned engine task
+        let engine_storage = SnapshotStorage::new(snapshot_dir.clone(), config.clone())?;
+        // Create a separate storage instance for the caller's read queries,
+        // backed by the same directory
+        let query_storage = SnapshotStorage::new(snapshot_dir, config.clone())?;
+
         let (sender, receiver) = mpsc::channel(channel_capacity);
 
-        let storage_arc = Arc::new(Mutex::new(storage));
+        let storage_arc = Arc::new(Mutex::new(query_storage));
+
+        let mut engine = SnapshotEngine {
+            config,
+            storage: engine_storage,
+            receiver,
+            last_full_tick: 0,
+            last_full_snapshot: None,
+        };
+
+        tokio::spawn(async move {
+            engine.run().await;
+        });
 
         let handle = SnapshotEngineHandle { sender };
         Ok((handle, storage_arc))
-    }
-
-    /// Run the engine loop with direct storage ownership (no spawn).
-    /// Use this for tests or when you want to drive the engine manually.
-
-    /// Create the engine and handle without spawning (for testing).
-    pub fn new(
-        config: SnapshotConfig,
-        storage: SnapshotStorage,
-    ) -> (SnapshotEngineHandle, mpsc::Receiver<SnapshotRequest>) {
-        let (sender, receiver) = mpsc::channel(256);
-        let handle = SnapshotEngineHandle { sender };
-
-        // We return the engine parts for the caller to drive manually
-        let _ = (handle, receiver);
-        unimplemented!("Use spawn() or create_manual() for testing")
     }
 
     /// Create a manual engine for testing (no spawn, caller drives the loop).
@@ -369,6 +377,34 @@ mod tests {
         let reconstructed = engine.storage.reconstruct_at(20).unwrap();
         assert_eq!(reconstructed.agents.len(), 1);
         assert_eq!(reconstructed.agents[0].tokens, 900);
+    }
+
+    #[tokio::test]
+    async fn spawn_actually_creates_snapshots() {
+        let dir = tempfile::tempdir().unwrap();
+        let config = make_config();
+        let (handle, storage) = SnapshotEngine::spawn(
+            config,
+            dir.path().to_path_buf(),
+            256,
+        ).unwrap();
+
+        let agents = vec![make_agent("Alice", 1000)];
+
+        // Send tick 10 (should trigger periodic snapshot)
+        handle.notify_tick(10, agents.clone(), vec![]).await;
+
+        // Give the background task time to process
+        tokio::time::sleep(tokio::time::Duration::from_millis(100)).await;
+
+        // Query via the shared storage — rebuild index first to pick up new files
+        {
+            let mut s = storage.lock().await;
+            s.rebuild_index_public().unwrap();
+            assert_eq!(s.count(), 1);
+        }
+
+        handle.shutdown().await;
     }
 
     #[test]

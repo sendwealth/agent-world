@@ -3,7 +3,7 @@
 //! Stores snapshots on disk using zstd-compressed JSON. Supports:
 //! - Full snapshots (complete world state)
 //! - Incremental deltas (only changes from previous snapshot)
-//! - Automatic pruning of old snapshots
+//! - Automatic pruning of old snapshots (group-based to protect delta chains)
 //! - Compression ratio tracking
 
 use std::collections::HashMap;
@@ -51,14 +51,12 @@ impl SnapshotStorage {
         Ok(storage)
     }
 
-    /// Create an in-memory storage for testing.
-    pub fn new_in_memory(config: SnapshotConfig) -> Self {
-        let dir = std::env::temp_dir().join(format!("snapshot_test_{}", Uuid::new_v4()));
-        Self {
-            directory: dir,
-            config,
-            index: HashMap::new(),
-        }
+    /// Rebuild the in-memory index from files on disk.
+    ///
+    /// Public so that external code (e.g., a query handle) can refresh its
+    /// view of the directory after the engine task has written new snapshots.
+    pub fn rebuild_index_public(&mut self) -> Result<()> {
+        self.rebuild_index()
     }
 
     /// Rebuild the in-memory index from files on disk.
@@ -75,9 +73,13 @@ impl SnapshotStorage {
             }
 
             // Parse filename: tick_N_full.snap or tick_N_delta.snap
+            // Format: "tick_<N>_<kind>.snap"
             let filename = path.file_stem().and_then(|f| f.to_str()).unwrap_or("");
-            let (tick_str, kind_str) = match filename.split_once('_') {
-                Some((t, k)) => (t, k),
+            let (tick_str, kind_str) = match filename.strip_prefix("tick_") {
+                Some(rest) => match rest.split_once('_') {
+                    Some((t, k)) => (t, k),
+                    None => continue,
+                },
                 None => continue,
             };
 
@@ -134,6 +136,14 @@ impl SnapshotStorage {
 
         let filename = format!("tick_{}_full.snap", snapshot.tick);
         let path = self.directory.join(&filename);
+
+        // If there's already a delta at this tick, remove it — full takes precedence
+        if let Some(existing) = self.index.get(&snapshot.tick) {
+            if existing.kind == SnapshotKind::Delta {
+                let _ = fs::remove_file(&existing.file_path);
+            }
+        }
+
         let record_json = serde_json::to_vec(&record)
             .context("Failed to serialize snapshot record")?;
         fs::write(&path, &record_json)
@@ -155,7 +165,21 @@ impl SnapshotStorage {
     }
 
     /// Store an incremental delta.
+    ///
+    /// If a full snapshot already exists at this tick, the delta is NOT saved —
+    /// the full snapshot is preserved to maintain delta chain integrity.
     pub fn save_delta(&mut self, delta: &SnapshotDelta) -> Result<SnapshotRecord> {
+        // P0-2 fix: Never overwrite or delete an existing full snapshot.
+        // A full snapshot at the same tick is strictly better than a delta.
+        if let Some(existing) = self.index.get(&delta.tick) {
+            if existing.kind == SnapshotKind::Full {
+                // Full snapshot already exists at this tick — skip delta,
+                // return the existing record so the caller doesn't error.
+                let record = self.load_record_from_disk(&existing.file_path)?;
+                return Ok(record);
+            }
+        }
+
         let json = serde_json::to_vec(delta)
             .context("Failed to serialize snapshot delta")?;
         let uncompressed_size = json.len();
@@ -181,13 +205,6 @@ impl SnapshotStorage {
             .context("Failed to serialize delta record")?;
         fs::write(&path, &record_json)
             .with_context(|| format!("Failed to write delta to {:?}", path))?;
-
-        // Remove any existing full snapshot at this tick (delta takes precedence)
-        if let Some(existing) = self.index.get(&delta.tick) {
-            if existing.kind == SnapshotKind::Full {
-                let _ = fs::remove_file(&existing.file_path);
-            }
-        }
 
         self.index.insert(delta.tick, SnapshotIndexEntry {
             tick: delta.tick,
@@ -304,37 +321,70 @@ impl SnapshotStorage {
     }
 
     /// Prune old snapshots if we exceed max_snapshots.
+    ///
+    /// Pruning operates on **groups**: a full snapshot plus all its subsequent
+    /// deltas (up to the next full snapshot) form an indivisible group. We
+    /// only prune entire groups, starting from the oldest. This guarantees
+    /// that any remaining delta can always be reconstructed from its base
+    /// full snapshot.
     fn prune_if_needed(&mut self) -> Result<()> {
         if self.config.max_snapshots == 0 {
             return Ok(());
         }
 
-        let mut ticks = self.list_ticks();
+        let ticks = self.list_ticks();
         if ticks.len() <= self.config.max_snapshots {
             return Ok(());
         }
 
-        // Always keep at least one full snapshot
-        let full_ticks: Vec<u64> = self.index.iter()
-            .filter(|(_, e)| e.kind == SnapshotKind::Full)
-            .map(|(t, _)| *t)
-            .collect();
+        // Build groups: each group starts with a full snapshot and includes
+        // all subsequent deltas until the next full snapshot.
+        // Groups: [(full_tick, [tick1, tick2, ...]), ...]
+        let mut groups: Vec<(u64, Vec<u64>)> = Vec::new();
+        let mut current_group: Option<(u64, Vec<u64>)> = None;
 
-        // Remove oldest entries, but never remove the latest full snapshot
-        let to_remove = ticks.len() - self.config.max_snapshots;
-        let mut removed = 0;
+        for tick in &ticks {
+            if let Some(entry) = self.index.get(tick) {
+                if entry.kind == SnapshotKind::Full {
+                    // Start a new group
+                    if let Some(g) = current_group.take() {
+                        groups.push(g);
+                    }
+                    current_group = Some((*tick, vec![*tick]));
+                } else {
+                    // Delta — append to current group
+                    if let Some((base, ref mut members)) = current_group {
+                        members.push(*tick);
+                    }
+                    // If no current group, this is an orphan delta — skip it
+                    // (shouldn't happen with correct usage)
+                }
+            }
+        }
+        if let Some(g) = current_group.take() {
+            groups.push(g);
+        }
 
-        for tick in ticks {
-            if removed >= to_remove {
+        // We must keep at least the latest group
+        if groups.len() <= 1 {
+            return Ok(());
+        }
+
+        // Prune oldest groups until we're within budget
+        let mut total_count = ticks.len();
+        let groups_to_remove = groups.len() - 1; // Keep at least the last group
+
+        for i in 0..groups_to_remove {
+            if total_count <= self.config.max_snapshots {
                 break;
             }
-            // Don't remove the latest full snapshot
-            if full_ticks.last() == Some(&tick) {
-                continue;
-            }
-            if let Some(entry) = self.index.remove(&tick) {
-                let _ = fs::remove_file(&entry.file_path);
-                removed += 1;
+
+            let (_, group_ticks) = &groups[i];
+            for tick in group_ticks {
+                if let Some(entry) = self.index.remove(tick) {
+                    let _ = fs::remove_file(&entry.file_path);
+                    total_count -= 1;
+                }
             }
         }
 
@@ -491,7 +541,43 @@ mod tests {
     }
 
     #[test]
-    fn storage_prune_old_snapshots() {
+    fn storage_prune_old_snapshots_group_based() {
+        let dir = tempfile::tempdir().unwrap();
+        let config = SnapshotConfig {
+            max_snapshots: 4,
+            ..make_config()
+        };
+        let mut storage = SnapshotStorage::new(dir.path().to_path_buf(), config).unwrap();
+
+        let agents = vec![make_agent("Alice", 1000)];
+
+        // Group 1: full at tick 1, deltas at tick 2, 3
+        let snap1 = WorldSnapshot::from_world_state(1, &agents);
+        storage.save_full(&snap1).unwrap();
+        let delta2 = SnapshotDelta::diff(&snap1, 2, &agents);
+        storage.save_delta(&delta2).unwrap();
+        let delta3 = SnapshotDelta::diff(&snap1, 3, &agents);
+        storage.save_delta(&delta3).unwrap();
+
+        // Group 2: full at tick 10
+        let snap10 = WorldSnapshot::from_world_state(10, &agents);
+        storage.save_full(&snap10).unwrap();
+
+        assert_eq!(storage.count(), 4); // 3 + 1
+
+        // Adding tick 11 should trigger pruning of group 1
+        let delta11 = SnapshotDelta::diff(&snap10, 11, &agents);
+        storage.save_delta(&delta11).unwrap();
+
+        // Group 1 (ticks 1, 2, 3) should be pruned, leaving group 2 (ticks 10, 11)
+        assert_eq!(storage.count(), 2);
+        let ticks = storage.list_ticks();
+        assert!(ticks.contains(&10), "Latest full snapshot should be kept");
+        assert!(ticks.contains(&11), "Latest delta should be kept");
+    }
+
+    #[test]
+    fn storage_prune_keeps_at_least_one_group() {
         let dir = tempfile::tempdir().unwrap();
         let config = SnapshotConfig {
             max_snapshots: 2,
@@ -505,8 +591,48 @@ mod tests {
             storage.save_full(&snapshot).unwrap();
         }
 
+        // With max_snapshots=2, the oldest full (tick 1) group should be pruned
         assert_eq!(storage.count(), 2);
         let ticks = storage.list_ticks();
         assert!(ticks.contains(&3), "Latest full snapshot should be kept");
+    }
+
+    #[test]
+    fn save_delta_preserves_existing_full() {
+        // P0-2 regression test: saving a delta at a tick that already has a
+        // full snapshot must NOT delete the full snapshot.
+        let dir = tempfile::tempdir().unwrap();
+        let config = make_config();
+        let mut storage = SnapshotStorage::new(dir.path().to_path_buf(), config).unwrap();
+
+        let agents = vec![make_agent("Alice", 1000)];
+        let snapshot = WorldSnapshot::from_world_state(1, &agents);
+        storage.save_full(&snapshot).unwrap();
+
+        // Try to save a delta at the same tick
+        let delta = SnapshotDelta::diff(&snapshot, 1, &agents);
+        storage.save_delta(&delta).unwrap();
+
+        // The full snapshot should still be there
+        let loaded = storage.load_full_at(1).unwrap();
+        assert_eq!(loaded.tick, 1);
+        assert_eq!(loaded.agents.len(), 1);
+    }
+
+    #[test]
+    fn filename_parsing() {
+        // Verify the fixed filename parser handles "tick_N_full.snap" correctly
+        let dir = tempfile::tempdir().unwrap();
+        let config = make_config();
+        let mut storage = SnapshotStorage::new(dir.path().to_path_buf(), config).unwrap();
+
+        let agents = vec![make_agent("Alice", 1000)];
+        let snapshot = WorldSnapshot::from_world_state(42, &agents);
+        storage.save_full(&snapshot).unwrap();
+
+        // Rebuild index from disk to verify filename parsing works
+        storage.rebuild_index_public().unwrap();
+        assert_eq!(storage.count(), 1);
+        assert!(storage.load_full_at(42).is_ok());
     }
 }

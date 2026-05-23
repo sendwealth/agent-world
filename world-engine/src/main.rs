@@ -31,6 +31,7 @@ use agent_world_engine::evolution::{EvolutionSubsystem, subsystem::EvolutionSubs
 use agent_world_engine::evolution::mutation::OffspringMutationConfig;
 use agent_world_engine::persistence::{SerializableWorldState, SqlitePersistence, StatePersistence};
 use agent_world_engine::world::{Scheduler, WorldState};
+use agent_world_engine::federation::{MigrationManager, MigrationPolicy, WorldRegistry};
 
 #[tokio::main]
 async fn main() {
@@ -464,6 +465,28 @@ async fn main() {
     // ── Initialize HTTP/SSE Server ──────────────────────────
     let (tick_tx, tick_rx) = watch::channel(0u64);
     let governance_metrics = agent_world_engine::organization::GovernanceMetricsCollector::new(&event_bus);
+
+    // ── Initialize Federation Subsystem ─────────────────────
+    let migration_policy = MigrationPolicy {
+        enabled: genesis_config.migration.enabled,
+        daily_quota: genesis_config.migration.daily_quota,
+        weekly_quota: genesis_config.migration.weekly_quota,
+        min_reputation: genesis_config.migration.min_reputation,
+        token_cost: genesis_config.migration.token_cost,
+        resource_tax_rate: genesis_config.migration.resource_tax_rate,
+        require_skill_certification: genesis_config.migration.require_skill_certification,
+        blocked_skills: genesis_config.migration.blocked_skills.clone(),
+        cooldown_ticks: genesis_config.migration.cooldown_ticks,
+    };
+    let federation_registry = Arc::new(Mutex::new(
+        WorldRegistry::new(event_bus.clone())
+            .with_heartbeat_timeout(genesis_config.federation.heartbeat_timeout_secs),
+    ));
+    let migration_manager = Arc::new(Mutex::new(
+        MigrationManager::new(migration_policy, event_bus.clone()),
+    ));
+    println!("   Federation: WorldRegistry + MigrationManager initialized");
+
     let app_state = AppState {
         board: task_board,
         wal: wal_writer.clone(),
@@ -483,8 +506,8 @@ async fn main() {
         external_agents: Arc::new(Mutex::new(std::collections::HashMap::new())),
         governance_metrics: Some(Arc::new(Mutex::new(governance_metrics))),
         building_manager: Arc::new(Mutex::new(agent_world_engine::world::map::building::BuildingManager::new())),
-        federation_registry: None,
-        migration_manager: None,
+        federation_registry: Some(federation_registry),
+        migration_manager: Some(migration_manager),
     };
     let app = api::build_full_router(app_state);
 

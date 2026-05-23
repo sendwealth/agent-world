@@ -26,6 +26,27 @@ pub enum DiplomaticStatus {
     War,
 }
 
+impl DiplomaticStatus {
+    /// Diplomatic rank for upgrade comparisons.
+    /// Neutral < Peace < TradeAgreement < Alliance.
+    /// ColdWar and War are outside the normal upgrade path.
+    fn diplomatic_rank(&self) -> u8 {
+        match self {
+            DiplomaticStatus::Neutral => 0,
+            DiplomaticStatus::Peace => 1,
+            DiplomaticStatus::TradeAgreement => 2,
+            DiplomaticStatus::Alliance => 3,
+            DiplomaticStatus::ColdWar => 0, // ColdWar is not higher than Peace
+            DiplomaticStatus::War => 0,     // War is not higher than Peace
+        }
+    }
+
+    /// Whether this status is in the normal diplomatic upgrade path.
+    fn is_upgradeable(&self) -> bool {
+        matches!(self, DiplomaticStatus::Neutral | DiplomaticStatus::Peace | DiplomaticStatus::TradeAgreement | DiplomaticStatus::Alliance)
+    }
+}
+
 impl std::fmt::Display for DiplomaticStatus {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
@@ -206,6 +227,8 @@ pub struct FederationEngine {
     pub sanctions: HashMap<String, String>,
     /// Pending peace proposals (world_id -> treaty_id).
     pub peace_proposals: HashMap<String, String>,
+    /// Reverse diplomatic status: how each foreign world views us.
+    pub reverse_diplomatic_status: HashMap<String, DiplomaticStatus>,
     /// Event bus for emitting events.
     event_bus: Option<Arc<EventBus>>,
     /// Monotonic counter for treaty IDs.
@@ -220,6 +243,7 @@ impl FederationEngine {
             treaties: HashMap::new(),
             sanctions: HashMap::new(),
             peace_proposals: HashMap::new(),
+            reverse_diplomatic_status: HashMap::new(),
             event_bus: None,
             next_treaty_id: 1,
         }
@@ -232,6 +256,7 @@ impl FederationEngine {
             treaties: HashMap::new(),
             sanctions: HashMap::new(),
             peace_proposals: HashMap::new(),
+            reverse_diplomatic_status: HashMap::new(),
             event_bus: Some(Arc::new(event_bus)),
             next_treaty_id: 1,
         }
@@ -244,6 +269,7 @@ impl FederationEngine {
             treaties: HashMap::new(),
             sanctions: HashMap::new(),
             peace_proposals: HashMap::new(),
+            reverse_diplomatic_status: HashMap::new(),
             event_bus: Some(event_bus),
             next_treaty_id: 1,
         }
@@ -300,6 +326,7 @@ impl FederationEngine {
         self.treaties.retain(|_, t| t.foreign_world_id != world_id);
         self.sanctions.remove(world_id);
         self.peace_proposals.remove(world_id);
+        self.reverse_diplomatic_status.remove(world_id);
 
         self.emit(WorldEvent::ForeignWorldDeregistered {
             world_id: world_id.to_string(),
@@ -420,11 +447,11 @@ impl FederationEngine {
             });
         }
 
-        // Check for existing active treaty of same type
+        // Check for existing pending or active treaty of same type
         let has_existing = self.treaties.values().any(|t| {
             t.foreign_world_id == world_id
                 && t.treaty_type == treaty_type
-                && t.status == CrossWorldTreatyStatus::Active
+                && (t.status == CrossWorldTreatyStatus::Active || t.status == CrossWorldTreatyStatus::Proposed)
         });
         if has_existing {
             return Err(FederationError::TreatyAlreadyExists {
@@ -483,7 +510,7 @@ impl FederationEngine {
             CrossWorldTreatyType::TradePact => DiplomaticStatus::TradeAgreement,
             CrossWorldTreatyType::MilitaryAlliance => DiplomaticStatus::Alliance,
             CrossWorldTreatyType::ResearchExchange => {
-                if current_status as u8 >= DiplomaticStatus::Peace as u8 { current_status } else { DiplomaticStatus::Peace }
+                if current_status.diplomatic_rank() >= DiplomaticStatus::Peace.diplomatic_rank() && current_status.is_upgradeable() { current_status } else { DiplomaticStatus::Peace }
             }
             CrossWorldTreatyType::CulturalExchange => DiplomaticStatus::Peace,
         };
@@ -498,14 +525,14 @@ impl FederationEngine {
             let old_status = world.diplomatic_status;
             world.relation_score = (world.relation_score + 10).clamp(-100, 100);
             // Only upgrade, never downgrade via treaty acceptance
-            if new_status as u8 > old_status as u8 {
+            if new_status.diplomatic_rank() > old_status.diplomatic_rank() {
                 world.diplomatic_status = new_status;
             }
         }
 
         // Emit events after mutable borrows are done
         let old_status = current_status;
-        if new_status as u8 > old_status as u8 {
+        if new_status.diplomatic_rank() > old_status.diplomatic_rank() {
             self.emit(WorldEvent::DiplomaticStatusChanged {
                 world_id: world_id.clone(),
                 old_status,
@@ -720,6 +747,8 @@ impl FederationEngine {
     }
 
     /// Declare war on a foreign world.
+    /// Updates both the local world's view (foreign_worlds) and the reverse view
+    /// (how the foreign world sees us).
     pub fn declare_war(&mut self, world_id: &str, tick: u64) -> Result<(), FederationError> {
         let world = self.foreign_worlds.get_mut(world_id)
             .ok_or_else(|| FederationError::WorldNotFound(world_id.to_string()))?;
@@ -735,6 +764,9 @@ impl FederationEngine {
         let old_status = world.diplomatic_status;
         world.diplomatic_status = DiplomaticStatus::War;
         world.relation_score = -100;
+
+        // Bidirectional update: mark how the foreign world views us as War too
+        self.reverse_diplomatic_status.insert(world_id.to_string(), DiplomaticStatus::War);
 
         // Break ALL active treaties
         for treaty in self.treaties.values_mut() {
@@ -811,6 +843,9 @@ impl FederationEngine {
         let old_status = world.diplomatic_status;
         world.diplomatic_status = DiplomaticStatus::Peace;
         world.relation_score = 0;
+
+        // Bidirectional update: foreign world also sees us as at peace now
+        self.reverse_diplomatic_status.insert(world_id.to_string(), DiplomaticStatus::Peace);
 
         self.emit(WorldEvent::DiplomaticStatusChanged {
             world_id: world_id.to_string(),
@@ -1411,5 +1446,73 @@ mod tests {
         assert_eq!(summary.active_treaties, 2); // alliance + peace treaty
         assert_eq!(summary.allied_with, vec!["earth"]);
         assert!(summary.at_war_with.is_empty());
+    }
+
+    // ── P0 Fix Verification Tests ────────────────────────
+
+    /// P0-1: Verify DiplomaticStatus uses diplomatic_rank() not discriminant.
+    /// ColdWar(4) must NOT be considered higher than Alliance(3).
+    #[test]
+    fn test_diplomatic_rank_coldwar_not_above_alliance() {
+        // ColdWar discriminant is 4, Alliance is 3 — old `as u8` made ColdWar > Alliance (wrong).
+        // With diplomatic_rank(), Alliance(3) > ColdWar(0).
+        assert!(DiplomaticStatus::Alliance.diplomatic_rank() > DiplomaticStatus::ColdWar.diplomatic_rank());
+        assert!(DiplomaticStatus::Alliance.diplomatic_rank() > DiplomaticStatus::War.diplomatic_rank());
+        assert!(DiplomaticStatus::TradeAgreement.diplomatic_rank() > DiplomaticStatus::ColdWar.diplomatic_rank());
+    }
+
+    /// P0-1: Ensure accepting ResearchExchange when at Alliance does NOT downgrade.
+    #[test]
+    fn test_research_exchange_does_not_downgrade_from_alliance() {
+        let mut engine = make_engine();
+        register_world(&mut engine, "w1");
+        engine.establish_relations("w1", 10).unwrap();
+        engine.adjust_relation("w1", 50).unwrap();
+        // Get to Alliance status
+        let id = engine.propose_treaty("w1", CrossWorldTreatyType::MilitaryAlliance, 20, None, "ally".into()).unwrap();
+        engine.accept_treaty(&id, 25).unwrap();
+        assert_eq!(engine.get_world("w1").unwrap().diplomatic_status, DiplomaticStatus::Alliance);
+        // Accepting ResearchExchange should NOT downgrade from Alliance
+        let re_id = engine.propose_treaty("w1", CrossWorldTreatyType::ResearchExchange, 30, None, "research".into()).unwrap();
+        engine.accept_treaty(&re_id, 31).unwrap();
+        assert_eq!(engine.get_world("w1").unwrap().diplomatic_status, DiplomaticStatus::Alliance);
+    }
+
+    /// P0-2: Duplicate pending treaty should be rejected.
+    #[test]
+    fn test_duplicate_pending_treaty_fails() {
+        let mut engine = make_engine();
+        register_world(&mut engine, "w1");
+        engine.establish_relations("w1", 10).unwrap();
+        // First proposal succeeds
+        engine.propose_treaty("w1", CrossWorldTreatyType::TradePact, 20, None, "trade".into()).unwrap();
+        // Second proposal of same type while first is still Proposed should fail
+        let result = engine.propose_treaty("w1", CrossWorldTreatyType::TradePact, 25, None, "trade2".into());
+        assert!(matches!(result.unwrap_err(), FederationError::TreatyAlreadyExists { .. }));
+    }
+
+    /// P0-3: declare_war must update reverse diplomatic status bidirectionally.
+    #[test]
+    fn test_declare_war_updates_reverse_status() {
+        let mut engine = make_engine();
+        register_world(&mut engine, "w1");
+        engine.establish_relations("w1", 10).unwrap();
+        engine.declare_war("w1", 20).unwrap();
+        // Forward: our view of w1
+        assert_eq!(engine.get_world("w1").unwrap().diplomatic_status, DiplomaticStatus::War);
+        // Reverse: w1's view of us
+        assert_eq!(engine.reverse_diplomatic_status.get("w1"), Some(&DiplomaticStatus::War));
+    }
+
+    /// P0-3: accept_peace must also update reverse status.
+    #[test]
+    fn test_accept_peace_updates_reverse_status() {
+        let mut engine = make_engine();
+        register_world(&mut engine, "w1");
+        engine.declare_war("w1", 10).unwrap();
+        assert_eq!(engine.reverse_diplomatic_status.get("w1"), Some(&DiplomaticStatus::War));
+        engine.propose_peace("w1", 20).unwrap();
+        engine.accept_peace("w1", 25).unwrap();
+        assert_eq!(engine.reverse_diplomatic_status.get("w1"), Some(&DiplomaticStatus::Peace));
     }
 }

@@ -114,6 +114,11 @@ pub enum EventType {
     BuildingDemolished,
     BuildingMaintained,
     BuildingUpgraded,
+    // Investment events
+    InvestmentProductCreated,
+    InvestmentPurchased,
+    InvestmentSold,
+    InvestmentDividend,
 }
 
 /// Events emitted by the world engine.
@@ -233,6 +238,11 @@ pub enum WorldEvent {
     BuildingDemolished { building_id: String, owner_id: String },
     BuildingMaintained { building_id: String, health_restored: u32, new_health: u32 },
     BuildingUpgraded { building_id: String, new_level: u32 },
+    // Investment events
+    InvestmentProductCreated { product_id: String, target_id: String, total_shares: u64, price: u64 },
+    InvestmentPurchased { product_id: String, investor_id: String, shares: u64, total_amount: u64 },
+    InvestmentSold { product_id: String, investor_id: String, shares: u64, total_amount: u64 },
+    InvestmentDividend { dividend_id: String, product_id: String, target_id: String, total_profit: u64, recipient_count: usize },
 }
 
 impl WorldEvent {
@@ -330,6 +340,10 @@ impl WorldEvent {
             WorldEvent::BuildingDemolished { .. } => EventType::BuildingDemolished,
             WorldEvent::BuildingMaintained { .. } => EventType::BuildingMaintained,
             WorldEvent::BuildingUpgraded { .. } => EventType::BuildingUpgraded,
+            WorldEvent::InvestmentProductCreated { .. } => EventType::InvestmentProductCreated,
+            WorldEvent::InvestmentPurchased { .. } => EventType::InvestmentPurchased,
+            WorldEvent::InvestmentSold { .. } => EventType::InvestmentSold,
+            WorldEvent::InvestmentDividend { .. } => EventType::InvestmentDividend,
         }
     }
 
@@ -427,6 +441,10 @@ impl WorldEvent {
             WorldEvent::BuildingDemolished { owner_id, .. } => Some(owner_id),
             WorldEvent::BuildingMaintained { .. } => None,
             WorldEvent::BuildingUpgraded { .. } => None,
+            WorldEvent::InvestmentProductCreated { .. } => None,
+            WorldEvent::InvestmentPurchased { investor_id, .. } => Some(investor_id),
+            WorldEvent::InvestmentSold { investor_id, .. } => Some(investor_id),
+            WorldEvent::InvestmentDividend { .. } => None,
         }
     }
 

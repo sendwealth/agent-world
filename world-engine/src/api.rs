@@ -29,6 +29,13 @@ use crate::economy::stock_market::{
     StockMarket, StockListing, Order as StockOrder,
     OrderType, OrderKind, ListingStatus,
 };
+use crate::economy::investment::{
+    InvestmentSystem, InvestmentError,
+    CreateProductRequest, BuySharesRequest, SellSharesRequest,
+    CloseInvestmentRequest, DistributeReturnsRequest,
+    UpdatePerformanceRequest, FreezeProductRequest,
+    ListTransactionsQuery,
+};
 use crate::economy::task::{TaskBoard, Task};
 use crate::human::store::{
     HumanParticipationStore, SharedHumanStore,
@@ -59,6 +66,7 @@ pub type SharedGovernanceSystem = Arc<Mutex<GovernanceSystem>>;
 pub type SharedBankingSystem = Arc<Mutex<BankingSystem>>;
 pub type SharedTraceStore = Arc<Mutex<crate::tracing::TraceStore>>;
 pub type SharedGovernanceMetricsCollector = Arc<Mutex<GovernanceMetricsCollector>>;
+pub type SharedInvestmentSystem = Arc<Mutex<InvestmentSystem>>;
 
 /// Agent record tracked by the world engine.
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -107,6 +115,7 @@ pub struct AppState {
     pub governance_metrics: Option<SharedGovernanceMetricsCollector>,
     pub building_manager: Arc<Mutex<BuildingManager>>,
     pub human_store: SharedHumanStore,
+    pub investment_system: Option<SharedInvestmentSystem>,
 
 }
 
@@ -151,6 +160,7 @@ pub fn create_router_with_wal(board: SharedTaskBoard, wal: SharedWAL) -> Router 
         governance_metrics: None,
             building_manager: Arc::new(Mutex::new(BuildingManager::new())),
             human_store: Arc::new(Mutex::new(HumanParticipationStore::new())),
+            investment_system: None,
     };
     build_full_router(state)
 }
@@ -182,6 +192,7 @@ pub fn create_router_with_wal_and_snapshots(board: SharedTaskBoard, wal: SharedW
         governance_metrics: None,
             building_manager: Arc::new(Mutex::new(BuildingManager::new())),
             human_store: Arc::new(Mutex::new(HumanParticipationStore::new())),
+            investment_system: None,
     };
     build_full_router(state)
 }
@@ -313,6 +324,20 @@ pub fn build_full_router(state: AppState) -> Router {
         .route("/api/v1/human/portfolio/invest", post(human_invest))
         .route("/api/v1/human/rankings", get(human_rankings))
         .route("/api/v1/human/interventions", get(human_list_interventions))
+        // Investment System routes
+        .route("/api/v1/investments/products", post(inv_create_product))
+        .route("/api/v1/investments/products", get(inv_list_products))
+        .route("/api/v1/investments/products/:id", get(inv_get_product))
+        .route("/api/v1/investments/buy", post(inv_buy_shares))
+        .route("/api/v1/investments/sell", post(inv_sell_shares))
+        .route("/api/v1/investments/portfolio/:investor_id", get(inv_get_portfolio))
+        .route("/api/v1/investments/leaderboard", get(inv_leaderboard))
+        .route("/api/v1/investments/products/:id/close", post(inv_close_investment))
+        .route("/api/v1/investments/products/:id/distribute-returns", post(inv_distribute_returns))
+        .route("/api/v1/investments/products/:id/performance", post(inv_update_performance))
+        .route("/api/v1/investments/products/:id/freeze", post(inv_freeze_product))
+        .route("/api/v1/investments/transactions", get(inv_list_transactions))
+        .route("/api/v1/investments/dividends", get(inv_list_dividends))
         .with_state(state)
 }
 
@@ -347,6 +372,7 @@ pub fn create_router_for_test(
         governance_metrics: None,
             building_manager: Arc::new(Mutex::new(BuildingManager::new())),
             human_store: Arc::new(Mutex::new(HumanParticipationStore::new())),
+            investment_system: None,
     };
     build_full_router(state)
 }
@@ -3975,6 +4001,7 @@ mod tests {
             governance_metrics: Some(Arc::new(Mutex::new(collector))),
             building_manager: Arc::new(Mutex::new(BuildingManager::new())),
             human_store: Arc::new(Mutex::new(HumanParticipationStore::new())),
+            investment_system: None,
         };
         (state, tmp)
     }
@@ -4260,6 +4287,7 @@ mod tests {
             governance_metrics: None,
             building_manager: Arc::new(Mutex::new(BuildingManager::new())),
             human_store: Arc::new(Mutex::new(HumanParticipationStore::new())),
+            investment_system: None,
         };
 
         let app = build_full_router(state);
@@ -4275,4 +4303,196 @@ mod tests {
 
         assert_eq!(response.status(), StatusCode::SERVICE_UNAVAILABLE);
     }
+}
+
+// ── Investment System API Handlers ────────────────────────
+
+fn inv_error_to_status(e: &InvestmentError) -> StatusCode {
+    match e {
+        InvestmentError::ProductNotFound(_)
+        | InvestmentError::PositionNotFound(_) => StatusCode::NOT_FOUND,
+        InvestmentError::Unauthorized(_) => StatusCode::FORBIDDEN,
+        InvestmentError::InvalidShareCount
+        | InvestmentError::InvalidPrice
+        | InvestmentError::InvalidTotalShares
+        | InvestmentError::InvalidPerformanceScore => StatusCode::BAD_REQUEST,
+        InvestmentError::DuplicateIdempotencyKey(_) => StatusCode::CONFLICT,
+        _ => StatusCode::UNPROCESSABLE_ENTITY,
+    }
+}
+
+async fn inv_create_product(
+    State(state): State<AppState>,
+    Json(req): Json<CreateProductRequest>,
+) -> impl IntoResponse {
+    let Some(ref inv) = state.investment_system else {
+        return (StatusCode::SERVICE_UNAVAILABLE, Json(serde_json::json!({"error": "investment system not available"})));
+    };
+    let mut sys = inv.lock().await;
+    match sys.create_product(req) {
+        Ok(product) => (StatusCode::CREATED, Json(serde_json::json!(product))),
+        Err(e) => (inv_error_to_status(&e), Json(serde_json::json!({"error": e.to_string()}))),
+    }
+}
+
+async fn inv_list_products(
+    State(state): State<AppState>,
+) -> impl IntoResponse {
+    let Some(ref inv) = state.investment_system else {
+        return (StatusCode::SERVICE_UNAVAILABLE, Json(serde_json::json!([])));
+    };
+    let sys = inv.lock().await;
+    (StatusCode::OK, Json(serde_json::json!(sys.list_products())))
+}
+
+async fn inv_get_product(
+    State(state): State<AppState>,
+    Path(id): Path<String>,
+) -> impl IntoResponse {
+    let Some(ref inv) = state.investment_system else {
+        return (StatusCode::SERVICE_UNAVAILABLE, Json(serde_json::json!({"error": "investment system not available"})));
+    };
+    let sys = inv.lock().await;
+    match sys.get_product(&id) {
+        Some(p) => (StatusCode::OK, Json(serde_json::json!(p))),
+        None => (StatusCode::NOT_FOUND, Json(serde_json::json!({"error": "product not found"}))),
+    }
+}
+
+async fn inv_buy_shares(
+    State(state): State<AppState>,
+    Json(req): Json<BuySharesRequest>,
+) -> impl IntoResponse {
+    let Some(ref inv) = state.investment_system else {
+        return (StatusCode::SERVICE_UNAVAILABLE, Json(serde_json::json!({"error": "investment system not available"})));
+    };
+    let mut sys = inv.lock().await;
+    match sys.buy_shares(req) {
+        Ok((pos, tx)) => (StatusCode::OK, Json(serde_json::json!({"position": pos, "transaction": tx}))),
+        Err(e) => (inv_error_to_status(&e), Json(serde_json::json!({"error": e.to_string()}))),
+    }
+}
+
+async fn inv_sell_shares(
+    State(state): State<AppState>,
+    Json(req): Json<SellSharesRequest>,
+) -> impl IntoResponse {
+    let Some(ref inv) = state.investment_system else {
+        return (StatusCode::SERVICE_UNAVAILABLE, Json(serde_json::json!({"error": "investment system not available"})));
+    };
+    let mut sys = inv.lock().await;
+    match sys.sell_shares(req) {
+        Ok((pos, tx)) => (StatusCode::OK, Json(serde_json::json!({"position": pos, "transaction": tx}))),
+        Err(e) => (inv_error_to_status(&e), Json(serde_json::json!({"error": e.to_string()}))),
+    }
+}
+
+async fn inv_get_portfolio(
+    State(state): State<AppState>,
+    Path(investor_id): Path<String>,
+) -> impl IntoResponse {
+    let Some(ref inv) = state.investment_system else {
+        return (StatusCode::SERVICE_UNAVAILABLE, Json(serde_json::json!([])));
+    };
+    let sys = inv.lock().await;
+    (StatusCode::OK, Json(serde_json::json!(sys.get_portfolio(&investor_id))))
+}
+
+async fn inv_leaderboard(
+    State(state): State<AppState>,
+) -> impl IntoResponse {
+    let Some(ref inv) = state.investment_system else {
+        return (StatusCode::SERVICE_UNAVAILABLE, Json(serde_json::json!([])));
+    };
+    let sys = inv.lock().await;
+    (StatusCode::OK, Json(serde_json::json!(sys.get_leaderboard())))
+}
+
+async fn inv_close_investment(
+    State(state): State<AppState>,
+    Path(id): Path<String>,
+    Json(req): Json<CloseInvestmentRequest>,
+) -> impl IntoResponse {
+    let Some(ref inv) = state.investment_system else {
+        return (StatusCode::SERVICE_UNAVAILABLE, Json(serde_json::json!({"error": "investment system not available"})));
+    };
+    let mut sys = inv.lock().await;
+    let mut req = req;
+    req.product_id = id;
+    match sys.close_investment(req) {
+        Ok(product) => (StatusCode::OK, Json(serde_json::json!(product))),
+        Err(e) => (inv_error_to_status(&e), Json(serde_json::json!({"error": e.to_string()}))),
+    }
+}
+
+async fn inv_distribute_returns(
+    State(state): State<AppState>,
+    Path(id): Path<String>,
+    Json(req): Json<DistributeReturnsRequest>,
+) -> impl IntoResponse {
+    let Some(ref inv) = state.investment_system else {
+        return (StatusCode::SERVICE_UNAVAILABLE, Json(serde_json::json!({"error": "investment system not available"})));
+    };
+    let mut sys = inv.lock().await;
+    let mut req = req;
+    req.product_id = id;
+    match sys.distribute_returns(req) {
+        Ok(dist) => (StatusCode::OK, Json(serde_json::json!(dist))),
+        Err(e) => (inv_error_to_status(&e), Json(serde_json::json!({"error": e.to_string()}))),
+    }
+}
+
+async fn inv_update_performance(
+    State(state): State<AppState>,
+    Path(id): Path<String>,
+    Json(req): Json<UpdatePerformanceRequest>,
+) -> impl IntoResponse {
+    let Some(ref inv) = state.investment_system else {
+        return (StatusCode::SERVICE_UNAVAILABLE, Json(serde_json::json!({"error": "investment system not available"})));
+    };
+    let mut sys = inv.lock().await;
+    match sys.update_performance(&id, req.performance_score) {
+        Ok(product) => (StatusCode::OK, Json(serde_json::json!(product))),
+        Err(e) => (inv_error_to_status(&e), Json(serde_json::json!({"error": e.to_string()}))),
+    }
+}
+
+async fn inv_freeze_product(
+    State(state): State<AppState>,
+    Path(id): Path<String>,
+    Json(req): Json<FreezeProductRequest>,
+) -> impl IntoResponse {
+    let Some(ref inv) = state.investment_system else {
+        return (StatusCode::SERVICE_UNAVAILABLE, Json(serde_json::json!({"error": "investment system not available"})));
+    };
+    let mut sys = inv.lock().await;
+    let mut req = req;
+    req.product_id = id;
+    match sys.freeze_product(req) {
+        Ok(product) => (StatusCode::OK, Json(serde_json::json!(product))),
+        Err(e) => (inv_error_to_status(&e), Json(serde_json::json!({"error": e.to_string()}))),
+    }
+}
+
+async fn inv_list_transactions(
+    State(state): State<AppState>,
+    Query(query): Query<ListTransactionsQuery>,
+) -> impl IntoResponse {
+    let Some(ref inv) = state.investment_system else {
+        return (StatusCode::SERVICE_UNAVAILABLE, Json(serde_json::json!([])));
+    };
+    let sys = inv.lock().await;
+    (StatusCode::OK, Json(serde_json::json!(sys.list_transactions(&query))))
+}
+
+async fn inv_list_dividends(
+    State(state): State<AppState>,
+    Query(query): Query<serde_json::Value>,
+) -> impl IntoResponse {
+    let product_id = query.get("product_id").and_then(|v| v.as_str()).map(|s| s.to_string());
+    let Some(ref inv) = state.investment_system else {
+        return (StatusCode::SERVICE_UNAVAILABLE, Json(serde_json::json!([])));
+    };
+    let sys = inv.lock().await;
+    (StatusCode::OK, Json(serde_json::json!(sys.list_dividends(product_id.as_deref()))))
 }

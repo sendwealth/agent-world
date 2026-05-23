@@ -1,5 +1,6 @@
 pub mod banking;
 pub mod escrow;
+pub mod investment;
 pub mod ledger;
 pub mod inheritance;
 pub mod marketplace;
@@ -20,6 +21,17 @@ pub use banking::{
 };
 pub use escrow::{EscrowManager, EscrowRecord, EscrowStatus};
 pub use inheritance::{InheritanceSystem, InheritanceConfig, Will, Beneficiary, InheritanceResult, ValueExperience};
+pub use investment::{
+    InvestmentSystem, InvestmentConfig, InvestmentError,
+    InvestmentProduct, InvestmentPosition, InvestmentTransaction,
+    InvestmentTxType, InvestmentStatus, InvestmentEntityType, PositionStatus,
+    DividendDistribution, DividendRecipient,
+    PortfolioEntry, LeaderboardEntry,
+    CreateProductRequest, BuySharesRequest, SellSharesRequest,
+    CloseInvestmentRequest, DistributeReturnsRequest,
+    UpdatePerformanceRequest, FreezeProductRequest,
+    ListTransactionsQuery,
+};
 pub use marketplace::{Marketplace, KnowledgeListing, KnowledgeCategory, ListingStatus};
 pub use mentorship::{MentorshipSystem, MentorshipConfig, MentorshipSession, MentorshipStatus};
 pub use reputation::{
@@ -32,7 +44,7 @@ pub use reward::{
 };
 pub use stock_market::{
     StockMarket, StockListing, ShareHolding, Order, Trade,
-    DividendRecord, DividendRecipient, OrderType, OrderKind,
+    DividendRecord, DividendRecipient as StockDividendRecipient, OrderType, OrderKind,
     OrderStatus, StockMarketError,
 };
 pub use task::{TaskBoard, Task, TaskStatus, TaskError};

@@ -11,6 +11,7 @@ use agent_world_engine::agentworld::a2a::v1::a2a_service_server::A2aServiceServe
 use agent_world_engine::api::{self, AppState};
 use agent_world_engine::config::{ConfigManager, GenesisConfig};
 use agent_world_engine::economy::banking::{BankingSystem, CentralBankConfig};
+use agent_world_engine::economy::investment::InvestmentSystem;
 use agent_world_engine::economy::marketplace::Marketplace;
 use agent_world_engine::economy::reputation::{ReputationConfig, ReputationSystem};
 use agent_world_engine::economy::stock_market::StockMarket;
@@ -433,6 +434,12 @@ async fn main() {
     )));
     println!("   BankingSystem: initialized");
 
+    // ── Initialize Investment System ───────────────────────
+    let investment_system = Arc::new(Mutex::new(InvestmentSystem::with_event_bus(
+        event_bus.as_ref().clone(),
+    )));
+    println!("   InvestmentSystem: initialized");
+
     // ── Initialize ConfigManager (hot-reload) ───────────────
     if std::path::Path::new(&genesis_path).exists() {
         match ConfigManager::new(&genesis_path, Some(event_bus.clone())) {
@@ -484,6 +491,7 @@ async fn main() {
         governance_metrics: Some(Arc::new(Mutex::new(governance_metrics))),
         building_manager: Arc::new(Mutex::new(agent_world_engine::world::map::building::BuildingManager::new())),
         human_store: Arc::new(Mutex::new(agent_world_engine::human::store::HumanParticipationStore::new())),
+        investment_system: Some(investment_system),
     };
     let app = api::build_full_router(app_state);
 

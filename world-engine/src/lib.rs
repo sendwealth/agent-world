@@ -4,6 +4,7 @@ pub mod config;
 pub mod economy;
 pub mod engine;
 pub mod evolution;
+pub mod federation;
 pub mod grpc_pool;
 pub mod lifecycle;
 pub mod organization;
@@ -19,6 +20,11 @@ pub mod agentworld {
     pub mod a2a {
         pub mod v1 {
             tonic::include_proto!("agentworld.a2a.v1");
+        }
+    }
+    pub mod federation {
+        pub mod v1 {
+            tonic::include_proto!("agentworld.federation.v1");
         }
     }
 }

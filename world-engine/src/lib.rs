@@ -5,6 +5,7 @@ pub mod economy;
 pub mod engine;
 pub mod evolution;
 pub mod grpc_pool;
+pub mod human;
 pub mod lifecycle;
 pub mod organization;
 pub mod persistence;

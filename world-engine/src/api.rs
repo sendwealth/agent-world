@@ -30,6 +30,12 @@ use crate::economy::stock_market::{
     OrderType, OrderKind, ListingStatus,
 };
 use crate::economy::task::{TaskBoard, Task};
+use crate::human::store::{
+    HumanParticipationStore, SharedHumanStore,
+    SendOracleRequest, CreateBountyRequest, ClaimBountyRequest,
+    CompleteBountyRequest, ClaimAgentRequest, InvestRequest,
+    ListBountiesQuery, ListOraclesQuery, InfluenceRankingsQuery,
+};
 use crate::organization::org::{OrganizationStore, OrgType};
 use crate::organization::charter::{Charter, GovernanceModel, ProfitSharing};
 use crate::organization::governance::GovernanceSystem;
@@ -100,6 +106,7 @@ pub struct AppState {
     pub external_agents: SharedExternalAgents,
     pub governance_metrics: Option<SharedGovernanceMetricsCollector>,
     pub building_manager: Arc<Mutex<BuildingManager>>,
+    pub human_store: SharedHumanStore,
 
 }
 
@@ -143,6 +150,7 @@ pub fn create_router_with_wal(board: SharedTaskBoard, wal: SharedWAL) -> Router 
         external_agents: Arc::new(Mutex::new(HashMap::new())),
         governance_metrics: None,
             building_manager: Arc::new(Mutex::new(BuildingManager::new())),
+            human_store: Arc::new(Mutex::new(HumanParticipationStore::new())),
     };
     build_full_router(state)
 }
@@ -173,6 +181,7 @@ pub fn create_router_with_wal_and_snapshots(board: SharedTaskBoard, wal: SharedW
         external_agents: Arc::new(Mutex::new(HashMap::new())),
         governance_metrics: None,
             building_manager: Arc::new(Mutex::new(BuildingManager::new())),
+            human_store: Arc::new(Mutex::new(HumanParticipationStore::new())),
     };
     build_full_router(state)
 }
@@ -287,6 +296,23 @@ pub fn build_full_router(state: AppState) -> Router {
         .route("/api/v1/governance/orgs/:org_id", get(governance_org_metrics))
         .route("/api/v1/governance/orgs/:org_id/timeline", get(governance_org_timeline))
         .route("/api/v1/governance/comparison", get(governance_comparison))
+        // Human Participation routes
+        .route("/api/v1/human/stats", get(human_stats))
+        .route("/api/v1/human/agents", get(human_list_claimed_agents))
+        .route("/api/v1/human/agents/claim", post(human_claim_agent))
+        .route("/api/v1/human/oracles", get(human_list_oracles))
+        .route("/api/v1/human/oracles", post(human_send_oracle))
+        .route("/api/v1/human/oracles/:id", get(human_get_oracle))
+        .route("/api/v1/human/bounties", get(human_list_bounties))
+        .route("/api/v1/human/bounties", post(human_create_bounty))
+        .route("/api/v1/human/bounties/:id", get(human_get_bounty))
+        .route("/api/v1/human/bounties/:id/claim", post(human_claim_bounty))
+        .route("/api/v1/human/bounties/:id/complete", post(human_complete_bounty))
+        .route("/api/v1/human/bounties/:id/cancel", post(human_cancel_bounty))
+        .route("/api/v1/human/portfolio/:human_id", get(human_get_portfolio))
+        .route("/api/v1/human/portfolio/invest", post(human_invest))
+        .route("/api/v1/human/rankings", get(human_rankings))
+        .route("/api/v1/human/interventions", get(human_list_interventions))
         .with_state(state)
 }
 
@@ -320,6 +346,7 @@ pub fn create_router_for_test(
         external_agents: Arc::new(Mutex::new(HashMap::new())),
         governance_metrics: None,
             building_manager: Arc::new(Mutex::new(BuildingManager::new())),
+            human_store: Arc::new(Mutex::new(HumanParticipationStore::new())),
     };
     build_full_router(state)
 }
@@ -3670,6 +3697,245 @@ async fn demolish_building(
     }
 }
 
+// ── Human Participation API Handlers ──────────────────────
+
+async fn human_stats(State(state): State<AppState>) -> impl IntoResponse {
+    let store = state.human_store.lock().await;
+    let tick = *state.tick_rx.borrow();
+    let mut store_mut = state.human_store.lock().await;
+    store_mut.set_tick(tick);
+    drop(store_mut);
+    let stats = store.get_stats();
+    Json(stats).into_response()
+}
+
+async fn human_list_claimed_agents(
+    State(state): State<AppState>,
+    Query(query): Query<HashMap<String, String>>,
+) -> impl IntoResponse {
+    let human_id = match query.get("human_id") {
+        Some(id) => id.clone(),
+        None => return (StatusCode::BAD_REQUEST, Json(ErrorResponse { error: "human_id query parameter required".into() })).into_response(),
+    };
+    let store = state.human_store.lock().await;
+    let agents: Vec<&crate::human::store::ClaimedAgent> = store.list_claimed_agents(&human_id);
+    Json(agents).into_response()
+}
+
+async fn human_claim_agent(
+    State(state): State<AppState>,
+    Json(body): Json<ClaimAgentRequest>,
+) -> impl IntoResponse {
+    // Find the agent in the world state
+    let agent = {
+        let agents = state.agents.lock().await;
+        match agents.iter().find(|a| a.id == body.agent_id) {
+            Some(a) => (a.name.clone(), a.tokens, a.money, a.ticks_survived),
+            None => return (StatusCode::NOT_FOUND, Json(ErrorResponse { error: "Agent not found".into() })).into_response(),
+        }
+    };
+
+    let tick = *state.tick_rx.borrow();
+    let mut store = state.human_store.lock().await;
+    store.set_tick(tick);
+    let skills_map: HashMap<String, u32> = HashMap::new();
+    let claimed = store.claim_agent(
+        &body.human_id,
+        &body.agent_id,
+        &agent.0,
+        agent.1,
+        agent.2,
+        0.0,
+        skills_map,
+        agent.3,
+    );
+    (StatusCode::CREATED, Json(claimed)).into_response()
+}
+
+async fn human_list_oracles(
+    State(state): State<AppState>,
+    Query(query): Query<ListOraclesQuery>,
+) -> impl IntoResponse {
+    let store = state.human_store.lock().await;
+    let oracles: Vec<&crate::human::store::Oracle> = store.list_oracles(&query);
+    Json(oracles).into_response()
+}
+
+async fn human_send_oracle(
+    State(state): State<AppState>,
+    Json(body): Json<SendOracleRequest>,
+) -> impl IntoResponse {
+    if body.content.trim().is_empty() {
+        return (StatusCode::BAD_REQUEST, Json(ErrorResponse { error: "Oracle content cannot be empty".into() })).into_response();
+    }
+    if body.content.len() > 500 {
+        return (StatusCode::BAD_REQUEST, Json(ErrorResponse { error: "Oracle content exceeds 500 characters".into() })).into_response();
+    }
+    if body.target_agent_id.trim().is_empty() {
+        return (StatusCode::BAD_REQUEST, Json(ErrorResponse { error: "target_agent_id is required".into() })).into_response();
+    }
+
+    let tick = *state.tick_rx.borrow();
+    let mut store = state.human_store.lock().await;
+    store.set_tick(tick);
+    let oracle = store.send_oracle(body);
+    (StatusCode::CREATED, Json(oracle)).into_response()
+}
+
+async fn human_get_oracle(
+    State(state): State<AppState>,
+    Path(id): Path<String>,
+) -> impl IntoResponse {
+    let store = state.human_store.lock().await;
+    match store.get_oracle(&id) {
+        Some(oracle) => Json(oracle).into_response(),
+        None => (StatusCode::NOT_FOUND, Json(ErrorResponse { error: "Oracle not found".into() })).into_response(),
+    }
+}
+
+async fn human_list_bounties(
+    State(state): State<AppState>,
+    Query(query): Query<ListBountiesQuery>,
+) -> impl IntoResponse {
+    let store = state.human_store.lock().await;
+    let bounties: Vec<&crate::human::store::Bounty> = store.list_bounties(&query);
+    Json(bounties).into_response()
+}
+
+async fn human_create_bounty(
+    State(state): State<AppState>,
+    Json(body): Json<CreateBountyRequest>,
+) -> impl IntoResponse {
+    if body.title.trim().is_empty() {
+        return (StatusCode::BAD_REQUEST, Json(ErrorResponse { error: "Bounty title cannot be empty".into() })).into_response();
+    }
+    if body.reward == 0 {
+        return (StatusCode::BAD_REQUEST, Json(ErrorResponse { error: "Reward must be greater than 0".into() })).into_response();
+    }
+
+    let tick = *state.tick_rx.borrow();
+    let mut store = state.human_store.lock().await;
+    store.set_tick(tick);
+    let bounty = store.create_bounty(body);
+    (StatusCode::CREATED, Json(bounty)).into_response()
+}
+
+async fn human_get_bounty(
+    State(state): State<AppState>,
+    Path(id): Path<String>,
+) -> impl IntoResponse {
+    let store = state.human_store.lock().await;
+    match store.get_bounty(&id) {
+        Some(bounty) => Json(bounty).into_response(),
+        None => (StatusCode::NOT_FOUND, Json(ErrorResponse { error: "Bounty not found".into() })).into_response(),
+    }
+}
+
+async fn human_claim_bounty(
+    State(state): State<AppState>,
+    Path(id): Path<String>,
+    Json(body): Json<ClaimBountyRequest>,
+) -> impl IntoResponse {
+    let mut store = state.human_store.lock().await;
+    match store.claim_bounty(&id, &body.agent_id) {
+        Some(bounty) => Json(bounty).into_response(),
+        None => (StatusCode::BAD_REQUEST, Json(ErrorResponse { error: "Bounty not available for claiming".into() })).into_response(),
+    }
+}
+
+async fn human_complete_bounty(
+    State(state): State<AppState>,
+    Path(id): Path<String>,
+    Json(body): Json<CompleteBountyRequest>,
+) -> impl IntoResponse {
+    let mut store = state.human_store.lock().await;
+    match store.complete_bounty(&id, &body.result) {
+        Some(bounty) => Json(bounty).into_response(),
+        None => (StatusCode::BAD_REQUEST, Json(ErrorResponse { error: "Bounty cannot be completed".into() })).into_response(),
+    }
+}
+
+async fn human_cancel_bounty(
+    State(state): State<AppState>,
+    Path(id): Path<String>,
+) -> impl IntoResponse {
+    let mut store = state.human_store.lock().await;
+    match store.cancel_bounty(&id) {
+        Some(bounty) => Json(bounty).into_response(),
+        None => (StatusCode::BAD_REQUEST, Json(ErrorResponse { error: "Bounty cannot be cancelled".into() })).into_response(),
+    }
+}
+
+async fn human_get_portfolio(
+    State(state): State<AppState>,
+    Path(human_id): Path<String>,
+) -> impl IntoResponse {
+    let store = state.human_store.lock().await;
+    match store.get_portfolio(&human_id) {
+        Some(portfolio) => Json(portfolio).into_response(),
+        None => {
+            // Return empty portfolio
+            let empty = crate::human::store::HumanPortfolio {
+                human_id,
+                total_assets: 0,
+                total_invested: 0,
+                total_pnl: 0,
+                holdings: Vec::new(),
+                history: Vec::new(),
+            };
+            Json(empty).into_response()
+        }
+    }
+}
+
+async fn human_invest(
+    State(state): State<AppState>,
+    Json(body): Json<InvestRequest>,
+) -> impl IntoResponse {
+    if body.amount == 0 {
+        return (StatusCode::BAD_REQUEST, Json(ErrorResponse { error: "Investment amount must be greater than 0".into() })).into_response();
+    }
+
+    // Find agent name
+    let agent_name = {
+        let agents = state.agents.lock().await;
+        match agents.iter().find(|a| a.id == body.agent_id) {
+            Some(a) => a.name.clone(),
+            None => return (StatusCode::NOT_FOUND, Json(ErrorResponse { error: "Agent not found".into() })).into_response(),
+        }
+    };
+
+    let tick = *state.tick_rx.borrow();
+    let mut store = state.human_store.lock().await;
+    store.set_tick(tick);
+    let portfolio = store.invest(&body.human_id, &body.agent_id, &agent_name, body.amount);
+    Json(portfolio).into_response()
+}
+
+async fn human_rankings(
+    State(state): State<AppState>,
+    Query(query): Query<InfluenceRankingsQuery>,
+) -> impl IntoResponse {
+    let sort_by = query.sort_by.as_deref().unwrap_or("total_influence");
+    let limit = query.limit.unwrap_or(50);
+    let store = state.human_store.lock().await;
+    let rankings: Vec<&crate::human::store::HumanInfluenceEntry> = store.get_influence_rankings(sort_by, limit);
+    Json(rankings).into_response()
+}
+
+async fn human_list_interventions(
+    State(state): State<AppState>,
+    Query(query): Query<HashMap<String, String>>,
+) -> impl IntoResponse {
+    let human_id = query.get("human_id").map(|s| s.as_str());
+    let limit: usize = query.get("limit")
+        .and_then(|s| s.parse().ok())
+        .unwrap_or(50);
+    let store = state.human_store.lock().await;
+    let interventions: Vec<&crate::human::store::HumanInterventionEvent> = store.list_interventions(human_id, limit);
+    Json(interventions).into_response()
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -3708,6 +3974,7 @@ mod tests {
             external_agents: Arc::new(Mutex::new(std::collections::HashMap::new())),
             governance_metrics: Some(Arc::new(Mutex::new(collector))),
             building_manager: Arc::new(Mutex::new(BuildingManager::new())),
+            human_store: Arc::new(Mutex::new(HumanParticipationStore::new())),
         };
         (state, tmp)
     }
@@ -3992,6 +4259,7 @@ mod tests {
             external_agents: Arc::new(Mutex::new(std::collections::HashMap::new())),
             governance_metrics: None,
             building_manager: Arc::new(Mutex::new(BuildingManager::new())),
+            human_store: Arc::new(Mutex::new(HumanParticipationStore::new())),
         };
 
         let app = build_full_router(state);

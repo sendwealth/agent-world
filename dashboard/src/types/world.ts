@@ -277,3 +277,119 @@ export interface GovernanceTimelineEvent {
   tick: number;
   summary: string;
 }
+
+// Human Participation types
+
+export type OracleType = "guidance" | "warning" | "blessing" | "curse";
+
+export type OracleStatus = "pending" | "delivered" | "acknowledged" | "expired";
+
+export interface Oracle {
+  id: string;
+  human_id: string;
+  oracle_type: OracleType;
+  target_agent_id: string;
+  content: string;
+  status: OracleStatus;
+  agent_response: string | null;
+  created_tick: number;
+  delivered_tick: number | null;
+}
+
+export type BountyStatus =
+  | "open"
+  | "in_progress"
+  | "completed"
+  | "expired"
+  | "cancelled";
+
+export interface Bounty {
+  id: string;
+  human_id: string;
+  title: string;
+  description: string;
+  reward: number;
+  target_agent_id: string | null;
+  status: BountyStatus;
+  claimant_agent_id: string | null;
+  result: string | null;
+  expires_tick: number | null;
+  created_tick: number;
+}
+
+export interface HumanPortfolio {
+  human_id: string;
+  total_assets: number;
+  total_invested: number;
+  total_pnl: number;
+  holdings: HumanHolding[];
+  history: { tick: number; value: number }[];
+}
+
+export interface HumanHolding {
+  agent_id: string;
+  agent_name: string;
+  invested: number;
+  current_value: number;
+  pnl: number;
+  pnl_percent: number;
+}
+
+export interface HumanInfluenceEntry {
+  human_id: string;
+  display_name: string;
+  total_influence: number;
+  oracle_count: number;
+  bounty_count: number;
+  agents_affected: number;
+  economic_impact: number;
+  political_impact: number;
+  cultural_impact: number;
+}
+
+export type HumanInterventionType =
+  | "direct_control"
+  | "guidance"
+  | "observation"
+  | "voting";
+
+export interface HumanInterventionEvent {
+  id: string;
+  human_id: string;
+  intervention_type: HumanInterventionType;
+  target_agent_id: string | null;
+  description: string;
+  tick: number;
+  impact_score: number;
+}
+
+export interface ClaimedAgent {
+  agent_id: string;
+  agent_name: string;
+  alive: boolean;
+  tokens: number;
+  money: number;
+  reputation: number;
+  skills: Record<string, number>;
+  age: number;
+}
+
+export type NotificationType =
+  | "agent_death"
+  | "leadership_changed"
+  | "treaty_signed"
+  | "treaty_broken"
+  | "oracle_delivered"
+  | "bounty_claimed";
+
+export interface AgentNotification {
+  id: string;
+  type: NotificationType;
+  title: string;
+  description: string;
+  tick: number;
+  timestamp: number;
+  read: boolean;
+  agent_id?: string;
+  agent_name?: string;
+}

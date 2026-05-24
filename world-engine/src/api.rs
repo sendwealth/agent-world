@@ -37,6 +37,11 @@ use crate::economy::investment::{
     ListTransactionsQuery,
 };
 use crate::economy::task::{TaskBoard, Task};
+use crate::auth::{
+    AuthStore, SharedAuthStore, HumanUser, Claims, HumanRole, Capability,
+    AuthUser, RequireAuth, OptionalAuth,
+    extractors::{AuthError, require_capability},
+};
 use crate::human::store::{
     HumanParticipationStore, SharedHumanStore,
     SendOracleRequest, CreateBountyRequest, ClaimBountyRequest,
@@ -117,6 +122,7 @@ pub struct AppState {
     pub governance_metrics: Option<SharedGovernanceMetricsCollector>,
     pub building_manager: Arc<Mutex<BuildingManager>>,
     pub human_store: SharedHumanStore,
+    pub auth_store: SharedAuthStore,
     pub investment_system: Option<SharedInvestmentSystem>,
     pub rule_engine: Option<SharedRuleEngine>,
     pub federation: Option<Arc<Mutex<crate::a2a::federation::FederationEngine>>>,    // Federation
@@ -166,6 +172,7 @@ pub fn create_router_with_wal(board: SharedTaskBoard, wal: SharedWAL) -> Router 
         governance_metrics: None,
             building_manager: Arc::new(Mutex::new(BuildingManager::new())),
             human_store: Arc::new(Mutex::new(HumanParticipationStore::new())),
+            auth_store: Arc::new(Mutex::new(AuthStore::new("change-me-in-production"))),
             investment_system: None,
             rule_engine: None,
             federation: None,        federation_registry: None,
@@ -201,6 +208,7 @@ pub fn create_router_with_wal_and_snapshots(board: SharedTaskBoard, wal: SharedW
         governance_metrics: None,
             building_manager: Arc::new(Mutex::new(BuildingManager::new())),
             human_store: Arc::new(Mutex::new(HumanParticipationStore::new())),
+            auth_store: Arc::new(Mutex::new(AuthStore::new("change-me-in-production"))),
             investment_system: None,
             rule_engine: None,
             federation: None,        federation_registry: None,
@@ -319,6 +327,12 @@ pub fn build_full_router(state: AppState) -> Router {
         .route("/api/v1/governance/orgs/:org_id", get(governance_org_metrics))
         .route("/api/v1/governance/orgs/:org_id/timeline", get(governance_org_timeline))
         .route("/api/v1/governance/comparison", get(governance_comparison))
+        // Auth routes
+        .route("/api/v1/auth/register", post(auth_register))
+        .route("/api/v1/auth/login", post(auth_login))
+        .route("/api/v1/auth/me", get(auth_me))
+        .route("/api/v1/auth/users", get(auth_list_users))
+        .route("/api/v1/auth/users/:id/role", post(auth_update_role))
         // Human Participation routes
         .route("/api/v1/human/stats", get(human_stats))
         .route("/api/v1/human/agents", get(human_list_claimed_agents))
@@ -380,11 +394,7 @@ pub fn build_full_router(state: AppState) -> Router {
         .route("/api/v1/federation/propose-peace", post(fed_propose_peace))
         .route("/api/v1/federation/accept-peace/:id", post(fed_accept_peace))
         .route("/api/v1/federation/summary", get(fed_summary))
-        // Federation / Migration routes
-        .route("/api/v1/federation/worlds", post(federation_register_world))
-        .route("/api/v1/federation/worlds", get(federation_list_worlds))
-        .route("/api/v1/federation/worlds/:world_id", get(federation_get_world))
-        .route("/api/v1/federation/worlds/:world_id", delete(federation_deregister_world))
+        // Federation / Migration routes (heartbeat only — register/list/get/deregister above)
         .route("/api/v1/federation/worlds/:world_id/heartbeat", post(federation_heartbeat))
         .route("/api/v1/migration/submit", post(migration_submit))
         .route("/api/v1/migration/:migration_id/review", post(migration_review))
@@ -430,6 +440,7 @@ pub fn create_router_for_test(
         governance_metrics: None,
             building_manager: Arc::new(Mutex::new(BuildingManager::new())),
             human_store: Arc::new(Mutex::new(HumanParticipationStore::new())),
+            auth_store: Arc::new(Mutex::new(AuthStore::new("change-me-in-production"))),
             investment_system: None,
             rule_engine: None,
             federation: None,        federation_registry: None,
@@ -3784,26 +3795,109 @@ async fn demolish_building(
     }
 }
 
+// ── Auth API Handlers ──────────────────────────────────────
+
+#[derive(Debug, Deserialize)]
+struct RegisterRequest {
+    username: String,
+    password: String,
+    role: HumanRole,
+}
+
+#[derive(Debug, Deserialize)]
+struct LoginRequest {
+    username: String,
+    password: String,
+}
+
+#[derive(Debug, Serialize)]
+struct AuthResponse {
+    user: HumanUser,
+    token: String,
+}
+
+async fn auth_register(
+    State(state): State<AppState>,
+    Json(body): Json<RegisterRequest>,
+) -> impl IntoResponse {
+    let mut store = state.auth_store.lock().await;
+    match store.register(&body.username, &body.password, body.role) {
+        Ok(user) => (StatusCode::CREATED, Json(user)).into_response(),
+        Err(e) => (StatusCode::BAD_REQUEST, Json(ErrorResponse { error: e })).into_response(),
+    }
+}
+
+async fn auth_login(
+    State(state): State<AppState>,
+    Json(body): Json<LoginRequest>,
+) -> impl IntoResponse {
+    let mut store = state.auth_store.lock().await;
+    match store.login(&body.username, &body.password) {
+        Ok((user, token)) => (StatusCode::OK, Json(AuthResponse { user, token })).into_response(),
+        Err(e) => (StatusCode::UNAUTHORIZED, Json(ErrorResponse { error: e })).into_response(),
+    }
+}
+
+async fn auth_me(
+    State(state): State<AppState>,
+    RequireAuth(auth): RequireAuth,
+) -> impl IntoResponse {
+    let store = state.auth_store.lock().await;
+    match store.get_user(&auth.user_id) {
+        Some(user) => Json(user).into_response(),
+        None => (StatusCode::NOT_FOUND, Json(ErrorResponse { error: "User not found".into() })).into_response(),
+    }
+}
+
+async fn auth_list_users(
+    State(state): State<AppState>,
+    RequireAuth(auth): RequireAuth,
+) -> impl IntoResponse {
+    if let Err(e) = require_capability(&auth, Capability::CreateAgent) {
+        return e.into_response();
+    }
+    let store = state.auth_store.lock().await;
+    Json(store.list_users()).into_response()
+}
+
+async fn auth_update_role(
+    State(state): State<AppState>,
+    RequireAuth(auth): RequireAuth,
+    Path(user_id): Path<String>,
+    Json(body): Json<UpdateRoleRequest>,
+) -> impl IntoResponse {
+    if let Err(e) = require_capability(&auth, Capability::CreateAgent) {
+        return e.into_response();
+    }
+    let mut store = state.auth_store.lock().await;
+    match store.update_role(&user_id, body.role) {
+        Ok(user) => Json(user).into_response(),
+        Err(e) => (StatusCode::NOT_FOUND, Json(ErrorResponse { error: e })).into_response(),
+    }
+}
+
+#[derive(Debug, Deserialize)]
+struct UpdateRoleRequest {
+    role: HumanRole,
+}
+
 // ── Human Participation API Handlers ──────────────────────
 
 async fn human_stats(State(state): State<AppState>) -> impl IntoResponse {
-    let store = state.human_store.lock().await;
     let tick = *state.tick_rx.borrow();
-    let mut store_mut = state.human_store.lock().await;
-    store_mut.set_tick(tick);
-    drop(store_mut);
+    let mut store = state.human_store.lock().await;
+    store.set_tick(tick);
     let stats = store.get_stats();
     Json(stats).into_response()
 }
 
 async fn human_list_claimed_agents(
     State(state): State<AppState>,
+    RequireAuth(auth): RequireAuth,
     Query(query): Query<HashMap<String, String>>,
 ) -> impl IntoResponse {
-    let human_id = match query.get("human_id") {
-        Some(id) => id.clone(),
-        None => return (StatusCode::BAD_REQUEST, Json(ErrorResponse { error: "human_id query parameter required".into() })).into_response(),
-    };
+    // SECURITY: Only allow users to see their own claimed agents
+    let human_id = query.get("human_id").cloned().unwrap_or_else(|| auth.user_id.clone());
     let store = state.human_store.lock().await;
     let agents: Vec<&crate::human::store::ClaimedAgent> = store.list_claimed_agents(&human_id);
     Json(agents).into_response()
@@ -3811,6 +3905,7 @@ async fn human_list_claimed_agents(
 
 async fn human_claim_agent(
     State(state): State<AppState>,
+    RequireAuth(auth): RequireAuth,
     Json(body): Json<ClaimAgentRequest>,
 ) -> impl IntoResponse {
     // Find the agent in the world state
@@ -3822,12 +3917,13 @@ async fn human_claim_agent(
         }
     };
 
+    // SECURITY: Use authenticated user ID, ignore body.human_id
     let tick = *state.tick_rx.borrow();
     let mut store = state.human_store.lock().await;
     store.set_tick(tick);
     let skills_map: HashMap<String, u32> = HashMap::new();
     let claimed = store.claim_agent(
-        &body.human_id,
+        &auth.user_id,
         &body.agent_id,
         &agent.0,
         agent.1,
@@ -3850,8 +3946,11 @@ async fn human_list_oracles(
 
 async fn human_send_oracle(
     State(state): State<AppState>,
-    Json(body): Json<SendOracleRequest>,
+    RequireAuth(auth): RequireAuth,
+    Json(mut body): Json<SendOracleRequest>,
 ) -> impl IntoResponse {
+    // SECURITY: Replace client-provided human_id with authenticated user ID
+    body.human_id = auth.user_id.clone();
     if body.content.trim().is_empty() {
         return (StatusCode::BAD_REQUEST, Json(ErrorResponse { error: "Oracle content cannot be empty".into() })).into_response();
     }
@@ -3891,8 +3990,15 @@ async fn human_list_bounties(
 
 async fn human_create_bounty(
     State(state): State<AppState>,
-    Json(body): Json<CreateBountyRequest>,
+    RequireAuth(auth): RequireAuth,
+    Json(mut body): Json<CreateBountyRequest>,
 ) -> impl IntoResponse {
+    // RBAC: require PublishTasks capability
+    if let Err(e) = require_capability(&auth, Capability::PublishTasks) {
+        return e.into_response();
+    }
+    // SECURITY: Replace client-provided human_id with authenticated user ID
+    body.human_id = auth.user_id.clone();
     if body.title.trim().is_empty() {
         return (StatusCode::BAD_REQUEST, Json(ErrorResponse { error: "Bounty title cannot be empty".into() })).into_response();
     }
@@ -3944,9 +4050,18 @@ async fn human_complete_bounty(
 
 async fn human_cancel_bounty(
     State(state): State<AppState>,
+    RequireAuth(auth): RequireAuth,
     Path(id): Path<String>,
 ) -> impl IntoResponse {
     let mut store = state.human_store.lock().await;
+    // SECURITY: Verify ownership — only the creator can cancel
+    let bounty = match store.get_bounty(&id) {
+        Some(b) => b.clone(),
+        None => return (StatusCode::NOT_FOUND, Json(ErrorResponse { error: "Bounty not found".into() })).into_response(),
+    };
+    if bounty.human_id != auth.user_id {
+        return (StatusCode::FORBIDDEN, Json(ErrorResponse { error: "Only the bounty creator can cancel".into() })).into_response();
+    }
     match store.cancel_bounty(&id) {
         Some(bounty) => Json(bounty).into_response(),
         None => (StatusCode::BAD_REQUEST, Json(ErrorResponse { error: "Bounty cannot be cancelled".into() })).into_response(),
@@ -3977,8 +4092,13 @@ async fn human_get_portfolio(
 
 async fn human_invest(
     State(state): State<AppState>,
+    RequireAuth(auth): RequireAuth,
     Json(body): Json<InvestRequest>,
 ) -> impl IntoResponse {
+    // RBAC: require Invest capability
+    if let Err(e) = require_capability(&auth, Capability::Invest) {
+        return e.into_response();
+    }
     if body.amount == 0 {
         return (StatusCode::BAD_REQUEST, Json(ErrorResponse { error: "Investment amount must be greater than 0".into() })).into_response();
     }
@@ -3992,10 +4112,11 @@ async fn human_invest(
         }
     };
 
+    // SECURITY: Use authenticated user ID, ignore body.human_id
     let tick = *state.tick_rx.borrow();
     let mut store = state.human_store.lock().await;
     store.set_tick(tick);
-    let portfolio = store.invest(&body.human_id, &body.agent_id, &agent_name, body.amount);
+    let portfolio = store.invest(&auth.user_id, &body.agent_id, &agent_name, body.amount);
     Json(portfolio).into_response()
 }
 
@@ -4772,6 +4893,7 @@ mod tests {
             governance_metrics: Some(Arc::new(Mutex::new(collector))),
             building_manager: Arc::new(Mutex::new(BuildingManager::new())),
             human_store: Arc::new(Mutex::new(HumanParticipationStore::new())),
+            auth_store: Arc::new(Mutex::new(AuthStore::new("change-me-in-production"))),
             investment_system: None,
             rule_engine: None,
             federation: None,            federation_registry: None,
@@ -5061,6 +5183,7 @@ mod tests {
             governance_metrics: None,
             building_manager: Arc::new(Mutex::new(BuildingManager::new())),
             human_store: Arc::new(Mutex::new(HumanParticipationStore::new())),
+            auth_store: Arc::new(Mutex::new(AuthStore::new("change-me-in-production"))),
             investment_system: None,
             rule_engine: None,
             federation: None,            federation_registry: None,

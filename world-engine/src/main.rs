@@ -521,6 +521,9 @@ async fn main() {
         governance_metrics: Some(Arc::new(Mutex::new(governance_metrics))),
         building_manager: Arc::new(Mutex::new(agent_world_engine::world::map::building::BuildingManager::new())),
         human_store: Arc::new(Mutex::new(agent_world_engine::human::store::HumanParticipationStore::new())),
+        auth_store: Arc::new(Mutex::new(agent_world_engine::auth::AuthStore::new(
+            &std::env::var("JWT_SECRET").unwrap_or_else(|_| "change-me-in-production".to_string())
+        ))),
         investment_system: Some(investment_system),
         rule_engine: Some(Arc::new(Mutex::new(agent_world_engine::organization::rule_engine::RuleEngine::with_event_bus(event_bus.clone())))),
         federation: Some(federation),        federation_registry: Some(federation_registry),

@@ -1,5 +1,6 @@
 pub mod a2a;
 pub mod api;
+pub mod auth;
 pub mod config;
 pub mod dsl;
 pub mod economy;

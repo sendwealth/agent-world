@@ -135,7 +135,14 @@ pub enum EventType {
     DiplomaticTiesSevered,
     WarDeclared,
     PeaceProposed,
-    PeaceEstablished,
+    PeaceEstablished,    // Migration events
+    MigrationSubmitted,
+    MigrationApproved,
+    MigrationRejected,
+    MigrationCompleted,
+    MigrationCancelled,
+    AgentEmigrated,
+    AgentImmigrated,
 }
 
 /// Events emitted by the world engine.
@@ -276,7 +283,14 @@ pub enum WorldEvent {
     DiplomaticTiesSevered { world_id: String, old_status: super::super::a2a::federation::DiplomaticStatus, new_status: super::super::a2a::federation::DiplomaticStatus },
     WarDeclared { world_id: String, old_status: super::super::a2a::federation::DiplomaticStatus },
     PeaceProposed { world_id: String, treaty_id: String },
-    PeaceEstablished { world_id: String, treaty_id: String },
+    PeaceEstablished { world_id: String, treaty_id: String },    // Migration events
+    MigrationSubmitted { migration_id: String, agent_id: String, source_world: String, target_world: String },
+    MigrationApproved { migration_id: String, agent_id: String, reviewer: String },
+    MigrationRejected { migration_id: String, agent_id: String, reviewer: String, reason: Option<String> },
+    MigrationCompleted { migration_id: String, agent_id: String, source_world: String, target_world: String, tokens_remaining: u64 },
+    MigrationCancelled { migration_id: String, agent_id: String, cancelled_by: String },
+    AgentEmigrated { migration_id: String, agent_id: String, agent_name: String, source_world: String },
+    AgentImmigrated { migration_id: String, agent_id: String, agent_name: String, target_world: String, tokens: u64 },
 }
 
 impl WorldEvent {
@@ -393,7 +407,13 @@ impl WorldEvent {
             WorldEvent::DiplomaticTiesSevered { .. } => EventType::DiplomaticTiesSevered,
             WorldEvent::WarDeclared { .. } => EventType::WarDeclared,
             WorldEvent::PeaceProposed { .. } => EventType::PeaceProposed,
-            WorldEvent::PeaceEstablished { .. } => EventType::PeaceEstablished,
+            WorldEvent::PeaceEstablished { .. } => EventType::PeaceEstablished,            WorldEvent::MigrationSubmitted { .. } => EventType::MigrationSubmitted,
+            WorldEvent::MigrationApproved { .. } => EventType::MigrationApproved,
+            WorldEvent::MigrationRejected { .. } => EventType::MigrationRejected,
+            WorldEvent::MigrationCompleted { .. } => EventType::MigrationCompleted,
+            WorldEvent::MigrationCancelled { .. } => EventType::MigrationCancelled,
+            WorldEvent::AgentEmigrated { .. } => EventType::AgentEmigrated,
+            WorldEvent::AgentImmigrated { .. } => EventType::AgentImmigrated,
         }
     }
 
@@ -510,7 +530,13 @@ impl WorldEvent {
             WorldEvent::DiplomaticTiesSevered { .. } => None,
             WorldEvent::WarDeclared { .. } => None,
             WorldEvent::PeaceProposed { .. } => None,
-            WorldEvent::PeaceEstablished { .. } => None,
+            WorldEvent::PeaceEstablished { .. } => None,            WorldEvent::MigrationSubmitted { agent_id, .. } => Some(agent_id),
+            WorldEvent::MigrationApproved { agent_id, .. } => Some(agent_id),
+            WorldEvent::MigrationRejected { agent_id, .. } => Some(agent_id),
+            WorldEvent::MigrationCompleted { agent_id, .. } => Some(agent_id),
+            WorldEvent::MigrationCancelled { agent_id, .. } => Some(agent_id),
+            WorldEvent::AgentEmigrated { agent_id, .. } => Some(agent_id),
+            WorldEvent::AgentImmigrated { agent_id, .. } => Some(agent_id),
         }
     }
 

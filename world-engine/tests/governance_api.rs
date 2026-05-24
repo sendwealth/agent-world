@@ -49,7 +49,8 @@ fn build_app() -> (Arc<EventBus>, Arc<Mutex<GovernanceMetricsCollector>>, axum::
         building_manager: Arc::new(Mutex::new(agent_world_engine::world::map::building::BuildingManager::new())),
         human_store: Arc::new(Mutex::new(agent_world_engine::human::store::HumanParticipationStore::new())),
         investment_system: None,
-        rule_engine: None,
+        rule_engine: None,        federation_registry: None,
+        migration_manager: None,
     };
 
     let app = agent_world_engine::api::build_full_router(state);
@@ -300,7 +301,8 @@ async fn governance_endpoints_503_when_not_configured() {
         building_manager: Arc::new(Mutex::new(agent_world_engine::world::map::building::BuildingManager::new())),
         human_store: Arc::new(Mutex::new(agent_world_engine::human::store::HumanParticipationStore::new())),
         investment_system: None,
-        rule_engine: None,
+        rule_engine: None,        federation_registry: None,
+        migration_manager: None,
     };
     let app = agent_world_engine::api::build_full_router(state);
     let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();

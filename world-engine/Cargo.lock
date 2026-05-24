@@ -15,6 +15,7 @@ dependencies = [
  "http-body-util",
  "notify",
  "prost",
+ "prost-types",
  "rand",
  "reqwest",
  "rusqlite",

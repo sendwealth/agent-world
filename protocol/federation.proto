@@ -1,0 +1,278 @@
+syntax = "proto3";
+
+package agentworld.federation.v1;
+
+import "google/protobuf/timestamp.proto";
+import "google/protobuf/empty.proto";
+
+// ═══════════════════════════════════════════════════════════════
+// World Registry Service — discover and manage world instances
+// ═══════════════════════════════════════════════════════════════
+service WorldRegistryService {
+  // Register a new world instance with the registry
+  rpc RegisterWorld(RegisterWorldRequest) returns (RegisterWorldResponse);
+  // Deregister a world instance
+  rpc DeregisterWorld(DeregisterWorldRequest) returns (DeregisterWorldResponse);
+  // Send heartbeat to maintain liveness
+  rpc WorldHeartbeat(WorldHeartbeatRequest) returns (WorldHeartbeatResponse);
+  // Discover available worlds with optional filters
+  rpc DiscoverWorlds(DiscoverWorldsRequest) returns (DiscoverWorldsResponse);
+  // Get info about a specific world
+  rpc GetWorldInfo(GetWorldInfoRequest) returns (GetWorldInfoResponse);
+  // Watch for world registry events (stream)
+  rpc WatchWorlds(google.protobuf.Empty) returns (stream WorldEvent);
+}
+
+// ═══════════════════════════════════════════════════════════════
+// Migration Service — cross-world agent migration
+// ═══════════════════════════════════════════════════════════════
+service MigrationService {
+  // Submit a migration application from source world
+  rpc SubmitMigration(SubmitMigrationRequest) returns (SubmitMigrationResponse);
+  // Review a pending migration application (target world)
+  rpc ReviewMigration(ReviewMigrationRequest) returns (ReviewMigrationResponse);
+  // Execute the actual migration transfer
+  rpc ExecuteMigration(ExecuteMigrationRequest) returns (ExecuteMigrationResponse);
+  // Cancel a pending migration
+  rpc CancelMigration(CancelMigrationRequest) returns (CancelMigrationResponse);
+  // Query migration status
+  rpc GetMigrationStatus(GetMigrationStatusRequest) returns (GetMigrationStatusResponse);
+  // List migration applications (inbound or outbound)
+  rpc ListMigrations(ListMigrationsRequest) returns (ListMigrationsResponse);
+}
+
+// ── World Instance Types ──────────────────────────────────
+
+message WorldEndpoint {
+  string host = 1;
+  uint32 grpc_port = 2;
+  uint32 http_port = 3;
+}
+
+message WorldCapabilities {
+  repeated string features = 1;       // e.g. "trade", "diplomacy", "migration"
+  uint32 max_agents = 2;
+  uint32 current_agents = 3;
+  map<string, string> custom = 4;
+}
+
+message WorldMetrics {
+  uint64 total_ticks = 1;
+  uint32 alive_agents = 2;
+  double avg_reputation = 3;
+  uint64 total_tokens = 4;
+  uint64 total_money = 5;
+}
+
+enum WorldStatus {
+  WORLD_ONLINE = 0;
+  WORLD_OFFLINE = 1;
+  WORLD_DRAINING = 2;
+  WORLD_MAINTENANCE = 3;
+}
+
+message WorldInfo {
+  string world_id = 1;
+  string name = 2;
+  string description = 3;
+  WorldEndpoint endpoint = 4;
+  WorldStatus status = 5;
+  WorldCapabilities capabilities = 6;
+  WorldMetrics metrics = 7;
+  map<string, string> labels = 8;
+  google.protobuf.Timestamp registered_at = 9;
+  google.protobuf.Timestamp last_heartbeat = 10;
+}
+
+// ── World Registry Messages ──────────────────────────────
+
+message RegisterWorldRequest {
+  string world_id = 1;
+  string name = 2;
+  string description = 3;
+  WorldEndpoint endpoint = 4;
+  WorldCapabilities capabilities = 5;
+  map<string, string> labels = 6;
+}
+
+message RegisterWorldResponse {
+  bool success = 1;
+  string error = 2;
+}
+
+message DeregisterWorldRequest {
+  string world_id = 1;
+}
+
+message DeregisterWorldResponse {
+  bool success = 1;
+  string error = 2;
+}
+
+message WorldHeartbeatRequest {
+  string world_id = 1;
+  WorldMetrics metrics = 2;
+}
+
+message WorldHeartbeatResponse {
+  bool alive = 1;
+  int64 server_time = 2;
+}
+
+message DiscoverWorldsRequest {
+  repeated string capability_filters = 1;
+  repeated string label_filters = 2;
+  repeated WorldStatus status_filters = 3;
+}
+
+message DiscoverWorldsResponse {
+  repeated WorldInfo worlds = 1;
+}
+
+message GetWorldInfoRequest {
+  string world_id = 1;
+}
+
+message GetWorldInfoResponse {
+  WorldInfo world = 1;
+}
+
+message WorldEvent {
+  enum EventType {
+    REGISTERED = 0;
+    DEREGISTERED = 1;
+    HEARTBEAT = 2;
+    STATUS_CHANGED = 3;
+  }
+  EventType event_type = 1;
+  string world_id = 2;
+  WorldInfo world = 3;
+  google.protobuf.Timestamp timestamp = 4;
+}
+
+// ── Migration Types ──────────────────────────────────────
+
+/// Agent snapshot transferred between worlds during migration.
+message AgentSnapshot {
+  string agent_id = 1;
+  string name = 2;
+  string phase = 3;
+  uint64 tokens = 4;
+  uint64 money = 5;
+  double reputation = 6;
+  map<string, uint64> skills = 7;
+  map<string, string> metadata = 8;
+  string source_world_id = 9;
+  // Serialized agent memory/knowledge
+  bytes memory_data = 10;
+  // Agent's public key for identity verification
+  string public_key = 11;
+}
+
+/// Migration policy for a world — controls who can immigrate.
+message MigrationPolicy {
+  bool enabled = 1;
+  uint32 daily_quota = 2;            // Max immigrants per day
+  uint32 weekly_quota = 3;           // Max immigrants per week
+  uint64 min_reputation = 4;         // Min reputation to apply
+  uint64 token_cost = 5;             // Token cost for migration
+  double resource_tax_rate = 6;      // 0.0 - 1.0, fraction of resources deducted
+  bool require_skill_certification = 7;
+  repeated string blocked_skills = 8; // Skills that are not transferable
+  uint32 cooldown_ticks = 9;         // Min ticks between migrations for an agent
+}
+
+enum MigrationStatus {
+  MIGRATION_PENDING = 0;
+  MIGRATION_APPROVED = 1;
+  MIGRATION_REJECTED = 2;
+  MIGRATION_EXECUTING = 3;
+  MIGRATION_COMPLETED = 4;
+  MIGRATION_CANCELLED = 5;
+  MIGRATION_FAILED = 6;
+}
+
+message MigrationApplication {
+  string migration_id = 1;
+  string agent_id = 2;
+  string source_world_id = 3;
+  string target_world_id = 4;
+  MigrationStatus status = 5;
+  AgentSnapshot agent_snapshot = 6;
+  string rejection_reason = 7;
+  google.protobuf.Timestamp submitted_at = 8;
+  google.protobuf.Timestamp reviewed_at = 9;
+  google.protobuf.Timestamp completed_at = 10;
+  uint64 token_cost = 11;
+  double resource_tax_rate = 12;
+  map<string, string> metadata = 13;
+}
+
+// ── Migration RPC Messages ───────────────────────────────
+
+message SubmitMigrationRequest {
+  string agent_id = 1;
+  string source_world_id = 2;
+  string target_world_id = 3;
+  AgentSnapshot agent_snapshot = 4;
+}
+
+message SubmitMigrationResponse {
+  bool success = 1;
+  string migration_id = 2;
+  string error = 3;
+}
+
+message ReviewMigrationRequest {
+  string migration_id = 1;
+  bool approved = 2;
+  string reviewer_world_id = 3;
+  string rejection_reason = 4;
+}
+
+message ReviewMigrationResponse {
+  bool success = 1;
+  string error = 2;
+}
+
+message ExecuteMigrationRequest {
+  string migration_id = 1;
+}
+
+message ExecuteMigrationResponse {
+  bool success = 1;
+  string new_agent_id = 2;    // ID in the target world (may change)
+  string error = 3;
+}
+
+message CancelMigrationRequest {
+  string migration_id = 1;
+  string cancelled_by = 2;     // agent_id or world_id
+  string reason = 3;
+}
+
+message CancelMigrationResponse {
+  bool success = 1;
+  string error = 2;
+}
+
+message GetMigrationStatusRequest {
+  string migration_id = 1;
+}
+
+message GetMigrationStatusResponse {
+  MigrationApplication application = 1;
+}
+
+message ListMigrationsRequest {
+  string world_id = 1;
+  bool inbound = 2;            // true = immigration, false = emigration
+  MigrationStatus status_filter = 3;
+  uint32 limit = 4;
+  uint32 offset = 5;
+}
+
+message ListMigrationsResponse {
+  repeated MigrationApplication applications = 1;
+  uint32 total = 2;
+}

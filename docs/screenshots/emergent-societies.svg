@@ -1,0 +1,45 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="640" height="360" viewBox="0 0 640 360">
+  <defs>
+    <linearGradient id="bg" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" style="stop-color:#0f172a"/>
+      <stop offset="100%" style="stop-color:#1e293b"/>
+    </linearGradient>
+  </defs>
+  <rect width="640" height="360" fill="url(#bg)" rx="8"/>
+  <!-- Header -->
+  <text x="320" y="36" text-anchor="middle" fill="#e2e8f0" font-family="system-ui, sans-serif" font-size="18" font-weight="600">🏘️ Emergent Societies — Organizations &amp; Economy</text>
+  <line x1="40" y1="52" x2="600" y2="52" stroke="#334155" stroke-width="1"/>
+  <!-- Organizations -->
+  <rect x="40" y="64" width="270" height="200" rx="6" fill="#0f172a" stroke="#a78bfa" stroke-width="1"/>
+  <text x="175" y="86" text-anchor="middle" fill="#a78bfa" font-family="system-ui, sans-serif" font-size="13" font-weight="600">Organizations (12)</text>
+  <rect x="52" y="96" width="246" height="24" rx="3" fill="#1e293b"/>
+  <text x="60" y="113" fill="#22d3ee" font-family="monospace" font-size="10">🏢 "Builders Guild" — 8 members, GDP 3.2K</text>
+  <rect x="52" y="124" width="246" height="24" rx="3" fill="#1e293b"/>
+  <text x="60" y="141" fill="#4ade80" font-family="monospace" font-size="10">⚔️ "Trade Alliance" — 15 members</text>
+  <rect x="52" y="152" width="246" height="24" rx="3" fill="#1e293b"/>
+  <text x="60" y="169" fill="#f472b6" font-family="monospace" font-size="10">🎓 "University" — 6 scholars</text>
+  <rect x="52" y="180" width="246" height="24" rx="3" fill="#1e293b"/>
+  <text x="60" y="197" fill="#fbbf24" font-family="monospace" font-size="10">🏛️ "Council" — 5 elected leaders</text>
+  <rect x="52" y="208" width="246" height="24" rx="3" fill="#1e293b"/>
+  <text x="60" y="225" fill="#64748b" font-family="monospace" font-size="10">🏢 8 more companies &amp; guilds...</text>
+  <!-- Birth/Death ticker -->
+  <text x="175" y="250" text-anchor="middle" fill="#94a3b8" font-family="system-ui, sans-serif" font-size="10">👶 3 births · 💀 1 death · 🔄 2 migrations this tick</text>
+  <!-- Market -->
+  <rect x="330" y="64" width="270" height="200" rx="6" fill="#0f172a" stroke="#4ade80" stroke-width="1"/>
+  <text x="465" y="86" text-anchor="middle" fill="#4ade80" font-family="system-ui, sans-serif" font-size="13" font-weight="600">Stock Market</text>
+  <!-- Stock rows -->
+  <text x="346" y="110" fill="#e2e8f0" font-family="monospace" font-size="10" font-weight="600">Symbol    Price    Change</text>
+  <line x1="346" y1="116" x2="584" y2="116" stroke="#334155" stroke-width="0.5"/>
+  <text x="346" y="132" fill="#4ade80" font-family="monospace" font-size="11">WOOD       5.2₵    ▲ +8%</text>
+  <text x="346" y="152" fill="#4ade80" font-family="monospace" font-size="11">FOOD       3.8₵    ▲ +3%</text>
+  <text x="346" y="172" fill="#f87171" font-family="monospace" font-size="11">STONE      8.1₵    ▼ -2%</text>
+  <text x="346" y="192" fill="#4ade80" font-family="monospace" font-size="11">IRON      12.4₵    ▲ +15%</text>
+  <text x="346" y="212" fill="#94a3b8" font-family="monospace" font-size="11">TECH      22.0₵    —  0%</text>
+  <text x="465" y="240" text-anchor="middle" fill="#94a3b8" font-family="system-ui, sans-serif" font-size="10">Volume: 847 trades · Market Cap: 94.2K₵</text>
+  <!-- Bottom event bar -->
+  <rect x="40" y="276" width="560" height="50" rx="6" fill="#0f172a" stroke="#334155" stroke-width="1"/>
+  <text x="320" y="296" text-anchor="middle" fill="#f472b6" font-family="system-ui, sans-serif" font-size="12" font-weight="600">🌊 Emergent Behaviors Detected</text>
+  <text x="320" y="314" text-anchor="middle" fill="#94a3b8" font-family="system-ui, sans-serif" font-size="10">Agent#42 inherited legacy from #15 · Builders Guild monopolized wood trade · Council passed tax law</text>
+  <!-- Watermark -->
+  <text x="320" y="350" text-anchor="middle" fill="#475569" font-family="system-ui, sans-serif" font-size="10" font-style="italic">📸 Screenshot placeholder — replace with real capture from localhost:3001/organizations</text>
+</svg>

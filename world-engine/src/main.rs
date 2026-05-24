@@ -7,6 +7,7 @@ use tokio_util::sync::CancellationToken;
 use agent_world_engine::a2a::registry::AgentRegistry;
 use agent_world_engine::a2a::router::MessageRouter;
 use agent_world_engine::a2a::service::A2aServiceImpl;
+use agent_world_engine::a2a::federation::FederationEngine;
 use agent_world_engine::agentworld::a2a::v1::a2a_service_server::A2aServiceServer;
 use agent_world_engine::api::{self, AppState};
 use agent_world_engine::config::{ConfigManager, GenesisConfig};
@@ -32,6 +33,7 @@ use agent_world_engine::evolution::{EvolutionSubsystem, subsystem::EvolutionSubs
 use agent_world_engine::evolution::mutation::OffspringMutationConfig;
 use agent_world_engine::persistence::{SerializableWorldState, SqlitePersistence, StatePersistence};
 use agent_world_engine::world::{Scheduler, WorldState};
+use agent_world_engine::federation::{MigrationManager, MigrationPolicy, WorldRegistry};
 
 #[tokio::main]
 async fn main() {
@@ -440,6 +442,12 @@ async fn main() {
     )));
     println!("   InvestmentSystem: initialized");
 
+    // ── Initialize Federation Engine ──────────────────────
+    let federation = Arc::new(Mutex::new(FederationEngine::with_shared_event_bus(
+        event_bus.clone(),
+    )));
+    println!("   FederationEngine: initialized");
+
     // ── Initialize ConfigManager (hot-reload) ───────────────
     if std::path::Path::new(&genesis_path).exists() {
         match ConfigManager::new(&genesis_path, Some(event_bus.clone())) {
@@ -471,6 +479,28 @@ async fn main() {
     // ── Initialize HTTP/SSE Server ──────────────────────────
     let (tick_tx, tick_rx) = watch::channel(0u64);
     let governance_metrics = agent_world_engine::organization::GovernanceMetricsCollector::new(&event_bus);
+
+    // ── Initialize Federation Subsystem ─────────────────────
+    let migration_policy = MigrationPolicy {
+        enabled: genesis_config.migration.enabled,
+        daily_quota: genesis_config.migration.daily_quota,
+        weekly_quota: genesis_config.migration.weekly_quota,
+        min_reputation: genesis_config.migration.min_reputation,
+        token_cost: genesis_config.migration.token_cost,
+        resource_tax_rate: genesis_config.migration.resource_tax_rate,
+        require_skill_certification: genesis_config.migration.require_skill_certification,
+        blocked_skills: genesis_config.migration.blocked_skills.clone(),
+        cooldown_ticks: genesis_config.migration.cooldown_ticks,
+    };
+    let federation_registry = Arc::new(Mutex::new(
+        WorldRegistry::new(event_bus.clone())
+            .with_heartbeat_timeout(genesis_config.federation.heartbeat_timeout_secs),
+    ));
+    let migration_manager = Arc::new(Mutex::new(
+        MigrationManager::new(migration_policy, event_bus.clone()),
+    ));
+    println!("   Federation: WorldRegistry + MigrationManager initialized");
+
     let app_state = AppState {
         board: task_board,
         wal: wal_writer.clone(),
@@ -493,6 +523,8 @@ async fn main() {
         human_store: Arc::new(Mutex::new(agent_world_engine::human::store::HumanParticipationStore::new())),
         investment_system: Some(investment_system),
         rule_engine: Some(Arc::new(Mutex::new(agent_world_engine::organization::rule_engine::RuleEngine::with_event_bus(event_bus.clone())))),
+        federation: Some(federation),        federation_registry: Some(federation_registry),
+        migration_manager: Some(migration_manager),
     };
     let app = api::build_full_router(app_state);
 

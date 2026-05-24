@@ -37,6 +37,10 @@ pub struct GenesisConfig {
     pub mentorship: MentorshipConfigSection,
     #[serde(default)]
     pub inheritance: InheritanceConfigSection,
+    #[serde(default)]
+    pub migration: MigrationConfigSection,
+    #[serde(default)]
+    pub federation: FederationConfigSection,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
@@ -381,6 +385,79 @@ impl Default for InheritanceConfigSection {
 
 fn default_inheritance_ratio_config() -> f64 { 0.5 }
 fn default_skill_transfer_ratio_config() -> f64 { 0.3 }
+
+// ── Migration Config ─────────────────────────────────────
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub struct MigrationConfigSection {
+    #[serde(default = "default_migration_enabled")]
+    pub enabled: bool,
+    #[serde(default = "default_daily_quota")]
+    pub daily_quota: u32,
+    #[serde(default = "default_weekly_quota")]
+    pub weekly_quota: u32,
+    #[serde(default = "default_min_reputation")]
+    pub min_reputation: f64,
+    #[serde(default = "default_token_cost")]
+    pub token_cost: u64,
+    #[serde(default = "default_resource_tax_rate")]
+    pub resource_tax_rate: f64,
+    #[serde(default)]
+    pub require_skill_certification: bool,
+    #[serde(default)]
+    pub blocked_skills: Vec<String>,
+    #[serde(default = "default_cooldown_ticks")]
+    pub cooldown_ticks: u32,
+}
+
+impl Default for MigrationConfigSection {
+    fn default() -> Self {
+        Self {
+            enabled: default_migration_enabled(),
+            daily_quota: default_daily_quota(),
+            weekly_quota: default_weekly_quota(),
+            min_reputation: default_min_reputation(),
+            token_cost: default_token_cost(),
+            resource_tax_rate: default_resource_tax_rate(),
+            require_skill_certification: false,
+            blocked_skills: Vec::new(),
+            cooldown_ticks: default_cooldown_ticks(),
+        }
+    }
+}
+
+fn default_migration_enabled() -> bool { true }
+fn default_daily_quota() -> u32 { 10 }
+fn default_weekly_quota() -> u32 { 50 }
+fn default_min_reputation() -> f64 { 0.0 }
+fn default_token_cost() -> u64 { 10_000 }
+fn default_resource_tax_rate() -> f64 { 0.2 }
+fn default_cooldown_ticks() -> u32 { 100 }
+
+// ── Federation Config ─────────────────────────────────────
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub struct FederationConfigSection {
+    #[serde(default = "default_heartbeat_timeout")]
+    pub heartbeat_timeout_secs: u64,
+    #[serde(default = "default_world_id")]
+    pub world_id: String,
+    #[serde(default)]
+    pub bootstrap_peers: Vec<String>,
+}
+
+impl Default for FederationConfigSection {
+    fn default() -> Self {
+        Self {
+            heartbeat_timeout_secs: default_heartbeat_timeout(),
+            world_id: default_world_id(),
+            bootstrap_peers: Vec::new(),
+        }
+    }
+}
+
+fn default_heartbeat_timeout() -> u64 { 90 }
+fn default_world_id() -> String { uuid::Uuid::new_v4().to_string() }
 
 // ── Validation ────────────────────────────────────────────
 

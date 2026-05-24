@@ -11,7 +11,7 @@ use axum::{
         sse::{Event as SseEvent, Sse},
         IntoResponse,
     },
-    routing::{delete, get, post},
+    routing::{delete, get, post, put},
 };
 use futures::stream::Stream;
 use serde::{Deserialize, Serialize};
@@ -119,6 +119,10 @@ pub struct AppState {
     pub human_store: SharedHumanStore,
     pub investment_system: Option<SharedInvestmentSystem>,
     pub rule_engine: Option<SharedRuleEngine>,
+    pub federation: Option<Arc<Mutex<crate::a2a::federation::FederationEngine>>>,    // Federation
+    pub federation_registry: Option<Arc<Mutex<crate::federation::WorldRegistry>>>,
+    pub migration_manager: Option<Arc<Mutex<crate::federation::MigrationManager>>>,
+
 }
 
 pub fn create_router(board: SharedTaskBoard) -> Router {
@@ -164,6 +168,8 @@ pub fn create_router_with_wal(board: SharedTaskBoard, wal: SharedWAL) -> Router 
             human_store: Arc::new(Mutex::new(HumanParticipationStore::new())),
             investment_system: None,
             rule_engine: None,
+            federation: None,        federation_registry: None,
+        migration_manager: None,
     };
     build_full_router(state)
 }
@@ -197,6 +203,8 @@ pub fn create_router_with_wal_and_snapshots(board: SharedTaskBoard, wal: SharedW
             human_store: Arc::new(Mutex::new(HumanParticipationStore::new())),
             investment_system: None,
             rule_engine: None,
+            federation: None,        federation_registry: None,
+        migration_manager: None,
     };
     build_full_router(state)
 }
@@ -353,6 +361,41 @@ pub fn build_full_router(state: AppState) -> Router {
         .route("/api/v1/rules/dsl/rules/:id/activate", post(dsl_activate_rule))
         .route("/api/v1/rules/dsl/rules/:id/suspend", post(dsl_suspend_rule))
         .route("/api/v1/rules/dsl/rules/:id/repeal", post(dsl_repeal_rule))
+        // Federation / Cross-world diplomacy routes
+        .route("/api/v1/federation/worlds", post(fed_register_world))
+        .route("/api/v1/federation/worlds", get(fed_list_worlds))
+        .route("/api/v1/federation/worlds/:id", get(fed_get_world))
+        .route("/api/v1/federation/worlds/:id", delete(fed_deregister_world))
+        .route("/api/v1/federation/establish-relations", post(fed_establish_relations))
+        .route("/api/v1/federation/treaties", get(fed_list_treaties))
+        .route("/api/v1/federation/treaties", post(fed_propose_treaty))
+        .route("/api/v1/federation/treaties/:id", get(fed_get_treaty))
+        .route("/api/v1/federation/treaties/:id/accept", post(fed_accept_treaty))
+        .route("/api/v1/federation/treaties/:id/reject", post(fed_reject_treaty))
+        .route("/api/v1/federation/treaties/:id/break", post(fed_break_treaty))
+        .route("/api/v1/federation/sanctions", post(fed_impose_sanctions))
+        .route("/api/v1/federation/sanctions/:id/lift", post(fed_lift_sanctions))
+        .route("/api/v1/federation/sever-ties", post(fed_sever_ties))
+        .route("/api/v1/federation/declare-war", post(fed_declare_war))
+        .route("/api/v1/federation/propose-peace", post(fed_propose_peace))
+        .route("/api/v1/federation/accept-peace/:id", post(fed_accept_peace))
+        .route("/api/v1/federation/summary", get(fed_summary))
+        // Federation / Migration routes
+        .route("/api/v1/federation/worlds", post(federation_register_world))
+        .route("/api/v1/federation/worlds", get(federation_list_worlds))
+        .route("/api/v1/federation/worlds/:world_id", get(federation_get_world))
+        .route("/api/v1/federation/worlds/:world_id", delete(federation_deregister_world))
+        .route("/api/v1/federation/worlds/:world_id/heartbeat", post(federation_heartbeat))
+        .route("/api/v1/migration/submit", post(migration_submit))
+        .route("/api/v1/migration/:migration_id/review", post(migration_review))
+        .route("/api/v1/migration/:migration_id/execute", post(migration_execute))
+        .route("/api/v1/migration/:migration_id/cancel", post(migration_cancel))
+        .route("/api/v1/migration/:migration_id", get(migration_get_status))
+        .route("/api/v1/migration/list", post(migration_list))
+        .route("/api/v1/migration/policy", get(migration_get_policy))
+        .route("/api/v1/migration/policy", put(migration_update_policy))
+        .route("/api/v1/migration/stats", get(migration_stats))
+        .route("/api/v1/agents/:id/immigration-status", get(agent_immigration_status))
         .with_state(state)
 }
 
@@ -389,6 +432,8 @@ pub fn create_router_for_test(
             human_store: Arc::new(Mutex::new(HumanParticipationStore::new())),
             investment_system: None,
             rule_engine: None,
+            federation: None,        federation_registry: None,
+        migration_manager: None,
     };
     build_full_router(state)
 }
@@ -4374,6 +4419,320 @@ async fn dsl_repeal_rule(
     }
 }
 
+// ── Federation / Migration REST Handlers ──────────────────
+
+use crate::federation::registry::{WorldEntry, WorldEndpoint, WorldMetrics};
+use crate::federation::migration::{AgentSnapshot, MigrationStatus as MigStatus};
+use crate::federation::service::{RestMigrationSubmit, RestMigrationReview, RestWorldRegister};
+
+/// Helper: wrap success response in { data, error: null, request_id } format.
+fn api_ok(data: impl serde::Serialize) -> axum::response::Response {
+    let request_id = Uuid::new_v4().to_string();
+    Json(serde_json::json!({
+        "data": data,
+        "error": null,
+        "request_id": request_id,
+    })).into_response()
+}
+
+/// Helper: wrap error response in { data: null, error, request_id } format.
+fn api_err(status: StatusCode, error: impl Into<String>) -> axum::response::Response {
+    let request_id = Uuid::new_v4().to_string();
+    (status, Json(serde_json::json!({
+        "data": null,
+        "error": error.into(),
+        "request_id": request_id,
+    }))).into_response()
+}
+
+/// POST /api/v1/federation/worlds — Register a new world.
+async fn federation_register_world(
+    State(state): State<AppState>,
+    Json(body): Json<RestWorldRegister>,
+) -> impl IntoResponse {
+    let registry = match &state.federation_registry {
+        Some(r) => r.clone(),
+        None => return api_err(StatusCode::SERVICE_UNAVAILABLE, "federation registry not configured"),
+    };
+    let entry = WorldEntry {
+        world_id: body.world_id,
+        name: body.name,
+        description: body.description,
+        endpoint: WorldEndpoint {
+            host: body.host,
+            grpc_port: body.grpc_port,
+            http_port: body.http_port,
+        },
+        status: crate::federation::WorldStatus::Online,
+        capabilities: body.capabilities,
+        max_agents: body.max_agents,
+        current_agents: 0,
+        labels: body.labels,
+        metrics: WorldMetrics::default(),
+        registered_at: chrono::Utc::now().to_rfc3339(),
+        last_heartbeat: chrono::Utc::now().to_rfc3339(),
+    };
+    let mut reg = registry.lock().await;
+    match reg.register(entry).await {
+        Ok(is_new) => api_ok(serde_json::json!({ "registered": true, "is_new": is_new })),
+        Err(e) => api_err(StatusCode::BAD_REQUEST, e),
+    }
+}
+
+/// GET /api/v1/federation/worlds — List all registered worlds.
+async fn federation_list_worlds(
+    State(state): State<AppState>,
+) -> impl IntoResponse {
+    let registry = match &state.federation_registry {
+        Some(r) => r.clone(),
+        None => return api_err(StatusCode::SERVICE_UNAVAILABLE, "federation registry not configured"),
+    };
+    let reg = registry.lock().await;
+    let worlds = reg.list_all().await;
+    api_ok(&worlds)
+}
+
+/// GET /api/v1/federation/worlds/:world_id — Get a specific world.
+async fn federation_get_world(
+    State(state): State<AppState>,
+    Path(world_id): Path<String>,
+) -> impl IntoResponse {
+    let registry = match &state.federation_registry {
+        Some(r) => r.clone(),
+        None => return api_err(StatusCode::SERVICE_UNAVAILABLE, "federation registry not configured"),
+    };
+    let reg = registry.lock().await;
+    match reg.get_world(&world_id).await {
+        Some(entry) => api_ok(&entry),
+        None => api_err(StatusCode::NOT_FOUND, "world not found"),
+    }
+}
+
+/// DELETE /api/v1/federation/worlds/:world_id — Deregister a world.
+async fn federation_deregister_world(
+    State(state): State<AppState>,
+    Path(world_id): Path<String>,
+) -> impl IntoResponse {
+    let registry = match &state.federation_registry {
+        Some(r) => r.clone(),
+        None => return api_err(StatusCode::SERVICE_UNAVAILABLE, "federation registry not configured"),
+    };
+    let reg = registry.lock().await;
+    let removed = reg.deregister(&world_id).await;
+    api_ok(serde_json::json!({ "removed": removed }))
+}
+
+/// POST /api/v1/federation/worlds/:world_id/heartbeat — Record a heartbeat.
+async fn federation_heartbeat(
+    State(state): State<AppState>,
+    Path(world_id): Path<String>,
+    Json(metrics): Json<WorldMetrics>,
+) -> impl IntoResponse {
+    let registry = match &state.federation_registry {
+        Some(r) => r.clone(),
+        None => return api_err(StatusCode::SERVICE_UNAVAILABLE, "federation registry not configured"),
+    };
+    let reg = registry.lock().await;
+    let ok = reg.heartbeat(&world_id, metrics).await;
+    if ok {
+        api_ok(serde_json::json!({ "ok": true }))
+    } else {
+        api_err(StatusCode::NOT_FOUND, "world not found")
+    }
+}
+
+/// POST /api/v1/migration/submit — Submit a migration application.
+async fn migration_submit(
+    State(state): State<AppState>,
+    Json(body): Json<RestMigrationSubmit>,
+) -> impl IntoResponse {
+    let manager = match &state.migration_manager {
+        Some(m) => m.clone(),
+        None => return api_err(StatusCode::SERVICE_UNAVAILABLE, "migration manager not configured"),
+    };
+    let snapshot = AgentSnapshot {
+        agent_id: body.agent_id,
+        name: body.name,
+        phase: body.phase,
+        tokens: body.tokens,
+        money: body.money,
+        reputation: body.reputation,
+        skills: body.skills,
+        metadata: std::collections::HashMap::new(),
+        source_world_id: body.source_world_id,
+        memory_data: Vec::new(),
+        public_key: body.public_key,
+    };
+    let mgr = manager.lock().await;
+    match mgr.submit(snapshot, body.target_world_id).await {
+        Ok(app) => api_ok(&app),
+        Err(e) => api_err(StatusCode::BAD_REQUEST, e),
+    }
+}
+
+/// POST /api/v1/migration/:migration_id/review — Review a migration.
+async fn migration_review(
+    State(state): State<AppState>,
+    Path(migration_id): Path<String>,
+    Json(body): Json<RestMigrationReview>,
+) -> impl IntoResponse {
+    let manager = match &state.migration_manager {
+        Some(m) => m.clone(),
+        None => return api_err(StatusCode::SERVICE_UNAVAILABLE, "migration manager not configured"),
+    };
+    let mgr = manager.lock().await;
+    match mgr.review(
+        &migration_id,
+        body.approved,
+        &body.reviewer_world_id,
+        body.rejection_reason,
+    ).await {
+        Ok(app) => api_ok(&app),
+        Err(e) => api_err(StatusCode::BAD_REQUEST, e),
+    }
+}
+
+/// POST /api/v1/migration/:migration_id/execute — Execute a migration.
+async fn migration_execute(
+    State(state): State<AppState>,
+    Path(migration_id): Path<String>,
+) -> impl IntoResponse {
+    let manager = match &state.migration_manager {
+        Some(m) => m.clone(),
+        None => return api_err(StatusCode::SERVICE_UNAVAILABLE, "migration manager not configured"),
+    };
+    let mgr = manager.lock().await;
+    match mgr.execute_standalone(&migration_id).await {
+        Ok(app) => api_ok(&app),
+        Err(e) => api_err(StatusCode::BAD_REQUEST, e),
+    }
+}
+
+/// POST /api/v1/migration/:migration_id/cancel — Cancel a migration.
+async fn migration_cancel(
+    State(state): State<AppState>,
+    Path(migration_id): Path<String>,
+    Json(body): Json<serde_json::Value>,
+) -> impl IntoResponse {
+    let manager = match &state.migration_manager {
+        Some(m) => m.clone(),
+        None => return api_err(StatusCode::SERVICE_UNAVAILABLE, "migration manager not configured"),
+    };
+    let cancelled_by = body.get("cancelled_by").and_then(|v| v.as_str()).unwrap_or("").to_string();
+    let reason = body.get("reason").and_then(|v| v.as_str()).map(|s| s.to_string());
+    let mgr = manager.lock().await;
+    match mgr.cancel(&migration_id, &cancelled_by, reason).await {
+        Ok(app) => api_ok(&app),
+        Err(e) => api_err(StatusCode::BAD_REQUEST, e),
+    }
+}
+
+/// GET /api/v1/migration/:migration_id — Get migration status.
+async fn migration_get_status(
+    State(state): State<AppState>,
+    Path(migration_id): Path<String>,
+) -> impl IntoResponse {
+    let manager = match &state.migration_manager {
+        Some(m) => m.clone(),
+        None => return api_err(StatusCode::SERVICE_UNAVAILABLE, "migration manager not configured"),
+    };
+    let mgr = manager.lock().await;
+    match mgr.get(&migration_id).await {
+        Some(app) => api_ok(&app),
+        None => api_err(StatusCode::NOT_FOUND, "migration not found"),
+    }
+}
+
+/// POST /api/v1/migration/list — List migrations with optional filters.
+async fn migration_list(
+    State(state): State<AppState>,
+    Json(body): Json<serde_json::Value>,
+) -> impl IntoResponse {
+    let manager = match &state.migration_manager {
+        Some(m) => m.clone(),
+        None => return api_err(StatusCode::SERVICE_UNAVAILABLE, "migration manager not configured"),
+    };
+    let world_id: Option<String> = body.get("world_id").and_then(|v| v.as_str()).map(|s| s.to_string());
+    let inbound = body.get("inbound").and_then(|v| v.as_bool()).unwrap_or(true);
+    let status_filter: Option<MigStatus> = body.get("status_filter").and_then(|v| v.as_str()).and_then(|s| match s {
+        "pending" => Some(MigStatus::Pending),
+        "approved" => Some(MigStatus::Approved),
+        "rejected" => Some(MigStatus::Rejected),
+        "executing" => Some(MigStatus::Executing),
+        "completed" => Some(MigStatus::Completed),
+        "cancelled" => Some(MigStatus::Cancelled),
+        "failed" => Some(MigStatus::Failed),
+        _ => None,
+    });
+    let limit = body.get("limit").and_then(|v| v.as_u64()).unwrap_or(10) as u32;
+    let offset = body.get("offset").and_then(|v| v.as_u64()).unwrap_or(0) as u32;
+
+    let mgr = manager.lock().await;
+    let world_id_ref = world_id.as_deref();
+    let results = mgr.list(world_id_ref, inbound, status_filter, limit, offset).await;
+    api_ok(&results)
+}
+
+/// GET /api/v1/migration/policy — Get the current migration policy.
+async fn migration_get_policy(
+    State(state): State<AppState>,
+) -> impl IntoResponse {
+    let manager = match &state.migration_manager {
+        Some(m) => m.clone(),
+        None => return api_err(StatusCode::SERVICE_UNAVAILABLE, "migration manager not configured"),
+    };
+    let mgr = manager.lock().await;
+    let policy = mgr.get_policy().await;
+    let rest_policy = crate::federation::service::RestMigrationPolicy::from(policy);
+    api_ok(&rest_policy)
+}
+
+/// PUT /api/v1/migration/policy — Update migration policy.
+async fn migration_update_policy(
+    State(state): State<AppState>,
+    Json(body): Json<crate::federation::service::RestMigrationPolicy>,
+) -> impl IntoResponse {
+    let manager = match &state.migration_manager {
+        Some(m) => m.clone(),
+        None => return api_err(StatusCode::SERVICE_UNAVAILABLE, "migration manager not configured"),
+    };
+    let mgr = manager.lock().await;
+    let policy: crate::federation::MigrationPolicy = body.into();
+    mgr.set_policy(policy).await;
+    let updated = mgr.get_policy().await;
+    let rest_policy = crate::federation::service::RestMigrationPolicy::from(updated);
+    api_ok(&rest_policy)
+}
+
+/// GET /api/v1/migration/stats — Get migration statistics.
+async fn migration_stats(
+    State(state): State<AppState>,
+) -> impl IntoResponse {
+    let manager = match &state.migration_manager {
+        Some(m) => m.clone(),
+        None => return api_err(StatusCode::SERVICE_UNAVAILABLE, "migration manager not configured"),
+    };
+    let mgr = manager.lock().await;
+    let stats = mgr.stats().await;
+    api_ok(&stats)
+}
+
+/// GET /api/v1/agents/:id/immigration-status — Get agent immigration status.
+async fn agent_immigration_status(
+    State(state): State<AppState>,
+    Path(agent_id): Path<String>,
+) -> impl IntoResponse {
+    let manager = match &state.migration_manager {
+        Some(m) => m.clone(),
+        None => return api_err(StatusCode::SERVICE_UNAVAILABLE, "migration manager not configured"),
+    };
+    let mgr = manager.lock().await;
+    match mgr.get_agent_status(&agent_id).await {
+        Some(app) => api_ok(&app),
+        None => api_ok(serde_json::json!({ "agent_id": agent_id, "status": "none", "message": "no migration applications found" })),
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -4415,6 +4774,8 @@ mod tests {
             human_store: Arc::new(Mutex::new(HumanParticipationStore::new())),
             investment_system: None,
             rule_engine: None,
+            federation: None,            federation_registry: None,
+            migration_manager: None,
         };
         (state, tmp)
     }
@@ -4702,6 +5063,8 @@ mod tests {
             human_store: Arc::new(Mutex::new(HumanParticipationStore::new())),
             investment_system: None,
             rule_engine: None,
+            federation: None,            federation_registry: None,
+            migration_manager: None,
         };
 
         let app = build_full_router(state);
@@ -4909,4 +5272,375 @@ async fn inv_list_dividends(
     };
     let sys = inv.lock().await;
     (StatusCode::OK, Json(serde_json::json!(sys.list_dividends(product_id.as_deref()))))
+}
+
+// ── Federation / Cross-World Diplomacy Types ──────────────
+
+#[derive(Debug, Deserialize)]
+pub struct FedRegisterWorldRequest {
+    pub id: String,
+    pub name: String,
+    pub endpoint: String,
+    #[serde(default)]
+    pub tick: u64,
+}
+
+#[derive(Debug, Deserialize)]
+pub struct FedEstablishRelationsRequest {
+    pub world_id: String,
+    #[serde(default)]
+    pub tick: u64,
+}
+
+#[derive(Debug, Deserialize)]
+pub struct FedProposeTreatyRequest {
+    pub world_id: String,
+    pub treaty_type: String,
+    #[serde(default)]
+    pub duration_ticks: Option<u64>,
+    #[serde(default)]
+    pub terms: String,
+    #[serde(default)]
+    pub tick: u64,
+}
+
+#[derive(Debug, Deserialize)]
+pub struct FedSanctionRequest {
+    pub world_id: String,
+    pub reason: String,
+    #[serde(default)]
+    pub tick: u64,
+}
+
+#[derive(Debug, Deserialize)]
+pub struct FedSeverTiesRequest {
+    pub world_id: String,
+    #[serde(default)]
+    pub tick: u64,
+}
+
+#[derive(Debug, Deserialize)]
+pub struct FedDeclareWarRequest {
+    pub world_id: String,
+    #[serde(default)]
+    pub tick: u64,
+}
+
+#[derive(Debug, Deserialize)]
+pub struct FedProposePeaceRequest {
+    pub world_id: String,
+    #[serde(default)]
+    pub tick: u64,
+}
+
+#[derive(Debug, Deserialize)]
+pub struct FedAcceptTreatyRequest {
+    #[serde(default)]
+    pub tick: u64,
+}
+
+#[derive(Debug, Deserialize)]
+pub struct FedBreakTreatyRequest {
+    #[serde(default)]
+    pub tick: u64,
+}
+
+#[derive(Debug, Deserialize)]
+pub struct FedRejectTreatyRequest {}
+
+#[derive(Debug, Deserialize)]
+pub struct FedListTreatiesQuery {
+    pub world_id: Option<String>,
+    pub status: Option<String>,
+}
+
+fn fed_error_to_status(e: &crate::a2a::federation::FederationError) -> StatusCode {
+    match e {
+        crate::a2a::federation::FederationError::WorldNotFound(_)
+        | crate::a2a::federation::FederationError::TreatyNotFound(_) => StatusCode::NOT_FOUND,
+        crate::a2a::federation::FederationError::WorldAlreadyRegistered(_) => StatusCode::CONFLICT,
+        crate::a2a::federation::FederationError::TreatyAlreadyExists { .. }
+        | crate::a2a::federation::FederationError::SanctionAlreadyActive(_) => StatusCode::CONFLICT,
+        _ => StatusCode::BAD_REQUEST,
+    }
+}
+
+fn parse_treaty_type(s: &str) -> Option<crate::a2a::federation::CrossWorldTreatyType> {
+    match s {
+        "non_aggression" => Some(crate::a2a::federation::CrossWorldTreatyType::NonAggression),
+        "trade_pact" => Some(crate::a2a::federation::CrossWorldTreatyType::TradePact),
+        "military_alliance" => Some(crate::a2a::federation::CrossWorldTreatyType::MilitaryAlliance),
+        "research_exchange" => Some(crate::a2a::federation::CrossWorldTreatyType::ResearchExchange),
+        "cultural_exchange" => Some(crate::a2a::federation::CrossWorldTreatyType::CulturalExchange),
+        _ => None,
+    }
+}
+
+fn parse_treaty_status(s: &str) -> Option<crate::a2a::federation::CrossWorldTreatyStatus> {
+    match s {
+        "proposed" => Some(crate::a2a::federation::CrossWorldTreatyStatus::Proposed),
+        "active" => Some(crate::a2a::federation::CrossWorldTreatyStatus::Active),
+        "rejected" => Some(crate::a2a::federation::CrossWorldTreatyStatus::Rejected),
+        "broken" => Some(crate::a2a::federation::CrossWorldTreatyStatus::Broken),
+        "expired" => Some(crate::a2a::federation::CrossWorldTreatyStatus::Expired),
+        _ => None,
+    }
+}
+
+macro_rules! require_federation {
+    ($state:expr) => {
+        match $state.federation {
+            Some(ref f) => f,
+            None => return (StatusCode::SERVICE_UNAVAILABLE, Json(serde_json::json!({"error": "federation system not available"}))).into_response(),
+        }
+    };
+}
+
+// ── Federation Endpoint Handlers ──────────────────────────
+
+async fn fed_register_world(
+    State(state): State<AppState>,
+    Json(body): Json<FedRegisterWorldRequest>,
+) -> impl IntoResponse {
+    let fed = require_federation!(state);
+    let mut fed = fed.lock().await;
+    let id = body.id.clone();
+    match fed.register_world(body.id, body.name, body.endpoint, body.tick) {
+        Ok(()) => {
+            let world = fed.list_worlds().into_iter().find(|w| w.id == id).unwrap().clone();
+            (StatusCode::CREATED, Json(serde_json::json!(world))).into_response()
+        }
+        Err(e) => (fed_error_to_status(&e), Json(serde_json::json!({"error": e.to_string()}))).into_response(),
+    }
+}
+
+async fn fed_list_worlds(
+    State(state): State<AppState>,
+) -> impl IntoResponse {
+    let fed = require_federation!(state);
+    let fed = fed.lock().await;
+    let worlds: Vec<_> = fed.list_worlds().into_iter().cloned().collect();
+    (StatusCode::OK, Json(serde_json::json!(worlds))).into_response()
+}
+
+async fn fed_get_world(
+    State(state): State<AppState>,
+    Path(id): Path<String>,
+) -> impl IntoResponse {
+    let fed = require_federation!(state);
+    let fed = fed.lock().await;
+    match fed.get_world(&id) {
+        Some(world) => (StatusCode::OK, Json(serde_json::json!(world))).into_response(),
+        None => (StatusCode::NOT_FOUND, Json(serde_json::json!({"error": "world not found"}))).into_response(),
+    }
+}
+
+async fn fed_deregister_world(
+    State(state): State<AppState>,
+    Path(id): Path<String>,
+) -> impl IntoResponse {
+    let fed = require_federation!(state);
+    let mut fed = fed.lock().await;
+    match fed.deregister_world(&id) {
+        Ok(()) => (StatusCode::OK, Json(serde_json::json!({"status": "deregistered"}))).into_response(),
+        Err(e) => (fed_error_to_status(&e), Json(serde_json::json!({"error": e.to_string()}))).into_response(),
+    }
+}
+
+async fn fed_establish_relations(
+    State(state): State<AppState>,
+    Json(body): Json<FedEstablishRelationsRequest>,
+) -> impl IntoResponse {
+    let fed = require_federation!(state);
+    let mut fed = fed.lock().await;
+    match fed.establish_relations(&body.world_id, body.tick) {
+        Ok(()) => {
+            let world = fed.get_world(&body.world_id).unwrap().clone();
+            (StatusCode::OK, Json(serde_json::json!(world))).into_response()
+        }
+        Err(e) => (fed_error_to_status(&e), Json(serde_json::json!({"error": e.to_string()}))).into_response(),
+    }
+}
+
+async fn fed_list_treaties(
+    State(state): State<AppState>,
+    Query(query): Query<FedListTreatiesQuery>,
+) -> impl IntoResponse {
+    let fed = require_federation!(state);
+    let fed = fed.lock().await;
+    let status_filter = query.status.as_deref().and_then(parse_treaty_status);
+    let treaties: Vec<_> = fed.list_treaties(query.world_id.as_deref(), status_filter)
+        .into_iter().cloned().collect();
+    (StatusCode::OK, Json(serde_json::json!(treaties))).into_response()
+}
+
+async fn fed_propose_treaty(
+    State(state): State<AppState>,
+    Json(body): Json<FedProposeTreatyRequest>,
+) -> impl IntoResponse {
+    let Some(treaty_type) = parse_treaty_type(&body.treaty_type) else {
+        return (StatusCode::BAD_REQUEST, Json(serde_json::json!({"error": "invalid treaty_type"}))).into_response();
+    };
+    let fed = require_federation!(state);
+    let mut fed = fed.lock().await;
+    match fed.propose_treaty(&body.world_id, treaty_type, body.tick, body.duration_ticks, body.terms.clone()) {
+        Ok(id) => {
+            let treaty = fed.get_treaty(&id).unwrap().clone();
+            (StatusCode::CREATED, Json(serde_json::json!(treaty))).into_response()
+        }
+        Err(e) => (fed_error_to_status(&e), Json(serde_json::json!({"error": e.to_string()}))).into_response(),
+    }
+}
+
+async fn fed_get_treaty(
+    State(state): State<AppState>,
+    Path(id): Path<String>,
+) -> impl IntoResponse {
+    let fed = require_federation!(state);
+    let fed = fed.lock().await;
+    match fed.get_treaty(&id) {
+        Some(treaty) => (StatusCode::OK, Json(serde_json::json!(treaty))).into_response(),
+        None => (StatusCode::NOT_FOUND, Json(serde_json::json!({"error": "treaty not found"}))).into_response(),
+    }
+}
+
+async fn fed_accept_treaty(
+    State(state): State<AppState>,
+    Path(id): Path<String>,
+    Json(body): Json<FedAcceptTreatyRequest>,
+) -> impl IntoResponse {
+    let fed = require_federation!(state);
+    let mut fed = fed.lock().await;
+    match fed.accept_treaty(&id, body.tick) {
+        Ok(()) => {
+            let treaty = fed.get_treaty(&id).unwrap().clone();
+            (StatusCode::OK, Json(serde_json::json!(treaty))).into_response()
+        }
+        Err(e) => (fed_error_to_status(&e), Json(serde_json::json!({"error": e.to_string()}))).into_response(),
+    }
+}
+
+async fn fed_reject_treaty(
+    State(state): State<AppState>,
+    Path(id): Path<String>,
+    Json(_body): Json<FedRejectTreatyRequest>,
+) -> impl IntoResponse {
+    let fed = require_federation!(state);
+    let mut fed = fed.lock().await;
+    match fed.reject_treaty(&id) {
+        Ok(()) => {
+            let treaty = fed.get_treaty(&id).unwrap().clone();
+            (StatusCode::OK, Json(serde_json::json!(treaty))).into_response()
+        }
+        Err(e) => (fed_error_to_status(&e), Json(serde_json::json!({"error": e.to_string()}))).into_response(),
+    }
+}
+
+async fn fed_break_treaty(
+    State(state): State<AppState>,
+    Path(id): Path<String>,
+    Json(body): Json<FedBreakTreatyRequest>,
+) -> impl IntoResponse {
+    let fed = require_federation!(state);
+    let mut fed = fed.lock().await;
+    match fed.break_treaty(&id, body.tick) {
+        Ok(()) => {
+            let treaty = fed.get_treaty(&id).unwrap().clone();
+            (StatusCode::OK, Json(serde_json::json!(treaty))).into_response()
+        }
+        Err(e) => (fed_error_to_status(&e), Json(serde_json::json!({"error": e.to_string()}))).into_response(),
+    }
+}
+
+async fn fed_impose_sanctions(
+    State(state): State<AppState>,
+    Json(body): Json<FedSanctionRequest>,
+) -> impl IntoResponse {
+    let fed = require_federation!(state);
+    let mut fed = fed.lock().await;
+    match fed.impose_sanctions(&body.world_id, body.reason.clone(), body.tick) {
+        Ok(()) => {
+            let world = fed.get_world(&body.world_id).unwrap().clone();
+            (StatusCode::OK, Json(serde_json::json!(world))).into_response()
+        }
+        Err(e) => (fed_error_to_status(&e), Json(serde_json::json!({"error": e.to_string()}))).into_response(),
+    }
+}
+
+async fn fed_lift_sanctions(
+    State(state): State<AppState>,
+    Path(id): Path<String>,
+) -> impl IntoResponse {
+    let fed = require_federation!(state);
+    let mut fed = fed.lock().await;
+    match fed.lift_sanctions(&id) {
+        Ok(status) => (StatusCode::OK, Json(serde_json::json!({"world_id": id, "diplomatic_status": status.to_string()}))).into_response(),
+        Err(e) => (fed_error_to_status(&e), Json(serde_json::json!({"error": e.to_string()}))).into_response(),
+    }
+}
+
+async fn fed_sever_ties(
+    State(state): State<AppState>,
+    Json(body): Json<FedSeverTiesRequest>,
+) -> impl IntoResponse {
+    let fed = require_federation!(state);
+    let mut fed = fed.lock().await;
+    match fed.sever_ties(&body.world_id, body.tick) {
+        Ok(()) => {
+            let world = fed.get_world(&body.world_id).unwrap().clone();
+            (StatusCode::OK, Json(serde_json::json!(world))).into_response()
+        }
+        Err(e) => (fed_error_to_status(&e), Json(serde_json::json!({"error": e.to_string()}))).into_response(),
+    }
+}
+
+async fn fed_declare_war(
+    State(state): State<AppState>,
+    Json(body): Json<FedDeclareWarRequest>,
+) -> impl IntoResponse {
+    let fed = require_federation!(state);
+    let mut fed = fed.lock().await;
+    match fed.declare_war(&body.world_id, body.tick) {
+        Ok(()) => {
+            let world = fed.get_world(&body.world_id).unwrap().clone();
+            (StatusCode::OK, Json(serde_json::json!(world))).into_response()
+        }
+        Err(e) => (fed_error_to_status(&e), Json(serde_json::json!({"error": e.to_string()}))).into_response(),
+    }
+}
+
+async fn fed_propose_peace(
+    State(state): State<AppState>,
+    Json(body): Json<FedProposePeaceRequest>,
+) -> impl IntoResponse {
+    let fed = require_federation!(state);
+    let mut fed = fed.lock().await;
+    match fed.propose_peace(&body.world_id, body.tick) {
+        Ok(treaty_id) => (StatusCode::CREATED, Json(serde_json::json!({"treaty_id": treaty_id, "world_id": body.world_id, "status": "peace_proposed"}))).into_response(),
+        Err(e) => (fed_error_to_status(&e), Json(serde_json::json!({"error": e.to_string()}))).into_response(),
+    }
+}
+
+async fn fed_accept_peace(
+    State(state): State<AppState>,
+    Path(id): Path<String>,
+) -> impl IntoResponse {
+    let fed = require_federation!(state);
+    let mut fed = fed.lock().await;
+    match fed.accept_peace(&id, 0) {
+        Ok(()) => {
+            let world = fed.get_world(&id).unwrap().clone();
+            (StatusCode::OK, Json(serde_json::json!(world))).into_response()
+        }
+        Err(e) => (fed_error_to_status(&e), Json(serde_json::json!({"error": e.to_string()}))).into_response(),
+    }
+}
+
+async fn fed_summary(
+    State(state): State<AppState>,
+) -> impl IntoResponse {
+    let fed = require_federation!(state);
+    let fed = fed.lock().await;
+    let summary = fed.summary();
+    (StatusCode::OK, Json(serde_json::json!(summary))).into_response()
 }

@@ -1,23 +1,30 @@
 # Screenshots
 
-This directory contains dashboard screenshots used in the project README.
+This directory contains dashboard preview illustrations used in the project README.
 
-## Required Files
+## Files
 
-| File | Description | Suggested Source |
-|------|-------------|------------------|
-| `world-overview.png` | Dashboard world overview page showing stat cards (agent count, GDP, tick), event stream, and leaderboard | `http://localhost:3001` main page |
-| `agent-decisions.png` | Agent detail page showing decision log, think loop (Perceive→Decide→Act), skill tree | `http://localhost:3001/agents/[id]` |
-| `emergent-societies.png` | Organizations page or economy page showing emergent behavior (orgs formed, stock trades, events) | `http://localhost:3001/organizations` or `/economy` |
-| `demo-thumbnail.png` | Thumbnail image for demo video embed in README | Video frame capture |
+| File | Description |
+|------|-------------|
+| `world-overview.svg` | Dashboard world overview — stat cards, event stream, leaderboard |
+| `agent-decisions.svg` | Agent detail — decision log, think loop (Perceive→Decide→Act), skills |
+| `emergent-societies.svg` | Organizations & stock market — emergent behavior |
 
-## How to Capture
+These are **illustrated SVG previews** (dark-theme mockups). They should be replaced with real screenshots when a running instance is available.
+
+## How to Replace with Real Screenshots
 
 1. Start the platform: `docker compose up`
 2. Wait for agents to produce interesting events (5-10 minutes)
 3. Take screenshots at 1280×720 or higher resolution
-4. Optimize with: `pngquant --quality=65-80 screenshot.png`
+4. Save as PNG or update the SVG paths in README
+5. Optimize with: `pngquant --quality=65-80 screenshot.png`
+
+## Demo Video Thumbnail
+
+The demo video embed (`demo-thumbnail.png`) is pending completion of the demo video.
+When ready, uncomment the video section in README and add the thumbnail.
 
 ## Contributing
 
-These are placeholder paths. If you have a running instance and can capture good screenshots, please open a PR!
+If you have a running instance and can capture good screenshots, please open a PR!

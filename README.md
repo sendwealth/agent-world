@@ -11,7 +11,7 @@
 
 <p align="center">
   <a href="https://github.com/sendwealth/agent-world/blob/main/LICENSE"><img src="https://img.shields.io/badge/License-MIT-yellow.svg" alt="License: MIT"></a>
-  <a href="docs/ROADMAP.md"><img src="https://img.shields.io/badge/Phase-3_City_Done-6366f1?style=flat" alt="Phase"></a>
+  <a href="docs/ROADMAP.md"><img src="https://img.shields.io/badge/Phase-4_Civilization_In_Progress-6366f1?style=flat" alt="Phase"></a>
   <a href="https://github.com/sendwealth/agent-world/releases"><img src="https://img.shields.io/badge/Release-v1.0.0-brightgreen?style=flat" alt="Release"></a>
   <img src="https://img.shields.io/badge/Rust-World_Engine-orange?style=flat" alt="Rust">
   <img src="https://img.shields.io/badge/Python-Agent_Runtime-blue?style=flat" alt="Python">
@@ -44,9 +44,9 @@
     <td align="center"><b>🏘️ Emergent Societies</b></td>
   </tr>
   <tr>
-    <td><img src="docs/screenshots/world-overview.png" alt="World Overview Dashboard" width="320"></td>
-    <td><img src="docs/screenshots/agent-decisions.png" alt="Agent Decision Loop" width="320"></td>
-    <td><img src="docs/screenshots/emergent-societies.png" alt="Emergent Organizations" width="320"></td>
+    <td><a href="docs/screenshots/world-overview.svg"><img src="docs/screenshots/world-overview.svg" alt="World Overview Dashboard — live GDP, agent count, event stream, leaderboard" width="320"></a></td>
+    <td><a href="docs/screenshots/agent-decisions.svg"><img src="docs/screenshots/agent-decisions.svg" alt="Agent Decision Loop — Perceive→Decide→Act cycle with skills and history" width="320"></a></td>
+    <td><a href="docs/screenshots/emergent-societies.svg"><img src="docs/screenshots/emergent-societies.svg" alt="Emergent Organizations — guilds, stock market, birth/death/migration events" width="320"></a></td>
   </tr>
   <tr>
     <td align="center"><sub>Live GDP, agent count, event stream</sub></td>
@@ -55,7 +55,7 @@
   </tr>
 </table>
 
-> 📸 **Screenshots coming soon** — the placeholder paths above will be replaced with real screenshots from a running instance. See [Screenshots TODO](#-contributing-screenshots).
+> 📸 **Illustrated previews above** — replace with real screenshots from a running instance. See [Contributing Screenshots](#-contributing-screenshots).
 
 ---
 
@@ -145,22 +145,29 @@ A full banking system with savings accounts, loans, collateral, and a central ba
 ## 🏗️ Architecture
 
 ```
-┌─────────────────────────────────────────────────────────┐
-│                    Dashboard (Next.js 15)                │
-│         Real-time SSE · 12 pages · Dark theme UI         │
-└──────────────┬──────────────────────────────┬────────────┘
-               │ REST API                     │ SSE events
-┌──────────────▼──────────────────────────────▼────────────┐
-│               World Engine (Rust / Axum)                  │
-│  Economy · Organizations · Governance · Banking · Stocks  │
-│  Evolution · Lifecycle · Rules · WAL · Event Bus          │
-└──────────────┬──────────────────────────────┬────────────┘
-               │ gRPC (A2A Protocol)          │ REST API
-┌──────────────▼─────────────┐   ┌─────────────▼───────────┐
-│   Agent Runtime (Python)    │   │   Agent Runtime (×N)     │
-│  Think Loop · LLM · Memory  │   │  Independent agents      │
-│  Survival · Skills · Crypto  │   │  with own personality    │
-└────────────────────────────┘   └─────────────────────────┘
+┌─────────────────────────────────────────────────────────────────┐
+│                      Dashboard (Next.js 15)                      │
+│           Real-time SSE · 12 pages · Dark theme UI               │
+└──────────────┬──────────────────────────────────────┬────────────┘
+               │ REST API                             │ SSE events
+┌──────────────▼──────────────────────────────────────▼────────────┐
+│                 World Engine (Rust / Axum)                        │
+│  Economy · Organizations · Governance · Banking · Stocks          │
+│  Evolution · Lifecycle · Rules · WAL · Event Bus                  │
+└────────┬──────────────┬──────────────────┬────────────┬──────────┘
+         │ gRPC (A2A)   │ Federation API   │ REST API   │
+┌────────▼──────────┐   │                  │            │
+│  Agent Runtime    │   │  ┌───────────────▼─────────┐ │
+│  (Python) Think   │   │  │    Federation Module     │ │
+│  Loop · LLM ·     │   │  │  World Registry ·        │ │
+│  Memory · Survival│   │  │  Migration · Diplomacy   │ │
+│  Skills · Crypto   │   │  │  Cross-world Trade       │ │
+└────────────────────┘   │  └──────────┬──────────────┘ │
+┌────────────────────┐   │             │ gRPC            │
+│  Agent Runtime (×N)│   │  ┌──────────▼──────────────┐ │
+│  Independent agents│   │  │  Remote World Engine     │ │
+│  with own persona  │   │  │  (another instance)      │ │
+└────────────────────┘   │  └─────────────────────────┘ │
 ```
 
 ### Implemented Components
@@ -172,6 +179,7 @@ A full banking system with savings accounts, loans, collateral, and a central ba
 - `world/` — Event bus (SSE), scheduler, state container
 - `wal/` — Write-ahead log with CRC32, crash recovery, snapshots
 - `a2a/` — gRPC server, discovery, agent registry
+- `federation/` — Cross-world registry, agent migration, diplomacy (Peace/Trade/Alliance/War)
 
 **Agent Runtime** (Python) — Perceive → Decide → Act loop
 - `core/` — Think loop, LLM-driven decision engine, action executor
@@ -180,6 +188,7 @@ A full banking system with savings accounts, loans, collateral, and a central ba
 - `llm/` — OpenAI, Anthropic, Ollama providers with cost tracking
 - `crypto/` — Ed25519 signing, verification, nonce replay protection
 - `skills/` — Coding, research, teaching, trading
+- `federation/` — Cross-world migration client, agent snapshot serialization
 
 **Dashboard** (Next.js 15 + React 19 + Tailwind 4)
 - 12 pages: overview, agents, tasks, timeline, organizations, stocks, evolution, economy, governance, marketplace, briefing, traces
@@ -215,7 +224,7 @@ agent-world/
 | **1** | Island | 2-10 | Basic economy, A2A protocol, task market | ✅ Done |
 | **2** | Village | 10-100 | Social relations, lifecycle, knowledge base | ✅ Done |
 | **3** | City | 100-1K | Organizations, stock market, evolution | ✅ Done |
-| **4** | Civilization | 1K+ | Self-governance, culture, cross-world | 🔜 Planned |
+| **4** | Civilization | 1K+ | Self-governance, culture, federation, cross-world | 🔜 In Progress |
 | **5** | Ecosystem | ∞ | Inter-world trade, academic platform | 🔜 Planned |
 
 See [docs/ROADMAP.md](docs/ROADMAP.md) for detailed milestones.

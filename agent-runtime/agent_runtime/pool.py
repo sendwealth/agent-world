@@ -176,6 +176,9 @@ class AgentProcessManager:
             data_dir.mkdir(parents=True, exist_ok=True)
             log_path = self._base_dir / "logs" / f"{name}.log"
 
+            # Initialize data files for the agent
+            self._init_data_files(data_dir, name)
+
             proc = self._start_process(name, config, data_dir, log_path)
 
             mp = ManagedProcess(
@@ -342,6 +345,7 @@ class AgentProcessManager:
         cmd = [
             self._python, "-m", "agent_runtime", "spawn",
             "--name", name,
+            "--data-dir", str(data_dir),
         ]
 
         if config.get("config"):
@@ -364,6 +368,58 @@ class AgentProcessManager:
     def _get_env(self, data_dir: Path) -> dict[str, str]:
         """Build the environment dict for a subprocess."""
         return {**os.environ, "AGENT_DATA_DIR": str(data_dir)}
+
+    def _init_data_files(self, data_dir: Path, agent_name: str) -> None:
+        """Seed the standard data files for an agent if they don't exist yet.
+
+        Creates:
+          - ``memory.db``  : empty SQLite database for agent memories
+          - ``skills.json``: empty JSON object (populated by subprocess)
+          - ``trace.db``   : empty SQLite database for tick traces
+
+        Idempotent — skips files that already exist.
+        """
+        # memory.db
+        memory_db = data_dir / "memory.db"
+        if not memory_db.exists():
+            import sqlite3
+            conn = sqlite3.connect(str(memory_db))
+            conn.execute(
+                "CREATE TABLE IF NOT EXISTS memories ("
+                " id INTEGER PRIMARY KEY AUTOINCREMENT,"
+                " tick INTEGER NOT NULL,"
+                " content TEXT NOT NULL,"
+                " created_at REAL NOT NULL"
+                ")"
+            )
+            conn.commit()
+            conn.close()
+
+        # skills.json
+        skills_json = data_dir / "skills.json"
+        if not skills_json.exists():
+            skills_json.write_text("{}")
+
+        # trace.db
+        trace_db = data_dir / "trace.db"
+        if not trace_db.exists():
+            import sqlite3
+            conn = sqlite3.connect(str(trace_db))
+            conn.execute(
+                "CREATE TABLE IF NOT EXISTS tick_snapshots ("
+                " id INTEGER PRIMARY KEY AUTOINCREMENT,"
+                " agent_id TEXT NOT NULL,"
+                " tick INTEGER NOT NULL,"
+                " snapshot_json TEXT NOT NULL,"
+                " created_at REAL NOT NULL"
+                ")"
+            )
+            conn.commit()
+            conn.close()
+
+        logger.debug(
+            "Data files initialised for %s in %s", agent_name, data_dir,
+        )
 
     def _start_process(
         self, name: str, config: dict[str, Any], data_dir: Path, log_path: Path,

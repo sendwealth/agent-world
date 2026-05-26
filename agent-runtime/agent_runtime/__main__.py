@@ -454,6 +454,108 @@ def spawn_agent(config: AgentSpawnConfig) -> AgentState:
 
 
 # ---------------------------------------------------------------------------
+# Data directory isolation
+# ---------------------------------------------------------------------------
+
+
+def _init_data_dir(data_dir: Path, state: AgentState) -> None:
+    """Initialize an agent's isolated data directory.
+
+    Creates the directory (if needed) and seeds the standard data files:
+      - ``memory.db``  : SQLite database for agent memory (touched to reserve)
+      - ``skills.json``: JSON snapshot of the agent's skills
+      - ``trace.db``   : SQLite database for tick traces (touched to reserve)
+      - ``agent_state.json``: Serialized AgentState for crash recovery
+
+    Args:
+        data_dir: Per-agent data directory (e.g. ``data/alice/``).
+        state: The agent's current state (serialized to ``agent_state.json``).
+    """
+    data_dir.mkdir(parents=True, exist_ok=True)
+
+    # Reserve memory.db (SQLite) — create empty DB if not present
+    memory_db = data_dir / "memory.db"
+    if not memory_db.exists():
+        import sqlite3
+        conn = sqlite3.connect(str(memory_db))
+        conn.execute(
+            "CREATE TABLE IF NOT EXISTS memories ("
+            " id INTEGER PRIMARY KEY AUTOINCREMENT,"
+            " tick INTEGER NOT NULL,"
+            " content TEXT NOT NULL,"
+            " created_at REAL NOT NULL"
+            ")"
+        )
+        conn.commit()
+        conn.close()
+
+    # Write skills.json
+    skills_json = data_dir / "skills.json"
+    skills_data = {
+        name: skill.model_dump() for name, skill in state.skills.items()
+    }
+    skills_json.write_text(
+        json.dumps(skills_data, indent=2, default=str, ensure_ascii=False)
+    )
+
+    # Reserve trace.db (SQLite) — create empty DB if not present
+    trace_db = data_dir / "trace.db"
+    if not trace_db.exists():
+        import sqlite3
+        conn = sqlite3.connect(str(trace_db))
+        conn.execute(
+            "CREATE TABLE IF NOT EXISTS tick_snapshots ("
+            " id INTEGER PRIMARY KEY AUTOINCREMENT,"
+            " agent_id TEXT NOT NULL,"
+            " tick INTEGER NOT NULL,"
+            " snapshot_json TEXT NOT NULL,"
+            " created_at REAL NOT NULL"
+            ")"
+        )
+        conn.commit()
+        conn.close()
+
+    # Persist AgentState for crash recovery
+    _save_agent_state_to_dir(data_dir, state)
+
+    logger.info(
+        "Data directory initialised  dir=%s  files=[memory.db, skills.json, trace.db, agent_state.json]",
+        data_dir,
+        extra={"agent": state.name, "event": "data_dir_initialised"},
+    )
+
+
+def _save_agent_state_to_dir(data_dir: Path, state: AgentState) -> None:
+    """Persist an AgentState snapshot to the agent's data directory.
+
+    Writes ``agent_state.json`` with the full serialised state.
+    This file can be loaded on restart to resume the agent.
+    """
+    state_path = data_dir / "agent_state.json"
+    state_path.write_text(state.to_json())
+    logger.debug(
+        "AgentState saved to %s",
+        state_path,
+        extra={"agent": state.name},
+    )
+
+
+def _load_agent_state_from_dir(data_dir: Path) -> AgentState | None:
+    """Load a previously saved AgentState from a data directory.
+
+    Returns None if no saved state exists.
+    """
+    state_path = data_dir / "agent_state.json"
+    if not state_path.exists():
+        return None
+    try:
+        return AgentState.from_json(state_path.read_text())
+    except Exception:
+        logger.warning("Failed to load AgentState from %s", state_path, exc_info=True)
+        return None
+
+
+# ---------------------------------------------------------------------------
 # Main runtime
 # ---------------------------------------------------------------------------
 
@@ -506,6 +608,11 @@ async def run_agent(config: RuntimeConfig) -> RunStats:
         agent_name=state.name,
         agent_id=str(state.id),
     )
+
+    # Initialize data directory isolation if configured
+    data_dir = config.data_dir
+    if data_dir is not None:
+        _init_data_dir(data_dir, state)
 
     # Generate Ed25519 key pair for this agent
     public_key_b64: str | None = None
@@ -668,6 +775,17 @@ async def run_agent(config: RuntimeConfig) -> RunStats:
                     )
                 except Exception:
                     logger.warning("Failed to close vector memory", exc_info=True)
+
+            # Graceful shutdown: persist AgentState to data directory
+            if data_dir is not None:
+                try:
+                    _save_agent_state_to_dir(data_dir, state)
+                    logger.info(
+                        "AgentState persisted to data directory",
+                        extra={"agent": state.name, "event": "state_persisted"},
+                    )
+                except Exception:
+                    logger.warning("Failed to persist AgentState", exc_info=True)
 
             # Graceful shutdown: stop LLM queue and async decision provider
             llm_queue = _find_llm_queue(decision_provider)
@@ -1125,6 +1243,10 @@ def _add_spawn_args(parser: argparse.ArgumentParser) -> None:
         "--health-port", type=int, default=None,
         help="Health check HTTP port (default: 9090, env: HEALTH_PORT)",
     )
+    parser.add_argument(
+        "--data-dir", type=Path, default=None,
+        help="Agent data directory for isolated storage (memory.db, skills.json, trace.db)",
+    )
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -1251,6 +1373,17 @@ def build_config_from_args(args: argparse.Namespace) -> RuntimeConfig:
     # Health check port
     if getattr(args, "health_port", None) is not None:
         config.health_port = args.health_port  # type: ignore[attr-defined]
+
+    # Data directory for agent isolation
+    data_dir = getattr(args, "data_dir", None)
+    if data_dir is None:
+        # Fall back to AGENT_DATA_DIR env var (set by pool.py subprocess manager)
+        env_data_dir = os.environ.get("AGENT_DATA_DIR")
+        if env_data_dir:
+            data_dir = Path(env_data_dir)
+    if data_dir is not None:
+        config.data_dir = Path(data_dir)
+        config.data_dir.mkdir(parents=True, exist_ok=True)
 
     # LLM configuration: CLI args > environment variables > default (Ollama)
     _apply_llm_config(config, args)
@@ -1493,6 +1626,11 @@ class AgentPool:
         # Always set the name (overrides config file name)
         cmd.extend(["--name", agent.name])
 
+        # Per-agent data directory isolation
+        data_dir = Path("data") / agent.name
+        data_dir.mkdir(parents=True, exist_ok=True)
+        cmd.extend(["--data-dir", str(data_dir)])
+
         # Append shared spawn args (world-url, llm settings, etc.)
         cmd.extend(self._spawn_args)
 
@@ -1714,6 +1852,8 @@ def _build_pool_spawn_args(args: argparse.Namespace) -> list[str]:
         parts.extend(["--tick-interval", str(args.tick_interval)])
     if getattr(args, "health_port", None) is not None:
         parts.extend(["--health-port", str(args.health_port)])
+    if getattr(args, "data_dir", None) is not None:
+        parts.extend(["--data-dir", str(args.data_dir)])
     return parts
 
 

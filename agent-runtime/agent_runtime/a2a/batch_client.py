@@ -34,8 +34,7 @@ import logging
 from dataclasses import dataclass, field
 from typing import Any
 
-import grpc
-from protocol.gen.python import a2a_pb2, a2a_pb2_grpc
+from protocol.gen.python import a2a_pb2
 
 from .client import A2AClient
 from .message import build_a2a_message

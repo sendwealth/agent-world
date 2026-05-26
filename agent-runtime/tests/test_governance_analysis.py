@@ -9,14 +9,10 @@ import pytest
 from agent_runtime.organization.governance_analysis import (
     ExportFormat,
     GovernanceAnalyzer,
-    GovernanceComparison,
     GovernanceEventData,
-    LeadershipPrediction,
     OrgGovernanceSnapshot,
     StabilityLevel,
-    StabilityReport,
 )
-
 
 # ── Helpers ──────────────────────────────────────────────────
 

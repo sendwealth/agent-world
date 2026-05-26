@@ -493,7 +493,7 @@ mod tests {
         let mut registry =
             AgentRegistry::new().with_heartbeat_timeout(Duration::from_millis(50));
 
-        let id1 = registry.register("Online".into(), vec![], vec![]).unwrap();
+        let _id1 = registry.register("Online".into(), vec![], vec![]).unwrap();
         let id2 = registry.register("ToBeOffline".into(), vec![], vec![]).unwrap();
 
         // Age id2

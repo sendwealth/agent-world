@@ -856,7 +856,7 @@ safety:
   new_agent_protection_ticks: 30
 "#;
 
-        let config: GenesisConfig = serde_yaml::from_str(&yaml).unwrap();
+        let config: GenesisConfig = serde_yaml::from_str(yaml).unwrap();
         assert_eq!(config.world.name, "test-world");
         assert_eq!(config.world.tick_interval_ms, 500);
         assert_eq!(config.world.max_agents, 5);

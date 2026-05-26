@@ -31,6 +31,7 @@ pub struct EvolutionSubsystem {
     /// Mutation engine (internally holds the skill tree).
     mutation: MutationEngine,
     /// Crossover engine for offspring generation.
+    #[allow(dead_code)]
     crossover: CrossoverEngine,
     /// Natural selection engine.
     selection: Mutex<SelectionEngine>,

@@ -12,7 +12,6 @@ import random
 import uuid
 from dataclasses import dataclass, field
 from enum import Enum
-from typing import Any
 
 from .formation import AgentProfile, FormationConditions, FormationReason
 
@@ -215,7 +214,10 @@ class ProposalGenerator:
         )
 
         template = self._rng.choice(
-            _CHARTER_TEMPLATES.get(primary_trigger, _CHARTER_TEMPLATES[FormationReason.SHARED_INTERESTS])
+            _CHARTER_TEMPLATES.get(
+                primary_trigger,
+                _CHARTER_TEMPLATES[FormationReason.SHARED_INTERESTS],
+            )
         )
 
         # Collect shared skills for template formatting
@@ -235,4 +237,10 @@ class ProposalGenerator:
             OrgType.COLLECTIVE: "Building a strong community through cooperation.",
         }
 
-        return f"{charter_body} {type_purpose.get(conditions.triggers[0] if conditions.triggers else None, type_purpose[OrgType.COLLECTIVE])}" if conditions.triggers else f"{charter_body} {type_purpose[OrgType.COLLECTIVE]}"
+        if conditions.triggers:
+            trigger_type = type_purpose.get(
+                conditions.triggers[0],
+                type_purpose[OrgType.COLLECTIVE],
+            )
+            return f"{charter_body} {trigger_type}"
+        return f"{charter_body} {type_purpose[OrgType.COLLECTIVE]}"

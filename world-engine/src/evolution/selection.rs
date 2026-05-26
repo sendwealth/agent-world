@@ -268,11 +268,11 @@ mod tests {
         let id = Uuid::new_v4();
         let mut skills = HashMap::new();
         let skill_names = ["coding", "trading", "crafting", "mining", "exploration"];
-        for i in 0..skill_count.min(skill_names.len()) {
+        for name in skill_names.iter().take(skill_count) {
             skills.insert(
-                skill_names[i].to_string(),
+                name.to_string(),
                 crate::economy::token_burn::SkillRecord {
-                    name: skill_names[i].to_string(),
+                    name: name.to_string(),
                     level: 1,
                     experience: 0.0,
                 },

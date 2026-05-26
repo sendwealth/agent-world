@@ -225,6 +225,12 @@ pub struct HumanParticipationStore {
     current_tick: u64,
 }
 
+impl Default for HumanParticipationStore {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl HumanParticipationStore {
     pub fn new() -> Self {
         Self {
@@ -391,6 +397,7 @@ impl HumanParticipationStore {
 
     // ── Claimed agent operations ──────────────────────────────
 
+    #[allow(clippy::too_many_arguments)]
     pub fn claim_agent(&mut self, human_id: &str, agent_id: &str, agent_name: &str, tokens: u64, money: u64, reputation: f64, skills: HashMap<String, u32>, age: u64) -> ClaimedAgent {
         let claimed = ClaimedAgent {
             agent_id: agent_id.to_string(),
@@ -421,10 +428,10 @@ impl HumanParticipationStore {
     pub fn get_influence_rankings(&self, sort_by: &str, limit: usize) -> Vec<&HumanInfluenceEntry> {
         let mut entries: Vec<&HumanInfluenceEntry> = self.influence_entries.iter().collect();
         match sort_by {
-            "economic_impact" => entries.sort_by(|a, b| b.economic_impact.cmp(&a.economic_impact)),
-            "political_impact" => entries.sort_by(|a, b| b.political_impact.cmp(&a.political_impact)),
-            "cultural_impact" => entries.sort_by(|a, b| b.cultural_impact.cmp(&a.cultural_impact)),
-            _ => entries.sort_by(|a, b| b.total_influence.cmp(&a.total_influence)),
+            "economic_impact" => entries.sort_by_key(|b| std::cmp::Reverse(b.economic_impact)),
+            "political_impact" => entries.sort_by_key(|b| std::cmp::Reverse(b.political_impact)),
+            "cultural_impact" => entries.sort_by_key(|b| std::cmp::Reverse(b.cultural_impact)),
+            _ => entries.sort_by_key(|b| std::cmp::Reverse(b.total_influence)),
         }
         entries.truncate(limit);
         entries
@@ -463,7 +470,7 @@ impl HumanParticipationStore {
             self.interventions.iter().collect()
         };
         // Most recent first
-        result.sort_by(|a, b| b.tick.cmp(&a.tick));
+        result.sort_by_key(|b| std::cmp::Reverse(b.tick));
         result.truncate(limit);
         result
     }

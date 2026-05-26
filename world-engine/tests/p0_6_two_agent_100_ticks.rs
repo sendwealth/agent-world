@@ -320,14 +320,11 @@ async fn test_100_ticks_survival_death_with_100_initial_tokens() {
     let mut dying_count = 0;
     let mut died_count = 0;
 
-    loop {
-        match event_rx.try_recv() {
-            Ok(event) => match event.event_type() {
-                EventType::AgentDying => dying_count += 1,
-                EventType::AgentDied => died_count += 1,
-                _ => {}
-            },
-            Err(_) => break,
+    while let Ok(event) = event_rx.try_recv() {
+        match event.event_type() {
+            EventType::AgentDying => dying_count += 1,
+            EventType::AgentDied => died_count += 1,
+            _ => {}
         }
     }
 
@@ -433,15 +430,12 @@ async fn test_two_agent_100_ticks_survival_then_death_judgment() {
         let dead = world.advance_tick().await;
 
         // Count events from this tick
-        loop {
-            match event_rx.try_recv() {
-                Ok(event) => match event.event_type() {
-                    EventType::TickAdvanced => total_tick_events += 1,
-                    EventType::BalanceChanged => balance_change_events += 1,
-                    EventType::AgentDied | EventType::AgentDying => {}
-                    _ => {}
-                },
-                Err(_) => break,
+        while let Ok(event) = event_rx.try_recv() {
+            match event.event_type() {
+                EventType::TickAdvanced => total_tick_events += 1,
+                EventType::BalanceChanged => balance_change_events += 1,
+                EventType::AgentDied | EventType::AgentDying => {}
+                _ => {}
             }
         }
 
@@ -530,22 +524,19 @@ async fn test_two_agent_100_ticks_survival_then_death_judgment() {
 
     let mut found_dying = false;
     let mut found_died = false;
-    loop {
-        match event_rx.try_recv() {
-            Ok(event) => match event {
-                WorldEvent::AgentDying { agent_id, reason, .. } => {
-                    assert_eq!(agent_id, agent_a_id);
-                    assert_eq!(reason, DeathReason::TokenDepleted);
-                    found_dying = true;
-                }
-                WorldEvent::AgentDied { agent_id, reason } => {
-                    assert_eq!(agent_id, agent_a_id);
-                    assert_eq!(reason, DeathReason::TokenDepleted);
-                    found_died = true;
-                }
-                _ => {}
-            },
-            Err(_) => break,
+    while let Ok(event) = event_rx.try_recv() {
+        match event {
+            WorldEvent::AgentDying { agent_id, reason, .. } => {
+                assert_eq!(agent_id, agent_a_id);
+                assert_eq!(reason, DeathReason::TokenDepleted);
+                found_dying = true;
+            }
+            WorldEvent::AgentDied { agent_id, reason } => {
+                assert_eq!(agent_id, agent_a_id);
+                assert_eq!(reason, DeathReason::TokenDepleted);
+                found_died = true;
+            }
+            _ => {}
         }
     }
 
@@ -588,33 +579,30 @@ async fn test_event_broadcasting_during_100_ticks() {
         let _dead = world.advance_tick().await;
 
         // Drain all events from this tick
-        loop {
-            match event_rx.try_recv() {
-                Ok(event) => match &event {
-                    WorldEvent::TickAdvanced { tick } => {
-                        tick_events.push(*tick);
-                    }
-                    WorldEvent::BalanceChanged {
-                        agent_id,
-                        old_balance,
-                        new_balance,
-                        ..
-                    } => {
-                        balance_events.push((
-                            agent_id.clone(),
-                            *old_balance,
-                            *new_balance,
-                        ));
-                    }
-                    WorldEvent::AgentDying { agent_id, .. } => {
-                        death_events.push((agent_id.clone(), EventType::AgentDying));
-                    }
-                    WorldEvent::AgentDied { agent_id, .. } => {
-                        death_events.push((agent_id.clone(), EventType::AgentDied));
-                    }
-                    _ => {}
-                },
-                Err(_) => break,
+        while let Ok(event) = event_rx.try_recv() {
+            match &event {
+                WorldEvent::TickAdvanced { tick } => {
+                    tick_events.push(*tick);
+                }
+                WorldEvent::BalanceChanged {
+                    agent_id,
+                    old_balance,
+                    new_balance,
+                    ..
+                } => {
+                    balance_events.push((
+                        agent_id.clone(),
+                        *old_balance,
+                        *new_balance,
+                    ));
+                }
+                WorldEvent::AgentDying { agent_id, .. } => {
+                    death_events.push((agent_id.clone(), EventType::AgentDying));
+                }
+                WorldEvent::AgentDied { agent_id, .. } => {
+                    death_events.push((agent_id.clone(), EventType::AgentDied));
+                }
+                _ => {}
             }
         }
     }
@@ -765,27 +753,24 @@ async fn test_death_judgment_stop_heartbeat() {
     let mut found_died = false;
     let mut tick_advanced = false;
 
-    loop {
-        match event_rx.try_recv() {
-            Ok(event) => match &event {
-                WorldEvent::AgentDying { agent_id, reason, grace_ticks } => {
-                    assert_eq!(agent_id, &agent_b_id);
-                    assert_eq!(*reason, DeathReason::TokenDepleted);
-                    assert_eq!(*grace_ticks, 0);
-                    found_dying = true;
-                }
-                WorldEvent::AgentDied { agent_id, reason } => {
-                    assert_eq!(agent_id, &agent_b_id);
-                    assert_eq!(*reason, DeathReason::TokenDepleted);
-                    found_died = true;
-                }
-                WorldEvent::TickAdvanced { tick } => {
-                    assert_eq!(*tick, 51);
-                    tick_advanced = true;
-                }
-                _ => {}
-            },
-            Err(_) => break,
+    while let Ok(event) = event_rx.try_recv() {
+        match &event {
+            WorldEvent::AgentDying { agent_id, reason, grace_ticks } => {
+                assert_eq!(agent_id, &agent_b_id);
+                assert_eq!(*reason, DeathReason::TokenDepleted);
+                assert_eq!(*grace_ticks, 0);
+                found_dying = true;
+            }
+            WorldEvent::AgentDied { agent_id, reason } => {
+                assert_eq!(agent_id, &agent_b_id);
+                assert_eq!(*reason, DeathReason::TokenDepleted);
+                found_died = true;
+            }
+            WorldEvent::TickAdvanced { tick } => {
+                assert_eq!(*tick, 51);
+                tick_advanced = true;
+            }
+            _ => {}
         }
     }
 

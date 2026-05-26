@@ -84,7 +84,7 @@ async fn register_test_agent(app: &mut axum::Router) -> Value {
 
 #[tokio::test]
 async fn test_register_agent() {
-    let mut app = create_test_app();
+    let app = create_test_app();
 
     let req = make_request(
         Method::POST,
@@ -230,7 +230,7 @@ async fn test_deregister_agent() {
 
 #[tokio::test]
 async fn test_deregister_nonexistent() {
-    let mut app = create_test_app();
+    let app = create_test_app();
 
     let fake_id = "00000000-0000-0000-0000-000000000000";
 

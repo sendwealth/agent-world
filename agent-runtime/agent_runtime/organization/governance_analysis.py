@@ -12,11 +12,9 @@ event data to produce analytical insights:
 from __future__ import annotations
 
 import json
-import math
 from dataclasses import dataclass, field
 from enum import Enum
 from typing import Any
-
 
 # ---------------------------------------------------------------------------
 # Data types
@@ -433,11 +431,19 @@ class GovernanceAnalyzer:
         lines = ["# Governance Report\n"]
         for org, stability, prediction in reports:
             lines.append(f"## {org.org_id}\n")
-            lines.append(f"- **Stability**: {stability.stability_level.value} ({stability.stability_score:.2f})")
+            lines.append(
+                f"- **Stability**: "
+                f"{stability.stability_level.value} "
+                f"({stability.stability_score:.2f})"
+            )
             lines.append(f"  - Leadership: {stability.leadership_stability:.2f}")
             lines.append(f"  - Fiscal: {stability.fiscal_stability:.2f}")
             lines.append(f"  - Diplomacy: {stability.diplomatic_stability:.2f}")
-            lines.append(f"- **Leadership Change Risk**: {prediction.risk_score:.2f} (confidence: {prediction.confidence:.2f})")
+            lines.append(
+                f"- **Leadership Change Risk**: "
+                f"{prediction.risk_score:.2f} "
+                f"(confidence: {prediction.confidence:.2f})"
+            )
             if stability.factors:
                 lines.append("- **Risk Factors**:")
                 for key, val in stability.factors.items():

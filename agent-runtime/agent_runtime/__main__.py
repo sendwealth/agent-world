@@ -755,7 +755,6 @@ def _create_mock_decision_provider(preset: str) -> Any | None:
             sys.path.insert(0, tests_str)
 
         from e2e.mocks.mock_llm import (  # noqa: F811
-            AgentMockLLM,
             hungry_gather_mock,
             social_nearby_mock,
             survival_behaviour_mock,

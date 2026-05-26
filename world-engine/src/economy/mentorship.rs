@@ -342,6 +342,7 @@ mod tests {
     use super::*;
     use crate::economy::token_burn::SkillRecord;
 
+    #[allow(dead_code)]
     fn make_agent_with_skill(id: &str, skill: &str, level: u32) -> (Uuid, u64, AgentRecord) {
         let uuid = Uuid::parse_str(id).unwrap_or(Uuid::new_v4());
         (

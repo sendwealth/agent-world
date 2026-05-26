@@ -81,7 +81,7 @@ async fn test_e2e_smoke_2_agent_conversation_with_dashboard() {
 
     // Spawn Alice
     let alice_resp = client
-        .post(&format!("{}/api/v1/agents", base_url))
+        .post(format!("{}/api/v1/agents", base_url))
         .json(&serde_json::json!({
             "name": "Alice",
             "tokens": 100_000,
@@ -96,7 +96,7 @@ async fn test_e2e_smoke_2_agent_conversation_with_dashboard() {
 
     // Spawn Bob
     let bob_resp = client
-        .post(&format!("{}/api/v1/agents", base_url))
+        .post(format!("{}/api/v1/agents", base_url))
         .json(&serde_json::json!({
             "name": "Bob",
             "tokens": 100_000,
@@ -111,7 +111,7 @@ async fn test_e2e_smoke_2_agent_conversation_with_dashboard() {
 
     // Verify agents via list endpoint
     let agents_resp = client
-        .get(&format!("{}/api/v1/agents", base_url))
+        .get(format!("{}/api/v1/agents", base_url))
         .send()
         .await
         .unwrap();
@@ -136,7 +136,7 @@ async fn test_e2e_smoke_2_agent_conversation_with_dashboard() {
     println!("[E2E] Phase 2: Alice → Bob message...");
 
     let msg_ab_resp = client
-        .post(&format!("{}/api/v1/messages", base_url))
+        .post(format!("{}/api/v1/messages", base_url))
         .json(&serde_json::json!({
             "from_agent": alice.id,
             "to_agent": bob.id,
@@ -158,7 +158,7 @@ async fn test_e2e_smoke_2_agent_conversation_with_dashboard() {
     println!("[E2E] Phase 3: Bob → Alice reply...");
 
     let msg_ba_resp = client
-        .post(&format!("{}/api/v1/messages", base_url))
+        .post(format!("{}/api/v1/messages", base_url))
         .json(&serde_json::json!({
             "from_agent": bob.id,
             "to_agent": alice.id,
@@ -177,7 +177,7 @@ async fn test_e2e_smoke_2_agent_conversation_with_dashboard() {
 
     // Verify messages stored
     let msgs_resp = client
-        .get(&format!("{}/api/v1/messages", base_url))
+        .get(format!("{}/api/v1/messages", base_url))
         .send()
         .await
         .unwrap();
@@ -201,7 +201,7 @@ async fn test_e2e_smoke_2_agent_conversation_with_dashboard() {
     println!("[E2E] Phase 4: Advancing ticks...");
 
     let tick_resp = client
-        .post(&format!("{}/api/v1/tick", base_url))
+        .post(format!("{}/api/v1/tick", base_url))
         .json(&serde_json::json!({ "count": 10 }))
         .send()
         .await
@@ -226,7 +226,7 @@ async fn test_e2e_smoke_2_agent_conversation_with_dashboard() {
     println!("[E2E] Phase 5: Verifying world stats...");
 
     let stats_resp = client
-        .get(&format!("{}/api/v1/world/stats", base_url))
+        .get(format!("{}/api/v1/world/stats", base_url))
         .send()
         .await
         .unwrap();
@@ -242,7 +242,7 @@ async fn test_e2e_smoke_2_agent_conversation_with_dashboard() {
 
     println!("[E2E] Phase 6: Task lifecycle...");
     let create_task_resp = client
-        .post(&format!("{}/tasks", base_url))
+        .post(format!("{}/tasks", base_url))
         .json(&serde_json::json!({
             "title": "Gather Resources",
             "description": "Collect 50 wood and 30 stone",
@@ -266,7 +266,7 @@ async fn test_e2e_smoke_2_agent_conversation_with_dashboard() {
 
     // Claim task
     let claim_resp = client
-        .post(&format!("{}/tasks/{}/claim", base_url, task_id))
+        .post(format!("{}/tasks/{}/claim", base_url, task_id))
         .json(&serde_json::json!({ "assignee_id": bob.id }))
         .send()
         .await
@@ -276,7 +276,7 @@ async fn test_e2e_smoke_2_agent_conversation_with_dashboard() {
 
     // Start task
     let start_resp = client
-        .post(&format!("{}/tasks/{}/start", base_url, task_id))
+        .post(format!("{}/tasks/{}/start", base_url, task_id))
         .send()
         .await
         .unwrap();
@@ -285,7 +285,7 @@ async fn test_e2e_smoke_2_agent_conversation_with_dashboard() {
 
     // Submit result
     let submit_resp = client
-        .post(&format!("{}/tasks/{}/submit", base_url, task_id))
+        .post(format!("{}/tasks/{}/submit", base_url, task_id))
         .json(&serde_json::json!({ "result": "Gathered 52 wood and 35 stone" }))
         .send()
         .await
@@ -295,7 +295,7 @@ async fn test_e2e_smoke_2_agent_conversation_with_dashboard() {
 
     // Review (approve)
     let review_resp = client
-        .post(&format!("{}/tasks/{}/review", base_url, task_id))
+        .post(format!("{}/tasks/{}/review", base_url, task_id))
         .json(&serde_json::json!({ "approved": true, "reviewer_id": alice.id }))
         .send()
         .await
@@ -305,7 +305,7 @@ async fn test_e2e_smoke_2_agent_conversation_with_dashboard() {
 
     // Complete task
     let complete_resp = client
-        .post(&format!("{}/tasks/{}/complete", base_url, task_id))
+        .post(format!("{}/tasks/{}/complete", base_url, task_id))
         .send()
         .await
         .unwrap();
@@ -333,7 +333,7 @@ async fn test_e2e_smoke_2_agent_conversation_with_dashboard() {
 
     // Verify via WAL consistency endpoint
     let wal_verify_resp = client
-        .get(&format!("{}/wal/verify", base_url))
+        .get(format!("{}/wal/verify", base_url))
         .send()
         .await
         .unwrap();
@@ -347,7 +347,7 @@ async fn test_e2e_smoke_2_agent_conversation_with_dashboard() {
     println!("[E2E] Phase 8: WAL snapshot...");
 
     let snapshot_resp = client
-        .post(&format!("{}/wal/snapshot", base_url))
+        .post(format!("{}/wal/snapshot", base_url))
         .send()
         .await
         .unwrap();
@@ -362,7 +362,7 @@ async fn test_e2e_smoke_2_agent_conversation_with_dashboard() {
 
     // Advance a few more ticks and verify events come through
     let more_ticks = client
-        .post(&format!("{}/api/v1/tick", base_url))
+        .post(format!("{}/api/v1/tick", base_url))
         .json(&serde_json::json!({ "count": 5 }))
         .send()
         .await
@@ -384,7 +384,7 @@ async fn test_e2e_smoke_2_agent_conversation_with_dashboard() {
 
     // Bob proposes a counter-trade
     let msg_ba2 = client
-        .post(&format!("{}/api/v1/messages", base_url))
+        .post(format!("{}/api/v1/messages", base_url))
         .json(&serde_json::json!({
             "from_agent": bob.id,
             "to_agent": alice.id,
@@ -398,7 +398,7 @@ async fn test_e2e_smoke_2_agent_conversation_with_dashboard() {
 
     // Alice accepts
     let msg_ab2 = client
-        .post(&format!("{}/api/v1/messages", base_url))
+        .post(format!("{}/api/v1/messages", base_url))
         .json(&serde_json::json!({
             "from_agent": alice.id,
             "to_agent": bob.id,
@@ -413,7 +413,7 @@ async fn test_e2e_smoke_2_agent_conversation_with_dashboard() {
 
     // Verify total messages
     let all_msgs = client
-        .get(&format!("{}/api/v1/messages", base_url))
+        .get(format!("{}/api/v1/messages", base_url))
         .send()
         .await
         .unwrap()
@@ -456,7 +456,7 @@ async fn test_e2e_ledger_consistency_with_rewards() {
     let mut agents = Vec::new();
     for name in &["Alice", "Bob", "Carol"] {
         let resp = client
-            .post(&format!("{}/api/v1/agents", base_url))
+            .post(format!("{}/api/v1/agents", base_url))
             .json(&serde_json::json!({ "name": name, "tokens": 100_000, "money": 10_000 }))
             .send()
             .await
@@ -467,7 +467,7 @@ async fn test_e2e_ledger_consistency_with_rewards() {
 
     // Advance a few ticks
     client
-        .post(&format!("{}/api/v1/tick", base_url))
+        .post(format!("{}/api/v1/tick", base_url))
         .json(&serde_json::json!({ "count": 5 }))
         .send()
         .await
@@ -475,7 +475,7 @@ async fn test_e2e_ledger_consistency_with_rewards() {
 
     // Verify stats
     let stats: serde_json::Value = client
-        .get(&format!("{}/api/v1/world/stats", base_url))
+        .get(format!("{}/api/v1/world/stats", base_url))
         .send()
         .await
         .unwrap()
@@ -489,7 +489,7 @@ async fn test_e2e_ledger_consistency_with_rewards() {
 
     // Verify WAL consistency
     let wal: serde_json::Value = client
-        .get(&format!("{}/wal/verify", base_url))
+        .get(format!("{}/wal/verify", base_url))
         .send()
         .await
         .unwrap()
@@ -511,7 +511,7 @@ async fn test_e2e_sse_event_ordering() {
 
     // Spawn agent
     client
-        .post(&format!("{}/api/v1/agents", base_url))
+        .post(format!("{}/api/v1/agents", base_url))
         .json(&serde_json::json!({ "name": "TestAgent", "tokens": 50_000 }))
         .send()
         .await
@@ -519,7 +519,7 @@ async fn test_e2e_sse_event_ordering() {
 
     // Advance 3 ticks
     client
-        .post(&format!("{}/api/v1/tick", base_url))
+        .post(format!("{}/api/v1/tick", base_url))
         .json(&serde_json::json!({ "count": 3 }))
         .send()
         .await

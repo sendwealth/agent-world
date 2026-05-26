@@ -1007,7 +1007,7 @@ mod tests {
     fn test_verify_pair_balances() {
         let mut ledger = make_ledger();
         ledger.set_balance_genesis("alice", Currency::Money, 1000);
-        let (debit_id, credit_id) = ledger.transfer(
+        let (_debit_id, _credit_id) = ledger.transfer(
             "alice", "bob", 300, Currency::Money,
             TransactionType::TaskReward, "verify".into(), 1, None,
         ).unwrap();

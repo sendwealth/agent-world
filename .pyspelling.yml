@@ -1,0 +1,26 @@
+matrix:
+  - name: Markdown
+    aspell:
+      lang: en
+    dictionary:
+      wordlists:
+        - docs-site/.spellcheck-dictionary.txt
+      encoding: utf-8
+    pipeline:
+      - pyspelling.filters.markdown:
+          markdown_extensions:
+            - markdown.extensions.tables
+            - markdown.extensions.fenced_code
+      - pyspelling.filters.html:
+          comments: false
+          attributes:
+            - title
+            - alt
+          ignores:
+            - code
+            - pre
+            - a
+            - img
+    sources:
+      - docs-site/**/*.md
+    default_encoding: utf-8

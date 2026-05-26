@@ -56,6 +56,7 @@ fn make_world_with_rule_subsystem() -> WorldState {
     WorldState::new(bus, registry, vec![])
 }
 
+#[allow(dead_code)]
 fn make_agent(phase: AgentPhase, tokens: u64) -> (uuid::Uuid, u64, AgentRecord) {
     let id = uuid::Uuid::new_v4();
     (
@@ -158,7 +159,7 @@ fn test_100_ticks_no_panic_rule_subsystem() {
 #[test]
 fn test_tick_pipeline_order_burn_then_death_then_broadcast() {
     let mut world = make_world_with_individual_subsystems();
-    let mut rx = world.event_bus.subscribe();
+    let _rx = world.event_bus.subscribe();
 
     // Spawn agent with exactly 10 tokens (1 tick of burn)
     let agent_id = world.spawn_agent("ShortLived", 10, 0);

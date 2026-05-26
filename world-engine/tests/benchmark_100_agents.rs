@@ -114,8 +114,8 @@ async fn test_full_pipeline_100_agents_2000_ticks() {
                 );
                 if let Ok(org_id) = result {
                     // Join members
-                    for j in (batch_start + 1)..batch_end {
-                        let _ = gov.join_org(org_id, agent_ids[j].clone(), tick);
+                    for id in agent_ids.iter().take(batch_end).skip(batch_start + 1) {
+                        let _ = gov.join_org(org_id, id.clone(), tick);
                     }
 
                     // Issue stock
@@ -124,12 +124,12 @@ async fn test_full_pipeline_100_agents_2000_ticks() {
                         org_id.to_string(),
                         ticker,
                         1000,
-                        10 + tick as u64,
+                        10 + tick,
                         tick,
                     ) {
                         // Credit shares to org members
-                        for j in batch_start..batch_end {
-                            stock_market.credit_shares(&stock.id, &agent_ids[j], 10);
+                        for id in agent_ids.iter().take(batch_end).skip(batch_start) {
+                            stock_market.credit_shares(&stock.id, id, 10);
                         }
 
                         // IPO
@@ -228,15 +228,13 @@ async fn test_full_pipeline_100_agents_2000_ticks() {
                 // Complete the task
                 let worker_idx = (agent_idx + 1) % NUM_AGENTS;
                 let worker_id = agent_ids[worker_idx].clone();
-                if b.claim_task(task_id, worker_id).is_ok() {
-                    if b.start_task(task_id).is_ok() {
-                        let _ = b.submit_result(task_id, "Done".to_string());
-                        let publisher = agent_ids[agent_idx].clone();
-                        if b.review_task(task_id, &publisher, true).is_ok() {
-                            if b.complete_task(task_id, tick).is_ok() {
-                                total_tasks_completed += 1;
-                            }
-                        }
+                if b.claim_task(task_id, worker_id.clone()).is_ok()
+                    && b.start_task(task_id).is_ok() {
+                    let _ = b.submit_result(task_id, "Done".to_string());
+                    let publisher = agent_ids[agent_idx].clone();
+                    if b.review_task(task_id, &publisher, true).is_ok()
+                        && b.complete_task(task_id, tick).is_ok() {
+                            total_tasks_completed += 1;
                     }
                 }
             }

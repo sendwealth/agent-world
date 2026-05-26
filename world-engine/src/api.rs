@@ -38,9 +38,9 @@ use crate::economy::investment::{
 };
 use crate::economy::task::{TaskBoard, Task};
 use crate::auth::{
-    AuthStore, SharedAuthStore, HumanUser, Claims, HumanRole, Capability,
-    AuthUser, RequireAuth, OptionalAuth,
-    extractors::{AuthError, require_capability},
+    AuthStore, SharedAuthStore, HumanUser, HumanRole, Capability,
+    RequireAuth,
+    extractors::{require_capability},
 };
 use crate::human::store::{
     HumanParticipationStore, SharedHumanStore,
@@ -3264,7 +3264,7 @@ async fn export_query(
                     .filter(|trace| {
                         trace.phases.iter().any(|p| event_types.contains(&p.phase))
                     })
-                    .map(|t| t.clone())
+                    .cloned()
                     .collect::<Vec<_>>()
             } else {
                 all_traces.into_iter().cloned().collect::<Vec<_>>()
@@ -3536,35 +3536,19 @@ async fn get_agent_status(
 // ── Governance Metrics Handlers ──────────────────────────────
 
 /// Query parameters for governance comparison endpoint.
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Default, Deserialize)]
 #[serde(default)]
 pub struct GovernanceComparisonQuery {
     pub org_ids: Option<String>,
 }
 
-impl Default for GovernanceComparisonQuery {
-    fn default() -> Self {
-        Self { org_ids: None }
-    }
-}
-
 /// Query parameters for governance timeline endpoint.
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Default, Deserialize)]
 #[serde(default)]
 pub struct GovernanceTimelineQuery {
     pub event_type: Option<crate::world::event::EventType>,
     pub from_tick: Option<u64>,
     pub to_tick: Option<u64>,
-}
-
-impl Default for GovernanceTimelineQuery {
-    fn default() -> Self {
-        Self {
-            event_type: None,
-            from_tick: None,
-            to_tick: None,
-        }
-    }
 }
 
 /// GET /api/v1/governance/summary — World governance summary.
@@ -4269,7 +4253,7 @@ fn rule_engine_error_status(e: &crate::organization::rule_engine::RuleEngineErro
 
 /// POST /api/v1/rules/dsl/parse — Parse and validate a DSL rule document.
 async fn dsl_parse_rule(
-    State(state): State<AppState>,
+    State(_state): State<AppState>,
     Json(body): Json<DslParseRequest>,
 ) -> impl IntoResponse {
     let result = if body.format == "json" {
@@ -4567,6 +4551,7 @@ fn api_err(status: StatusCode, error: impl Into<String>) -> axum::response::Resp
 }
 
 /// POST /api/v1/federation/worlds — Register a new world.
+#[allow(dead_code)]
 async fn federation_register_world(
     State(state): State<AppState>,
     Json(body): Json<RestWorldRegister>,
@@ -4593,7 +4578,7 @@ async fn federation_register_world(
         registered_at: chrono::Utc::now().to_rfc3339(),
         last_heartbeat: chrono::Utc::now().to_rfc3339(),
     };
-    let mut reg = registry.lock().await;
+    let reg = registry.lock().await;
     match reg.register(entry).await {
         Ok(is_new) => api_ok(serde_json::json!({ "registered": true, "is_new": is_new })),
         Err(e) => api_err(StatusCode::BAD_REQUEST, e),
@@ -4601,6 +4586,7 @@ async fn federation_register_world(
 }
 
 /// GET /api/v1/federation/worlds — List all registered worlds.
+#[allow(dead_code)]
 async fn federation_list_worlds(
     State(state): State<AppState>,
 ) -> impl IntoResponse {
@@ -4614,6 +4600,7 @@ async fn federation_list_worlds(
 }
 
 /// GET /api/v1/federation/worlds/:world_id — Get a specific world.
+#[allow(dead_code)]
 async fn federation_get_world(
     State(state): State<AppState>,
     Path(world_id): Path<String>,
@@ -4630,6 +4617,7 @@ async fn federation_get_world(
 }
 
 /// DELETE /api/v1/federation/worlds/:world_id — Deregister a world.
+#[allow(dead_code)]
 async fn federation_deregister_world(
     State(state): State<AppState>,
     Path(world_id): Path<String>,

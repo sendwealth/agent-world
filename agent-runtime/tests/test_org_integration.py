@@ -13,15 +13,11 @@ import uuid
 from dataclasses import dataclass, field
 from enum import Enum
 from typing import Any, Dict, List, Optional
-from unittest.mock import MagicMock, patch
 
 import pytest
 
-from agent_runtime.models.agent_state import AgentState
-from agent_runtime.models.enums import AgentPhase
 from agent_runtime.models.personality import PersonalityVector
 from agent_runtime.models.values import ValueWeights
-
 
 # ═══════════════════════════════════════════════════════════════
 # Test Infrastructure — Simulated World Engine Responses
@@ -648,7 +644,7 @@ class TestMultiOrgScenario:
         """10 agents over 500 ticks form at least 2 different org types."""
         world = MockWorldEngine()
         formation_eval = OrgFormationEvaluator()
-        recruitment_eval = OrgRecruitmentEvaluator()
+        OrgRecruitmentEvaluator()
 
         # Create 10 diverse agents in two clusters
         # Cluster A: Near mine (0,0) — mining-oriented
@@ -759,7 +755,7 @@ class TestMultiOrgScenario:
 
     def test_agents_already_in_org_are_excluded(self):
         """Agents already in an org cannot form or join another."""
-        world = MockWorldEngine()
+        MockWorldEngine()
         formation_eval = OrgFormationEvaluator()
 
         agents = [
@@ -798,7 +794,7 @@ class TestMultiOrgScenario:
         """World Engine rejects agents already in an org."""
         world = MockWorldEngine()
 
-        org = world.create_org(
+        world.create_org(
             name="Test Org",
             org_type=OrgType.GUILD,
             founder_ids=["agent-1", "agent-2"],

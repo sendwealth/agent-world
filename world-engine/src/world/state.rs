@@ -536,8 +536,6 @@ mod tests {
 
     // ── WorldState tests ──
 
-    use crate::world::subsystem::Subsystem;
-    use crate::economy::token_burn::TokenBurnEngine;
     use std::collections::HashMap;
 
     fn make_agent(phase: AgentPhase, tokens: u64) -> (Uuid, u64, AgentRecord) {

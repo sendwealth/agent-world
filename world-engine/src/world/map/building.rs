@@ -317,17 +317,15 @@ impl BuildingManager {
     pub fn tick_durability(&mut self, decay_rate: u32) -> Vec<(BuildingId, u32)> {
         let mut damaged = Vec::new();
         for building in self.buildings.values_mut() {
-            if building.status == BuildingStatus::Active && building.health > 0 {
-                if decay_rate > 0 {
-                    building.health = building.health.saturating_sub(decay_rate);
-                    if building.health == 0 {
-                        building.status = BuildingStatus::Destroyed;
-                    } else if building.health < 50 {
-                        building.status = BuildingStatus::Damaged;
-                    }
-                    if matches!(building.status, BuildingStatus::Damaged | BuildingStatus::Destroyed) {
-                        damaged.push((building.id.clone(), building.health));
-                    }
+            if building.status == BuildingStatus::Active && building.health > 0 && decay_rate > 0 {
+                building.health = building.health.saturating_sub(decay_rate);
+                if building.health == 0 {
+                    building.status = BuildingStatus::Destroyed;
+                } else if building.health < 50 {
+                    building.status = BuildingStatus::Damaged;
+                }
+                if matches!(building.status, BuildingStatus::Damaged | BuildingStatus::Destroyed) {
+                    damaged.push((building.id.clone(), building.health));
                 }
             }
         }

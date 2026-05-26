@@ -495,7 +495,7 @@ mod tests {
             100,
         ).unwrap();
 
-        let id2 = sys.create_will(
+        let _id2 = sys.create_will(
             "a",
             vec![Beneficiary { agent_id: "c".into(), share: 1.0 }],
             200,

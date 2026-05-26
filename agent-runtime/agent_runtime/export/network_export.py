@@ -2,8 +2,6 @@
 
 from __future__ import annotations
 
-import csv
-import io
 import json
 from typing import TYPE_CHECKING
 
@@ -28,7 +26,6 @@ class NetworkExporter:
 
     def _get_filtered_interactions(self) -> list:
         """Get interactions filtered by tick range."""
-        from agent_runtime.tracing.interaction_graph import Interaction
         all_interactions = self._graph.get_all_interactions()
         if not self._tick_range:
             return all_interactions
@@ -57,7 +54,8 @@ class NetworkExporter:
             '<graphml xmlns="http://graphml.graphstruct.org/xmlns">',
             '  <key id="label" for="node" attr.name="label" attr.type="string"/>',
             '  <key id="weight" for="edge" attr.name="weight" attr.type="double"/>',
-            '  <key id="interaction_type" for="edge" attr.name="interaction_type" attr.type="string"/>',
+            '  <key id="interaction_type" for="edge"'
+            ' attr.name="interaction_type" attr.type="string"/>',
             '  <key id="tick" for="edge" attr.name="tick" attr.type="int"/>',
             '  <graph id="G" edgedefault="directed">',
         ]
@@ -66,16 +64,21 @@ class NetworkExporter:
             escaped = node.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
             lines.append(f'    <node id="{escaped}">')
             lines.append(f'      <data key="label">{escaped}</data>')
-            lines.append(f'    </node>')
+            lines.append('    </node>')
 
         for i in interactions:
             f = i.from_agent.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
             t = i.to_agent.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
-            itype = i.interaction_type.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
+            itype = (
+                i.interaction_type
+                .replace("&", "&amp;")
+                .replace("<", "&lt;")
+                .replace(">", "&gt;")
+            )
             lines.append(f'    <edge source="{f}" target="{t}">')
             lines.append(f'      <data key="interaction_type">{itype}</data>')
             lines.append(f'      <data key="tick">{i.tick}</data>')
-            lines.append(f'    </edge>')
+            lines.append('    </edge>')
 
         lines.append('  </graph>')
         lines.append('</graphml>')

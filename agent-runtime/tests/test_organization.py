@@ -8,7 +8,6 @@ Covers:
 
 from __future__ import annotations
 
-import asyncio
 import pytest
 
 from agent_runtime.organization import (
@@ -18,9 +17,7 @@ from agent_runtime.organization import (
     FormationConditions,
     FormationEvaluator,
     FormationReason,
-    GovernanceDecision,
     GovernanceDecider,
-    Invitation,
     InvitationStatus,
     LeadershipAmbition,
     OrgProposal,
@@ -32,12 +29,11 @@ from agent_runtime.organization import (
     TreatyResponse,
 )
 from agent_runtime.organization.formation import (
-    AgentProfile,
     FORMATION_THRESHOLD,
+    AgentProfile,
     _euclidean_distance,
     _jaccard_similarity,
 )
-
 
 # ---------------------------------------------------------------------------
 # Helpers

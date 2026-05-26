@@ -127,12 +127,14 @@ class RESTWorldClient:
     async def _request(self, method: str, path: str, **kwargs: Any) -> dict[str, Any]:
         """Send an HTTP request to the World Engine.
 
-        On connection failure returns ``{"status": "standalone"}`` so the
-        agent can continue running without the World Engine.
+        All errors — including connection failures — are raised so the
+        ``ActionExecutor`` retry logic and ThinkLoop error tracking can
+        function correctly.  The agent cannot silently "succeed" while
+        the World Engine is unreachable.
 
-        On HTTP errors (4xx/5xx) from the World Engine, raises so the
-        ThinkLoop can track it as a real error instead of silently
-        ignoring it.
+        If the user wants the agent to run without a World Engine, they
+        should not provide ``--world-url``; the ``_NoOpWorldClient``
+        (``world_client=None``) handles that case explicitly.
         """
         import httpx
 
@@ -143,17 +145,14 @@ class RESTWorldClient:
                 resp.raise_for_status()
                 return resp.json()
         except httpx.ConnectError:
-            logger.warning("World Engine unreachable at %s — running standalone", url)
-            return {"status": "standalone"}
+            logger.warning("World Engine unreachable at %s", url)
+            raise
         except httpx.HTTPStatusError as exc:
             logger.warning(
                 "World Engine returned %d for %s %s: %s",
                 exc.response.status_code, method, path,
                 exc.response.text[:200] if exc.response.text else "(empty)",
             )
-            # Re-raise so the ThinkLoop error counter picks it up.
-            # This prevents silent "standalone" masking real failures
-            # like 404 (wrong agent_id) or 500 (server bugs).
             raise
         except Exception:
             logger.warning("World Engine request failed: %s %s", method, path, exc_info=True)
@@ -209,9 +208,9 @@ class RESTWorldClient:
     async def broadcast_message(
         self, payload: dict[str, object]
     ) -> dict[str, object]:
-        """No World Engine broadcast endpoint — runs standalone."""
-        logger.warning("broadcast_message: no World Engine endpoint, running standalone")
-        return {"status": "standalone"}  # type: ignore[return-value]
+        """No World Engine broadcast endpoint — raises to indicate unsupported."""
+        logger.warning("broadcast_message: no World Engine endpoint for broadcast")
+        raise NotImplementedError("broadcast_message is not supported via REST World Engine")  # type: ignore[return-value]
 
     async def form_org(self, org_data: dict[str, Any]) -> dict[str, Any]:
         return await self._request("POST", "/api/v1/orgs", json=org_data)

@@ -25,6 +25,11 @@ class GRPCWorldClient:
     Implements both ``WorldClientProtocol`` (from ``core.act``) and
     ``A2AClientProtocol`` (from ``survival.instinct``).
 
+    Errors are raised (not swallowed) so that ``ActionExecutor``'s retry
+    logic can function correctly.  Each method logs the error and
+    re-raises the exception so the executor records ``RETRY_EXHAUSTED``
+    instead of a false success.
+
     Usage::
 
         a2a = A2AClient(config)
@@ -59,7 +64,7 @@ class GRPCWorldClient:
             return {"status": "ok", "received": ack.received}
         except Exception as exc:
             logger.exception("send_message failed")
-            return {"status": "error", "error": str(exc)}
+            raise
 
     async def claim_task(self, task_id: str) -> dict[str, Any]:
         """Claim an available task — sent as a PROPOSE message."""
@@ -71,7 +76,7 @@ class GRPCWorldClient:
             return {"status": "ok", "task_id": task_id, "received": ack.received}
         except Exception as exc:
             logger.exception("claim_task failed")
-            return {"status": "error", "error": str(exc)}
+            raise
 
     async def submit_task(
         self, task_id: str, result: dict[str, Any]
@@ -89,7 +94,7 @@ class GRPCWorldClient:
             return {"status": "ok", "task_id": task_id, "received": ack.received}
         except Exception as exc:
             logger.exception("submit_task failed")
-            return {"status": "error", "error": str(exc)}
+            raise
 
     async def propose_deal(self, proposal: dict[str, Any]) -> dict[str, Any]:
         """Propose a deal/contract — sent as a PROPOSE message."""
@@ -103,7 +108,7 @@ class GRPCWorldClient:
             return {"status": "ok", "received": ack.received}
         except Exception as exc:
             logger.exception("propose_deal failed")
-            return {"status": "error", "error": str(exc)}
+            raise
 
     async def teach_skill(
         self, target_agent_id: str, skill_name: str, level: int
@@ -127,7 +132,7 @@ class GRPCWorldClient:
             }
         except Exception as exc:
             logger.exception("teach_skill failed")
-            return {"status": "error", "error": str(exc)}
+            raise
 
     async def explore(self, parameters: dict[str, Any]) -> dict[str, Any]:
         """Explore the world via Discover RPC."""
@@ -150,7 +155,7 @@ class GRPCWorldClient:
             return {"status": "ok", "agents": agents}
         except Exception as exc:
             logger.exception("explore failed")
-            return {"status": "error", "error": str(exc)}
+            raise
 
     async def move(self, direction: str) -> dict[str, Any]:
         """Move the agent in a direction — sent as a WILL message."""
@@ -162,7 +167,7 @@ class GRPCWorldClient:
             return {"status": "ok", "direction": direction, "received": ack.received}
         except Exception as exc:
             logger.exception("move failed")
-            return {"status": "error", "error": str(exc)}
+            raise
 
     async def gather(self, resource_type: str) -> dict[str, Any]:
         """Gather a resource — sent as a WILL message."""
@@ -174,7 +179,7 @@ class GRPCWorldClient:
             return {"status": "ok", "resource_type": resource_type, "received": ack.received}
         except Exception as exc:
             logger.exception("gather failed")
-            return {"status": "error", "error": str(exc)}
+            raise
 
     async def build(self, structure_type: str, **kwargs: Any) -> dict[str, Any]:
         """Build a structure — sent as a WILL message."""
@@ -186,7 +191,7 @@ class GRPCWorldClient:
             return {"status": "ok", "structure_type": structure_type, "received": ack.received}
         except Exception as exc:
             logger.exception("build failed")
-            return {"status": "error", "error": str(exc)}
+            raise
 
     # ------------------------------------------------------------------
     # A2AClientProtocol method (SurvivalInstinct integration)
@@ -211,7 +216,7 @@ class GRPCWorldClient:
             return {"status": "ok", "received": ack.received}
         except Exception as exc:
             logger.exception("broadcast_message failed")
-            return {"status": "error", "error": str(exc)}
+            raise
 
 
 # ---------------------------------------------------------------------------

@@ -313,15 +313,15 @@ class TestRESTWorldClientEndpoints:
             )
 
     @pytest.mark.asyncio
-    async def test_broadcast_message_standalone(self) -> None:
-        """broadcast_message has no World Engine endpoint — standalone."""
+    async def test_broadcast_message_raises(self) -> None:
+        """broadcast_message has no World Engine endpoint — raises NotImplementedError."""
         client = _make_client()
-        result = await client.broadcast_message({"text": "hello all"})
-        assert result["status"] == "standalone"
+        with pytest.raises(NotImplementedError):
+            await client.broadcast_message({"text": "hello all"})
 
 
 class TestRESTWorldClientFallback:
-    """Verify graceful fallback when World Engine is unreachable."""
+    """Verify error handling when World Engine is unreachable."""
 
     @pytest.mark.asyncio
     async def test_send_message_connect_error(self) -> None:
@@ -332,8 +332,8 @@ class TestRESTWorldClientFallback:
             mock_client_cls.return_value.__aenter__ = AsyncMock(return_value=mock_instance)
             mock_client_cls.return_value.__aexit__ = AsyncMock(return_value=False)
             mock_instance.request = AsyncMock(side_effect=httpx.ConnectError("refused"))
-            result = await client.send_message({"text": "hi"})
-            assert result["status"] == "standalone"
+            with pytest.raises(httpx.ConnectError):
+                await client.send_message({"text": "hi"})
 
     @pytest.mark.asyncio
     async def test_submit_action_http_error(self) -> None:

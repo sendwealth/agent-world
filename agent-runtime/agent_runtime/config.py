@@ -124,6 +124,7 @@ class RuntimeConfig:
     world: WorldConfig = field(default_factory=WorldConfig)
     health_port: int = 9090
     mock_llm_preset: str | None = None
+    data_dir: Path | None = None
 
 
 # ---------------------------------------------------------------------------

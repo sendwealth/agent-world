@@ -573,7 +573,11 @@ class TestAutoRestart:
 class TestBuildCommand:
     def test_basic_command(self, manager: AgentProcessManager) -> None:
         cmd = manager._build_command("test", {}, Path("/data/test"))
-        assert cmd == ["/usr/bin/echo", "-m", "agent_runtime", "spawn", "--name", "test"]
+        assert cmd == [
+            "/usr/bin/echo", "-m", "agent_runtime", "spawn",
+            "--name", "test",
+            "--data-dir", "/data/test",
+        ]
 
     def test_command_with_config_file(self, manager: AgentProcessManager) -> None:
         cmd = manager._build_command(

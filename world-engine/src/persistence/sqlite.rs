@@ -176,7 +176,7 @@ impl StatePersistence for SqlitePersistence {
 mod tests {
     use super::*;
     use crate::economy::token_burn::AgentRecord;
-    use crate::persistence::{SerializableAgentEntry, SerializableAgentRecord, StatePersistence};
+    use crate::persistence::StatePersistence;
     use crate::world::enums::AgentPhase;
     use std::collections::HashMap;
     use uuid::Uuid;
@@ -340,7 +340,7 @@ mod tests {
         // Create snapshots at tick 10, 20, 30 with agents
         let agent = make_agent("Persist", 100, AgentPhase::Adult);
         for tick in [10u64, 20, 30] {
-            let s = SerializableWorldState::from_world_state(tick, &[agent.clone()]);
+            let s = SerializableWorldState::from_world_state(tick, std::slice::from_ref(&agent));
             db.save_snapshot(&s).unwrap();
         }
 

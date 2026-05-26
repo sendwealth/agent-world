@@ -851,7 +851,7 @@ mod tests {
         let id = publish_default_listing(&mut mp);
         mp.purchase_listing(id, "buyer", 5).unwrap();
 
-        let rating_id = mp.rate_listing(id, "buyer", 4, Some("Great guide!".into()), 10).unwrap();
+        let _rating_id = mp.rate_listing(id, "buyer", 4, Some("Great guide!".into()), 10).unwrap();
         assert!(mp.has_rated("buyer", id));
 
         let listing = mp.get(id).unwrap();
@@ -1144,7 +1144,7 @@ mod tests {
     #[test]
     fn test_search_excludes_inactive_and_delisted() {
         let mut mp = make_marketplace();
-        let id1 = mp.publish_listing(
+        let _id1 = mp.publish_listing(
             "Active".into(), "desc".into(),
             KnowledgeCategory::General, "h1".into(),
             100, Currency::Token, "seller".into(), vec![], 1,
@@ -1268,7 +1268,7 @@ mod tests {
         ).unwrap();
 
         // Purchase
-        let record = mp.purchase_listing(id, "buyer", 10).unwrap();
+        let _record = mp.purchase_listing(id, "buyer", 10).unwrap();
         assert_eq!(mp.get_balance("seller"), 10_500);
         assert_eq!(mp.get_balance("buyer"), 4_500);
 

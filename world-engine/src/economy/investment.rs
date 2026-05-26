@@ -862,7 +862,7 @@ impl InvestmentSystem {
                 total_value,
             })
             .collect();
-        result.sort_by(|a, b| b.total_value.cmp(&a.total_value));
+        result.sort_by_key(|b| std::cmp::Reverse(b.total_value));
         result
     }
 

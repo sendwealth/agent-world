@@ -4,12 +4,10 @@
 
 use std::collections::HashMap;
 use std::sync::Arc;
-use std::time::Duration;
 
 use chrono::Utc;
 use serde::{Deserialize, Serialize};
 use tokio::sync::RwLock;
-use uuid::Uuid;
 
 use crate::world::state::EventBus;
 
@@ -80,6 +78,7 @@ pub struct WorldEntry {
 #[derive(Clone)]
 pub struct WorldRegistry {
     worlds: Arc<RwLock<HashMap<String, WorldEntry>>>,
+    #[allow(dead_code)]
     event_bus: Arc<EventBus>,
     heartbeat_timeout_secs: u64,
 }
@@ -101,7 +100,7 @@ impl WorldRegistry {
     /// Register a new world instance.
     pub async fn register(&self, entry: WorldEntry) -> Result<bool, String> {
         let world_id = entry.world_id.clone();
-        let name = entry.name.clone();
+        let _name = entry.name.clone();
         let mut worlds = self.worlds.write().await;
 
         let is_new = !worlds.contains_key(&world_id);

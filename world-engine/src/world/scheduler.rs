@@ -114,7 +114,7 @@ mod tests {
     async fn run_n_ticks_advances_state() {
         let event_bus = Arc::new(EventBus::new(256));
         let registry = SubsystemRegistry::new();
-        let mut agents = vec![make_agent(AgentPhase::Adult, 1000)];
+        let agents = vec![make_agent(AgentPhase::Adult, 1000)];
 
         let state = Arc::new(Mutex::new(
             WorldState::new(event_bus, registry, agents)

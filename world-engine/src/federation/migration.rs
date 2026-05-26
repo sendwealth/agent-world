@@ -629,7 +629,7 @@ impl MigrationManager {
             migration_id: migration_id.to_string(),
             agent_id: snapshot.agent_id.clone(),
             source_world_id: snapshot.source_world_id.clone(),
-            target_world_id: target_world_id,
+            target_world_id,
             migration_type: MigrationType::Permanent,
             token_cost: 10_000,
             resource_tax_collected: 0,
@@ -881,8 +881,10 @@ mod tests {
     #[tokio::test]
     async fn test_insufficient_tokens() {
         let event_bus = Arc::new(EventBus::new(64));
-        let mut policy = MigrationPolicy::default();
-        policy.token_cost = 1_000_000;
+        let policy = MigrationPolicy {
+            token_cost: 1_000_000,
+            ..MigrationPolicy::default()
+        };
         let manager = MigrationManager::new(policy, event_bus);
 
         let mut snapshot = test_snapshot("agent-1", "world-a");
@@ -896,8 +898,10 @@ mod tests {
     #[tokio::test]
     async fn test_migration_disabled() {
         let event_bus = Arc::new(EventBus::new(64));
-        let mut policy = MigrationPolicy::default();
-        policy.enabled = false;
+        let policy = MigrationPolicy {
+            enabled: false,
+            ..MigrationPolicy::default()
+        };
         let manager = MigrationManager::new(policy, event_bus);
 
         let snapshot = test_snapshot("agent-1", "world-a");
@@ -922,8 +926,10 @@ mod tests {
     #[tokio::test]
     async fn test_blocked_skills() {
         let event_bus = Arc::new(EventBus::new(64));
-        let mut policy = MigrationPolicy::default();
-        policy.blocked_skills = vec!["research".into()];
+        let policy = MigrationPolicy {
+            blocked_skills: vec!["research".into()],
+            ..MigrationPolicy::default()
+        };
         let manager = MigrationManager::new(policy, event_bus);
 
         let snapshot = test_snapshot("agent-1", "world-a");
@@ -1039,8 +1045,10 @@ mod tests {
     #[tokio::test]
     async fn test_quota_enforcement() {
         let event_bus = Arc::new(EventBus::new(64));
-        let mut policy = MigrationPolicy::default();
-        policy.daily_quota = 1;
+        let policy = MigrationPolicy {
+            daily_quota: 1,
+            ..MigrationPolicy::default()
+        };
         let manager = MigrationManager::new(policy, event_bus);
 
         let snap1 = test_snapshot("agent-1", "world-a");

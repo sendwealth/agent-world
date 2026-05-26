@@ -140,7 +140,7 @@ impl CultureStore {
 
     /// Set trust between two groups.
     pub fn set_trust(&self, source: &str, target: &str, value: f64) {
-        let clamped = value.max(MIN_OUT_GROUP_TRUST).min(1.0);
+        let clamped = value.clamp(MIN_OUT_GROUP_TRUST, 1.0);
         let key = (source.to_string(), target.to_string());
         self.trust_records.insert(
             key,
@@ -176,8 +176,7 @@ impl CultureStore {
             });
 
         entry.trust_value = (entry.trust_value + delta)
-            .max(MIN_OUT_GROUP_TRUST)
-            .min(1.0);
+            .clamp(MIN_OUT_GROUP_TRUST, 1.0);
         entry.interaction_count += 1;
         entry.trust_value
     }

@@ -1,22 +1,17 @@
 """Tests for the federation migration system — unit tests for MigrationManager logic."""
 
-import asyncio
-import pytest
-from unittest.mock import MagicMock
-
 # We test the logic directly without needing a running World Engine.
 # Import from the Rust-bindings-free Python types.
-
-
 # ── Python mirror of the Rust MigrationManager logic for unit testing ──
 # In production, this logic lives in Rust. These tests verify the *design*
 # decisions (policy checks, resource tax, blocked skills, quotas) by
 # reimplementing the core rules in Python.
-
 from dataclasses import dataclass, field
 from datetime import datetime
 from typing import Dict, List, Optional
 from uuid import uuid4
+
+import pytest
 
 
 @dataclass
@@ -79,10 +74,16 @@ class PyMigrationManager:
             raise ValueError("Migration is currently disabled")
 
         if snapshot.reputation < p.min_reputation:
-            raise ValueError(f"Agent reputation {snapshot.reputation} below minimum {p.min_reputation}")
+            raise ValueError(
+                f"Agent reputation {snapshot.reputation} "
+                f"below minimum {p.min_reputation}"
+            )
 
         if snapshot.tokens < p.token_cost:
-            raise ValueError(f"Agent has {snapshot.tokens} tokens, but migration costs {p.token_cost}")
+            raise ValueError(
+                f"Agent has {snapshot.tokens} tokens, "
+                f"but migration costs {p.token_cost}"
+            )
 
         # Check cooldown
         if snapshot.agent_id in self.agent_last_migration:

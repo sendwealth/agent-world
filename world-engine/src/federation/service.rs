@@ -5,15 +5,15 @@
 
 use std::sync::Arc;
 
-use tonic::{Request, Response, Status};
-
-use crate::federation::registry::{WorldRegistry, WorldEntry, WorldEndpoint, WorldMetrics, WorldStatus};
-use crate::federation::migration::{MigrationManager, AgentSnapshot, MigrationPolicy};
+use crate::federation::registry::WorldRegistry;
+use crate::federation::migration::{MigrationManager, MigrationPolicy};
 
 /// Federation gRPC service combining WorldRegistry + Migration RPCs.
 #[derive(Clone)]
 pub struct FederationServiceImpl {
+    #[allow(dead_code)]
     world_registry: Arc<WorldRegistry>,
+    #[allow(dead_code)]
     migration_manager: Arc<MigrationManager>,
 }
 

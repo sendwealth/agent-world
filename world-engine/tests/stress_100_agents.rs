@@ -31,6 +31,7 @@ const TICKS: u64 = 100;
 
 /// Simulated agent state.
 #[derive(Debug, Clone)]
+#[allow(dead_code)]
 struct StressAgent {
     id: String,
     name: String,
@@ -368,7 +369,7 @@ async fn test_full_100_agent_simulation() {
 
     // Initialize 100 agents
     let mut stress_agents: Vec<StressAgent> = (0..NUM_AGENTS)
-        .map(|i| StressAgent::new(i))
+        .map(StressAgent::new)
         .collect();
 
     let mut agent_records: Vec<AgentRecord> = stress_agents
@@ -425,14 +426,14 @@ async fn test_full_100_agent_simulation() {
             let batch_size = 10;
             for batch_start in (0..NUM_AGENTS).step_by(batch_size) {
                 let mut handles = Vec::new();
-                for i in batch_start..std::cmp::min(batch_start + batch_size, NUM_AGENTS) {
+                for agent in stress_agents.iter().take(std::cmp::min(batch_start + batch_size, NUM_AGENTS)).skip(batch_start) {
                     let board = task_board.clone();
-                    let agent_id = stress_agents[i].id.clone();
+                    let agent_id = agent.id.clone();
                     handles.push(tokio::spawn(async move {
                         let mut b = board.write().await;
                         b.create_task(
-                            format!("Task @ tick {} by agent {}", tick, i),
-                            format!("Agent {} task at tick {}", i, tick),
+                            format!("Task @ tick {} by agent {}", tick, agent_id),
+                            format!("Agent {} task at tick {}", agent_id, tick),
                             100,
                             agent_id,
                             tick,
@@ -462,21 +463,18 @@ async fn test_full_100_agent_simulation() {
 
             for (task_id, publisher_id) in &published {
                 // Pick a random different agent as worker
-                let worker_idx = (publisher_id.split('-').last().unwrap().parse::<usize>().unwrap() + 1) % NUM_AGENTS;
+                let worker_idx = (publisher_id.split('-').next_back().unwrap().parse::<usize>().unwrap() + 1) % NUM_AGENTS;
                 let worker_id = stress_agents[worker_idx].id.clone();
                 let publisher_id = publisher_id.clone();
 
                 let mut b = task_board.write().await;
-                if b.claim_task(*task_id, worker_id).is_ok() {
-                    if b.start_task(*task_id).is_ok() {
-                        if b.submit_result(*task_id, format!("Done at tick {}", tick)).is_ok() {
-                            if b.review_task(*task_id, &publisher_id, true).is_ok() {
-                                if b.complete_task(*task_id, tick).is_ok() {
-                                    total_tasks_completed += 1;
-                                }
-                            }
-                        }
-                    }
+                if b.claim_task(*task_id, worker_id).is_ok()
+                    && b.start_task(*task_id).is_ok()
+                    && b.submit_result(*task_id, format!("Done at tick {}", tick)).is_ok()
+                    && b.review_task(*task_id, &publisher_id, true).is_ok()
+                    && b.complete_task(*task_id, tick).is_ok()
+                {
+                    total_tasks_completed += 1;
                 }
             }
         }

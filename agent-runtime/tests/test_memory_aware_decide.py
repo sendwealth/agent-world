@@ -60,7 +60,10 @@ class TestMemoryAwareDecisionProvider:
 
         decision = await provider.decide(state, perception, survival)
         assert isinstance(decision, Decision)
-        assert decision.action_type in (ActionType.REST, ActionType.EXPLORE, ActionType.GATHER, ActionType.MOVE)
+        assert decision.action_type in (
+            ActionType.REST, ActionType.EXPLORE,
+            ActionType.GATHER, ActionType.MOVE,
+        )
 
     @pytest.mark.asyncio
     async def test_decision_with_memories(self, setup):

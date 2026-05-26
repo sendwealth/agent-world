@@ -367,7 +367,7 @@ fn validate_action_params(
     match action.action_type.as_str() {
         "tax" => {
             if let Some(rate) = params.get("rate").and_then(|v| v.as_f64()) {
-                if rate < 0.0 || rate > 1.0 {
+                if !(0.0..=1.0).contains(&rate) {
                     errors.push(format!(
                         "actions[{}]: tax.rate must be between 0.0 and 1.0, got {}",
                         index, rate
@@ -380,13 +380,13 @@ fn validate_action_params(
                 warnings.push(format!("actions[{}]: tax rule has no 'target' parameter", index));
             }
         }
-        "penalty" | "reward" => {
-            if params.get("amount").is_none() {
+        "penalty" | "reward"
+            if params.get("amount").is_none() =>
+        {
                 warnings.push(format!(
                     "actions[{}]: {} has no 'amount' parameter",
                     index, action.action_type
                 ));
-            }
         }
         "transfer" => {
             if params.get("amount").is_none() {

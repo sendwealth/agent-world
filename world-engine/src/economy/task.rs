@@ -843,7 +843,7 @@ mod tests {
     fn test_list_by_status() {
         let mut board = make_board();
         let id1 = board.create_task("T1".into(), "".into(), 0, "p1".into(), 1, None).unwrap();
-        let id2 = board.create_task("T2".into(), "".into(), 0, "p1".into(), 1, None).unwrap();
+        let _id2 = board.create_task("T2".into(), "".into(), 0, "p1".into(), 1, None).unwrap();
         board.claim_task(id1, "w1".to_string()).unwrap();
 
         assert_eq!(board.list_by_status(TaskStatus::Published).len(), 1);

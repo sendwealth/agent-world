@@ -171,6 +171,7 @@ struct RuleVote {
 pub struct RuleEngine {
     rules: HashMap<String, SoftRule>,
     votes: HashMap<String, Vec<RuleVote>>,
+    #[allow(dead_code)]
     event_bus: Option<Arc<EventBus>>,
 }
 
@@ -196,6 +197,7 @@ impl RuleEngine {
     // ── Rule Proposal ──────────────────────────────────────
 
     /// Propose a new soft rule. Returns the rule ID.
+    #[allow(clippy::too_many_arguments)]
     pub fn propose_rule(
         &mut self,
         proposer_id: String,
@@ -400,6 +402,7 @@ impl RuleEngine {
 
     // ── Helpers ────────────────────────────────────────────
 
+    #[allow(dead_code)]
     fn emit(&self, _event: WorldEvent) {
         if let Some(ref bus) = self.event_bus {
             bus.emit(_event);

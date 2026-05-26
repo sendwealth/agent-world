@@ -233,7 +233,7 @@ impl GovernanceMetricsCollector {
                 .timeline
                 .iter()
                 .filter(|e| {
-                    let type_match = event_type.map_or(true, |t| e.event_type == t);
+                    let type_match = event_type.is_none_or(|t| e.event_type == t);
                     let range_match = e.tick >= range.0 && e.tick <= range.1;
                     type_match && range_match
                 })
@@ -588,9 +588,8 @@ fn build_org_metrics(org_id: Uuid, acc: &OrgAccumulator) -> OrgMetrics {
     // Governance stability score (0.0-1.0):
     // High stability = low treaty breaks relative to signings + steady membership
     let diplomacy_health = if acc.treaties_signed + acc.treaties_broken > 0 {
-        let ratio = acc.treaties_signed as f64
-            / (acc.treaties_signed + acc.treaties_broken) as f64;
-        ratio
+        acc.treaties_signed as f64
+            / (acc.treaties_signed + acc.treaties_broken) as f64
     } else {
         0.5 // neutral when no diplomacy data
     };

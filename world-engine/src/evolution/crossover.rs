@@ -10,26 +10,21 @@ use rand::Rng;
 use serde::{Deserialize, Serialize};
 
 use super::mutation::{
-    EnvironmentPressure, HeritableMutation, MutationEngine, OffspringMutation,
+    EnvironmentPressure, HeritableMutation, MutationEngine,
     OffspringMutationConfig, OffspringMutationResult, OffspringMutationType,
 };
 
 /// Strategy for combining skill levels from two parents.
-#[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize, Default)]
 #[serde(rename_all = "snake_case")]
 pub enum CrossoverStrategy {
     /// Take the higher skill level from either parent.
     Max,
     /// Average the skill levels (rounded down).
+    #[default]
     Average,
     /// Randomly pick one parent's level for each skill independently.
     Random,
-}
-
-impl Default for CrossoverStrategy {
-    fn default() -> Self {
-        Self::Average
-    }
 }
 
 /// Configuration for the crossover engine.
@@ -87,6 +82,7 @@ impl CrossoverEngine {
 
     /// Perform crossover between two parents, producing an offspring's
     /// initial skill and personality state, then optionally apply mutations.
+    #[allow(clippy::too_many_arguments)]
     pub fn crossover<R: Rng + ?Sized>(
         &self,
         rng: &mut R,
@@ -303,8 +299,9 @@ impl CrossoverEngine {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use rand::SeedableRng;
+    use crate::evolution::mutation::OffspringMutation;
     use rand::rngs::StdRng;
+    use rand::SeedableRng;
 
     use crate::evolution::skill_tree::SkillTree;
 

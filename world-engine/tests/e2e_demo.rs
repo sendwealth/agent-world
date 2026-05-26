@@ -20,7 +20,7 @@ use agent_world_engine::rules::{
     custom_registry, RuleRegistry,
 };
 use agent_world_engine::world::enums::{AgentPhase, Currency, DeathReason};
-use agent_world_engine::world::event::{EventType, WorldEvent};
+use agent_world_engine::world::event::WorldEvent;
 use agent_world_engine::world::state::EventBus;
 use uuid::Uuid;
 
@@ -99,6 +99,7 @@ struct PerfMetrics {
 // World Simulation
 // ═══════════════════════════════════════════════════════════════════════════
 
+#[allow(dead_code)]
 struct WorldSimulation {
     tick: u64,
     max_ticks: u64,
@@ -124,14 +125,14 @@ impl WorldSimulation {
 
     fn new_with_grace(max_ticks: u64, grace_ticks: u64) -> Self {
         let event_bus = EventBus::new(10_000);
-        let mut rx = event_bus.subscribe();
+        let _rx = event_bus.subscribe();
 
         // Build rule registry with genesis-like config
         let consumption_config = ConsumptionConfig::default();
         let registry = custom_registry(consumption_config, grace_ticks, 50);
 
         // Task board with reward distribution
-        let mut task_board = TaskBoard::with_reward_distributor(RewardConfig::default());
+        let task_board = TaskBoard::with_reward_distributor(RewardConfig::default());
 
         Self {
             tick: 0,
@@ -292,7 +293,7 @@ impl WorldSimulation {
         }
 
         // Periodic trading: every ~50 ticks, if agents have tokens to spare
-        if self.tick % 50 != 0 || self.tick < 60 {
+        if !self.tick.is_multiple_of(50) || self.tick < 60 {
             return;
         }
 
@@ -353,7 +354,7 @@ impl WorldSimulation {
     /// Simulate task creation, claiming, and completion.
     fn process_tasks(&mut self) {
         // Only process tasks periodically
-        if self.tick % 100 != 0 || self.tick == 0 {
+        if !self.tick.is_multiple_of(100) || self.tick == 0 {
             return;
         }
 
@@ -462,7 +463,7 @@ impl WorldSimulation {
             }
             // If agent has very low tokens (<20) and is past protection, give emergency aid
             // This simulates finding resources in the world
-            if agent.tokens < 20 && agent.age(self.tick) > 50 && self.tick % 10 == 0 {
+            if agent.tokens < 20 && agent.age(self.tick) > 50 && self.tick.is_multiple_of(10) {
                 let aid_amount = 50u64;
                 agent.tokens = agent.tokens.saturating_add(aid_amount);
                 rescued_ids.push(agent.id.to_string());
@@ -680,9 +681,9 @@ fn test_e2e_two_agents_1000_ticks_survival() {
 
     // Events should be generated
     assert!(metrics.total_events > 0, "Events must be generated");
-    assert!(metrics.events_by_type.contains_key(&"TickAdvanced".to_string()));
-    assert!(metrics.events_by_type.contains_key(&"BalanceChanged".to_string()));
-    assert!(metrics.events_by_type.contains_key(&"AgentSpawned".to_string()));
+    assert!(metrics.events_by_type.contains_key("TickAdvanced"));
+    assert!(metrics.events_by_type.contains_key("BalanceChanged"));
+    assert!(metrics.events_by_type.contains_key("AgentSpawned"));
 
     // Tokens must be burned
     assert!(metrics.total_tokens_burned > 0, "Tokens must be burned during simulation");
@@ -796,7 +797,7 @@ fn test_e2e_task_lifecycle() {
     assert!(!task_events.is_empty(), "Should have task events, got {} total events", sim.events.len());
 
     // Tasks should have been created and completed
-    assert!(task_events.len() > 0,
+    assert!(!task_events.is_empty(),
         "Should have task activity");
 
     println!("✓ Task lifecycle assertions passed");
@@ -842,9 +843,9 @@ fn test_e2e_event_bus_integration() {
         .map(|e| format!("{:?}", e.event_type()))
         .collect();
 
-    assert!(event_types.contains(&"TickAdvanced".to_string()), "Must have TickAdvanced events");
-    assert!(event_types.contains(&"AgentSpawned".to_string()), "Must have AgentSpawned events");
-    assert!(event_types.contains(&"BalanceChanged".to_string()), "Must have BalanceChanged events");
+    assert!(event_types.contains("TickAdvanced"), "Must have TickAdvanced events");
+    assert!(event_types.contains("AgentSpawned"), "Must have AgentSpawned events");
+    assert!(event_types.contains("BalanceChanged"), "Must have BalanceChanged events");
 
     println!("  Event types observed: {:?}", event_types);
     println!("✓ Event bus integration assertions passed");

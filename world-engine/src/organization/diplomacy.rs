@@ -275,8 +275,8 @@ impl DiplomacyEngine {
         let has_existing = self.treaties.values().any(|t| {
             t.treaty_type == treaty_type
                 && t.status == TreatyStatus::Active
-                && ((&t.org_a == org_a && &t.org_b == org_b)
-                    || (&t.org_a == org_b && &t.org_b == org_a))
+                && ((t.org_a == *org_a && t.org_b == *org_b)
+                    || (t.org_a == *org_b && t.org_b == *org_a))
         });
         if has_existing {
             return Err(DiplomacyError::TreatyAlreadyExists {

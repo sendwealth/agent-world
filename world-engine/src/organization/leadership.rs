@@ -168,7 +168,7 @@ impl Election {
         }
         let counts = self.first_preference_counts();
         // Need >= 2/3 of total votes
-        let threshold = (2 * total + 2) / 3; // ceil(2/3 * total)
+        let threshold = (2 * total).div_ceil(3);
         for (candidate, count) in &counts {
             if *count >= threshold {
                 self.winner = Some(candidate.clone());

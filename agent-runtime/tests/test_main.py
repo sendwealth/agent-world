@@ -198,7 +198,10 @@ class TestRESTWorldClientEndpoints:
         client = _make_client()
         with patch.object(client, "_request", new_callable=AsyncMock) as mock_req:
             mock_req.return_value = {"status": "ok"}
-            await client.send_message({"from_agent": "a", "to_agent": "b", "message_type": "text", "payload": "hi"})
+            await client.send_message({
+                "from_agent": "a", "to_agent": "b",
+                "message_type": "text", "payload": "hi",
+            })
             mock_req.assert_awaited_once_with(
                 "POST", "/api/v1/messages",
                 json={"from_agent": "a", "to_agent": "b", "message_type": "text", "payload": "hi"},
@@ -218,7 +221,10 @@ class TestRESTWorldClientEndpoints:
         with patch.object(client, "submit_action", new_callable=AsyncMock) as mock:
             mock.return_value = {"status": "ok"}
             await client.submit_task("task-99", {"answer": 42})
-            mock.assert_awaited_once_with("submit_task", {"task_id": "task-99", "result": {"answer": 42}})
+            mock.assert_awaited_once_with(
+                "submit_task",
+                {"task_id": "task-99", "result": {"answer": 42}},
+            )
 
     @pytest.mark.asyncio
     async def test_propose_deal_uses_trade_action(self) -> None:
@@ -341,7 +347,11 @@ class TestRESTWorldClientFallback:
             mock_response.status_code = 500
             mock_response.text = "internal error"
             mock_response.raise_for_status = MagicMock(
-                side_effect=httpx.HTTPStatusError("500", request=MagicMock(), response=mock_response)
+                side_effect=httpx.HTTPStatusError(
+                    "500",
+                    request=MagicMock(),
+                    response=mock_response,
+                )
             )
             mock_instance.request = AsyncMock(return_value=mock_response)
             with pytest.raises(httpx.HTTPStatusError):

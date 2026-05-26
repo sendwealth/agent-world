@@ -76,8 +76,8 @@ async fn collect_sse_events(port: u16, query: &str, event_bus: Arc<EventBus>, ev
             if let Ok(bytes) = chunk {
                 let text = String::from_utf8_lossy(&bytes);
                 for line in text.lines() {
-                    if line.starts_with("data: ") {
-                        let _ = tx.send(line[6..].to_string()).await;
+                    if let Some(stripped) = line.strip_prefix("data: ") {
+                        let _ = tx.send(stripped.to_string()).await;
                     }
                 }
             }
@@ -223,8 +223,8 @@ async fn sse_multi_client() {
                 if let Ok(bytes) = chunk {
                     let text = String::from_utf8_lossy(&bytes);
                     for line in text.lines() {
-                        if line.starts_with("data: ") {
-                            let _ = tx.send(line[6..].to_string()).await;
+                        if let Some(stripped) = line.strip_prefix("data: ") {
+                            let _ = tx.send(stripped.to_string()).await;
                         }
                     }
                 }
@@ -246,7 +246,7 @@ async fn sse_multi_client() {
             events.push(evt);
         }
         assert!(
-            events.len() >= 1,
+            !events.is_empty(),
             "Client {} should receive at least 1 event, got {}",
             i,
             events.len()
@@ -260,7 +260,7 @@ async fn sse_invalid_event_type_returns_400() {
     let client = reqwest::Client::new();
 
     let resp = client
-        .get(&format!(
+        .get(format!(
             "http://127.0.0.1:{}/api/v1/world/events?types=tick_advanced,invalid_type",
             port
         ))

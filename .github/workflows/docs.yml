@@ -57,10 +57,11 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - uses: streets-of-code/markdown-spellcheck-action@v1
+      - uses: rojopolis/spellcheck-github-actions@v0
         with:
-          dictionary-file: docs-site/.spellcheck-dictionary.txt
-          markdown-files: docs-site/**/*.md
+          source_files: docs-site/**/*.md
+          task_name: Markdown
+          expect_match: true
 
   deploy:
     name: Deploy to GitHub Pages

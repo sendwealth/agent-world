@@ -303,6 +303,7 @@ impl MutationEngine {
     ///
     /// Returns a list of mutations that actually occurred. The caller is
     /// responsible for applying the mutations to the offspring's records.
+    #[allow(clippy::too_many_arguments)]
     pub fn apply_offspring_mutations<R: Rng + ?Sized>(
         &self,
         rng: &mut R,

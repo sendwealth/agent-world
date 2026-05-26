@@ -500,6 +500,7 @@ impl WorldState {
     ///
     /// Returns the ledger entry UUID.
     /// Recovers from lock poisoning rather than panicking.
+    #[allow(clippy::too_many_arguments)]
     pub fn record_transaction(
         &self,
         from_agent: Option<String>,

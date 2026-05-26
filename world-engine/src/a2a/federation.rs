@@ -625,8 +625,8 @@ impl FederationEngine {
     pub fn list_treaties(&self, world_id: Option<&str>, status: Option<CrossWorldTreatyStatus>) -> Vec<&CrossWorldTreaty> {
         self.treaties.values()
             .filter(|t| {
-                let world_match = world_id.map_or(true, |w| t.foreign_world_id == w);
-                let status_match = status.map_or(true, |s| t.status == s);
+                let world_match = world_id.is_none_or(|w| t.foreign_world_id == w);
+                let status_match = status.is_none_or(|s| t.status == s);
                 world_match && status_match
             })
             .collect()
@@ -1285,7 +1285,7 @@ mod tests {
         let mut engine = make_engine();
         register_world(&mut engine, "w1");
         engine.declare_war("w1", 10).unwrap();
-        let tid = engine.propose_peace("w1", 20).unwrap();
+        let _tid = engine.propose_peace("w1", 20).unwrap();
         assert!(engine.peace_proposals.contains_key("w1"));
         engine.accept_peace("w1", 25).unwrap();
         assert_eq!(engine.get_world("w1").unwrap().diplomatic_status, DiplomaticStatus::Peace);
@@ -1425,7 +1425,7 @@ mod tests {
         assert_eq!(engine.get_world("mars").unwrap().diplomatic_status, DiplomaticStatus::War);
 
         // Peace process with Mars
-        let peace_id = engine.propose_peace("mars", 400).unwrap();
+        let _peace_id = engine.propose_peace("mars", 400).unwrap();
         engine.accept_peace("mars", 410).unwrap();
         assert_eq!(engine.get_world("mars").unwrap().diplomatic_status, DiplomaticStatus::Peace);
 

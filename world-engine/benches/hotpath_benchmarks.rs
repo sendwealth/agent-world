@@ -167,6 +167,7 @@ fn bench_token_burn_100_agents(c: &mut Criterion) {
             phase: AgentPhase::Adult,
             tokens: 500_000,
             skills: Default::default(),
+            personality: String::new(),
         })
         .collect();
 
@@ -203,32 +204,35 @@ fn bench_concurrent_task_create(c: &mut Criterion) {
             BenchmarkId::new("rwlock", num_tasks),
             &num_tasks,
             |b, &num_tasks| {
-                b.to_async(tokio::runtime::Runtime::new().unwrap()).iter(|| async move {
-                    let board = Arc::new(tokio::sync::RwLock::new(TaskBoard::new()));
-                    {
-                        let mut b = board.write().await;
-                        b.set_balance("publisher", 10_000_000);
-                    }
-
-                    let mut handles = Vec::new();
-                    for i in 0..num_tasks {
-                        let board = board.clone();
-                        handles.push(tokio::spawn(async move {
+                b.iter(|| {
+                    let rt = tokio::runtime::Runtime::new().unwrap();
+                    rt.block_on(async {
+                        let board = Arc::new(tokio::sync::RwLock::new(TaskBoard::new()));
+                        {
                             let mut b = board.write().await;
-                            b.create_task(
-                                format!("Concurrent Task {}", i),
-                                format!("Desc {}", i),
-                                100,
-                                "publisher".to_string(),
-                                i as u64,
-                                None,
-                            )
-                            .unwrap();
-                        }));
-                    }
-                    for h in handles {
-                        h.await.unwrap();
-                    }
+                            b.set_balance("publisher", 10_000_000);
+                        }
+
+                        let mut handles = Vec::new();
+                        for i in 0..num_tasks {
+                            let board = board.clone();
+                            handles.push(tokio::spawn(async move {
+                                let mut b = board.write().await;
+                                b.create_task(
+                                    format!("Concurrent Task {}", i),
+                                    format!("Desc {}", i),
+                                    100,
+                                    "publisher".to_string(),
+                                    i as u64,
+                                    None,
+                                )
+                                .unwrap();
+                            }));
+                        }
+                        for h in handles {
+                            h.await.unwrap();
+                        }
+                    })
                 });
             },
         );
@@ -243,46 +247,49 @@ fn bench_concurrent_read_heavy(c: &mut Criterion) {
     group.sample_size(20);
 
     group.bench_function("80pct_reads_100_tasks", |b| {
-        b.to_async(tokio::runtime::Runtime::new().unwrap()).iter(|| async move {
-            let board = Arc::new(tokio::sync::RwLock::new(TaskBoard::new()));
-            {
-                let mut b = board.write().await;
-                b.set_balance("publisher", 10_000_000);
-                // Pre-populate 100 tasks
-                for i in 0..100 {
-                    b.create_task(
-                        format!("Task {}", i),
-                        format!("Desc {}", i),
-                        100,
-                        "publisher".to_string(),
-                        i as u64,
-                        None,
-                    ).unwrap();
-                }
-            }
-
-            // 8 reads for every 2 writes
-            let mut handles = Vec::new();
-            for i in 0..200 {
-                let board = board.clone();
-                handles.push(tokio::spawn(async move {
-                    if i % 5 == 0 {
-                        // Write: claim a task
-                        let mut b = board.write().await;
-                        let tasks = b.list();
-                        if let Some(task) = tasks.first() {
-                            let _ = b.claim_task(task.id, format!("worker-{}", i));
-                        }
-                    } else {
-                        // Read: list tasks
-                        let b = board.read().await;
-                        black_box(b.list());
+        b.iter(|| {
+            let rt = tokio::runtime::Runtime::new().unwrap();
+            rt.block_on(async {
+                let board = Arc::new(tokio::sync::RwLock::new(TaskBoard::new()));
+                {
+                    let mut b = board.write().await;
+                    b.set_balance("publisher", 10_000_000);
+                    // Pre-populate 100 tasks
+                    for i in 0..100 {
+                        b.create_task(
+                            format!("Task {}", i),
+                            format!("Desc {}", i),
+                            100,
+                            "publisher".to_string(),
+                            i as u64,
+                            None,
+                        ).unwrap();
                     }
-                }));
-            }
-            for h in handles {
-                h.await.unwrap();
-            }
+                }
+
+                // 8 reads for every 2 writes
+                let mut handles = Vec::new();
+                for i in 0..200 {
+                    let board = board.clone();
+                    handles.push(tokio::spawn(async move {
+                        if i % 5 == 0 {
+                            // Write: claim a task
+                            let mut b = board.write().await;
+                            let task_id = b.list().first().map(|t| t.id);
+                            if let Some(tid) = task_id {
+                                let _ = b.claim_task(tid, format!("worker-{}", i));
+                            }
+                        } else {
+                            // Read: list tasks
+                            let b = board.read().await;
+                            black_box(b.list());
+                        }
+                    }));
+                }
+                for h in handles {
+                    h.await.unwrap();
+                }
+            })
         });
     });
 

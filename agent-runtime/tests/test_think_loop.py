@@ -187,7 +187,10 @@ class TestMockDecisionProvider:
         survival = SurvivalAction(mode=SurvivalMode.NORMAL, token_ratio=0.5)
 
         decision = await provider.decide(state, perception, survival)
-        assert decision.action_type in (ActionType.REST, ActionType.EXPLORE, ActionType.GATHER, ActionType.MOVE)
+        assert decision.action_type in (
+            ActionType.REST, ActionType.EXPLORE,
+            ActionType.GATHER, ActionType.MOVE,
+        )
         assert decision.reasoning != ""
 
     @pytest.mark.asyncio

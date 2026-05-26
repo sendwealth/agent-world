@@ -5,7 +5,6 @@ All HTTP calls are mocked via unittest.mock – no live server required.
 
 from __future__ import annotations
 
-import json
 from unittest.mock import MagicMock, patch
 
 import httpx
@@ -43,9 +42,9 @@ def _mock_response(status_code: int = 200, data: dict | None = None) -> MagicMoc
 @pytest.fixture()
 def mock_httpx_client():
     """Patch httpx.Client and yield the mock instance for assertions."""
-    with patch("agent_runtime.sdk.client.httpx.Client") as MockClient:
+    with patch("agent_runtime.sdk.client.httpx.Client") as mock_client:
         mock_instance = MagicMock()
-        MockClient.return_value = mock_instance
+        mock_client.return_value = mock_instance
         yield mock_instance
 
 
@@ -297,7 +296,7 @@ class TestContextManager:
     def test_context_manager_closes_on_exception(self, mock_httpx_client):
         """close() should be called even if an exception occurs inside the block."""
         with pytest.raises(ValueError):
-            with AgentWorldClient(BASE_URL) as client:
+            with AgentWorldClient(BASE_URL):
                 raise ValueError("boom")
 
         mock_httpx_client.close.assert_called_once()

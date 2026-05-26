@@ -1,7 +1,7 @@
-/// Integration test for the A2A gRPC server.
-///
-/// Starts a gRPC server on a random port, registers test agents,
-/// and verifies Discover / SendMessage RPCs via a tonic client.
+//! Integration test for the A2A gRPC server.
+//!
+//! Starts a gRPC server on a random port, registers test agents,
+//! and verifies Discover / SendMessage RPCs via a tonic client.
 
 use std::net::SocketAddr;
 use std::sync::Arc;

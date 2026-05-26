@@ -341,14 +341,11 @@ async fn test_agent_spawn_consume_die_snapshot() {
     // Collect events from the death tick — drain all and check for dying/died
     let mut found_dying = false;
     let mut found_died = false;
-    loop {
-        match event_rx.try_recv() {
-            Ok(event) => match event.event_type() {
-                EventType::AgentDying => found_dying = true,
-                EventType::AgentDied => found_died = true,
-                _ => {} // TickAdvanced or other events
-            },
-            Err(_) => break,
+    while let Ok(event) = event_rx.try_recv() {
+        match event.event_type() {
+            EventType::AgentDying => found_dying = true,
+            EventType::AgentDied => found_died = true,
+            _ => {} // TickAdvanced or other events
         }
     }
     assert!(found_dying, "Should have received AgentDying event");

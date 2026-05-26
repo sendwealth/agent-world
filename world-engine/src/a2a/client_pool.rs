@@ -114,12 +114,11 @@ impl Default for ConnectionPool {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::world::EventBus;
-
     fn make_pool() -> ConnectionPool {
         ConnectionPool::new(50052)
     }
 
+    #[allow(dead_code)]
     fn make_agent(id: &str) -> RegisteredAgent {
         RegisteredAgent {
             agent_id: id.to_string(),

@@ -1,5 +1,5 @@
 use axum::{
-    extract::{FromRequestParts, State},
+    extract::FromRequestParts,
     http::request::Parts,
     response::{IntoResponse, Response},
 };
@@ -125,7 +125,7 @@ async fn extract_auth_from_parts(
     let store = auth_store.lock().await;
     let claims = store
         .verify_token(token)
-        .map_err(|e| AuthError::InvalidToken(e))?;
+        .map_err(AuthError::InvalidToken)?;
 
     Ok(AuthUser {
         user_id: claims.sub,

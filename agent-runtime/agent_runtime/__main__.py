@@ -1062,6 +1062,73 @@ def _extract_grpc_address(engine_url: str) -> str:
 # ---------------------------------------------------------------------------
 
 
+def _add_spawn_args(parser: argparse.ArgumentParser) -> None:
+    """Add spawn-related arguments to a sub-parser (shared by spawn and pool)."""
+    parser.add_argument(
+        "--name", default=None, help="Agent name (default: Agent)"
+    )
+    parser.add_argument(
+        "--config", type=Path, default=None,
+        help="Path to TOML or YAML config file",
+    )
+    parser.add_argument(
+        "--skills", default=None,
+        help="Comma-separated skill names (e.g. coding,trading,research)",
+    )
+    parser.add_argument(
+        "--traits", nargs="*", default=None,
+        help="Personality traits as key=value pairs (e.g. curiosity=0.8 caution=0.3)",
+    )
+    parser.add_argument(
+        "--tokens", type=int, default=None,
+        help="Initial token balance",
+    )
+    parser.add_argument(
+        "--max-tokens", type=int, default=None,
+        help="Maximum token capacity",
+    )
+    parser.add_argument(
+        "--max-ticks", type=int, default=None,
+        help="Maximum ticks to run (0 = unlimited)",
+    )
+    parser.add_argument(
+        "--tick-interval", type=float, default=None,
+        help="Seconds between ticks",
+    )
+    parser.add_argument(
+        "--world-url", default=None,
+        help="World Engine URL (default: http://localhost:3000)",
+    )
+    parser.add_argument(
+        "--llm-provider", choices=["openai", "anthropic", "ollama", "zhipu"], default=None,
+        help="LLM provider (default: ollama; zhipu maps to OpenAI-compatible GLM-5 API)",
+    )
+    parser.add_argument(
+        "--llm-model", default=None,
+        help="LLM model name (default: qwen3:8b)",
+    )
+    parser.add_argument(
+        "--llm-base-url", default=None,
+        help="LLM API base URL",
+    )
+    parser.add_argument(
+        "--no-llm", action="store_true",
+        help="Disable LLM and use mock random decisions",
+    )
+    parser.add_argument(
+        "--mock-llm", default=None,
+        help=(
+            "Use preset LLM mock for deterministic decisions. "
+            "Options: hungry_gather, social_nearby, survival. "
+            "Can also be set via MOCK_LLM_PRESET env var."
+        ),
+    )
+    parser.add_argument(
+        "--health-port", type=int, default=None,
+        help="Health check HTTP port (default: 9090, env: HEALTH_PORT)",
+    )
+
+
 def build_parser() -> argparse.ArgumentParser:
     """Build the argument parser for the CLI."""
     parser = argparse.ArgumentParser(
@@ -1091,69 +1158,34 @@ def build_parser() -> argparse.ArgumentParser:
     spawn_parser = sub.add_parser(
         "spawn", help="Spawn and run a single agent"
     )
-    spawn_parser.add_argument(
-        "--name", default=None, help="Agent name (default: Agent)"
+    _add_spawn_args(spawn_parser)
+
+    # -- pool --
+    pool_parser = sub.add_parser(
+        "pool", help="Spawn and manage a pool of agents"
     )
-    spawn_parser.add_argument(
-        "--config", type=Path, default=None,
-        help="Path to TOML or YAML config file",
+    pool_parser.add_argument(
+        "--count", type=int, default=1,
+        help="Number of agents to launch with auto-naming (Agent-1..N, default: 1)",
     )
-    spawn_parser.add_argument(
-        "--skills", default=None,
-        help="Comma-separated skill names (e.g. coding,trading,research)",
+    pool_parser.add_argument(
+        "--config-dir", type=Path, default=None,
+        help="Directory of .toml agent configs (one file per agent)",
     )
-    spawn_parser.add_argument(
-        "--traits", nargs="*", default=None,
-        help="Personality traits as key=value pairs (e.g. curiosity=0.8 caution=0.3)",
+    pool_parser.add_argument(
+        "--max-restart", type=int, default=3,
+        help="Max restart attempts per crashed agent (default: 3)",
     )
-    spawn_parser.add_argument(
-        "--tokens", type=int, default=None,
-        help="Initial token balance",
+    pool_parser.add_argument(
+        "--health-interval", type=float, default=10.0,
+        help="Health check interval in seconds (default: 10)",
     )
-    spawn_parser.add_argument(
-        "--max-tokens", type=int, default=None,
-        help="Maximum token capacity",
+    pool_parser.add_argument(
+        "--api-port", type=int, default=9090,
+        help="Pool API HTTP port (default: 9090)",
     )
-    spawn_parser.add_argument(
-        "--max-ticks", type=int, default=None,
-        help="Maximum ticks to run (0 = unlimited)",
-    )
-    spawn_parser.add_argument(
-        "--tick-interval", type=float, default=None,
-        help="Seconds between ticks",
-    )
-    spawn_parser.add_argument(
-        "--world-url", default=None,
-        help="World Engine URL (default: http://localhost:3000)",
-    )
-    spawn_parser.add_argument(
-        "--llm-provider", choices=["openai", "anthropic", "ollama", "zhipu"], default=None,
-        help="LLM provider (default: ollama; zhipu maps to OpenAI-compatible GLM-5 API)",
-    )
-    spawn_parser.add_argument(
-        "--llm-model", default=None,
-        help="LLM model name (default: qwen3:8b)",
-    )
-    spawn_parser.add_argument(
-        "--llm-base-url", default=None,
-        help="LLM API base URL",
-    )
-    spawn_parser.add_argument(
-        "--no-llm", action="store_true",
-        help="Disable LLM and use mock random decisions",
-    )
-    spawn_parser.add_argument(
-        "--mock-llm", default=None,
-        help=(
-            "Use preset LLM mock for deterministic decisions. "
-            "Options: hungry_gather, social_nearby, survival. "
-            "Can also be set via MOCK_LLM_PRESET env var."
-        ),
-    )
-    spawn_parser.add_argument(
-        "--health-port", type=int, default=None,
-        help="Health check HTTP port (default: 9090, env: HEALTH_PORT)",
-    )
+    # Reuse all spawn args
+    _add_spawn_args(pool_parser)
 
     return parser
 
@@ -1311,6 +1343,416 @@ def _apply_llm_config(config: RuntimeConfig, args: argparse.Namespace) -> None:
 
 
 # ---------------------------------------------------------------------------
+# Agent Pool — spawn and manage N agents in subprocesses
+# ---------------------------------------------------------------------------
+
+
+@dataclass
+class PoolAgentInfo:
+    """Tracks a single agent in the pool."""
+
+    index: int
+    name: str
+    process: asyncio.subprocess.Process | None = None
+    restarts: int = 0
+    status: str = "pending"  # pending | running | crashed | stopped
+
+
+class AgentPool:
+    """Manages a pool of agent subprocesses with health monitoring.
+
+    Each agent runs as ``python -m agent_runtime spawn --name <name> ...``
+    in its own subprocess, inheriting the pool's LLM/world configuration.
+    Crashed agents are automatically restarted up to ``max_restart`` times.
+    """
+
+    def __init__(
+        self,
+        *,
+        count: int = 1,
+        config_dir: Path | None = None,
+        max_restart: int = 3,
+        health_interval: float = 10.0,
+        api_port: int = 9090,
+        spawn_args: list[str] | None = None,
+    ) -> None:
+        self._count = count
+        self._config_dir = config_dir
+        self._max_restart = max_restart
+        self._health_interval = health_interval
+        self._api_port = api_port
+        self._spawn_args = spawn_args or []
+        self._agents: list[PoolAgentInfo] = []
+        self._shutdown = asyncio.Event()
+        self._api_server: asyncio.Server | None = None
+
+    async def run(self) -> dict[str, Any]:
+        """Start all agents and monitor until shutdown."""
+        start_time = time.monotonic()
+
+        # Build agent list from --config-dir or --count
+        if self._config_dir is not None:
+            self._agents = self._build_from_config_dir()
+        else:
+            self._agents = self._build_from_count()
+
+        if not self._agents:
+            logger.warning("No agents to start in pool")
+            return {"agents": [], "duration_s": 0.0}
+
+        logger.info(
+            "Starting agent pool with %d agents",
+            len(self._agents),
+            extra={"event": "pool_start"},
+        )
+
+        # Launch all agents
+        for agent in self._agents:
+            await self._start_agent(agent)
+
+        # Start the Pool API server
+        api_task = asyncio.create_task(self._start_api_server())
+
+        # Health monitor loop
+        try:
+            while not self._shutdown.is_set():
+                try:
+                    await asyncio.wait_for(
+                        self._shutdown.wait(), timeout=self._health_interval
+                    )
+                except asyncio.TimeoutError:
+                    pass
+                # Check health and restart crashed agents
+                await self._health_check()
+                # Auto-shutdown when all agents are stopped/crashed
+                if all(a.status in ("stopped", "crashed") for a in self._agents):
+                    logger.info("All agents finished — pool shutting down")
+                    break
+        except asyncio.CancelledError:
+            pass
+        finally:
+            # Stop all agents
+            await self._stop_all()
+            if self._api_server is not None:
+                self._api_server.close()
+                await self._api_server.wait_closed()
+            try:
+                await api_task
+            except (asyncio.CancelledError, Exception):
+                pass
+
+        duration = time.monotonic() - start_time
+        result = {
+            "agents": [
+                {
+                    "name": a.name,
+                    "status": a.status,
+                    "restarts": a.restarts,
+                }
+                for a in self._agents
+            ],
+            "duration_s": round(duration, 2),
+        }
+        logger.info("Pool stopped: %s", result, extra={"event": "pool_stop"})
+        return result
+
+    def request_shutdown(self) -> None:
+        """Signal the pool to shut down gracefully."""
+        self._shutdown.set()
+
+    def _build_from_count(self) -> list[PoolAgentInfo]:
+        """Build agent list from --count with auto-naming (Agent-1..N)."""
+        return [
+            PoolAgentInfo(index=i, name=f"Agent-{i + 1}")
+            for i in range(self._count)
+        ]
+
+    def _build_from_config_dir(self) -> list[PoolAgentInfo]:
+        """Build agent list from .toml files in --config-dir."""
+        agents: list[PoolAgentInfo] = []
+        if not self._config_dir or not self._config_dir.is_dir():
+            logger.warning("Config directory not found: %s", self._config_dir)
+            return agents
+        for i, path in enumerate(sorted(self._config_dir.glob("*.toml"))):
+            agents.append(
+                PoolAgentInfo(
+                    index=i,
+                    name=path.stem,
+                )
+            )
+        return agents
+
+    async def _start_agent(self, agent: PoolAgentInfo) -> None:
+        """Start a single agent subprocess."""
+        cmd = [sys.executable, "-m", "agent_runtime", "spawn"]
+
+        # If using config-dir, pass the specific config file
+        if self._config_dir is not None:
+            config_file = self._config_dir / f"{agent.name}.toml"
+            if config_file.exists():
+                cmd.extend(["--config", str(config_file)])
+
+        # Always set the name (overrides config file name)
+        cmd.extend(["--name", agent.name])
+
+        # Append shared spawn args (world-url, llm settings, etc.)
+        cmd.extend(self._spawn_args)
+
+        try:
+            process = await asyncio.create_subprocess_exec(
+                *cmd,
+                stdout=asyncio.subprocess.PIPE,
+                stderr=asyncio.subprocess.PIPE,
+            )
+            agent.process = process
+            agent.status = "running"
+            logger.info(
+                "Started agent %s (pid=%d)",
+                agent.name,
+                process.pid,
+                extra={"agent": agent.name, "event": "pool_agent_started"},
+            )
+        except Exception:
+            agent.status = "crashed"
+            logger.exception(
+                "Failed to start agent %s",
+                agent.name,
+                extra={"agent": agent.name, "event": "pool_agent_start_failed"},
+            )
+
+    async def _stop_agent(self, agent: PoolAgentInfo) -> None:
+        """Stop a single agent subprocess gracefully."""
+        if agent.process is None or agent.process.returncode is not None:
+            return
+        try:
+            agent.process.terminate()
+            try:
+                await asyncio.wait_for(agent.process.wait(), timeout=5.0)
+            except asyncio.TimeoutError:
+                agent.process.kill()
+                await agent.process.wait()
+            agent.status = "stopped"
+            logger.info(
+                "Stopped agent %s",
+                agent.name,
+                extra={"agent": agent.name, "event": "pool_agent_stopped"},
+            )
+        except Exception:
+            logger.warning(
+                "Error stopping agent %s",
+                agent.name,
+                exc_info=True,
+                extra={"agent": agent.name},
+            )
+
+    async def _stop_all(self) -> None:
+        """Stop all running agents."""
+        for agent in self._agents:
+            await self._stop_agent(agent)
+
+    async def _health_check(self) -> None:
+        """Check agent health and restart crashed agents."""
+        for agent in self._agents:
+            if agent.process is None:
+                continue
+            if agent.process.returncode is not None:
+                # Clean exit — mark stopped, don't restart
+                if agent.process.returncode == 0:
+                    agent.status = "stopped"
+                    continue
+                # Non-zero exit — crashed, attempt restart
+                if agent.restarts < self._max_restart:
+                    logger.info(
+                        "Agent %s crashed (exit=%d), restarting (%d/%d)",
+                        agent.name,
+                        agent.process.returncode,
+                        agent.restarts + 1,
+                        self._max_restart,
+                        extra={
+                            "agent": agent.name,
+                            "event": "pool_agent_restart",
+                        },
+                    )
+                    agent.restarts += 1
+                    await self._start_agent(agent)
+                else:
+                    agent.status = "crashed"
+                    logger.warning(
+                        "Agent %s exceeded max restarts (%d)",
+                        agent.name,
+                        self._max_restart,
+                        extra={
+                            "agent": agent.name,
+                            "event": "pool_agent_max_restarts",
+                        },
+                    )
+
+    def _build_spawn_args(self) -> list[str]:
+        """Return the shared spawn args list."""
+        return list(self._spawn_args)
+
+    # -- Pool API server --
+
+    async def _start_api_server(self) -> None:
+        """Start a lightweight HTTP server for pool status."""
+        try:
+            self._api_server = await asyncio.start_server(
+                self._handle_api_request,
+                host="0.0.0.0",
+                port=self._api_port,
+            )
+        except OSError:
+            logger.warning(
+                "Pool API: port %d unavailable, skipping", self._api_port
+            )
+            return
+        logger.info(
+            "Pool API listening on 0.0.0.0:%d",
+            self._api_port,
+            extra={"event": "pool_api_started", "port": self._api_port},
+        )
+        if self._api_server is not None:
+            await self._api_server.serve_forever()
+
+    async def _handle_api_request(
+        self,
+        reader: asyncio.StreamReader,
+        writer: asyncio.StreamWriter,
+    ) -> None:
+        """Handle Pool API HTTP requests."""
+        try:
+            request_line = await asyncio.wait_for(reader.readline(), timeout=5.0)
+            request_str = request_line.decode("ascii", errors="replace").strip()
+            # Drain headers
+            for _ in range(64):
+                line = await asyncio.wait_for(reader.readline(), timeout=2.0)
+                if line in (b"\r\n", b"\n", b""):
+                    break
+
+            parts = request_str.split()
+            path = parts[1].split("?")[0] if len(parts) >= 2 else ""
+
+            if parts and parts[0] == "GET" and path == "/health":
+                body = json.dumps(self._pool_status())
+            elif parts and parts[0] == "GET" and path == "/agents":
+                body = json.dumps(self._agent_list())
+            else:
+                writer.write(b"HTTP/1.1 404 Not Found\r\nConnection: close\r\n\r\n")
+                await writer.drain()
+                return
+
+            response = (
+                "HTTP/1.1 200 OK\r\n"
+                "Content-Type: application/json\r\n"
+                f"Content-Length: {len(body)}\r\n"
+                "Connection: close\r\n"
+                "\r\n"
+                f"{body}"
+            )
+            writer.write(response.encode("utf-8"))
+            await writer.drain()
+        except Exception:
+            logger.debug("Pool API request error", exc_info=True)
+        finally:
+            writer.close()
+            try:
+                await writer.wait_closed()
+            except Exception:
+                pass
+
+    def _pool_status(self) -> dict[str, Any]:
+        """Return pool health summary."""
+        running = sum(1 for a in self._agents if a.status == "running")
+        return {
+            "status": "running" if not self._shutdown.is_set() else "stopping",
+            "total": len(self._agents),
+            "running": running,
+            "crashed": sum(1 for a in self._agents if a.status == "crashed"),
+        }
+
+    def _agent_list(self) -> list[dict[str, Any]]:
+        """Return per-agent status list."""
+        return [
+            {
+                "name": a.name,
+                "status": a.status,
+                "restarts": a.restarts,
+                "pid": a.process.pid if a.process and a.process.returncode is None else None,
+            }
+            for a in self._agents
+        ]
+
+
+def _build_pool_spawn_args(args: argparse.Namespace) -> list[str]:
+    """Extract the shared spawn flags from parsed pool args into a CLI list.
+
+    These are passed as extra arguments to each ``spawn`` subprocess so the
+    pool agents share the same LLM / world / tick configuration.
+    """
+    parts: list[str] = []
+    if getattr(args, "world_url", None):
+        parts.extend(["--world-url", args.world_url])
+    if getattr(args, "llm_provider", None):
+        parts.extend(["--llm-provider", args.llm_provider])
+    if getattr(args, "llm_model", None):
+        parts.extend(["--llm-model", args.llm_model])
+    if getattr(args, "llm_base_url", None):
+        parts.extend(["--llm-base-url", args.llm_base_url])
+    if getattr(args, "no_llm", False):
+        parts.append("--no-llm")
+    if getattr(args, "mock_llm", None):
+        parts.extend(["--mock-llm", args.mock_llm])
+    if getattr(args, "skills", None):
+        parts.extend(["--skills", args.skills])
+    if getattr(args, "traits", None):
+        parts.extend(["--traits", *args.traits])
+    if getattr(args, "tokens", None) is not None:
+        parts.extend(["--tokens", str(args.tokens)])
+    if getattr(args, "max_tokens", None) is not None:
+        parts.extend(["--max-tokens", str(args.max_tokens)])
+    if getattr(args, "max_ticks", None) is not None:
+        parts.extend(["--max-ticks", str(args.max_ticks)])
+    if getattr(args, "tick_interval", None) is not None:
+        parts.extend(["--tick-interval", str(args.tick_interval)])
+    if getattr(args, "health_port", None) is not None:
+        parts.extend(["--health-port", str(args.health_port)])
+    return parts
+
+
+async def run_pool(args: argparse.Namespace) -> dict[str, Any]:
+    """Run an AgentPool from parsed CLI args."""
+    spawn_args = _build_pool_spawn_args(args)
+
+    pool = AgentPool(
+        count=getattr(args, "count", 1),
+        config_dir=getattr(args, "config_dir", None),
+        max_restart=getattr(args, "max_restart", 3),
+        health_interval=getattr(args, "health_interval", 10.0),
+        api_port=getattr(args, "api_port", 9090),
+        spawn_args=spawn_args,
+    )
+
+    # Graceful shutdown on SIGINT
+    loop = asyncio.get_running_loop()
+
+    def _signal_handler() -> None:
+        logger.info("Pool received SIGINT — shutting down", extra={"event": "pool_shutdown_signal"})
+        pool.request_shutdown()
+
+    loop.add_signal_handler(signal.SIGINT, _signal_handler)
+
+    try:
+        result = await pool.run()
+    finally:
+        try:
+            loop.remove_signal_handler(signal.SIGINT)
+        except (ValueError, OSError):
+            pass
+
+    return result
+
+
+# ---------------------------------------------------------------------------
 # Entry point
 # ---------------------------------------------------------------------------
 
@@ -1344,6 +1786,9 @@ def main() -> None:
         config = build_config_from_args(args)
         stats = asyncio.run(run_agent(config))
         print(json.dumps(stats.to_dict(), indent=2))
+    elif args.command == "pool":
+        result = asyncio.run(run_pool(args))
+        print(json.dumps(result, indent=2))
     else:
         parser.print_help()
         sys.exit(1)

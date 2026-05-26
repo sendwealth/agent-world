@@ -527,3 +527,172 @@ class TestGetHealthPort:
         monkeypatch.setenv("HEALTH_PORT", "not_a_number")
         config = RuntimeConfig(health_port=8888)
         assert _get_health_port(config) == 8888
+
+
+# ---------------------------------------------------------------------------
+# Pool sub-command
+# ---------------------------------------------------------------------------
+
+
+class TestPoolParser:
+    def test_pool_defaults(self) -> None:
+        parser = build_parser()
+        args = parser.parse_args(["pool"])
+        assert args.command == "pool"
+        assert args.count == 1
+        assert args.max_restart == 3
+        assert args.health_interval == 10.0
+        assert args.api_port == 9090
+        assert args.config_dir is None
+
+    def test_pool_with_count(self) -> None:
+        parser = build_parser()
+        args = parser.parse_args(["pool", "--count", "10"])
+        assert args.count == 10
+
+    def test_pool_inherits_spawn_args(self) -> None:
+        parser = build_parser()
+        args = parser.parse_args([
+            "pool",
+            "--count", "5",
+            "--world-url", "http://localhost:8080",
+            "--llm-provider", "zhipu",
+            "--llm-model", "glm-5",
+            "--no-llm",
+        ])
+        assert args.count == 5
+        assert args.world_url == "http://localhost:8080"
+        assert args.llm_provider == "zhipu"
+        assert args.llm_model == "glm-5"
+        assert args.no_llm is True
+
+    def test_pool_all_options(self) -> None:
+        parser = build_parser()
+        args = parser.parse_args([
+            "pool",
+            "--count", "3",
+            "--config-dir", "/tmp/agents",
+            "--max-restart", "5",
+            "--health-interval", "20",
+            "--api-port", "8888",
+            "--world-url", "http://engine:3000",
+            "--skills", "coding,trading",
+            "--max-ticks", "100",
+        ])
+        assert args.count == 3
+        assert str(args.config_dir) == "/tmp/agents"
+        assert args.max_restart == 5
+        assert args.health_interval == 20.0
+        assert args.api_port == 8888
+        assert args.world_url == "http://engine:3000"
+        assert args.skills == "coding,trading"
+        assert args.max_ticks == 100
+
+
+class TestBuildPoolSpawnArgs:
+    def test_extracts_world_url(self) -> None:
+        from agent_runtime.__main__ import _build_pool_spawn_args
+        parser = build_parser()
+        args = parser.parse_args(["pool", "--world-url", "http://localhost:8080"])
+        result = _build_pool_spawn_args(args)
+        assert "--world-url" in result
+        assert "http://localhost:8080" in result
+
+    def test_extracts_no_llm(self) -> None:
+        from agent_runtime.__main__ import _build_pool_spawn_args
+        parser = build_parser()
+        args = parser.parse_args(["pool", "--no-llm"])
+        result = _build_pool_spawn_args(args)
+        assert "--no-llm" in result
+
+    def test_empty_when_no_spawn_args(self) -> None:
+        from agent_runtime.__main__ import _build_pool_spawn_args
+        parser = build_parser()
+        args = parser.parse_args(["pool"])
+        result = _build_pool_spawn_args(args)
+        assert result == []
+
+
+class TestAgentPool:
+    def test_build_from_count(self) -> None:
+        from agent_runtime.__main__ import AgentPool
+        pool = AgentPool(count=5)
+        agents = pool._build_from_count()
+        assert len(agents) == 5
+        assert agents[0].name == "Agent-1"
+        assert agents[4].name == "Agent-5"
+
+    def test_build_from_count_default(self) -> None:
+        from agent_runtime.__main__ import AgentPool
+        pool = AgentPool(count=1)
+        agents = pool._build_from_count()
+        assert len(agents) == 1
+        assert agents[0].name == "Agent-1"
+
+    def test_build_from_config_dir_missing(self, tmp_path) -> None:
+        from agent_runtime.__main__ import AgentPool
+        pool = AgentPool(config_dir=tmp_path / "nonexistent")
+        agents = pool._build_from_config_dir()
+        assert agents == []
+
+    def test_build_from_config_dir_with_toml(self, tmp_path) -> None:
+        from agent_runtime.__main__ import AgentPool
+        (tmp_path / "alice.toml").write_text("[agent]\nname = 'Alice'\n")
+        (tmp_path / "bob.toml").write_text("[agent]\nname = 'Bob'\n")
+        pool = AgentPool(config_dir=tmp_path)
+        agents = pool._build_from_config_dir()
+        assert len(agents) == 2
+        assert agents[0].name == "alice"
+        assert agents[1].name == "bob"
+
+    @pytest.mark.asyncio
+    async def test_pool_run_3_agents(self) -> None:
+        """Integration test: pool launches 3 agents, each completes, pool exits."""
+        from agent_runtime.__main__ import AgentPool
+        pool = AgentPool(
+            count=3,
+            max_restart=0,
+            health_interval=1,
+            api_port=0,
+            spawn_args=["--no-llm", "--max-ticks", "2"],
+        )
+        result = await pool.run()
+        assert len(result["agents"]) == 3
+        assert all(a["status"] == "stopped" for a in result["agents"])
+        assert result["duration_s"] > 0
+
+    @pytest.mark.asyncio
+    async def test_pool_auto_naming(self) -> None:
+        from agent_runtime.__main__ import AgentPool
+        pool = AgentPool(
+            count=3,
+            max_restart=0,
+            health_interval=1,
+            api_port=0,
+            spawn_args=["--no-llm", "--max-ticks", "1"],
+        )
+        result = await pool.run()
+        names = [a["name"] for a in result["agents"]]
+        assert names == ["Agent-1", "Agent-2", "Agent-3"]
+
+    @pytest.mark.asyncio
+    async def test_pool_request_shutdown(self) -> None:
+        """Test that request_shutdown() causes pool to exit."""
+        from agent_runtime.__main__ import AgentPool
+        pool = AgentPool(
+            count=1,
+            max_restart=0,
+            health_interval=0.2,
+            api_port=0,
+            spawn_args=["--no-llm", "--max-ticks", "9999"],
+        )
+
+        async def shutdown_after(delay: float) -> None:
+            await asyncio.sleep(delay)
+            pool.request_shutdown()
+
+        asyncio.get_running_loop().create_task(shutdown_after(2.0))
+        result = await pool.run()
+        assert len(result["agents"]) == 1
+        # Agent was either stopped (terminated by pool shutdown) or running
+        assert result["agents"][0]["status"] in ("stopped", "running")

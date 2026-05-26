@@ -270,28 +270,28 @@ class TestDeregisterAgent:
 
 class TestRESTWorldClient:
     @pytest.mark.asyncio
-    async def test_send_message_returns_standalone(self) -> None:
+    async def test_send_message_returns_success(self) -> None:
         client = RESTWorldClient("http://localhost:3000", agent_id="test-agent")
         with patch.object(client, "_request", new_callable=AsyncMock) as mock_req:
-            mock_req.return_value = {"status": "standalone"}
+            mock_req.return_value = {"status": "ok"}
             result = await client.send_message({"text": "hello"})
-            assert result["status"] == "standalone"
+            assert result["status"] == "ok"
 
     @pytest.mark.asyncio
-    async def test_claim_task_returns_standalone(self) -> None:
+    async def test_claim_task_returns_success(self) -> None:
         client = RESTWorldClient("http://localhost:3000", agent_id="test-agent")
         with patch.object(client, "_request", new_callable=AsyncMock) as mock_req:
-            mock_req.return_value = {"status": "standalone"}
+            mock_req.return_value = {"status": "ok", "task_id": "task-123"}
             result = await client.claim_task("task-123")
-            assert result["status"] == "standalone"
+            assert result["status"] == "ok"
 
     @pytest.mark.asyncio
-    async def test_explore_returns_standalone(self) -> None:
+    async def test_explore_returns_success(self) -> None:
         client = RESTWorldClient("http://localhost:3000", agent_id="test-agent")
         with patch.object(client, "_request", new_callable=AsyncMock) as mock_req:
-            mock_req.return_value = {"status": "standalone"}
+            mock_req.return_value = {"status": "ok", "agents": []}
             result = await client.explore({})
-            assert result["status"] == "standalone"
+            assert result["status"] == "ok"
 
 
 # ---------------------------------------------------------------------------

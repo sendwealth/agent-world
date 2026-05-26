@@ -39,6 +39,7 @@ from typing import Any, Protocol
 from agent_runtime.core.act import (
     ActionContext,
     ActionExecutor,
+    ActionStatus,
     ActionType,
 )
 from agent_runtime.models.agent_state import AgentState
@@ -643,8 +644,22 @@ class ThinkLoop:
         The ActionExecutor handles token deduction, retry logic, and
         result recording.  We wrap the agent state and world client
         into an ActionContext.
+
+        If no world_client was provided (standalone mode), a
+        ``_NoOpWorldClient`` is used — actions succeed but have no
+        effect on the World Engine.  This is intentional for agents
+        running without ``--world-url``.
         """
-        world = self._world_client if self._world_client is not None else _NoOpWorldClient()
+        if self._world_client is not None:
+            world = self._world_client
+        else:
+            if self._tick <= 1:
+                logger.warning(
+                    "No world_client provided — running in standalone mode. "
+                    "Actions will succeed locally but have no effect on the "
+                    "World Engine.  Provide --world-url for connected mode."
+                )
+            world = _NoOpWorldClient()
         context = ActionContext(
             agent=self.state,  # type: ignore[arg-type]
             world=world,  # type: ignore[arg-type]
@@ -663,7 +678,7 @@ class ThinkLoop:
                 reasoning=decision.reasoning,
             )
 
-        if result.status.value != "success":
+        if result.status != ActionStatus.SUCCESS:
             logger.warning(
                 "Tick %d: action %s failed — status=%s error=%s",
                 self._tick,

@@ -280,6 +280,14 @@ class ActionExecutor:
             attempts = attempt
             try:
                 data = await self._dispatch(action_type, context)
+                # Guard against world clients that return {"status": "error", ...}
+                # instead of raising.  Treat it as a dispatch failure so the
+                # retry logic kicks in and the final result is RETRY_EXHAUSTED
+                # rather than a false SUCCESS.
+                if isinstance(data, dict) and data.get("status") == "error":
+                    raise RuntimeError(
+                        data.get("error", "world client returned error status")
+                    )
                 elapsed = (time.monotonic() - start_time) * 1000
                 result = ActionResult(
                     action_type=action_type,

@@ -418,9 +418,8 @@ class TestGRPCWorldClient:
         world, a2a = self._make_world_client()
         a2a.send_message = AsyncMock(side_effect=ConnectionError("network down"))
 
-        result = await world.send_message({"to_agent": "bob"})
-        assert result["status"] == "error"
-        assert "network down" in result["error"]
+        with pytest.raises(ConnectionError, match="network down"):
+            await world.send_message({"to_agent": "bob"})
 
     @pytest.mark.asyncio
     async def test_claim_task(self):
@@ -438,8 +437,8 @@ class TestGRPCWorldClient:
         world, a2a = self._make_world_client()
         a2a.send_message = AsyncMock(side_effect=Exception("fail"))
 
-        result = await world.claim_task("task-123")
-        assert result["status"] == "error"
+        with pytest.raises(Exception, match="fail"):
+            await world.claim_task("task-123")
 
     @pytest.mark.asyncio
     async def test_submit_task(self):
@@ -456,8 +455,8 @@ class TestGRPCWorldClient:
         world, a2a = self._make_world_client()
         a2a.send_message = AsyncMock(side_effect=Exception("fail"))
 
-        result = await world.submit_task("task-123", {})
-        assert result["status"] == "error"
+        with pytest.raises(Exception, match="fail"):
+            await world.submit_task("task-123", {})
 
     @pytest.mark.asyncio
     async def test_propose_deal(self):
@@ -474,8 +473,8 @@ class TestGRPCWorldClient:
         world, a2a = self._make_world_client()
         a2a.send_message = AsyncMock(side_effect=Exception("fail"))
 
-        result = await world.propose_deal({})
-        assert result["status"] == "error"
+        with pytest.raises(Exception, match="fail"):
+            await world.propose_deal({})
 
     @pytest.mark.asyncio
     async def test_teach_skill(self):
@@ -494,8 +493,8 @@ class TestGRPCWorldClient:
         world, a2a = self._make_world_client()
         a2a.send_message = AsyncMock(side_effect=Exception("fail"))
 
-        result = await world.teach_skill("bob", "python", 3)
-        assert result["status"] == "error"
+        with pytest.raises(Exception, match="fail"):
+            await world.teach_skill("bob", "python", 3)
 
     @pytest.mark.asyncio
     async def test_explore(self):
@@ -520,8 +519,8 @@ class TestGRPCWorldClient:
         world, a2a = self._make_world_client()
         a2a.discover = AsyncMock(side_effect=Exception("fail"))
 
-        result = await world.explore({})
-        assert result["status"] == "error"
+        with pytest.raises(Exception, match="fail"):
+            await world.explore({})
 
     @pytest.mark.asyncio
     async def test_broadcast_message(self):
@@ -541,8 +540,8 @@ class TestGRPCWorldClient:
         world, a2a = self._make_world_client()
         a2a.send_message = AsyncMock(side_effect=Exception("fail"))
 
-        result = await world.broadcast_message({"type": "PROPOSE"})
-        assert result["status"] == "error"
+        with pytest.raises(Exception, match="fail"):
+            await world.broadcast_message({"type": "PROPOSE"})
 
 
 # ---------------------------------------------------------------------------
@@ -644,7 +643,11 @@ class TestThinkLoopGRPCIntegration:
 
     @pytest.mark.asyncio
     async def test_network_error_does_not_crash_loop(self):
-        """Network errors from world_client don't crash the ThinkLoop."""
+        """Network errors from world_client don't crash the ThinkLoop.
+
+        GRPCWorldClient now raises on error, so ActionExecutor retries
+        and records RETRY_EXHAUSTED.  The loop should still complete.
+        """
         a2a = MagicMock(spec=A2AClient)
         world = GRPCWorldClient(a2a)
         a2a.send_message = AsyncMock(side_effect=ConnectionError("network down"))
@@ -656,17 +659,23 @@ class TestThinkLoopGRPCIntegration:
                     parameters={"payload": {"to_agent": "bob"}},
                 )
 
+        executor = ActionExecutor()
         state = make_state(tokens=5000, max_tokens=10000)
         loop = ThinkLoop(
             state=state,
             survival=SurvivalInstinct(),
-            executor=ActionExecutor(),
+            executor=executor,
             config=ThinkLoopConfig(tick_interval=0.0),
             decision_provider=AlwaysSendMessage(),
             world_client=world,
         )
         await loop.run(max_ticks=3)
         assert loop.tick == 3
+        # Action failures should be recorded as RETRY_EXHAUSTED in executor history
+        history = executor.history
+        assert len(history) == 3  # One action per tick
+        for result in history:
+            assert result.status.value == "retry_exhausted"
 
     @pytest.mark.asyncio
     async def test_no_world_client_uses_noop(self):

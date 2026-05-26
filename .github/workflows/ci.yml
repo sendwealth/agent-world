@@ -91,7 +91,6 @@ jobs:
   dashboard:
     name: Dashboard – lint + type-check + build
     runs-on: ubuntu-latest
-    if: hashFiles('dashboard/tsconfig.json') != ''
     defaults:
       run:
         working-directory: dashboard

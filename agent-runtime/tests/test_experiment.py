@@ -415,18 +415,17 @@ class TestABFramework:
         assert isinstance(comp.statistical_significance, dict)
         assert comp.recommendation != ""
 
-    def test_compare_results_deterministic(self) -> None:
+    @pytest.mark.asyncio
+    async def test_compare_results_deterministic(self) -> None:
         """Same seed should produce deterministic A/B results."""
         config = ExperimentConfig(experiment_id="det", seed=42, duration_ticks=500)
         ab1 = ABExperiment(config, config, seed_base=42)
         ab2 = ABExperiment(config, config, seed_base=42)
 
         # Compare results manually (since _run_single is async)
-        r1, r2 = asyncio.run(
-            asyncio.gather(
-                ab1._run_single(config),
-                ab2._run_single(config),
-            )
+        r1, r2 = await asyncio.gather(
+            ab1._run_single(config),
+            ab2._run_single(config),
         )
         # Results should be identical (same seed, same config)
         assert r1.metrics_timeline == r2.metrics_timeline

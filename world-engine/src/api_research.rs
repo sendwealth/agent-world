@@ -3,6 +3,7 @@
 //! Provides aggregated world state, deep agent profiles, historical snapshots,
 //! emergence metrics, and a real-time SSE event stream for external researchers.
 
+use std::collections::HashMap;
 use std::convert::Infallible;
 
 use axum::{
@@ -519,6 +520,10 @@ mod tests {
             money: tokens / 2,
             alive,
             ticks_survived: 0,
+            personality: String::new(),
+            parent_ids: Vec::new(),
+            generation: 0,
+            skills: HashMap::new(),
         }
     }
 

@@ -62,6 +62,8 @@ fn test_app() -> Router {
         federation: None,
         federation_registry: None,
         migration_manager: None,
+        api_key_store: None,
+        experiment_store: Arc::new(Mutex::new(Vec::new())),
     };
 
     build_full_router(state)

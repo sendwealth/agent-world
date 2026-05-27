@@ -196,7 +196,7 @@ pub fn create_router_with_wal(board: SharedTaskBoard, wal: SharedWAL) -> Router 
             rule_engine: None,
             federation: Some(Arc::new(Mutex::new(crate::a2a::federation::FederationEngine::with_shared_event_bus(event_bus.clone())))),
             federation_registry: Some(Arc::new(Mutex::new(WorldRegistry::new(event_bus.clone())))),
-        migration_manager: Some(Arc::new(Mutex::new(MigrationManager::new(MigrationPolicy::default(), event_bus)))),
+        migration_manager: Some(Arc::new(Mutex::new(MigrationManager::new(MigrationPolicy::default(), event_bus.clone())))),
         api_key_store: None,
         experiment_store: Arc::new(Mutex::new(Vec::new())),
     };
@@ -238,7 +238,7 @@ pub fn create_router_with_wal_and_snapshots(board: SharedTaskBoard, wal: SharedW
             rule_engine: None,
             federation: Some(Arc::new(Mutex::new(crate::a2a::federation::FederationEngine::with_shared_event_bus(event_bus.clone())))),
             federation_registry: Some(Arc::new(Mutex::new(WorldRegistry::new(event_bus.clone())))),
-        migration_manager: Some(Arc::new(Mutex::new(MigrationManager::new(MigrationPolicy::default(), event_bus)))),
+        migration_manager: Some(Arc::new(Mutex::new(MigrationManager::new(MigrationPolicy::default(), event_bus.clone())))),
         api_key_store: None,
         experiment_store: Arc::new(Mutex::new(Vec::new())),
     };
@@ -5466,6 +5466,8 @@ mod tests {
             rule_engine: None,
             federation: None,            federation_registry: None,
             migration_manager: None,
+            api_key_store: None,
+            experiment_store: Arc::new(Mutex::new(Vec::new())),
         };
         (state, tmp)
     }
@@ -5756,6 +5758,8 @@ mod tests {
             rule_engine: None,
             federation: None,            federation_registry: None,
             migration_manager: None,
+            api_key_store: None,
+            experiment_store: Arc::new(Mutex::new(Vec::new())),
         };
 
         let app = build_full_router(state);

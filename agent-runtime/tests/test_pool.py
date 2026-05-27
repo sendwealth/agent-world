@@ -5,26 +5,22 @@ All subprocess calls are mocked — no real processes are spawned.
 
 from __future__ import annotations
 
-import os
 import signal
 import subprocess
-import time
 from pathlib import Path
 from typing import Optional
-from unittest.mock import MagicMock, patch, call
+from unittest.mock import MagicMock, patch
 
 import pytest
 
 from agent_runtime.pool import (
+    _DEFAULT_CHECK_INTERVAL,
     AgentProcessManager,
     AgentStatus,
     AutoRestartPolicy,
     DeathEvent,
     ManagedProcess,
-    _DEFAULT_CHECK_INTERVAL,
-    _GRACEFUL_SHUTDOWN_TIMEOUT,
 )
-
 
 # ---------------------------------------------------------------------------
 # Fixtures
@@ -108,7 +104,9 @@ class TestSpawn:
         assert mp.data_dir.name == "bob"
 
     @patch("agent_runtime.pool.subprocess.Popen")
-    def test_spawn_duplicate_name_raises(self, mock_popen_cls, manager: AgentProcessManager) -> None:
+    def test_spawn_duplicate_name_raises(
+        self, mock_popen_cls, manager: AgentProcessManager,
+    ) -> None:
         mock_popen_cls.return_value = _mock_popen()
 
         manager.spawn("alice")
@@ -312,8 +310,8 @@ class TestRestart:
         mock_popen_cls.side_effect = procs
 
         manager.spawn("alice")
-        mp1 = manager.restart("alice")
-        mp2 = manager.restart("alice")
+        manager.restart("alice")
+        manager.restart("alice")
         mp3 = manager.restart("alice")
 
         assert mp3.restart_count == 3

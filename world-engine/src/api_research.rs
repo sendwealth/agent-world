@@ -3,7 +3,6 @@
 //! Provides aggregated world state, deep agent profiles, historical snapshots,
 //! emergence metrics, and a real-time SSE event stream for external researchers.
 
-use std::collections::HashMap;
 use std::convert::Infallible;
 
 use axum::{
@@ -510,6 +509,7 @@ fn compute_top_percent_share(agents: &[AgentRecord], pct: f64) -> Option<f64> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::collections::HashMap;
 
     fn make_agent(id: &str, tokens: u64, alive: bool) -> AgentRecord {
         AgentRecord {

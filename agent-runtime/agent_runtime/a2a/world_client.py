@@ -62,7 +62,7 @@ class GRPCWorldClient:
                 payload=payload.get("payload", payload),
             )
             return {"status": "ok", "received": ack.received}
-        except Exception as exc:
+        except Exception:
             logger.exception("send_message failed")
             raise
 
@@ -74,7 +74,7 @@ class GRPCWorldClient:
                 payload={"action": "claim_task", "task_id": task_id},
             )
             return {"status": "ok", "task_id": task_id, "received": ack.received}
-        except Exception as exc:
+        except Exception:
             logger.exception("claim_task failed")
             raise
 
@@ -92,7 +92,7 @@ class GRPCWorldClient:
                 },
             )
             return {"status": "ok", "task_id": task_id, "received": ack.received}
-        except Exception as exc:
+        except Exception:
             logger.exception("submit_task failed")
             raise
 
@@ -106,7 +106,7 @@ class GRPCWorldClient:
                 payload={"action": "propose_deal", "proposal": proposal},
             )
             return {"status": "ok", "received": ack.received}
-        except Exception as exc:
+        except Exception:
             logger.exception("propose_deal failed")
             raise
 
@@ -130,7 +130,7 @@ class GRPCWorldClient:
                 "skill": skill_name,
                 "received": ack.received,
             }
-        except Exception as exc:
+        except Exception:
             logger.exception("teach_skill failed")
             raise
 
@@ -153,7 +153,7 @@ class GRPCWorldClient:
                 for a in response.agents
             ]
             return {"status": "ok", "agents": agents}
-        except Exception as exc:
+        except Exception:
             logger.exception("explore failed")
             raise
 
@@ -165,7 +165,7 @@ class GRPCWorldClient:
                 payload={"action": "move", "direction": direction},
             )
             return {"status": "ok", "direction": direction, "received": ack.received}
-        except Exception as exc:
+        except Exception:
             logger.exception("move failed")
             raise
 
@@ -177,7 +177,7 @@ class GRPCWorldClient:
                 payload={"action": "gather", "resource_type": resource_type},
             )
             return {"status": "ok", "resource_type": resource_type, "received": ack.received}
-        except Exception as exc:
+        except Exception:
             logger.exception("gather failed")
             raise
 
@@ -189,7 +189,7 @@ class GRPCWorldClient:
                 payload={"action": "build", "structure_type": structure_type, **kwargs},
             )
             return {"status": "ok", "structure_type": structure_type, "received": ack.received}
-        except Exception as exc:
+        except Exception:
             logger.exception("build failed")
             raise
 
@@ -214,7 +214,7 @@ class GRPCWorldClient:
                 payload=payload.get("payload", {}),
             )
             return {"status": "ok", "received": ack.received}
-        except Exception as exc:
+        except Exception:
             logger.exception("broadcast_message failed")
             raise
 

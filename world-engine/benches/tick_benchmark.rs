@@ -23,7 +23,6 @@ use criterion::{
 use agent_world_engine::economy::token_burn::{AgentRecord, ConsumptionConfig, TokenBurnEngine};
 use agent_world_engine::economy::reputation::ReputationConfig;
 use agent_world_engine::lifecycle::LifecycleConfig;
-use agent_world_engine::lifecycle::{LifecycleConfig, LifecycleMachine};
 use agent_world_engine::rules::default_registry;
 use agent_world_engine::world::enums::AgentPhase;
 use agent_world_engine::world::event::WorldEvent;
@@ -55,6 +54,8 @@ fn make_agents(count: usize) -> Vec<(Uuid, u64, AgentRecord)> {
                     tokens: 500_000,
                     skills: std::collections::HashMap::new(),
                     personality: String::new(),
+                    tasks_completed: 0,
+                    tasks_attempted: 0,
                 },
             )
         })
@@ -208,6 +209,8 @@ fn bench_token_burn_scaling(c: &mut Criterion) {
                 tokens: 500_000,
                 skills: Default::default(),
                 personality: String::new(),
+                tasks_completed: 0,
+                tasks_attempted: 0,
             })
             .collect();
 
@@ -284,6 +287,8 @@ fn bench_rule_registry_scaling(c: &mut Criterion) {
                         tokens: 500_000,
                         skills: Default::default(),
                         personality: String::new(),
+                        tasks_completed: 0,
+                        tasks_attempted: 0,
                     },
                 )
             })
@@ -317,7 +322,6 @@ fn bench_snapshot_scaling(c: &mut Criterion) {
             BenchmarkId::new("world_engine_snapshot", agent_count),
             &agent_count,
             |b, &_agent_count| {
-            |b, &agent_count| {
                 b.iter(|| {
                     let state =
                         agent_world_engine::world::engine::WorldState::with_defaults();

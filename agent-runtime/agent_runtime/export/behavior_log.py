@@ -5,7 +5,7 @@ from __future__ import annotations
 import csv
 import io
 import json
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
@@ -75,7 +75,8 @@ class BehaviorLogExporter:
             # Extract entries from each phase
             for phase in snap.phases:
                 # phase.phase is a TracePhase enum; compare using .value
-                phase_value = phase.phase.value if hasattr(phase.phase, "value") else str(phase.phase)
+                phase_value = (phase.phase.value
+                    if hasattr(phase.phase, "value") else str(phase.phase))
 
                 # Apply event type filter
                 if self._event_type_filter and phase_value not in self._event_type_filter:
@@ -180,7 +181,11 @@ class BehaviorLogExporter:
         """Serialize entries to CSV (Pandas-compatible)."""
         output = io.StringIO()
         writer = csv.writer(output, lineterminator="\n")
-        writer.writerow(["agent_id", "tick", "phase", "action", "duration_ms", "error", "input_data", "output_data"])
+        writer.writerow([
+            "agent_id", "tick", "phase",
+            "action", "duration_ms", "error",
+            "input_data", "output_data",
+        ])
         for e in entries:
             writer.writerow([
                 e.agent_id,

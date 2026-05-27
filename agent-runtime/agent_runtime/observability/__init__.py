@@ -24,7 +24,7 @@ import os
 import time
 from contextlib import contextmanager
 from dataclasses import dataclass
-from typing import Any, Generator, Optional
+from typing import Any, Generator
 
 logger = logging.getLogger(__name__)
 
@@ -204,13 +204,16 @@ def setup_telemetry(
         return
 
     try:
-        from opentelemetry import trace, metrics as otel_metrics  # type: ignore[import-untyped]
-        from opentelemetry.sdk.trace import TracerProvider  # type: ignore[import-untyped]
-        from opentelemetry.sdk.trace.export import BatchSpanProcessor  # type: ignore[import-untyped]
+        from opentelemetry import metrics as otel_metrics
+        from opentelemetry import trace  # type: ignore[import-untyped]
         from opentelemetry.exporter.otlp.proto.grpc.trace_exporter import (  # type: ignore[import-untyped]
             OTLPSpanExporter,
         )
         from opentelemetry.sdk.resources import Resource  # type: ignore[import-untyped]
+        from opentelemetry.sdk.trace import TracerProvider  # type: ignore[import-untyped]
+        from opentelemetry.sdk.trace.export import (
+            BatchSpanProcessor,  # type: ignore[import-untyped]
+        )
 
         resource = Resource.create({"service.name": service_name})
 
@@ -225,11 +228,7 @@ def setup_telemetry(
         if enable_metrics:
             try:
                 from opentelemetry.sdk.metrics import MeterProvider  # type: ignore[import-untyped]
-                from opentelemetry.exporter.otlp.proto.grpc.metric_exporter import (  # type: ignore[import-untyped]
-                    OTLPMetricExporter,
-                )
 
-                metric_reader = OTLPMetricExporter(endpoint=endpoint)
                 meter_provider = MeterProvider(
                     resource=resource,
                     metric_readers=[],  # OTLP push is via periodic reader
@@ -300,7 +299,9 @@ def trace_phase(phase_name: str, agent_id: str | None = None) -> Generator[None,
         elapsed = time.monotonic() - start
 
     # Always record in local histogram
-    _histogram_for_phase(phase_name).observe(elapsed if 'elapsed' in dir() else time.monotonic() - start)
+    _histogram_for_phase(phase_name).observe(
+        elapsed if 'elapsed' in dir() else time.monotonic() - start
+    )
 
 
 def _histogram_for_phase(phase: str) -> _Histogram:

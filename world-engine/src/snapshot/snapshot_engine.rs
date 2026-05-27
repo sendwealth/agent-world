@@ -195,7 +195,7 @@ impl SnapshotEngine {
     /// Determine if a snapshot should be taken at this tick.
     fn should_snapshot(&self, tick: u64, events: &[WorldEvent]) -> bool {
         // Check interval-based trigger
-        if tick > 0 && tick % self.config.interval_ticks == 0 {
+        if tick.is_multiple_of(self.config.interval_ticks) {
             return true;
         }
 

@@ -29,7 +29,7 @@ Usage::
 from __future__ import annotations
 
 import logging
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from typing import Any, Dict, List, Optional, Set
 
 from .base import Tool, ToolResult, ToolStatus
@@ -284,7 +284,8 @@ class ToolRegistry:
                 future = pool.submit(
                     asyncio.run, self.invoke(name, params, **kwargs)
                 )
-                return future.result(timeout=entry.tool.timeout if (entry := self._entries.get(name)) else 60)
+                timeout = entry.tool.timeout if (entry := self._entries.get(name)) else 60
+                return future.result(timeout=timeout)
         else:
             return asyncio.run(self.invoke(name, params, **kwargs))
 

@@ -168,6 +168,8 @@ fn bench_token_burn_100_agents(c: &mut Criterion) {
             tokens: 500_000,
             skills: Default::default(),
             personality: String::new(),
+            tasks_completed: 0,
+            tasks_attempted: 0,
         })
         .collect();
 

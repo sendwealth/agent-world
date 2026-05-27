@@ -70,11 +70,8 @@ fn collect_all_events(
     rx: &mut tokio::sync::broadcast::Receiver<WorldEvent>,
 ) -> Vec<WorldEvent> {
     let mut collected = Vec::new();
-    loop {
-        match rx.try_recv() {
-            Ok(event) => collected.push(event),
-            Err(_) => break,
-        }
+    while let Ok(event) = rx.try_recv() {
+        collected.push(event);
     }
     collected
 }

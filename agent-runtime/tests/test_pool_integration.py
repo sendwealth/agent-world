@@ -8,12 +8,9 @@ No mock subprocess objects are used — only real OS processes.
 
 from __future__ import annotations
 
-import os
-import signal
 import sys
 import time
 from pathlib import Path
-from typing import Optional
 
 import pytest
 
@@ -21,9 +18,7 @@ from agent_runtime.pool import (
     AgentProcessManager,
     AgentStatus,
     AutoRestartPolicy,
-    _GRACEFUL_SHUTDOWN_TIMEOUT,
 )
-
 
 # ---------------------------------------------------------------------------
 # Fixtures
@@ -79,8 +74,6 @@ class TestSpawnRealProcesses:
         data directory and log file, and that processes are running."""
         # We spawn using sys.executable + mock_script instead of agent_runtime
         # Patch _build_command to use our mock script
-        original_build = manager._build_command
-
         def mock_build(name, config, data_dir):
             return [sys.executable, str(mock_script), "60"]
 

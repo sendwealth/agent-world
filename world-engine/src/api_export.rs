@@ -12,7 +12,7 @@ use axum::{
 };
 use serde::{Deserialize, Serialize};
 
-use crate::api::{AppState, ErrorResponse};
+use crate::api::AppState;
 
 // ── Query Types ───────────────────────────────────────────
 

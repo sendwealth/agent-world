@@ -1,5 +1,6 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { render, screen, waitFor, cleanup } from "@testing-library/react";
+import type { Oracle, Bounty, HumanInfluenceEntry } from "@/types/world";
 
 // ── Mock Next.js dependencies ────────────────────────────
 
@@ -44,7 +45,7 @@ describe("Human Participation Types", () => {
   it("exports correct oracle types", async () => {
     const types = await import("@/types/world");
     // Verify the type exists at the module level
-    const oracle: types.Oracle = {
+    const oracle: Oracle = {
       id: "test-id",
       human_id: "human-1",
       oracle_type: "guidance",
@@ -61,7 +62,7 @@ describe("Human Participation Types", () => {
 
   it("exports correct bounty types", async () => {
     const types = await import("@/types/world");
-    const bounty: types.Bounty = {
+    const bounty: Bounty = {
       id: "bounty-1",
       human_id: "human-1",
       title: "Test Bounty",
@@ -80,7 +81,7 @@ describe("Human Participation Types", () => {
 
   it("exports correct human influence entry", async () => {
     const types = await import("@/types/world");
-    const entry: types.HumanInfluenceEntry = {
+    const entry: HumanInfluenceEntry = {
       human_id: "h1",
       display_name: "Test Human",
       total_influence: 100,

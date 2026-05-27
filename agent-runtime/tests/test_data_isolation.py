@@ -14,12 +14,8 @@ from __future__ import annotations
 import json
 import os
 import sqlite3
-import sys
-import tempfile
 from pathlib import Path
-from unittest.mock import MagicMock, patch
-
-import pytest
+from unittest.mock import patch
 
 # ---------------------------------------------------------------------------
 # Unit tests: _init_data_dir (in __main__.py)
@@ -139,7 +135,7 @@ def test_init_data_dir_idempotent(tmp_path: Path) -> None:
 
 def test_save_and_load_agent_state_roundtrip(tmp_path: Path) -> None:
     """save_to_dir / load_from_dir round-trip preserves state."""
-    from agent_runtime.__main__ import _save_agent_state_to_dir, _load_agent_state_from_dir
+    from agent_runtime.__main__ import _load_agent_state_from_dir, _save_agent_state_to_dir
     from agent_runtime.models.agent_state import AgentState
 
     state = AgentState(name="RoundTrip", tokens=123, money=45.6, health=78.9)
@@ -266,7 +262,10 @@ def test_two_agents_independent_data_dirs(tmp_path: Path) -> None:
 
     # Write to Alice's memory.db
     conn_a = sqlite3.connect(str(alice_dir / "memory.db"))
-    conn_a.execute("INSERT INTO memories (tick, content, created_at) VALUES (1, 'alice-memory', 0.0)")
+    conn_a.execute(
+        "INSERT INTO memories (tick, content, created_at)"
+        " VALUES (1, 'alice-memory', 0.0)"
+    )
     conn_a.commit()
     conn_a.close()
 
@@ -292,7 +291,10 @@ def test_two_agents_independent_data_dirs(tmp_path: Path) -> None:
 
 def test_kill_agent_preserves_others_data(tmp_path: Path) -> None:
     """Simulate killing agent A and verify agent B's data is intact."""
-    from agent_runtime.__main__ import _init_data_dir, _save_agent_state_to_dir, _load_agent_state_from_dir
+    from agent_runtime.__main__ import (
+        _init_data_dir,
+        _load_agent_state_from_dir,
+    )
     from agent_runtime.models.agent_state import AgentState
 
     alice_state = AgentState(name="Alice", tokens=100)
@@ -366,7 +368,7 @@ def test_data_dir_falls_back_to_env_var(tmp_path: Path) -> None:
 
 def test_data_dir_in_pool_spawn_args() -> None:
     """_build_pool_spawn_args forwards --data-dir when set."""
-    from agent_runtime.__main__ import build_parser, _build_pool_spawn_args
+    from agent_runtime.__main__ import _build_pool_spawn_args, build_parser
 
     parser = build_parser()
     args = parser.parse_args([

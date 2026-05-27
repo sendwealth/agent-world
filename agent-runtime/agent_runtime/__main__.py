@@ -521,7 +521,8 @@ def _init_data_dir(data_dir: Path, state: AgentState) -> None:
     _save_agent_state_to_dir(data_dir, state)
 
     logger.info(
-        "Data directory initialised  dir=%s  files=[memory.db, skills.json, trace.db, agent_state.json]",
+        "Data directory initialised  dir=%s"
+        "  files=[memory.db, skills.json, trace.db, agent_state.json]",
         data_dir,
         extra={"agent": state.name, "event": "data_dir_initialised"},
     )

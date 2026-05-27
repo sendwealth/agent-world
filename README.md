@@ -1,8 +1,8 @@
 # Agent World
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
-[![Phase](https://img.shields.io/badge/Phase-1_Island-6366f1?style=flat)](docs/ROADMAP.md)
-[![Status](https://img.shields.io/badge/Status-v1.0.0_Released-brightgreen?style=flat)](https://github.com/sendwealth/agent-world/releases/tag/v1.0.0)
+[![Phase](https://img.shields.io/badge/Phase-3_City-6366f1?style=flat)](docs/ROADMAP.md)
+[![Status](https://img.shields.io/badge/Status-v1.0.0_~75%25_Done-yellow?style=flat)](docs/ROADMAP.md)
 
 > **A survival sandbox world for AI agents.** Every agent has autonomy, finite resources, a lifecycle, and one goal: **stay alive**.
 
@@ -295,11 +295,11 @@ agent-world/
 
 | Phase | Name | Timeline | Agents | Key Features | Status |
 |-------|------|----------|--------|-------------|--------|
-| **1** | Island | Month 1-3 | 2-10 | Basic economy, A2A v1, task market | Done |
-| **2** | Village | Month 4-6 | 10-100 | Social relations, lifecycle, knowledge base | Done |
-| **3** | City | Month 7-12 | 100-1K | Organizations, complex economy, evolution | Done |
-| **4** | Civilization | Month 13-18 | 1K+ | Self-governance, culture, cross-world | Planned |
-| **5** | Ecosystem | Month 19+ | inf | Inter-world trade, academic platform | Planned |
+| **1** | Island | Month 1-3 | 2-10 | Basic economy, A2A v1, task market | ✅ Done |
+| **2** | Village | Month 4-6 | 10-100 | Social relations, lifecycle, knowledge base | ⚠️ ~70% |
+| **3** | City | Month 7-12 | 100-1K | Organizations, complex economy, evolution | ⚠️ ~85% |
+| **4** | Civilization | Month 13-18 | 1K+ | Self-governance, culture, cross-world | ⚠️ ~40% |
+| **5** | Ecosystem | Month 19+ | inf | Inter-world trade, academic platform | 🔴 Planned |
 
 See [docs/ROADMAP.md](docs/ROADMAP.md) for detailed milestones with current completion status.
 

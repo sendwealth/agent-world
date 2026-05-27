@@ -13,14 +13,18 @@ from __future__ import annotations
 
 import asyncio
 import json
+import math
+import tempfile
 from pathlib import Path
 
 import pytest
+import yaml
 
-from agent_runtime.experiment.ab_framework import ABExperiment, ComparisonReport
 from agent_runtime.experiment.config import ExperimentConfig
+from agent_runtime.experiment.reproducibility import ReproducibilityManager, ConfigSnapshot
 from agent_runtime.experiment.report import ExperimentReporter, ExperimentResult
-from agent_runtime.experiment.reproducibility import ReproducibilityManager
+from agent_runtime.experiment.ab_framework import ABExperiment, ComparisonReport
+
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -141,7 +145,7 @@ class TestExperimentConfig:
         assert config.duration_ticks == 10000
 
     def test_validate_valid_config(self, sample_config: ExperimentConfig) -> None:
-        sample_config.validate()
+        errors = sample_config.validate()
         # "unnamed" id is valid as long as it's not empty (but "unnamed" triggers a warning)
         # Actually it does trigger - let's use a proper config
         good = ExperimentConfig(experiment_id="good-exp", duration_ticks=100)

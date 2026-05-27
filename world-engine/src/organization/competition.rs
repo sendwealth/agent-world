@@ -614,6 +614,8 @@ mod tests {
                     tokens: 100,
                     skills: HashMap::new(),
                     personality: String::new(),
+            tasks_completed: 0,
+            tasks_attempted: 0,
                 },
             ),
             (
@@ -626,6 +628,8 @@ mod tests {
                     tokens: 100,
                     skills: HashMap::new(),
                     personality: String::new(),
+            tasks_completed: 0,
+            tasks_attempted: 0,
                 },
             ),
         ];
@@ -696,6 +700,8 @@ mod tests {
                         tokens: 100,
                         skills: HashMap::new(),
                         personality: String::new(),
+            tasks_completed: 0,
+            tasks_attempted: 0,
                     },
                 )
             })
@@ -730,6 +736,8 @@ mod tests {
                         tokens: 100,
                         skills: HashMap::new(),
                         personality: String::new(),
+            tasks_completed: 0,
+            tasks_attempted: 0,
                     },
                 )
             })

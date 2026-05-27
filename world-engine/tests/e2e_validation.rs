@@ -41,6 +41,8 @@ fn make_agent_record(id: Uuid, name: &str, tokens: u64, phase: AgentPhase) -> Ag
         tokens,
         skills: HashMap::new(),
         personality: String::new(),
+                tasks_completed: 0,
+                tasks_attempted: 0,
     }
 }
 
@@ -70,6 +72,8 @@ fn make_agent_record_with_skills(
             })
             .collect(),
         personality: String::new(),
+                tasks_completed: 0,
+                tasks_attempted: 0,
     }
 }
 

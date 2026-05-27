@@ -234,6 +234,8 @@ impl WorldSimulation {
                 tokens: a.tokens,
                 skills: HashMap::new(),
                 personality: String::new(),
+                tasks_completed: 0,
+                tasks_attempted: 0,
             };
             (a.id, a.spawn_tick, record)
         }).collect();

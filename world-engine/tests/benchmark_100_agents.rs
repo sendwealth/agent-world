@@ -67,6 +67,8 @@ async fn test_full_pipeline_100_agents_2000_ticks() {
                 tokens: 500_000,
                 skills,
                 personality: String::new(),
+                tasks_completed: 0,
+                tasks_attempted: 0,
             }
         })
         .collect();
@@ -380,6 +382,8 @@ async fn test_token_burn_100_agents_2000_ticks() {
                 tokens: 500_000,
                 skills,
                 personality: String::new(),
+                tasks_completed: 0,
+                tasks_attempted: 0,
             }
         })
         .collect();

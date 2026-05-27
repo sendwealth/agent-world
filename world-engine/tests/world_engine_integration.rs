@@ -89,6 +89,8 @@ impl WorldState {
             tokens,
             skills: HashMap::new(),
             personality: String::new(),
+                tasks_completed: 0,
+                tasks_attempted: 0,
         };
 
         self.agents.push((id_str.clone(), record));
@@ -236,6 +238,8 @@ economy:
         tokens: 1000,
         skills: HashMap::new(),
         personality: String::new(),
+                tasks_completed: 0,
+                tasks_attempted: 0,
     }), 10);
 
     // RewardDistributor should be ready

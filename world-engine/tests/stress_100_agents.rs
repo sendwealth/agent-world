@@ -89,6 +89,8 @@ async fn test_100_agents_100_ticks_token_burn() {
                 tokens: 500_000,
                 skills,
                 personality: String::new(),
+                tasks_completed: 0,
+                tasks_attempted: 0,
             }
         })
         .collect();
@@ -381,6 +383,8 @@ async fn test_full_100_agent_simulation() {
             tokens: a.tokens,
             skills: HashMap::new(),
             personality: String::new(),
+                tasks_completed: 0,
+                tasks_attempted: 0,
         })
         .collect();
 

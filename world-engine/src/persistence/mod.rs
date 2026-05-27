@@ -50,6 +50,12 @@ pub struct SerializableAgentRecord {
     /// Personality vector JSON (empty = not yet initialized).
     #[serde(default)]
     pub personality: String,
+    /// Number of tasks this agent has completed successfully.
+    #[serde(default)]
+    pub tasks_completed: u32,
+    /// Number of tasks this agent has attempted (claimed or started).
+    #[serde(default)]
+    pub tasks_attempted: u32,
 }
 
 impl SerializableAgentRecord {
@@ -61,6 +67,8 @@ impl SerializableAgentRecord {
             tokens: r.tokens,
             skills: r.skills.clone(),
             personality: r.personality.clone(),
+            tasks_completed: r.tasks_completed,
+            tasks_attempted: r.tasks_attempted,
         }
     }
 
@@ -72,6 +80,8 @@ impl SerializableAgentRecord {
             tokens: self.tokens,
             skills: self.skills.clone(),
             personality: self.personality.clone(),
+            tasks_completed: self.tasks_completed,
+            tasks_attempted: self.tasks_attempted,
         }
     }
 }
@@ -141,6 +151,8 @@ mod tests {
                 tokens,
                 skills: HashMap::new(),
                 personality: String::new(),
+            tasks_completed: 0,
+            tasks_attempted: 0,
             },
         )
     }
@@ -203,6 +215,8 @@ mod tests {
             tokens: 9999,
             skills,
             personality: String::new(),
+            tasks_completed: 0,
+            tasks_attempted: 0,
         };
 
         let serializable = SerializableAgentRecord::from_agent_record(&record);

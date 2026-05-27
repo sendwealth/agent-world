@@ -365,6 +365,8 @@ mod tests {
                     m
                 },
                 personality: String::new(),
+            tasks_completed: 0,
+            tasks_attempted: 0,
             },
         )
     }
@@ -438,6 +440,8 @@ mod tests {
                     m
                 },
                 personality: String::new(),
+            tasks_completed: 0,
+            tasks_attempted: 0,
             }),
             (apprentice_uuid, 0, AgentRecord {
                 id: apprentice_uuid,
@@ -446,6 +450,8 @@ mod tests {
                 tokens: 1000,
                 skills: HashMap::new(),
                 personality: String::new(),
+            tasks_completed: 0,
+            tasks_attempted: 0,
             }),
         ];
 
@@ -489,6 +495,8 @@ mod tests {
                 tokens: 0,
                 skills: HashMap::new(),
                 personality: String::new(),
+            tasks_completed: 0,
+            tasks_attempted: 0,
             }),
             (apprentice_uuid, 0, AgentRecord {
                 id: apprentice_uuid,
@@ -497,6 +505,8 @@ mod tests {
                 tokens: 1000,
                 skills: HashMap::new(),
                 personality: String::new(),
+            tasks_completed: 0,
+            tasks_attempted: 0,
             }),
         ];
 

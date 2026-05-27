@@ -365,6 +365,8 @@ mod tests {
                     m
                 },
                 personality: String::new(),
+            tasks_completed: 0,
+            tasks_attempted: 0,
             }),
             (heir, 0, AgentRecord {
                 id: heir,
@@ -373,6 +375,8 @@ mod tests {
                 tokens: 100,
                 skills: HashMap::new(),
                 personality: String::new(),
+            tasks_completed: 0,
+            tasks_attempted: 0,
             }),
             (bystander, 0, AgentRecord {
                 id: bystander,
@@ -381,6 +385,8 @@ mod tests {
                 tokens: 50,
                 skills: HashMap::new(),
                 personality: String::new(),
+            tasks_completed: 0,
+            tasks_attempted: 0,
             }),
         ]
     }

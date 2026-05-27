@@ -64,6 +64,8 @@ impl TestWorld {
             tokens: initial_tokens,
             skills: HashMap::new(),
             personality: String::new(),
+                tasks_completed: 0,
+                tasks_attempted: 0,
         };
 
         self.agents.push((id_str.clone(), record));

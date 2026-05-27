@@ -211,6 +211,8 @@ impl WorldState {
             tokens,
             skills: std::collections::HashMap::new(),
             personality: String::new(),
+            tasks_completed: 0,
+            tasks_attempted: 0,
         };
 
         self.event_bus.emit(WorldEvent::AgentSpawned {
@@ -549,6 +551,8 @@ mod tests {
                 tokens,
                 skills: HashMap::new(),
                 personality: String::new(),
+            tasks_completed: 0,
+            tasks_attempted: 0,
             },
         )
     }

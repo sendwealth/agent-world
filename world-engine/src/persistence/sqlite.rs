@@ -150,6 +150,8 @@ impl StatePersistence for SqlitePersistence {
                     tokens: tokens as u64,
                     skills,
                     personality: String::new(),
+            tasks_completed: 0,
+            tasks_attempted: 0,
                 },
             });
         }
@@ -193,6 +195,8 @@ mod tests {
                 tokens,
                 skills: HashMap::new(),
                 personality: String::new(),
+            tasks_completed: 0,
+            tasks_attempted: 0,
             },
         )
     }
@@ -285,6 +289,8 @@ mod tests {
                 tokens: 3000,
                 skills,
                 personality: String::new(),
+            tasks_completed: 0,
+            tasks_attempted: 0,
             },
         )];
         let state = SerializableWorldState::from_world_state(99, &agents);
@@ -397,6 +403,8 @@ mod tests {
                 tokens: 100,
                 skills: HashMap::new(),
                 personality: String::new(),
+            tasks_completed: 0,
+            tasks_attempted: 0,
             },
         );
         let s1 = SerializableWorldState::from_world_state(10, &[agent_v1]);
@@ -413,6 +421,8 @@ mod tests {
                 tokens: 500,
                 skills: HashMap::new(),
                 personality: String::new(),
+            tasks_completed: 0,
+            tasks_attempted: 0,
             },
         );
         let s2 = SerializableWorldState::from_world_state(20, &[agent_v2]);

@@ -27,6 +27,24 @@ pub struct AgentRecord {
     /// schema.  Empty string means "not yet initialized" (will use defaults).
     #[serde(default)]
     pub personality: String,
+    /// Number of tasks this agent has completed successfully.
+    #[serde(default)]
+    pub tasks_completed: u32,
+    /// Number of tasks this agent has attempted (claimed or started).
+    #[serde(default)]
+    pub tasks_attempted: u32,
+}
+
+impl AgentRecord {
+    /// Record that this agent has attempted a new task (claimed or started).
+    pub fn record_task_attempt(&mut self) {
+        self.tasks_attempted = self.tasks_attempted.saturating_add(1);
+    }
+
+    /// Record that this agent has completed a task successfully.
+    pub fn record_task_completed(&mut self) {
+        self.tasks_completed = self.tasks_completed.saturating_add(1);
+    }
 }
 
 // ── Consumption Config ───────────────────────────────────
@@ -241,6 +259,8 @@ mod tests {
             tokens,
             skills: HashMap::new(),
             personality: String::new(),
+            tasks_completed: 0,
+            tasks_attempted: 0,
         }
     }
 
@@ -268,6 +288,8 @@ mod tests {
                 })
                 .collect(),
             personality: String::new(),
+            tasks_completed: 0,
+            tasks_attempted: 0,
         }
     }
 
@@ -590,6 +612,8 @@ some_other_section:
             tokens: 100,
             skills: HashMap::new(),
             personality: String::new(),
+            tasks_completed: 0,
+            tasks_attempted: 0,
         }];
 
         let result = engine.process_tick(42, &mut agents);

@@ -1284,6 +1284,8 @@ mod tests {
             tokens,
             skills: HashMap::new(),
             personality: String::new(),
+            tasks_completed: 0,
+            tasks_attempted: 0,
         }
     }
 
@@ -1295,6 +1297,8 @@ mod tests {
             tokens,
             skills: HashMap::new(),
             personality: String::new(),
+            tasks_completed: 0,
+            tasks_attempted: 0,
         }
     }
 
@@ -1819,6 +1823,8 @@ mod tests {
                 ("mining".to_string(), SkillRecord { name: "mining".to_string(), level: 5, experience: 0.0 }),
             ].into_iter().collect(),
             personality: String::new(),
+            tasks_completed: 0,
+            tasks_attempted: 0,
         };
 
         let ctx = RuleContext::new(1, 0);

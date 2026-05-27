@@ -124,6 +124,7 @@ class TestActionType:
             "move",
             "gather",
             "build",
+            "socialize",
             "form_org",
             "join_org",
             "propose_rule",

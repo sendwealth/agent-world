@@ -1,0 +1,35 @@
+# skills.yaml — Plugin manifest
+apiVersion: v1
+
+plugin:
+  id: "{{ cookiecutter.plugin_id }}"
+  name: "{{ cookiecutter.project_name }}"
+  version: "0.1.0"
+  description: "{{ cookiecutter.project_description }}"
+  author: "{{ cookiecutter.author_name }}"
+  min_engine_version: "1.0.0"
+  tags:
+    - example
+    - tutorial
+
+  skills:
+    - id: "{{ cookiecutter.skill_id }}"
+      name: "Hello Skill"
+      description: "Greets the agent"
+
+  required_skills: []
+
+  config:
+    type: object
+    properties:
+      greeting:
+        type: string
+        default: "Hello"
+        description: "The greeting word to use"
+    required: []
+
+  subscribe: []
+
+  resources:
+    max_memory_mb: 16
+    max_execution_time_s: 10

@@ -1,0 +1,21 @@
+[package]
+name = "plugin-publish"
+version = "0.1.0"
+edition = "2021"
+description = "Publish Agent World plugins to the skill marketplace"
+license = "MIT"
+
+[[bin]]
+name = "plugin-publish"
+path = "src/main.rs"
+
+[dependencies]
+clap = { version = "4", features = ["derive", "env"] }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+colored = "2"
+anyhow = "1"
+reqwest = { version = "0.12", features = ["json"] }
+tokio = { version = "1", features = ["full"] }
+sha2 = "0.10"
+zip = "2"

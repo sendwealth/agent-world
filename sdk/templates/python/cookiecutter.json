@@ -1,0 +1,11 @@
+{
+    "project_name": "my-plugin",
+    "project_slug": "{{ cookiecutter.project_name.replace('-', '_') }}",
+    "project_description": "An Agent World skill plugin",
+    "plugin_id": "myorg/my-plugin",
+    "skill_id": "my-skill",
+    "author_name": "Your Name",
+    "author_email": "you@example.com",
+    "python_version": "3.11",
+    "use_wasm": ["no", "yes"]
+}

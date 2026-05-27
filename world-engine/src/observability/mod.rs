@@ -113,24 +113,37 @@ lazy_static::lazy_static! {
     ).unwrap();
 }
 
-/// Register all metrics with the global registry. Call once at startup.
+/// Register all metrics with the global registry.
+///
+/// Idempotent: safe to call multiple times (subsequent calls are no-ops).
 pub fn init() {
-    REGISTRY.register(Box::new(TICK_TOTAL.clone())).unwrap();
-    REGISTRY.register(Box::new(TRANSACTIONS_TOTAL.clone())).unwrap();
-    REGISTRY.register(Box::new(DEATHS_TOTAL.clone())).unwrap();
-    REGISTRY.register(Box::new(EVENTS_PUBLISHED_TOTAL.clone())).unwrap();
-    REGISTRY.register(Box::new(GRPC_MESSAGES_ROUTED_TOTAL.clone())).unwrap();
-    REGISTRY.register(Box::new(HTTP_REQUESTS_TOTAL.clone())).unwrap();
+    macro_rules! reg {
+        ($metric:expr) => {
+            if let Err(e) = REGISTRY.register(Box::new($metric.clone())) {
+                // AlreadyReg is expected on repeated calls (e.g. tests running in parallel).
+                if !matches!(e, prometheus::Error::AlreadyReg) {
+                    error!("Failed to register metric: {}", e);
+                }
+            }
+        };
+    }
 
-    REGISTRY.register(Box::new(AGENTS_ALIVE.clone())).unwrap();
-    REGISTRY.register(Box::new(TOKEN_SUPPLY.clone())).unwrap();
-    REGISTRY.register(Box::new(MONEY_SUPPLY.clone())).unwrap();
-    REGISTRY.register(Box::new(WORLD_GDP.clone())).unwrap();
-    REGISTRY.register(Box::new(TASKS_OPEN.clone())).unwrap();
+    reg!(TICK_TOTAL);
+    reg!(TRANSACTIONS_TOTAL);
+    reg!(DEATHS_TOTAL);
+    reg!(EVENTS_PUBLISHED_TOTAL);
+    reg!(GRPC_MESSAGES_ROUTED_TOTAL);
+    reg!(HTTP_REQUESTS_TOTAL);
 
-    REGISTRY.register(Box::new(TICK_DURATION.clone())).unwrap();
-    REGISTRY.register(Box::new(SUBSYSTEM_DURATION.clone())).unwrap();
-    REGISTRY.register(Box::new(GRPC_MESSAGE_DURATION.clone())).unwrap();
+    reg!(AGENTS_ALIVE);
+    reg!(TOKEN_SUPPLY);
+    reg!(MONEY_SUPPLY);
+    reg!(WORLD_GDP);
+    reg!(TASKS_OPEN);
+
+    reg!(TICK_DURATION);
+    reg!(SUBSYSTEM_DURATION);
+    reg!(GRPC_MESSAGE_DURATION);
 
     info!("Observability: Prometheus metrics registered");
 }
@@ -171,6 +184,12 @@ pub async fn metrics_handler() -> Response<Body> {
 /// ```
 pub struct MetricsGuard {
     start: Instant,
+}
+
+impl Default for MetricsGuard {
+    fn default() -> Self {
+        Self::new()
+    }
 }
 
 impl MetricsGuard {

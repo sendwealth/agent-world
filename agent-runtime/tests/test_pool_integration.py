@@ -4,16 +4,16 @@ These tests spawn REAL subprocesses using mock scripts (sleep, echo, etc.)
 to validate process isolation, lifecycle, and log redirection end-to-end.
 
 No mock subprocess objects are used — only real OS processes.
-"""
 
+These tests are marked @pytest.mark.integration and skipped in CI by default.
+Run locally with: pytest -m integration agent-runtime/tests/test_pool_integration.py
+"""
 from __future__ import annotations
 
 import os
-import signal
 import sys
 import time
 from pathlib import Path
-from typing import Optional
 
 import pytest
 
@@ -21,9 +21,13 @@ from agent_runtime.pool import (
     AgentProcessManager,
     AgentStatus,
     AutoRestartPolicy,
-    _GRACEFUL_SHUTDOWN_TIMEOUT,
 )
 
+# Skip all integration tests in CI (they spawn real OS processes)
+pytestmark = pytest.mark.skipif(
+    os.environ.get("CI") == "true",
+    reason="Integration tests skipped in CI — they spawn real OS processes",
+)
 
 # ---------------------------------------------------------------------------
 # Fixtures
@@ -79,7 +83,7 @@ class TestSpawnRealProcesses:
         data directory and log file, and that processes are running."""
         # We spawn using sys.executable + mock_script instead of agent_runtime
         # Patch _build_command to use our mock script
-        original_build = manager._build_command
+        _original_build = manager._build_command
 
         def mock_build(name, config, data_dir):
             return [sys.executable, str(mock_script), "60"]

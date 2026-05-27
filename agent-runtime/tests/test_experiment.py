@@ -13,18 +13,14 @@ from __future__ import annotations
 
 import asyncio
 import json
-import math
-import tempfile
 from pathlib import Path
 
 import pytest
-import yaml
 
-from agent_runtime.experiment.config import ExperimentConfig
-from agent_runtime.experiment.reproducibility import ReproducibilityManager, ConfigSnapshot
-from agent_runtime.experiment.report import ExperimentReporter, ExperimentResult
 from agent_runtime.experiment.ab_framework import ABExperiment, ComparisonReport
-
+from agent_runtime.experiment.config import ExperimentConfig
+from agent_runtime.experiment.report import ExperimentReporter, ExperimentResult
+from agent_runtime.experiment.reproducibility import ReproducibilityManager
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -145,7 +141,7 @@ class TestExperimentConfig:
         assert config.duration_ticks == 10000
 
     def test_validate_valid_config(self, sample_config: ExperimentConfig) -> None:
-        errors = sample_config.validate()
+        _errors = sample_config.validate()
         # "unnamed" id is valid as long as it's not empty (but "unnamed" triggers a warning)
         # Actually it does trigger - let's use a proper config
         good = ExperimentConfig(experiment_id="good-exp", duration_ticks=100)
@@ -419,19 +415,17 @@ class TestABFramework:
         assert isinstance(comp.statistical_significance, dict)
         assert comp.recommendation != ""
 
-    def test_compare_results_deterministic(self) -> None:
+    @pytest.mark.asyncio
+    async def test_compare_results_deterministic(self) -> None:
         """Same seed should produce deterministic A/B results."""
         config = ExperimentConfig(experiment_id="det", seed=42, duration_ticks=500)
         ab1 = ABExperiment(config, config, seed_base=42)
         ab2 = ABExperiment(config, config, seed_base=42)
 
         # Compare results manually (since _run_single is async)
-        result = asyncio.get_event_loop().run_until_complete(
-            asyncio.gather(
-                ab1._run_single(config),
-                ab2._run_single(config),
-            )
+        r1, r2 = await asyncio.gather(
+            ab1._run_single(config),
+            ab2._run_single(config),
         )
-        r1, r2 = result
         # Results should be identical (same seed, same config)
         assert r1.metrics_timeline == r2.metrics_timeline

@@ -44,12 +44,12 @@ from agent_runtime.core.act import (
 )
 from agent_runtime.models.agent_state import AgentState
 from agent_runtime.models.phase_abilities import get_phase_abilities, is_terminal
+from agent_runtime.observability import log_tick, metrics, trace_phase
 from agent_runtime.survival.instinct import (
     SurvivalAction,
     SurvivalInstinct,
     SurvivalMode,
 )
-from agent_runtime.observability import metrics, trace_phase, log_tick, log_error
 
 logger = logging.getLogger(__name__)
 
@@ -521,7 +521,6 @@ class ThinkLoop:
                     exc_info=True,
                 )
 
-        perception = await self._perceive_with_cache()
         logger.debug(
             "Tick %d: perceived — token_ratio=%.2f health=%.0f phase=%s",
             self._tick,
@@ -648,11 +647,6 @@ class ThinkLoop:
         self._perception_cache = perception
         self._perception_cache_time = now
         return perception
-
-    def invalidate_perception_cache(self) -> None:
-        """Force a fresh perception on the next tick."""
-        self._perception_cache = None
-        self._perception_cache_time = 0.0
 
     # ------------------------------------------------------------------
     # Perception caching

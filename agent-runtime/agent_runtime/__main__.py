@@ -267,12 +267,14 @@ async def connect_world_engine(
         client = A2AClient(config)
         await client.connect()
 
-        # Verify the channel is actually reachable before committing to gRPC
+        # Verify the channel is actually reachable before committing to gRPC.
+        # Use the native async channel_ready() coroutine instead of
+        # grpc.channel_ready_future() which requires a synchronous Channel
+        # (grpc.aio.Channel lacks subscribe/unsubscribe, causing AttributeError
+        # in _ChannelReadyFuture.__del__).
         try:
-            import grpc
-            future = grpc.channel_ready_future(client._channel)  # type: ignore[arg-type]
             await asyncio.wait_for(
-                asyncio.get_running_loop().run_in_executor(None, future.result),
+                client._channel.channel_ready(),  # type: ignore[union-attr]
                 timeout=2.0,
             )
         except Exception:

@@ -26,7 +26,8 @@ use crate::economy::banking::{
     BankingSystem, BankAccountType, Loan, LoanStatus, Collateral,
 };
 use crate::economy::marketplace::Marketplace;
-use crate::economy::reputation::ReputationSystem;
+use crate::economy::reputation::{ReputationConfig, ReputationSystem};
+use crate::federation::{MigrationManager, MigrationPolicy, WorldRegistry};
 use crate::economy::stock_market::{
     StockMarket, StockListing, Order as StockOrder,
     OrderType, OrderKind, ListingStatus,
@@ -170,14 +171,17 @@ pub fn create_router_with_wal(board: SharedTaskBoard, wal: SharedWAL) -> Router 
     let state = AppState {
         board,
         wal,
-        event_bus,
+        event_bus: event_bus.clone(),
         agents: Arc::new(Mutex::new(Vec::new())),
         messages: Arc::new(Mutex::new(Vec::new())),
         tick_tx,
         tick_rx,
         snapshot_store,
-        marketplace: None,
-        reputation_system: None,
+        marketplace: Some(Arc::new(Mutex::new(Marketplace::with_event_bus(event_bus.as_ref().clone())))),
+        reputation_system: Some(Arc::new(Mutex::new(ReputationSystem::with_event_bus(
+            ReputationConfig::default(),
+            event_bus.as_ref().clone(),
+        )))),
         org_store: None,
         stock_market: None,
         governance: None,
@@ -190,8 +194,9 @@ pub fn create_router_with_wal(board: SharedTaskBoard, wal: SharedWAL) -> Router 
             auth_store: Arc::new(Mutex::new(AuthStore::new("change-me-in-production"))),
             investment_system: None,
             rule_engine: None,
-            federation: None,        federation_registry: None,
-        migration_manager: None,
+            federation: Some(Arc::new(Mutex::new(crate::a2a::federation::FederationEngine::with_shared_event_bus(event_bus.clone())))),
+            federation_registry: Some(Arc::new(Mutex::new(WorldRegistry::new(event_bus.clone())))),
+        migration_manager: Some(Arc::new(Mutex::new(MigrationManager::new(MigrationPolicy::default(), event_bus)))),
         api_key_store: None,
         experiment_store: Arc::new(Mutex::new(Vec::new())),
     };
@@ -208,14 +213,17 @@ pub fn create_router_with_wal_and_snapshots(board: SharedTaskBoard, wal: SharedW
     let state = AppState {
         board,
         wal,
-        event_bus,
+        event_bus: event_bus.clone(),
         agents: Arc::new(Mutex::new(Vec::new())),
         messages: Arc::new(Mutex::new(Vec::new())),
         tick_tx,
         tick_rx,
         snapshot_store,
-        marketplace: None,
-        reputation_system: None,
+        marketplace: Some(Arc::new(Mutex::new(Marketplace::with_event_bus(event_bus.as_ref().clone())))),
+        reputation_system: Some(Arc::new(Mutex::new(ReputationSystem::with_event_bus(
+            ReputationConfig::default(),
+            event_bus.as_ref().clone(),
+        )))),
         org_store: None,
         stock_market: None,
         governance: None,
@@ -228,8 +236,9 @@ pub fn create_router_with_wal_and_snapshots(board: SharedTaskBoard, wal: SharedW
             auth_store: Arc::new(Mutex::new(AuthStore::new("change-me-in-production"))),
             investment_system: None,
             rule_engine: None,
-            federation: None,        federation_registry: None,
-        migration_manager: None,
+            federation: Some(Arc::new(Mutex::new(crate::a2a::federation::FederationEngine::with_shared_event_bus(event_bus.clone())))),
+            federation_registry: Some(Arc::new(Mutex::new(WorldRegistry::new(event_bus.clone())))),
+        migration_manager: Some(Arc::new(Mutex::new(MigrationManager::new(MigrationPolicy::default(), event_bus)))),
         api_key_store: None,
         experiment_store: Arc::new(Mutex::new(Vec::new())),
     };
@@ -383,6 +392,23 @@ pub fn build_full_router(state: AppState) -> Router {
         .route("/api/v1/investments/products/:id/freeze", post(inv_freeze_product))
         .route("/api/v1/investments/transactions", get(inv_list_transactions))
         .route("/api/v1/investments/dividends", get(inv_list_dividends))
+        // Marketplace routes
+        .route("/api/v1/marketplace/listings", post(mp_publish_listing))
+        .route("/api/v1/marketplace/listings", get(mp_list_listings))
+        .route("/api/v1/marketplace/listings/:id", get(mp_get_listing))
+        .route("/api/v1/marketplace/listings/:id", put(mp_update_listing))
+        .route("/api/v1/marketplace/listings/:id/delist", post(mp_delist_listing))
+        .route("/api/v1/marketplace/listings/:id/purchase", post(mp_purchase_listing))
+        .route("/api/v1/marketplace/listings/:id/rate", post(mp_rate_listing))
+        .route("/api/v1/marketplace/listings/:id/ratings", get(mp_list_ratings))
+        .route("/api/v1/marketplace/balance/:agent_id", get(mp_get_balance))
+        .route("/api/v1/marketplace/balance", post(mp_set_balance))
+        .route("/api/v1/marketplace/transfer", post(mp_transfer))
+        // Reputation routes
+        .route("/api/v1/reputation/:agent_id", get(rep_get_reputation))
+        .route("/api/v1/reputation/rankings", get(rep_rankings))
+        .route("/api/v1/reputation/low-reputation", get(rep_low_reputation))
+        .route("/api/v1/reputation/config", get(rep_get_config))
         // DSL Rule Engine routes
         .route("/api/v1/rules/dsl/parse", post(dsl_parse_rule))
         .route("/api/v1/rules/dsl/submit", post(dsl_submit_rule))
@@ -470,14 +496,17 @@ pub fn create_router_for_test(
     let state = AppState {
         board,
         wal,
-        event_bus,
+        event_bus: event_bus.clone(),
         agents: Arc::new(Mutex::new(Vec::new())),
         messages: Arc::new(Mutex::new(Vec::new())),
         tick_tx,
         tick_rx,
         snapshot_store,
-        marketplace: None,
-        reputation_system: None,
+        marketplace: Some(Arc::new(Mutex::new(Marketplace::with_event_bus(event_bus.as_ref().clone())))),
+        reputation_system: Some(Arc::new(Mutex::new(ReputationSystem::with_event_bus(
+            ReputationConfig::default(),
+            event_bus.as_ref().clone(),
+        )))),
         org_store: None,
         stock_market: None,
         governance: None,
@@ -490,8 +519,9 @@ pub fn create_router_for_test(
             auth_store: Arc::new(Mutex::new(AuthStore::new("change-me-in-production"))),
             investment_system: None,
             rule_engine: None,
-            federation: None,        federation_registry: None,
-        migration_manager: None,
+            federation: Some(Arc::new(Mutex::new(crate::a2a::federation::FederationEngine::with_shared_event_bus(event_bus.clone())))),
+            federation_registry: Some(Arc::new(Mutex::new(WorldRegistry::new(event_bus.clone())))),
+        migration_manager: Some(Arc::new(Mutex::new(MigrationManager::new(MigrationPolicy::default(), event_bus)))),
         api_key_store: None,
         experiment_store: Arc::new(Mutex::new(Vec::new())),
     };
@@ -6304,4 +6334,355 @@ async fn fed_summary(
     let fed = fed.lock().await;
     let summary = fed.summary();
     (StatusCode::OK, Json(serde_json::json!(summary))).into_response()
+}
+
+// ══════════════════════════════════════════════════════════════════════════════
+// Marketplace API handlers
+// ══════════════════════════════════════════════════════════════════════════════
+
+#[derive(Debug, Deserialize)]
+struct MpPublishListingRequest {
+    pub title: String,
+    #[serde(default)]
+    pub description: String,
+    pub category: crate::economy::marketplace::KnowledgeCategory,
+    pub content_hash: String,
+    pub price: u64,
+    pub currency: crate::world::enums::Currency,
+    pub publisher_id: String,
+    #[serde(default)]
+    pub tags: Vec<String>,
+    #[serde(default)]
+    pub tick: u64,
+}
+
+/// POST /api/v1/marketplace/listings — Publish a new knowledge listing.
+async fn mp_publish_listing(
+    State(state): State<AppState>,
+    Json(body): Json<MpPublishListingRequest>,
+) -> impl IntoResponse {
+    let mp = match &state.marketplace {
+        Some(m) => m.clone(),
+        None => return api_err(StatusCode::SERVICE_UNAVAILABLE, "marketplace not configured"),
+    };
+    let mut mp = mp.lock().await;
+    match mp.publish_listing(
+        body.title,
+        body.description,
+        body.category,
+        body.content_hash,
+        body.price,
+        body.currency,
+        body.publisher_id,
+        body.tags,
+        body.tick,
+    ) {
+        Ok(id) => {
+            let listing = mp.get(id).unwrap().clone();
+            api_ok(listing)
+        }
+        Err(e) => api_err(StatusCode::BAD_REQUEST, e.to_string()),
+    }
+}
+
+#[derive(Debug, Default, Deserialize)]
+#[serde(default)]
+struct MpListListingsQuery {
+    pub category: Option<crate::economy::marketplace::KnowledgeCategory>,
+    pub publisher_id: Option<String>,
+    pub min_price: Option<u64>,
+    pub max_price: Option<u64>,
+    pub tag: Option<String>,
+    pub query: Option<String>,
+    pub min_purchases: Option<u64>,
+    pub min_rating: Option<f64>,
+    pub sort: Option<crate::economy::marketplace::MarketplaceSort>,
+    /// If true, include inactive/delisted listings.
+    pub include_all: Option<bool>,
+}
+
+/// GET /api/v1/marketplace/listings — List/search knowledge listings.
+async fn mp_list_listings(
+    State(state): State<AppState>,
+    Query(params): Query<MpListListingsQuery>,
+) -> impl IntoResponse {
+    let mp = match &state.marketplace {
+        Some(m) => m.clone(),
+        None => return api_err(StatusCode::SERVICE_UNAVAILABLE, "marketplace not configured"),
+    };
+    let mp = mp.lock().await;
+    let listings = if params.include_all.unwrap_or(false) {
+        mp.list_all()
+    } else {
+        let filter = crate::economy::marketplace::MarketplaceFilter {
+            category: params.category,
+            publisher_id: params.publisher_id,
+            min_price: params.min_price,
+            max_price: params.max_price,
+            tag: params.tag,
+            query: params.query,
+            min_purchases: params.min_purchases,
+            min_rating: params.min_rating,
+            sort: params.sort,
+        };
+        mp.search(&filter)
+    };
+    api_ok(listings)
+}
+
+/// GET /api/v1/marketplace/listings/:id — Get a single listing.
+async fn mp_get_listing(
+    State(state): State<AppState>,
+    Path(id): Path<uuid::Uuid>,
+) -> impl IntoResponse {
+    let mp = match &state.marketplace {
+        Some(m) => m.clone(),
+        None => return api_err(StatusCode::SERVICE_UNAVAILABLE, "marketplace not configured"),
+    };
+    let mp = mp.lock().await;
+    match mp.get(id) {
+        Some(listing) => api_ok(listing),
+        None => api_err(StatusCode::NOT_FOUND, "listing not found"),
+    }
+}
+
+#[derive(Debug, Deserialize)]
+struct MpUpdateListingRequest {
+    pub publisher_id: String,
+    pub price: Option<u64>,
+    pub status: Option<crate::economy::marketplace::ListingStatus>,
+    pub tags: Option<Vec<String>>,
+}
+
+/// PUT /api/v1/marketplace/listings/:id — Update a listing.
+async fn mp_update_listing(
+    State(state): State<AppState>,
+    Path(id): Path<uuid::Uuid>,
+    Json(body): Json<MpUpdateListingRequest>,
+) -> impl IntoResponse {
+    let mp = match &state.marketplace {
+        Some(m) => m.clone(),
+        None => return api_err(StatusCode::SERVICE_UNAVAILABLE, "marketplace not configured"),
+    };
+    let mut mp = mp.lock().await;
+    match mp.update_listing(id, &body.publisher_id, body.price, body.status, body.tags) {
+        Ok(()) => {
+            let listing = mp.get(id).unwrap().clone();
+            api_ok(listing)
+        }
+        Err(e) => api_err(StatusCode::BAD_REQUEST, e.to_string()),
+    }
+}
+
+#[derive(Debug, Deserialize)]
+struct MpDelistRequest {
+    pub publisher_id: String,
+}
+
+/// POST /api/v1/marketplace/listings/:id/delist — Delist a listing.
+async fn mp_delist_listing(
+    State(state): State<AppState>,
+    Path(id): Path<uuid::Uuid>,
+    Json(body): Json<MpDelistRequest>,
+) -> impl IntoResponse {
+    let mp = match &state.marketplace {
+        Some(m) => m.clone(),
+        None => return api_err(StatusCode::SERVICE_UNAVAILABLE, "marketplace not configured"),
+    };
+    let mut mp = mp.lock().await;
+    match mp.delist_listing(id, &body.publisher_id) {
+        Ok(()) => api_ok(serde_json::json!({"status": "delisted"})),
+        Err(e) => api_err(StatusCode::BAD_REQUEST, e.to_string()),
+    }
+}
+
+#[derive(Debug, Deserialize)]
+struct MpPurchaseRequest {
+    pub buyer_id: String,
+    #[serde(default)]
+    pub tick: u64,
+}
+
+/// POST /api/v1/marketplace/listings/:id/purchase — Purchase a listing.
+async fn mp_purchase_listing(
+    State(state): State<AppState>,
+    Path(id): Path<uuid::Uuid>,
+    Json(body): Json<MpPurchaseRequest>,
+) -> impl IntoResponse {
+    let mp = match &state.marketplace {
+        Some(m) => m.clone(),
+        None => return api_err(StatusCode::SERVICE_UNAVAILABLE, "marketplace not configured"),
+    };
+    let mut mp = mp.lock().await;
+    match mp.purchase_listing(id, &body.buyer_id, body.tick) {
+        Ok(record) => api_ok(record),
+        Err(e) => api_err(StatusCode::BAD_REQUEST, e.to_string()),
+    }
+}
+
+#[derive(Debug, Deserialize)]
+struct MpRateRequest {
+    pub rater_id: String,
+    pub score: u8,
+    pub review: Option<String>,
+    #[serde(default)]
+    pub tick: u64,
+}
+
+/// POST /api/v1/marketplace/listings/:id/rate — Rate a purchased listing.
+async fn mp_rate_listing(
+    State(state): State<AppState>,
+    Path(id): Path<uuid::Uuid>,
+    Json(body): Json<MpRateRequest>,
+) -> impl IntoResponse {
+    let mp = match &state.marketplace {
+        Some(m) => m.clone(),
+        None => return api_err(StatusCode::SERVICE_UNAVAILABLE, "marketplace not configured"),
+    };
+    let mut mp = mp.lock().await;
+    match mp.rate_listing(id, &body.rater_id, body.score, body.review, body.tick) {
+        Ok(rating_id) => api_ok(serde_json::json!({"rating_id": rating_id.to_string()})),
+        Err(e) => api_err(StatusCode::BAD_REQUEST, e.to_string()),
+    }
+}
+
+/// GET /api/v1/marketplace/listings/:id/ratings — List ratings for a listing.
+async fn mp_list_ratings(
+    State(state): State<AppState>,
+    Path(id): Path<uuid::Uuid>,
+) -> impl IntoResponse {
+    let mp = match &state.marketplace {
+        Some(m) => m.clone(),
+        None => return api_err(StatusCode::SERVICE_UNAVAILABLE, "marketplace not configured"),
+    };
+    let mp = mp.lock().await;
+    let ratings = mp.listing_ratings(id);
+    api_ok(ratings)
+}
+
+/// GET /api/v1/marketplace/balance/:agent_id — Get agent's marketplace balance.
+async fn mp_get_balance(
+    State(state): State<AppState>,
+    Path(agent_id): Path<String>,
+) -> impl IntoResponse {
+    let mp = match &state.marketplace {
+        Some(m) => m.clone(),
+        None => return api_err(StatusCode::SERVICE_UNAVAILABLE, "marketplace not configured"),
+    };
+    let mp = mp.lock().await;
+    api_ok(serde_json::json!({"agent_id": agent_id, "balance": mp.get_balance(&agent_id)}))
+}
+
+#[derive(Debug, Deserialize)]
+struct MpSetBalanceRequest {
+    pub agent_id: String,
+    pub amount: u64,
+}
+
+/// POST /api/v1/marketplace/balance — Set agent balance (admin/seed).
+async fn mp_set_balance(
+    State(state): State<AppState>,
+    Json(body): Json<MpSetBalanceRequest>,
+) -> impl IntoResponse {
+    let mp = match &state.marketplace {
+        Some(m) => m.clone(),
+        None => return api_err(StatusCode::SERVICE_UNAVAILABLE, "marketplace not configured"),
+    };
+    let mut mp = mp.lock().await;
+    mp.set_balance(&body.agent_id, body.amount);
+    api_ok(serde_json::json!({"agent_id": body.agent_id, "balance": body.amount}))
+}
+
+#[derive(Debug, Deserialize)]
+struct MpTransferRequest {
+    pub from: String,
+    pub to: String,
+    pub amount: u64,
+    pub currency: crate::world::enums::Currency,
+}
+
+/// POST /api/v1/marketplace/transfer — Transfer tokens between agents.
+async fn mp_transfer(
+    State(state): State<AppState>,
+    Json(body): Json<MpTransferRequest>,
+) -> impl IntoResponse {
+    let mp = match &state.marketplace {
+        Some(m) => m.clone(),
+        None => return api_err(StatusCode::SERVICE_UNAVAILABLE, "marketplace not configured"),
+    };
+    let mut mp = mp.lock().await;
+    match mp.transfer(&body.from, &body.to, body.amount, body.currency) {
+        Ok(()) => api_ok(serde_json::json!({"status": "transferred"})),
+        Err(e) => api_err(StatusCode::BAD_REQUEST, e.to_string()),
+    }
+}
+
+// ══════════════════════════════════════════════════════════════════════════════
+// Reputation API handlers
+// ══════════════════════════════════════════════════════════════════════════════
+
+/// GET /api/v1/reputation/:agent_id — Get agent's reputation score.
+async fn rep_get_reputation(
+    State(state): State<AppState>,
+    Path(agent_id): Path<String>,
+) -> impl IntoResponse {
+    let rep = match &state.reputation_system {
+        Some(r) => r.clone(),
+        None => return api_err(StatusCode::SERVICE_UNAVAILABLE, "reputation system not configured"),
+    };
+    let rep = rep.lock().await;
+    let score = rep.get_reputation(&agent_id);
+    api_ok(serde_json::json!({"agent_id": agent_id, "reputation": score}))
+}
+
+#[derive(Debug, Default, Deserialize)]
+#[serde(default)]
+struct RepRankingsQuery {
+    pub limit: Option<usize>,
+}
+
+/// GET /api/v1/reputation/rankings — Get reputation rankings.
+async fn rep_rankings(
+    State(state): State<AppState>,
+    Query(params): Query<RepRankingsQuery>,
+) -> impl IntoResponse {
+    let rep = match &state.reputation_system {
+        Some(r) => r.clone(),
+        None => return api_err(StatusCode::SERVICE_UNAVAILABLE, "reputation system not configured"),
+    };
+    let rep = rep.lock().await;
+    let rankings = rep.get_rankings(params.limit.unwrap_or(50));
+    api_ok(rankings)
+}
+
+#[derive(Debug, Default, Deserialize)]
+#[serde(default)]
+struct RepLowReputationQuery {
+    pub threshold: Option<f64>,
+}
+
+/// GET /api/v1/reputation/low-reputation — Get agents with low reputation.
+async fn rep_low_reputation(
+    State(state): State<AppState>,
+    Query(params): Query<RepLowReputationQuery>,
+) -> impl IntoResponse {
+    let rep = match &state.reputation_system {
+        Some(r) => r.clone(),
+        None => return api_err(StatusCode::SERVICE_UNAVAILABLE, "reputation system not configured"),
+    };
+    let rep = rep.lock().await;
+    let agents = rep.get_low_reputation_agents(params.threshold.unwrap_or(-10.0));
+    api_ok(agents)
+}
+
+/// GET /api/v1/reputation/config — Get the reputation system configuration.
+async fn rep_get_config(
+    State(state): State<AppState>,
+) -> impl IntoResponse {
+    let rep = match &state.reputation_system {
+        Some(r) => r.clone(),
+        None => return api_err(StatusCode::SERVICE_UNAVAILABLE, "reputation system not configured"),
+    };
+    let rep = rep.lock().await;
+    api_ok(rep.config())
 }

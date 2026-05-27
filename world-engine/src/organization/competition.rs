@@ -879,18 +879,22 @@ mod tests {
             (agent_id_a0, 0u64, AgentRecord {
                 id: agent_id_a0, name: "a0".to_string(), phase: AgentPhase::Adult,
                 tokens: 100, skills: skills_a.clone(), personality: String::new(),
+                tasks_completed: 0, tasks_attempted: 0,
             }),
             (agent_id_a1, 0u64, AgentRecord {
                 id: agent_id_a1, name: "a1".to_string(), phase: AgentPhase::Adult,
                 tokens: 100, skills: skills_a, personality: String::new(),
+                tasks_completed: 0, tasks_attempted: 0,
             }),
             (agent_id_b0, 0u64, AgentRecord {
                 id: agent_id_b0, name: "b0".to_string(), phase: AgentPhase::Adult,
                 tokens: 100, skills: HashMap::new(), personality: String::new(),
+                tasks_completed: 0, tasks_attempted: 0,
             }),
             (agent_id_b1, 0u64, AgentRecord {
                 id: agent_id_b1, name: "b1".to_string(), phase: AgentPhase::Adult,
                 tokens: 100, skills: HashMap::new(), personality: String::new(),
+                tasks_completed: 0, tasks_attempted: 0,
             }),
         ];
 

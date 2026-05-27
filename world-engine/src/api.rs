@@ -406,6 +406,8 @@ pub fn build_full_router(state: AppState) -> Router {
         .route("/api/v1/migration/policy", put(migration_update_policy))
         .route("/api/v1/migration/stats", get(migration_stats))
         .route("/api/v1/agents/:id/immigration-status", get(agent_immigration_status))
+        // Prometheus metrics endpoint
+        .route("/metrics", get(crate::observability::metrics_handler))
         .with_state(state)
 }
 

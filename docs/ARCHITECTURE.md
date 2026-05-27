@@ -25,7 +25,7 @@
 | World Engine | a2a/ | **已实现** | gRPC 服务器（server.rs, grpc.rs, service.rs）、Discovery、Router、AgentRegistry、ClientPool |
 | World Engine | storage/ | **已实现** | persistence/ 模块：SQLite 快照持久化（persistence/sqlite.rs, 472 行） |
 | World Engine | wal/ | **已实现** | Write-Ahead Log：CRC32 校验、崩溃恢复、快照、1000 条自动轮转 |
-| World Engine | observability/ | **部分** | tracing.rs（TickTrace 数据模型）已实现；完整可观测性（metrics、OpenTelemetry）待建设 |
+| World Engine | observability/ | **已实现** | Prometheus metrics（/metrics 端点）、计数器/直方图/仪表盘、结构化日志；OpenTelemetry 集成待 Phase 2 |
 | Agent Runtime | core/ | **已实现** | think_loop、decide、act 均有完整实现和测试 |
 | Agent Runtime | survival/ | **已实现** | 5 模式生存本能，11 种紧急行动 |
 | Agent Runtime | memory/ | **已实现** | WorkingMemory（FIFO）、ShortTermMemory（SQLite）、LongTermMemory（SQLite）均已实现；嵌入/向量记忆也有实现 |
@@ -335,13 +335,13 @@ world-engine/
 │   └── persistence/             # ✅ 持久化层
 │       ├── mod.rs               # ✅ 持久化接口
 │       └── sqlite.rs            # ✅ SQLite 快照存储
+│   └── observability/           # ✅ 可观测性
+│       └── mod.rs               # ✅ Prometheus metrics + /metrics 端点 + 结构化日志
 ```
 
 **规划中的模块（未实现）：**
 
 ```
-│   └── observability/           # ❌ 完整目录
-│       ├── metrics.rs, tracing_setup.rs, opentelemetry.rs
 │   └── tools/ (Agent Runtime)   # ❌ 通用工具框架
 ```
 
@@ -755,6 +755,8 @@ agent-runtime/
 │   │   ├── emergence_metrics.py  # ✅ 涌现指标
 │   │   ├── interaction_graph.py  # ✅ 交互图谱
 │   │   └── query.py              # ✅ 追踪查询
+│   ├── observability/
+│   │   └── __init__.py           # ✅ OpenTelemetry + Prometheus metrics（think_loop 自动追踪）
 │   ├── experiment/
 │   │   ├── __init__.py
 │   │   ├── ab_framework.py       # ✅ A/B 实验框架
@@ -1796,6 +1798,25 @@ World Engine                    Storage
 ---
 
 ## 15. 可观测性架构
+
+### 15.0 已实现（v1.1.0）
+
+**Rust World Engine:**
+- `observability/mod.rs` — Prometheus metrics registry + `/metrics` HTTP 端点
+- 核心指标：`world_tick_total`, `world_agents_alive`, `world_token_supply`, `tick_duration_seconds`, `world_transactions_total`, `world_deaths_total`
+- RAII `MetricsGuard` 自动记录 tick 执行时间
+- 结构化日志 helper：`log_tick()`, `log_transaction()`, `log_agent_death()`
+
+**Python Agent Runtime:**
+- `observability/__init__.py` — OpenTelemetry SDK + Prometheus 兼容 metrics
+- `trace_phase()` context manager 自动为 perceive/decide/act 各阶段创建 OTel span
+- 内置 counters/gauges/histograms：`agent_think_ticks_total`, `agent_think_duration_seconds`, `agent_llm_tokens_used_total`
+- OTLP 端点可选（通过 `OTEL_EXPORTER_OTLP_ENDPOINT` 环境变量），未配置时使用内置 metrics
+
+**Docker Compose (profile: observability):**
+- `docker compose --profile observability up` 启动 Prometheus + Grafana
+- Prometheus 抓取 world-engine `/metrics` 和所有 agent-runtime `/metrics`
+- Grafana 预配置 datasource + "Agent World — Overview" dashboard
 
 ```
 ┌─────────────┐     ┌──────────────┐     ┌───────────────┐

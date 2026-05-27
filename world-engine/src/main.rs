@@ -40,6 +40,9 @@ async fn main() {
     // ── Initialize tracing ──────────────────────────────────
     tracing_subscriber::fmt().init();
 
+    // ── Initialize Prometheus metrics ────────────────────────
+    agent_world_engine::observability::init();
+
     println!("Agent World Engine v1.0.0");
     println!("   Status: initializing...");
 
@@ -542,7 +545,58 @@ async fn main() {
 
     println!("   HTTP API: http://{}", http_addr);
     println!("   SSE endpoint: http://{}/api/v1/world/events", http_addr);
+    println!("   Metrics: http://{}/metrics", http_addr);
     println!("   Status: ready");
+
+    // ── Spawn metrics sync task ────────────────────────────
+    // Periodically sync Prometheus gauges from world state.
+    let metrics_state = world_state.clone();
+    let mut metrics_rx = event_bus.subscribe();
+    let metrics_cancel = cancel_token.clone();
+    let metrics_handle = tokio::spawn(async move {
+        loop {
+            tokio::select! {
+                result = metrics_rx.recv() => {
+                    match result {
+                        Ok(event) => {
+                            match &event {
+                                WorldEvent::TickAdvanced { tick } => {
+                                    agent_world_engine::observability::TICK_TOTAL.inc();
+                                    let state = metrics_state.lock().await;
+                                    let alive = state.agents.len() as i64;
+                                    agent_world_engine::observability::AGENTS_ALIVE.set(alive);
+                                    agent_world_engine::observability::log_tick(
+                                        *tick, alive as usize, 0, 0,
+                                    );
+                                }
+                                WorldEvent::AgentDied { agent_id, .. } => {
+                                    agent_world_engine::observability::log_agent_death(
+                                        agent_id, "natural",
+                                    );
+                                }
+                                WorldEvent::TransactionCompleted { .. } => {
+                                    agent_world_engine::observability::TRANSACTIONS_TOTAL.inc();
+                                }
+                                _ => {}
+                            }
+                            agent_world_engine::observability::EVENTS_PUBLISHED_TOTAL.inc();
+                        }
+                        Err(tokio::sync::broadcast::error::RecvError::Lagged(n)) => {
+                            eprintln!("[Metrics] Lagged {} events", n);
+                        }
+                        Err(tokio::sync::broadcast::error::RecvError::Closed) => {
+                            break;
+                        }
+                    }
+                }
+                _ = metrics_cancel.cancelled() => {
+                    break;
+                }
+            }
+        }
+    });
+    // Keep the handle alive
+    tokio::spawn(async move { let _ = metrics_handle.await; });
 
     let http_listener = tokio::net::TcpListener::bind(http_addr).await.unwrap();
     let http_server = axum::serve(http_listener, app);

@@ -10,6 +10,7 @@ pub mod federation;
 pub mod grpc_pool;
 pub mod human;
 pub mod lifecycle;
+pub mod observability;
 pub mod organization;
 pub mod persistence;
 pub mod rules;

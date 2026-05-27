@@ -7,9 +7,14 @@
 #   agent-01..10   — 10 Python agent-runtime instances
 #   dashboard      — Next.js observability UI
 #   ollama         — Optional local LLM (only started with profile: local-llm)
+#   prometheus     — Metrics collection (profile: observability)
+#   grafana        — Metrics dashboards (profile: observability)
 #
 # CI profile (world-engine + 1 agent only):
 #   docker compose --profile ci up
+#
+# Observability profile (adds Prometheus + Grafana):
+#   docker compose --profile observability up
 #
 # Environment: copy .env.example → .env and adjust
 # ────────────────────────────────────────────────────────────────
@@ -206,6 +211,50 @@ services:
       - ci-agent-data:/app/data
     command: ["spawn", "--name", "ci-agent", "--no-llm", "--max-ticks", "10", "--world-url", "http://world-engine:${ENGINE_PORT:-8080}"]
 
+  # ── Prometheus (metrics collection) ──────────────────────
+  # Started with: docker compose --profile observability up
+  prometheus:
+    image: prom/prometheus:v2.52.0
+    container_name: prometheus
+    ports:
+      - "${PROMETHEUS_PORT:-9090}:9090"
+    volumes:
+      - ./config/prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - prometheus-data:/prometheus
+    command:
+      - "--config.file=/etc/prometheus/prometheus.yml"
+      - "--storage.tsdb.retention.time=30d"
+      - "--web.enable-lifecycle"
+    restart: unless-stopped
+    profiles:
+      - observability
+    networks:
+      - agent-world
+
+  # ── Grafana (metrics dashboards) ─────────────────────────
+  # Started with: docker compose --profile observability up
+  grafana:
+    image: grafana/grafana:11.0.0
+    container_name: grafana
+    ports:
+      - "${GRAFANA_PORT:-3002}:3000"
+    volumes:
+      - ./config/grafana/provisioning:/etc/grafana/provisioning:ro
+      - ./config/grafana/dashboards:/var/lib/grafana/dashboards:ro
+      - grafana-data:/var/lib/grafana
+    environment:
+      - GF_SECURITY_ADMIN_USER=${GRAFANA_ADMIN_USER:-admin}
+      - GF_SECURITY_ADMIN_PASSWORD=${GRAFANA_ADMIN_PASSWORD:-admin}
+      - GF_AUTH_ANONYMOUS_ENABLED=true
+      - GF_DASHBOARDS_DEFAULT_HOME_DASHBOARD_PATH=/var/lib/grafana/dashboards/agent-world-overview.json
+    depends_on:
+      - prometheus
+    restart: unless-stopped
+    profiles:
+      - observability
+    networks:
+      - agent-world
+
 volumes:
   world-data:
   agent-data-01:
@@ -220,6 +269,8 @@ volumes:
   agent-data-10:
   ci-agent-data:
   ollama-data:
+  prometheus-data:
+  grafana-data:
 
 networks:
   agent-world:

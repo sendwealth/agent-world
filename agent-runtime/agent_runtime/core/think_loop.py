@@ -48,6 +48,7 @@ from agent_runtime.survival.instinct import (
     SurvivalInstinct,
     SurvivalMode,
 )
+from agent_runtime.observability import metrics, trace_phase, log_tick, log_error
 
 logger = logging.getLogger(__name__)
 
@@ -472,6 +473,7 @@ class ThinkLoop:
           - Phase abilities gate which actions the agent can perform.
         """
         self._tick += 1
+        think_start = time.monotonic()
 
         # --- Lifecycle gate: Dead agents do nothing ---
         if is_terminal(self.state.phase):
@@ -498,7 +500,8 @@ class ThinkLoop:
                 )
 
         # 1. Perceive (with optional caching)
-        perception = await self._perceive_with_cache()
+        with trace_phase("perceive", str(self.state.id)):
+            perception = await self._perceive_with_cache()
 
         # 1b. Group identity influence (optional — Phase 4.3.3)
         if self._group_identity is not None:
@@ -534,13 +537,15 @@ class ThinkLoop:
                 self._tick,
                 survival_action.mode.value,
             )
+            metrics.survival_actions.inc()
             # Pass the world_client as the A2A client for emergency broadcasts
             a2a = self._world_client if self._world_client is not None else None
             await self.survival.execute(survival_action, self.state, a2a_client=a2a)
             return  # Skip normal decision
 
         # 3. Decide
-        decision = await self._decision.decide(self.state, perception, survival_action)
+        with trace_phase("decide", str(self.state.id)):
+            decision = await self._decision.decide(self.state, perception, survival_action)
 
         # 4. Phase ability gate: check if the agent can perform this action
         abilities = get_phase_abilities(self.state.phase)
@@ -568,7 +573,8 @@ class ThinkLoop:
         )
 
         # 5. Act
-        await self._act(decision)
+        with trace_phase("act", str(self.state.id)):
+            await self._act(decision)
 
         # 6. Reflect (periodic)
         if self.config.reflect_interval > 0 and self._tick % self.config.reflect_interval == 0:
@@ -584,6 +590,19 @@ class ThinkLoop:
                     self._tick,
                     exc_info=True,
                 )
+
+        # 8. Record think-loop duration
+        elapsed = time.monotonic() - think_start
+        metrics.think_duration.observe(elapsed)
+        metrics.tokens_balance.set(self.state.tokens)
+        metrics.health.set(self.state.health)
+        log_tick(
+            self._tick,
+            str(self.state.id),
+            self.state.tokens,
+            self.state.health,
+            self.state.phase.value,
+        )
 
     # ------------------------------------------------------------------
     # Perception caching

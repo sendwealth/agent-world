@@ -755,6 +755,13 @@ class _NoOpWorldClient:
     async def build(self, structure_type: str, **kwargs: Any) -> dict[str, Any]:
         return {"status": "ok", "action": "build", "structure_type": structure_type}
 
+    async def socialize(self, target_agent_id: str, message: str = "") -> dict[str, Any]:
+        return {
+            "status": "ok",
+            "action": "socialize",
+            "target_agent_id": target_agent_id,
+        }
+
 
 # ---------------------------------------------------------------------------
 # Concurrent multi-agent runner

@@ -160,6 +160,8 @@ class WorldClientProtocol(Protocol):
 
     async def build(self, structure_type: str, **kwargs: Any) -> dict[str, Any]: ...
 
+    async def socialize(self, target_agent_id: str, message: str = "") -> dict[str, Any]: ...
+
 
 @dataclass
 class ActionContext:
@@ -469,7 +471,6 @@ class ActionExecutor:
                 },
             }
         )
-
     async def _handle_form_org(self, context: ActionContext) -> dict[str, Any]:
         """Form a new organization — sent as a WILL message to World Engine."""
         org_name = context.parameters.get("org_name", "")

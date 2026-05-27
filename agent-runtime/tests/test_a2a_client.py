@@ -240,6 +240,17 @@ class TestA2AClientLifecycle:
         client = A2AClient(make_config())
         await client.close()  # should not raise
 
+    @pytest.mark.asyncio
+    async def test_async_context_manager(self):
+        mock_channel = MagicMock()
+        mock_channel.close = AsyncMock()
+        with patch("agent_runtime.a2a.client.grpc.aio.insecure_channel", return_value=mock_channel):
+            async with A2AClient(make_config()) as client:
+                assert client.connected
+            # After exiting the context, channel should be closed
+            assert not client.connected
+            mock_channel.close.assert_awaited_once()
+
 
 # ---------------------------------------------------------------------------
 # A2AClient — synchronous RPCs

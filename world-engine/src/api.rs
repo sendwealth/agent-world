@@ -472,7 +472,11 @@ fn v2_router(state: &AppState) -> Router<AppState> {
 
     let v2_routes = crate::api_research::research_routes()
         .merge(crate::api_experiment::experiment_routes())
-        .merge(crate::api_export::export_routes());
+        .merge(crate::api_export::export_routes())
+        .merge(crate::api_behavior_log::behavior_log_routes())
+        .merge(crate::api_network_graph::network_graph_routes())
+        .merge(crate::api_ab_experiment::ab_experiment_routes())
+        .merge(crate::api_report::report_routes());
     match &state.api_key_store {
         Some(store) => v2_routes.layer(middleware::from_fn_with_state(
             store.clone(),

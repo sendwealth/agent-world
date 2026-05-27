@@ -82,6 +82,12 @@ pub struct AgentSnapshot {
     /// Personality vector (opaque JSON string).
     #[serde(default)]
     pub personality: String,
+    /// Number of tasks this agent has completed successfully.
+    #[serde(default)]
+    pub tasks_completed: u32,
+    /// Number of tasks this agent has attempted (claimed or started).
+    #[serde(default)]
+    pub tasks_attempted: u32,
 }
 
 impl AgentSnapshot {
@@ -95,6 +101,8 @@ impl AgentSnapshot {
             spawn_tick,
             skills: record.skills.clone(),
             personality: record.personality.clone(),
+            tasks_completed: record.tasks_completed,
+            tasks_attempted: record.tasks_attempted,
         }
     }
 
@@ -110,8 +118,9 @@ impl AgentSnapshot {
                 tokens: self.tokens,
                 skills: self.skills.clone(),
                 personality: self.personality.clone(),
-                tasks_attempted: 0,
-                tasks_completed: 0,            },
+                tasks_attempted: self.tasks_attempted,
+                tasks_completed: self.tasks_completed,
+            },
         )
     }
 }
@@ -154,6 +163,8 @@ impl WorldSnapshot {
             agent.phase.hash(&mut hasher);
             agent.tokens.hash(&mut hasher);
             agent.spawn_tick.hash(&mut hasher);
+            agent.tasks_completed.hash(&mut hasher);
+            agent.tasks_attempted.hash(&mut hasher);
             // Hash skills in a deterministic order
             let mut skills: Vec<_> = agent.skills.iter().collect();
             skills.sort_by_key(|(k, _)| *k);
@@ -335,6 +346,8 @@ fn agent_changed(snapshot: &AgentSnapshot, record: &AgentRecord) -> bool {
         || snapshot.tokens != record.tokens
         || snapshot.skills != record.skills
         || snapshot.personality != record.personality
+        || snapshot.tasks_completed != record.tasks_completed
+        || snapshot.tasks_attempted != record.tasks_attempted
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
@@ -375,6 +388,16 @@ mod tests {
     use super::*;
 
     fn make_agent(name: &str, tokens: u64, phase: AgentPhase) -> (Uuid, u64, AgentRecord) {
+        make_agent_with_tasks(name, tokens, phase, 0, 0)
+    }
+
+    fn make_agent_with_tasks(
+        name: &str,
+        tokens: u64,
+        phase: AgentPhase,
+        tasks_completed: u32,
+        tasks_attempted: u32,
+    ) -> (Uuid, u64, AgentRecord) {
         (
             Uuid::new_v4(),
             0,
@@ -385,8 +408,8 @@ mod tests {
                 tokens,
                 skills: HashMap::new(),
                 personality: String::new(),
-                tasks_completed: 0,
-                tasks_attempted: 0,
+                tasks_completed,
+                tasks_attempted,
             },
         )
     }
@@ -444,6 +467,41 @@ mod tests {
         assert_eq!(rspawn, spawn_tick);
         assert_eq!(rrecord.name, "Alice");
         assert_eq!(rrecord.tokens, 1000);
+        assert_eq!(rrecord.tasks_completed, 0);
+        assert_eq!(rrecord.tasks_attempted, 0);
+    }
+
+    #[test]
+    fn agent_snapshot_roundtrip_preserves_tasks() {
+        let (id, spawn_tick, record) =
+            make_agent_with_tasks("Bob", 500, AgentPhase::Adult, 7, 12);
+        let snapshot = AgentSnapshot::from_record(id, spawn_tick, &record);
+        let (rid, rspawn, rrecord) = snapshot.to_record();
+        assert_eq!(rid, id);
+        assert_eq!(rspawn, spawn_tick);
+        assert_eq!(rrecord.tasks_completed, 7);
+        assert_eq!(rrecord.tasks_attempted, 12);
+    }
+
+    #[test]
+    fn delta_detect_tasks_change() {
+        let (id1, _, rec1) =
+            make_agent_with_tasks("Alice", 1000, AgentPhase::Adult, 5, 10);
+        let agents_t1 = vec![(id1, 0u64, rec1.clone())];
+        let snapshot_t1 = WorldSnapshot::from_world_state(1, &agents_t1);
+
+        // Agent completes more tasks
+        let rec2 = AgentRecord {
+            tasks_completed: 6,
+            tasks_attempted: 11,
+            ..rec1.clone()
+        };
+        let agents_t2 = vec![(id1, 0u64, rec2)];
+
+        let delta = SnapshotDelta::diff(&snapshot_t1, 2, &agents_t2);
+        assert_eq!(delta.agents_changed.len(), 1);
+        assert_eq!(delta.agents_changed[0].tasks_completed, 6);
+        assert_eq!(delta.agents_changed[0].tasks_attempted, 11);
     }
 
     #[test]

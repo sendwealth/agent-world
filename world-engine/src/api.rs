@@ -20,6 +20,8 @@ use tokio_stream::wrappers::BroadcastStream;
 use tokio_stream::StreamExt;
 use uuid::Uuid;
 
+use crate::api_auth::SharedApiKeyStore;
+use crate::api_experiment::SharedExperimentStore;
 use crate::economy::banking::{
     BankingSystem, BankAccountType, Loan, LoanStatus, Collateral,
 };
@@ -138,6 +140,10 @@ pub struct AppState {
     pub federation_registry: Option<Arc<Mutex<crate::federation::WorldRegistry>>>,
     pub migration_manager: Option<Arc<Mutex<crate::federation::MigrationManager>>>,
 
+    /// API key store for `/api/v2/*` research endpoints. `None` disables auth.
+    pub api_key_store: Option<SharedApiKeyStore>,
+    /// Experiment store for `/api/v2/experiments/*` endpoints.
+    pub experiment_store: SharedExperimentStore,
 }
 
 pub fn create_router(board: SharedTaskBoard) -> Router {
@@ -186,6 +192,8 @@ pub fn create_router_with_wal(board: SharedTaskBoard, wal: SharedWAL) -> Router 
             rule_engine: None,
             federation: None,        federation_registry: None,
         migration_manager: None,
+        api_key_store: None,
+        experiment_store: Arc::new(Mutex::new(Vec::new())),
     };
     build_full_router(state)
 }
@@ -222,6 +230,8 @@ pub fn create_router_with_wal_and_snapshots(board: SharedTaskBoard, wal: SharedW
             rule_engine: None,
             federation: None,        federation_registry: None,
         migration_manager: None,
+        api_key_store: None,
+        experiment_store: Arc::new(Mutex::new(Vec::new())),
     };
     build_full_router(state)
 }
@@ -425,7 +435,25 @@ pub fn build_full_router(state: AppState) -> Router {
         .route("/api/v1/population/genealogy/:id", get(population_genealogy))
         .route("/api/v1/population/timeline", get(population_timeline))
         .route("/api/v1/population/export/csv", get(population_export_csv))
+        // Research API v2 (with optional auth middleware)
+        .merge(v2_router(&state))
         .with_state(state)
+}
+
+/// Build the `/api/v2/*` research router, optionally wrapped in auth middleware.
+fn v2_router(state: &AppState) -> Router<AppState> {
+    use axum::middleware;
+
+    let v2_routes = crate::api_research::research_routes()
+        .merge(crate::api_experiment::experiment_routes())
+        .merge(crate::api_export::export_routes());
+    match &state.api_key_store {
+        Some(store) => v2_routes.layer(middleware::from_fn_with_state(
+            store.clone(),
+            crate::api_auth::auth_middleware,
+        )),
+        None => v2_routes,
+    }
 }
 
 /// Create a router for testing with a provided EventBus and tick channel.
@@ -464,6 +492,8 @@ pub fn create_router_for_test(
             rule_engine: None,
             federation: None,        federation_registry: None,
         migration_manager: None,
+        api_key_store: None,
+        experiment_store: Arc::new(Mutex::new(Vec::new())),
     };
     build_full_router(state)
 }
@@ -1036,7 +1066,7 @@ pub struct SseQuery {
 
 /// Parse a comma-separated string of event type names into `EventType` values.
 /// Returns an error message for any unrecognized names.
-fn parse_event_types(raw: &str) -> Result<Vec<crate::world::event::EventType>, String> {
+pub fn parse_event_types(raw: &str) -> Result<Vec<crate::world::event::EventType>, String> {
     use crate::world::event::EventType;
     let mut types = Vec::new();
     for name in raw.split(',') {

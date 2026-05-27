@@ -36,6 +36,25 @@ logger = logging.getLogger(__name__)
 
 
 # ---------------------------------------------------------------------------
+# Social context (optional, injected from social.engine)
+# ---------------------------------------------------------------------------
+
+
+@dataclass(frozen=True)
+class SocialContext:
+    """Social context injected into the decision prompt.
+
+    Produced by :class:`agent_runtime.social.engine.SocialEngine.build_context`.
+    """
+
+    social_propensity: float = 0.5
+    should_socialize: bool = False
+    recommended_target_id: str = ""
+    trust_snapshot: dict[str, float] = field(default_factory=dict)
+    personality_description: str = ""
+
+
+# ---------------------------------------------------------------------------
 # Action types — 10 actions with token costs
 # ---------------------------------------------------------------------------
 
@@ -212,6 +231,9 @@ state and choose the best action.
 - Money: {money:.1f}
 - Reputation: {reputation:.1f}
 
+## Personality
+{personality_description}
+
 ## Skills
 {skills_section}
 
@@ -228,6 +250,11 @@ state and choose the best action.
 - In danger: {in_danger}
 - Survival score: {survival_score}/100
 - Recommendation: {recommendation}
+
+## Social Context
+- Social propensity: {social_propensity:.0%}
+- Should socialize: {should_socialize}
+{social_targets_section}
 
 ## Available Actions
 {actions_section}
@@ -253,16 +280,19 @@ def build_prompt(
     perception: DecisionPerception,
     survival: SurvivalAssessment,
     available_actions: list[DecisionAction],
+    social: SocialContext | None = None,
 ) -> str:
     """Build the decision prompt from agent state, perception, and survival data.
 
     The prompt is structured to guide the LLM to return valid JSON:
     1. Agent identity & current state
-    2. Skills assessment
-    3. Perception (nearby agents, tasks, resources, events)
-    4. Survival assessment
-    5. Available actions with costs
-    6. Response format instructions
+    2. Personality description (from social context)
+    3. Skills assessment
+    4. Perception (nearby agents, tasks, resources, events)
+    5. Survival assessment
+    6. Social context (propensity, trust, recommended targets)
+    7. Available actions with costs
+    8. Response format instructions
     """
     # Skills
     skills = state.skills
@@ -313,6 +343,31 @@ def build_prompt(
         )
     )
 
+    # Social context fields
+    personality_description = ""
+    social_propensity = 0.0
+    should_socialize = False
+    social_targets_section = "  No social context available."
+
+    if social is not None:
+        personality_description = social.personality_description or "No personality data."
+        social_propensity = social.social_propensity
+        should_socialize = social.should_socialize
+
+        if social.trust_snapshot:
+            trust_lines = [
+                f"  - {aid}: trust={t:.2f}"
+                for aid, t in social.trust_snapshot.items()
+            ]
+            social_targets_section = "\n".join(trust_lines)
+        else:
+            social_targets_section = "  No nearby agents to socialize with."
+
+        if social.recommended_target_id:
+            social_targets_section += (
+                f"\n  Recommended social target: {social.recommended_target_id}"
+            )
+
     return _DECISION_PROMPT_TEMPLATE.format(
         name=state.name,
         id=state.id,
@@ -321,6 +376,7 @@ def build_prompt(
         tokens=state.tokens,
         money=state.money,
         reputation=state.reputation,
+        personality_description=personality_description,
         skills_section=skills_section,
         tick=perception.tick,
         nearby=nearby,
@@ -331,6 +387,9 @@ def build_prompt(
         in_danger=survival.in_danger,
         survival_score=survival.survival_score,
         recommendation=survival.recommendation,
+        social_propensity=social_propensity,
+        should_socialize=should_socialize,
+        social_targets_section=social_targets_section,
         actions_section=actions_section,
         reputation_note=reputation_note,
     )
@@ -513,6 +572,16 @@ def get_available_actions(
 # ---------------------------------------------------------------------------
 
 
+class SocialContextProvider(Protocol):
+    """Provides social context for the decision engine."""
+
+    def build_social_context(
+        self,
+        agent_id: str,
+        tick: int,
+    ) -> SocialContext | None: ...
+
+
 class DecisionEngine:
     """Core decision engine that drives agent behavior via LLM.
 
@@ -527,9 +596,11 @@ class DecisionEngine:
         provider: LLMProvider,
         *,
         pipeline: ContextEnginePipeline | None = None,
+        social_provider: SocialContextProvider | None = None,
     ) -> None:
         self._provider = provider
         self._pipeline = pipeline
+        self._social_provider = social_provider
 
     async def decide(
         self,
@@ -541,7 +612,7 @@ class DecisionEngine:
 
         This is the main entry point. It:
         1. Computes available actions from agent state
-        2. Builds the prompt
+        2. Builds the prompt (with optional social context)
         3. Calls the LLM
         4. Parses the JSON response
         5. Validates the decision
@@ -557,8 +628,25 @@ class DecisionEngine:
                 confidence=0,
             )
 
+        # Build social context if provider is available
+        social: SocialContext | None = None
+        if self._social_provider is not None:
+            try:
+                social = self._social_provider.build_social_context(
+                    agent_id=state.id,
+                    tick=perception.tick,
+                )
+            except Exception:
+                logger.debug(
+                    "Social context build failed for agent %s (non-fatal)",
+                    state.id,
+                    exc_info=True,
+                )
+
         try:
-            decision = await self._try_decide(state, perception, survival, available)
+            decision = await self._try_decide(
+                state, perception, survival, available, social=social
+            )
             logger.info(
                 "Agent %s decided: %s (confidence: %d)",
                 state.id,
@@ -580,6 +668,8 @@ class DecisionEngine:
         perception: DecisionPerception,
         survival: SurvivalAssessment,
         available_actions: list[DecisionAction],
+        *,
+        social: SocialContext | None = None,
     ) -> Decision:
         """Attempt to generate a validated decision via the LLM."""
         if self._pipeline is not None:
@@ -590,7 +680,9 @@ class DecisionEngine:
             )
             prompt = pipeline_result.formatted_context
         else:
-            prompt = build_prompt(state, perception, survival, available_actions)
+            prompt = build_prompt(
+                state, perception, survival, available_actions, social=social
+            )
 
         # Call LLM provider
         try:

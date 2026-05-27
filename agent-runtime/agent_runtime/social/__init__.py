@@ -13,6 +13,8 @@ from .cultural_conflict import (
     CulturalConflictAndFusion,
 )
 from .cultural_diffusion import CulturalDiffusion
+from .engine import SocialContext as SocialEngineContext
+from .engine import SocialEngine, SocialTarget
 from .imitation import ImitationEngine
 from .intergroup_trust import (
     DEFAULT_IN_GROUP_TRUST,
@@ -34,6 +36,10 @@ from .org_culture import (
 from .regional_culture import Cluster, RegionalCulture
 
 __all__ = [
+    # engine (Phase 4.3 orchestrator)
+    "SocialEngine",
+    "SocialEngineContext",
+    "SocialTarget",
     # cultural_diffusion (Phase 4.3.2)
     "CulturalDiffusion",
     # imitation (Phase 4.3.2)

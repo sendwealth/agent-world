@@ -521,7 +521,6 @@ class ThinkLoop:
                     exc_info=True,
                 )
 
-        perception = await self._perceive_with_cache()
         logger.debug(
             "Tick %d: perceived — token_ratio=%.2f health=%.0f phase=%s",
             self._tick,
@@ -605,54 +604,6 @@ class ThinkLoop:
             self.state.health,
             self.state.phase.value,
         )
-
-    # ------------------------------------------------------------------
-    # Perception caching
-    # ------------------------------------------------------------------
-
-    async def _perceive_with_cache(self) -> Perception:
-        """Get perception, using cache if within TTL.
-
-        Caching avoids redundant Discover RPC calls when the environment
-        hasn't changed.  Messages are always fresh (they come from the
-        streaming queue, not the cache).  The cache covers the expensive
-        `discover` call and static agent state.
-        """
-        if self.config.perception_cache_ttl <= 0:
-            return await self._perception.perceive(self.state, self._tick)
-
-        now = time.monotonic()
-        if (
-            self._perception_cache is not None
-            and (now - self._perception_cache_time) < self.config.perception_cache_ttl
-        ):
-            # Return cached perception but update tick and messages
-            cached = self._perception_cache
-            # Re-drain messages (always fresh)
-            if hasattr(self._perception, '_drain_messages'):
-                fresh_messages = await self._perception._drain_messages()  # type: ignore[union-attr]
-            else:
-                fresh_messages = cached.messages
-            return Perception(
-                messages=fresh_messages,
-                token_balance=self.state.tokens,
-                token_ratio=cached.token_ratio,
-                market_state=cached.market_state,
-                active_task=cached.active_task,
-                health=self.state.health,
-                tick=self._tick,
-                server_tick=cached.server_tick,
-            )
-
-        perception = await self._perception.perceive(self.state, self._tick)
-        self._perception_cache = perception
-        self._perception_cache_time = now
-        return perception
-
-    def invalidate_perception_cache(self) -> None:
-        """Force a fresh perception on the next tick."""
-        self._perception_cache = None
-        self._perception_cache_time = 0.0
 
     # ------------------------------------------------------------------
     # Perception caching
@@ -803,6 +754,13 @@ class _NoOpWorldClient:
 
     async def build(self, structure_type: str, **kwargs: Any) -> dict[str, Any]:
         return {"status": "ok", "action": "build", "structure_type": structure_type}
+
+    async def socialize(self, target_agent_id: str, message: str = "") -> dict[str, Any]:
+        return {
+            "status": "ok",
+            "action": "socialize",
+            "target_agent_id": target_agent_id,
+        }
 
 
 # ---------------------------------------------------------------------------

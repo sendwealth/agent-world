@@ -55,6 +55,7 @@ class ActionType(str, Enum):
     MOVE = "move"
     GATHER = "gather"
     BUILD = "build"
+    SOCIALIZE = "socialize"
     FORM_ORG = "form_org"
     JOIN_ORG = "join_org"
     PROPOSE_RULE = "propose_rule"
@@ -114,6 +115,7 @@ _DEFAULT_TOKEN_COSTS: dict[ActionType, int] = {
     ActionType.MOVE: 12,
     ActionType.GATHER: 8,
     ActionType.BUILD: 20,
+    ActionType.SOCIALIZE: 5,
     ActionType.FORM_ORG: 25,
     ActionType.JOIN_ORG: 10,
     ActionType.PROPOSE_RULE: 15,
@@ -157,6 +159,8 @@ class WorldClientProtocol(Protocol):
     async def gather(self, resource_type: str) -> dict[str, Any]: ...
 
     async def build(self, structure_type: str, **kwargs: Any) -> dict[str, Any]: ...
+
+    async def socialize(self, target_agent_id: str, message: str = "") -> dict[str, Any]: ...
 
 
 @dataclass
@@ -357,6 +361,7 @@ class ActionExecutor:
         ActionType.MOVE: "_handle_move",
         ActionType.GATHER: "_handle_gather",
         ActionType.BUILD: "_handle_build",
+        ActionType.SOCIALIZE: "_handle_socialize",
         ActionType.FORM_ORG: "_handle_form_org",
         ActionType.JOIN_ORG: "_handle_join_org",
         ActionType.PROPOSE_RULE: "_handle_propose_rule",
@@ -445,6 +450,14 @@ class ActionExecutor:
                 if k not in ("structure_type",)
             },
         )
+
+    async def _handle_socialize(self, context: ActionContext) -> dict[str, Any]:
+        """Socialize with a nearby agent — trigger trust, imitation, and cultural effects."""
+        target_agent_id = context.parameters.get("target_agent_id", "")
+        message = context.parameters.get("message", "")
+        if not target_agent_id:
+            raise ValueError("socialize requires 'target_agent_id' parameter")
+        return await context.world.socialize(target_agent_id, message)
 
     async def _handle_form_org(self, context: ActionContext) -> dict[str, Any]:
         """Form a new organization — sent as a WILL message to World Engine."""

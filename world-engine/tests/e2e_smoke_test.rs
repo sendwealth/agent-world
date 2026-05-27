@@ -370,8 +370,14 @@ async fn test_e2e_smoke_2_agent_conversation_with_dashboard() {
     assert_eq!(more_ticks.status(), StatusCode::OK);
 
     for i in 11..=15 {
-        let evt = sse_rx.try_recv().unwrap();
-        assert_eq!(evt.event_type(), EventType::TickAdvanced);
+        // Drain any non-tick events (e.g. ReputationChanged from task completion)
+        // before matching the expected TickAdvanced event.
+        let evt = loop {
+            let e = sse_rx.try_recv().unwrap();
+            if e.event_type() == EventType::TickAdvanced {
+                break e;
+            }
+        };
         if let WorldEvent::TickAdvanced { tick } = evt {
             assert_eq!(tick, i);
         }

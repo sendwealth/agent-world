@@ -19,6 +19,7 @@ pub use genesis::GenesisConfig;
 pub use intervention::{InterventionCheckerSubsystem, InterventionConfig as InterventionSubsystemConfig, MessageInterventionGuard};
 pub use scheduler::Scheduler;
 pub use seeder::{WorldSeeder, Terrain, Resource};
+pub use map::{HexPos, TerrainType, Tile, ResourceNode, WorldMap, MapSnapshot};
 pub use state::{EventBus, FilteredReceiver, SharedEventBus, WorldState};
 pub use subsystem::{Subsystem, SubsystemRegistry};
 pub use subsystems::{

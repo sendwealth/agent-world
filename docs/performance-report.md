@@ -298,6 +298,13 @@ Phase 4.2.2 性能优化分支已成功 rebase 并合并到 main (commit `0787c2
 2. **Generate flamegraphs** for visual hotspot confirmation
 3. **Set CI baseline** with `--save-baseline main` for regression tracking
 4. **Phase 4.2.3 规模化实验** — 50-100 Agent stress test now unblocked
+## 8. Next Steps
+
+1. **Run full benchmark suite** on a dedicated machine (not in CI sandbox)
+2. **Generate flamegraphs** for visual hotspot confirmation
+3. **Deliver profiling data** to 后端工程师 to guide gRPC batch + memory optimization
+4. **Set CI baseline** with `--save-baseline main` for regression tracking
+5. **Re-profile** after 后端工程师 completes gRPC batch processing changes
 
 ---
 

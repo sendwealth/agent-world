@@ -758,7 +758,11 @@ async def run_agent(config: RuntimeConfig) -> RunStats:
             # Ensure health server is stopped before deregistering, even if
             # think_task raised an exception.
             await health_server.stop()
-            await health_task
+            health_task.cancel()
+            try:
+                await health_task
+            except asyncio.CancelledError:
+                pass
             stats.end_time = time.monotonic()
             stats.ticks = think_loop.tick
             stats.errors = think_loop.total_errors
@@ -1573,6 +1577,7 @@ class AgentPool:
             if self._api_server is not None:
                 self._api_server.close()
                 await self._api_server.wait_closed()
+            api_task.cancel()
             try:
                 await api_task
             except (asyncio.CancelledError, Exception):

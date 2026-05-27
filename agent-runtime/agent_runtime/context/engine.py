@@ -8,11 +8,12 @@ Public symbols (re-exported via ``context/__init__.py``):
 
 from __future__ import annotations
 
+import json
 import logging
 import os
 from dataclasses import dataclass, field
 from enum import Enum, IntEnum
-from typing import Any, Protocol, runtime_checkable
+from typing import Any, Callable, Optional, Protocol, runtime_checkable
 
 logger = logging.getLogger(__name__)
 
@@ -98,6 +99,10 @@ class PipelineStats:
         tokens_after_filter: Token estimate after filtering.
         items_trimmed: Number of items removed during budget trimming.
         final_token_count: Token count in the final result.
+        protected_overflow: True when protected items alone exceed
+            ``max_tokens``.  Protected items are **never** trimmed (by
+            design), so the caller must decide how to handle the overflow
+            — e.g. skip the regular budget check or log an alert.
     """
 
     total_items_collected: int = 0
@@ -106,6 +111,7 @@ class PipelineStats:
     tokens_after_filter: int = 0
     items_trimmed: int = 0
     final_token_count: int = 0
+    protected_overflow: bool = False
 
 
 @dataclass(frozen=True)
@@ -132,19 +138,28 @@ class PipelineResult:
 class TokenBudget:
     """Token budget manager.
 
+    Protected items (survival-critical information) are **never** trimmed
+    and are **not** constrained by ``max_tokens``.  This is by design:
+    survival information must always reach the decision engine.  When
+    protected items alone exceed ``max_tokens``, the ``protected_overflow``
+    flag in ``PipelineStats`` is set so the caller can react accordingly.
+
     Attributes:
-        max_tokens: Hard cap on total tokens.
-        reserve_ratio: Fraction of budget reserved for P0 items.
+        max_tokens: Soft cap on total tokens.  Regular (non-protected)
+            items are trimmed to fit within the budget remaining after
+            protected items are accounted for.
     """
 
     max_tokens: int = _DEFAULT_MAX_TOKENS
-    reserve_ratio: float = 0.30  # 30% reserved for survival
 
-    def allocate(self, items: list[ContextItem]) -> list[ContextItem]:
+    def allocate(self, items: list[ContextItem]) -> tuple[list[ContextItem], int, bool]:
         """Trim items to fit within the token budget.
 
         Protected items are always kept. Remaining items are sorted by
         priority (ascending — P0 first) and included until budget is full.
+
+        Returns:
+            A tuple of (kept items, trimmed count, protected_overflow flag).
         """
         protected: list[ContextItem] = []
         regular: list[ContextItem] = []
@@ -157,6 +172,13 @@ class TokenBudget:
 
         # Calculate tokens used by protected items
         protected_tokens = sum(i.token_estimate for i in protected)
+        overflow = protected_tokens > self.max_tokens
+        if overflow:
+            logger.warning(
+                "Protected items exceed total budget: %d > %d",
+                protected_tokens,
+                self.max_tokens,
+            )
         remaining_budget = max(0, self.max_tokens - protected_tokens)
 
         # Sort regular items by priority (lower = higher priority)
@@ -170,7 +192,7 @@ class TokenBudget:
                 used += item.token_estimate
 
         trimmed_count = len(regular) - len(accepted)
-        return protected + accepted, trimmed_count
+        return protected + accepted, trimmed_count, overflow
 
 
 # ---------------------------------------------------------------------------
@@ -185,6 +207,10 @@ class MessageFilter:
         1. Survival info (HP < 30% or token ratio < 20%) is always protected.
         2. Social messages are sorted by trust_score (descending).
         3. Items are otherwise kept in source order.
+
+    **Social items ordering:** All ``P2_SOCIAL`` items are moved to the
+    end of the output list (after every non-social item) and sorted by
+    ``trust_score`` in descending order within that tail section.
     """
 
     def filter(self, items: list[ContextItem]) -> list[ContextItem]:
@@ -198,8 +224,6 @@ class MessageFilter:
         for item in items:
             if self._is_survival_critical(item):
                 result.append(self._protect(item))
-            elif item.source == ContextSource.MEMORY and item.priority == ContextPriority.P2_SOCIAL:
-                result.append(item)
             else:
                 result.append(item)
 
@@ -321,7 +345,7 @@ class DefaultPerceptionSource:
         if market:
             items.append(
                 ContextItem(
-                    content=f"Market state: {market}",
+                    content=f"Market state: {json.dumps(market, ensure_ascii=False)}",
                     source=ContextSource.PERCEPTION,
                     priority=ContextPriority.P1_MISSION,
                 )
@@ -427,7 +451,17 @@ class DefaultStateSource:
 
 
 class DefaultMemorySource:
-    """Extract context items from ``memory/memory_recall.RecalledMemory``."""
+    """Extract context items from ``memory/memory_recall.RecalledMemory``.
+
+    Args:
+        query_builder: Optional callable that returns the query string
+            passed to ``recall_for_decision()``.  Defaults to
+            ``"current context"``.  Override to build dynamic queries
+            based on tick, task, or other context at integration time.
+    """
+
+    def __init__(self, query_builder: Optional[Callable[[], str]] = None) -> None:
+        self._query_builder = query_builder
 
     def collect(self, memory_recall: Any) -> list[ContextItem]:
         items: list[ContextItem] = []
@@ -437,7 +471,8 @@ class DefaultMemorySource:
         if not isinstance(memories, list):
             # Might be a MemoryRecall object — try to call recall_for_decision
             if hasattr(memories, "recall_for_decision"):
-                memories = memories.recall_for_decision("current context")
+                query = self._query_builder() if self._query_builder else "current context"
+                memories = memories.recall_for_decision(query)
             else:
                 memories = []
 
@@ -470,11 +505,13 @@ class PipelineConfig:
 
     Attributes:
         max_tokens: Token budget cap (overridden by CONTEXT_MAX_TOKENS env var).
-        reserve_ratio: Fraction of budget reserved for P0 items.
+            Protected items are not constrained by this cap — they are
+            always kept regardless of budget.  When protected items alone
+            exceed ``max_tokens``, ``PipelineStats.protected_overflow`` is
+            set to ``True`` so the caller can decide how to react.
     """
 
     max_tokens: int = _DEFAULT_MAX_TOKENS
-    reserve_ratio: float = 0.30
 
     def __post_init__(self) -> None:
         # Allow environment variable override
@@ -528,7 +565,6 @@ class ContextEnginePipeline:
         self._filter = message_filter or MessageFilter()
         self._budget = token_budget or TokenBudget(
             max_tokens=self._config.max_tokens,
-            reserve_ratio=self._config.reserve_ratio,
         )
 
     @property
@@ -544,6 +580,11 @@ class ContextEnginePipeline:
         memory: Any = None,
     ) -> PipelineResult:
         """Execute the pipeline: collect → filter → budget-trim → format.
+
+        When all inputs are ``None``, returns an empty ``PipelineResult``
+        (``formatted_context=""``).  Callers should guard with
+        ``if result.formatted_context:`` before injecting the context into
+        a prompt.
 
         Parameters
         ----------
@@ -581,7 +622,7 @@ class ContextEnginePipeline:
         filtered_tokens = sum(i.token_estimate for i in items)
 
         # 3. Budget trim
-        items, trimmed_count = self._budget.allocate(items)
+        items, trimmed_count, protected_overflow = self._budget.allocate(items)
         final_tokens = sum(i.token_estimate for i in items)
 
         # 4. Format
@@ -594,15 +635,15 @@ class ContextEnginePipeline:
             tokens_after_filter=filtered_tokens,
             items_trimmed=trimmed_count,
             final_token_count=final_tokens,
+            protected_overflow=protected_overflow,
         )
 
         logger.debug(
-            "Context pipeline: collected=%d tokens=%d → final=%d items=%d tokens=%d trimmed=%d",
+            "Context pipeline: collected=%d tokens=%d → final=%d items, %d tokens, trimmed=%d",
             collected_count,
             collected_tokens,
             len(items),
             final_tokens,
-            stats.final_token_count,
             trimmed_count,
         )
 

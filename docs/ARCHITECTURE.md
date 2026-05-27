@@ -25,7 +25,7 @@
 | World Engine | a2a/ | **已实现** | gRPC 服务器（server.rs, grpc.rs, service.rs）、Discovery、Router、AgentRegistry、ClientPool |
 | World Engine | storage/ | **已实现** | persistence/ 模块：SQLite 快照持久化（persistence/sqlite.rs, 472 行） |
 | World Engine | wal/ | **已实现** | Write-Ahead Log：CRC32 校验、崩溃恢复、快照、1000 条自动轮转 |
-| World Engine | observability/ | **部分** | tracing.rs（TickTrace 数据模型）已实现；完整可观测性（metrics、OpenTelemetry）待建设 |
+|| World Engine | observability/ | **部分** | ✅ tracing.rs（TickTrace 数据模型，181 行）、EventBus 事件广播（30+ 事件类型）、SSE 端点（`/api/v1/world/events`）、tracing 基础日志；❌ Prometheus metrics、OpenTelemetry traces、结构化日志聚合（Loki）、Grafana dashboard 待建设 ||
 | Agent Runtime | core/ | **已实现** | think_loop、decide、act 均有完整实现和测试 |
 | Agent Runtime | survival/ | **已实现** | 5 模式生存本能，11 种紧急行动 |
 | Agent Runtime | memory/ | **已实现** | WorkingMemory（FIFO）、ShortTermMemory（SQLite）、LongTermMemory（SQLite）均已实现；嵌入/向量记忆也有实现 |
@@ -340,10 +340,21 @@ world-engine/
 **规划中的模块（未实现）：**
 
 ```
-│   └── observability/           # ❌ 完整目录
-│       ├── metrics.rs, tracing_setup.rs, opentelemetry.rs
-│   └── tools/ (Agent Runtime)   # ❌ 通用工具框架
+│   └── observability/           # ❌ 完整可观测性目录（未创建）
+│       ├── metrics.rs           # ❌ Prometheus metrics 导出
+│       ├── tracing_setup.rs     # ❌ OpenTelemetry traces 配置
+│       ├── opentelemetry.rs     # ❌ OTel exporter
+│       └── log_aggregation.rs   # ❌ 结构化日志聚合（Loki）
+└── tools/ (Agent Runtime)       # ❌ 通用工具框架
 ```
+
+> **可观测性现状说明**：以下已实现的可观测性能力分散在现有模块中：
+> - **基础日志**：`main.rs` 中 `tracing_subscriber::fmt().init()` + 各模块的 `tracing::info/warn/error/debug` 调用
+> - **事件广播**：`world/state.rs` 中 EventBus（tokio broadcast channel，256 容量），30+ 种 WorldEvent 变体
+> - **SSE 端点**：`api.rs` 中 `/api/v1/world/events` 端点，含 keep-alive
+> - **TickTrace 模型**：`tracing.rs`（181 行），TickTraceData / PhaseData / TickTraceSummary 数据结构
+>
+> 以下尚未实现：Prometheus metrics 端点、OpenTelemetry distributed traces、结构化日志聚合（Loki）、Grafana dashboard。
 
 > ✅ = 已实现（含测试） | ⏳ = 占位符 | ❌ = 未实现
 
@@ -1797,6 +1808,10 @@ World Engine                    Storage
 
 ## 15. 可观测性架构
 
+> **实现状态：部分** — 以下为**目标架构**。当前已实现部分见本节末尾的状态对照表。
+
+### 15.0 目标架构图
+
 ```
 ┌─────────────┐     ┌──────────────┐     ┌───────────────┐
 │  World       │     │  Agent        │     │  Dashboard    │
@@ -1822,7 +1837,7 @@ World Engine                    Storage
 └──────────────────────────────────────┘
 ```
 
-### 15.1 关键指标
+### 15.1 关键指标（规划）
 
 ```yaml
 # World Engine Metrics
@@ -1843,6 +1858,19 @@ World Engine                    Storage
 - agent_tasks_completed             # Counter: 完成任务数
 - agent_memory_size_bytes           # Gauge: 记忆大小
 ```
+
+### 15.2 实现状态对照
+
+| 能力 | 状态 | 实现位置 | 说明 |
+|------|------|---------|------|
+| 基础日志 | ✅ 已实现 | `main.rs`（`tracing_subscriber::fmt().init()`）+ 各模块 `tracing::info/warn/error/debug` | 标准 Rust tracing crate，输出到 stdout |
+| EventBus 事件广播 | ✅ 已实现 | `world/state.rs` EventBus（tokio broadcast，256 容量）| 30+ 种 WorldEvent 变体，子系统间解耦通信 |
+| SSE 端点 | ✅ 已实现 | `api.rs` `/api/v1/world/events` | Dashboard 实时数据推送，含 keep-alive |
+| TickTrace 数据模型 | ✅ 已实现 | `tracing.rs`（181 行） | TickTraceData / PhaseData / TickTraceSummary 数据结构 |
+| Prometheus metrics | ❌ 未实现 | — | 需引入 `metrics` + `metrics-exporter-prometheus` crate |
+| OpenTelemetry traces | ❌ 未实现 | — | 需引入 `opentelemetry` + `tracing-opentelemetry` crate |
+| 结构化日志聚合 | ❌ 未实现 | — | 当前为 plain text fmt 输出；需配置 `tracing_subscriber::fmt().json()` + Loki |
+| Grafana dashboard | ❌ 未实现 | — | 依赖 Prometheus + Loki 先行就绪 |
 
 ---
 

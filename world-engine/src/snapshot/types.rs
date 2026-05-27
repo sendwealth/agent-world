@@ -110,7 +110,8 @@ impl AgentSnapshot {
                 tokens: self.tokens,
                 skills: self.skills.clone(),
                 personality: self.personality.clone(),
-            },
+                tasks_attempted: 0,
+                tasks_completed: 0,            },
         )
     }
 }

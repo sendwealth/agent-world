@@ -490,6 +490,9 @@ impl MigrationManager {
                     alive: true,
                     ticks_survived: 0,
                     personality: String::new(),
+                    parent_ids: vec![],
+                    generation: 0,
+                    skills: std::collections::HashMap::new(),
                 };
                 agents_list.push(new_agent);
             }

@@ -520,8 +520,6 @@ impl GovernanceSystem {
             config: GovernanceConfig::default(),
             active_rules,
             event_bus: Some(arc_bus),
-            active_rules: RuleEngine::new(),
-            event_bus: Some(Arc::new(event_bus)),
         }
     }
 

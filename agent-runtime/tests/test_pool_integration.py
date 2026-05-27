@@ -17,16 +17,16 @@ from pathlib import Path
 
 import pytest
 
-# Skip all integration tests in CI (they spawn real OS processes)
-pytestmark = pytest.mark.skipif(
-    os.environ.get("CI") == "true",
-    reason="Integration tests skipped in CI — they spawn real OS processes",
-)
-
 from agent_runtime.pool import (
     AgentProcessManager,
     AgentStatus,
     AutoRestartPolicy,
+)
+
+# Skip all integration tests in CI (they spawn real OS processes)
+pytestmark = pytest.mark.skipif(
+    os.environ.get("CI") == "true",
+    reason="Integration tests skipped in CI — they spawn real OS processes",
 )
 
 # ---------------------------------------------------------------------------

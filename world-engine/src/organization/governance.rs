@@ -520,6 +520,8 @@ impl GovernanceSystem {
             config: GovernanceConfig::default(),
             active_rules,
             event_bus: Some(arc_bus),
+            active_rules: RuleEngine::new(),
+            event_bus: Some(Arc::new(event_bus)),
         }
     }
 
@@ -1037,6 +1039,7 @@ impl GovernanceSystem {
                 if let Some(payload) = payload {
                     // Check if payload has a pre-existing rule_id (backward compat)
                     // or full rule definition to create + activate
+                    // Extract rule data from payload and activate in the rule engine
                     let rule_id = payload.get("rule_id")
                         .and_then(|v| v.as_str())
                         .unwrap_or("")
@@ -1050,6 +1053,7 @@ impl GovernanceSystem {
                             // Rule doesn't exist yet — create it from the payload
                             self.create_and_activate_rule_from_payload(&rule_id, org_id, &payload);
                         }
+                        let _ = self.active_rules.activate_rule(&rule_id);
                     }
                 }
             }

@@ -57,6 +57,8 @@ class ActionType(str, Enum):
     BUILD = "build"
     FORM_ORG = "form_org"
     JOIN_ORG = "join_org"
+    PROPOSE_RULE = "propose_rule"
+    VOTE_RULE = "vote_rule"
 
 
 class ActionStatus(str, Enum):
@@ -114,6 +116,8 @@ _DEFAULT_TOKEN_COSTS: dict[ActionType, int] = {
     ActionType.BUILD: 20,
     ActionType.FORM_ORG: 25,
     ActionType.JOIN_ORG: 10,
+    ActionType.PROPOSE_RULE: 15,
+    ActionType.VOTE_RULE: 5,
 }
 
 
@@ -355,6 +359,8 @@ class ActionExecutor:
         ActionType.BUILD: "_handle_build",
         ActionType.FORM_ORG: "_handle_form_org",
         ActionType.JOIN_ORG: "_handle_join_org",
+        ActionType.PROPOSE_RULE: "_handle_propose_rule",
+        ActionType.VOTE_RULE: "_handle_vote_rule",
     }
 
     async def _dispatch(self, action_type: ActionType, context: ActionContext) -> dict[str, Any]:
@@ -472,6 +478,50 @@ class ActionExecutor:
                 "payload": {
                     "action": "join_org",
                     "org_id": org_id,
+                },
+            }
+        )
+
+    async def _handle_propose_rule(self, context: ActionContext) -> dict[str, Any]:
+        """Propose a new soft rule — sent as a WILL message to World Engine."""
+        org_id = context.parameters.get("org_id", "")
+        title = context.parameters.get("title", "")
+        description = context.parameters.get("description", "")
+        rule_type = context.parameters.get("rule_type", "custom")
+        conditions = context.parameters.get("conditions", [])
+        effects = context.parameters.get("effects", [])
+        if not org_id:
+            raise ValueError("propose_rule requires 'org_id' parameter")
+        if not title:
+            raise ValueError("propose_rule requires 'title' parameter")
+        return await context.world.send_message(
+            {
+                "type": "WILL",
+                "payload": {
+                    "action": "propose_rule",
+                    "org_id": org_id,
+                    "title": title,
+                    "description": description,
+                    "rule_type": rule_type,
+                    "conditions": conditions,
+                    "effects": effects,
+                },
+            }
+        )
+
+    async def _handle_vote_rule(self, context: ActionContext) -> dict[str, Any]:
+        """Vote on a proposed soft rule — sent as a PROPOSE message to World Engine."""
+        rule_id = context.parameters.get("rule_id", "")
+        support = context.parameters.get("support", True)
+        if not rule_id:
+            raise ValueError("vote_rule requires 'rule_id' parameter")
+        return await context.world.send_message(
+            {
+                "type": "PROPOSE",
+                "payload": {
+                    "action": "vote_rule",
+                    "rule_id": rule_id,
+                    "support": support,
                 },
             }
         )

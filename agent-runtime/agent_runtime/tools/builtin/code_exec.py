@@ -10,7 +10,7 @@ from __future__ import annotations
 
 import logging
 import traceback
-from typing import Any, Dict, Optional
+from typing import Any, Dict
 
 from ..base import Tool, ToolParameters, ToolResult, ToolStatus
 
@@ -120,8 +120,8 @@ class CodeExecTool(Tool):
         }
 
         # Capture stdout
-        import io
         import contextlib
+        import io
 
         stdout_capture = io.StringIO()
 

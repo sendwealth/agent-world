@@ -3802,7 +3802,7 @@ fn compute_skill_distribution(agents: &[AgentRecord]) -> Vec<SkillDistribution> 
             max_level,
         })
         .collect();
-    result.sort_by(|a, b| b.count.cmp(&a.count));
+    result.sort_by_key(|a| std::cmp::Reverse(a.count));
     result
 }
 
@@ -3819,7 +3819,7 @@ fn compute_phase_distribution(agents: &[AgentRecord]) -> Vec<PhaseDistribution> 
         .into_iter()
         .map(|(phase, count)| PhaseDistribution { phase, count })
         .collect();
-    result.sort_by(|a, b| b.count.cmp(&a.count));
+    result.sort_by_key(|a| std::cmp::Reverse(a.count));
     result
 }
 
@@ -3918,7 +3918,7 @@ async fn population_stats(
 }
 
 /// Query parameters for population timeline.
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Default, Deserialize)]
 #[serde(default)]
 pub struct PopulationTimelineQuery {
     pub from_tick: Option<u64>,
@@ -3926,11 +3926,6 @@ pub struct PopulationTimelineQuery {
     pub interval: Option<u64>,
 }
 
-impl Default for PopulationTimelineQuery {
-    fn default() -> Self {
-        Self { from_tick: None, to_tick: None, interval: None }
-    }
-}
 
 /// GET /api/v1/population/timeline — Population evolution over time.
 async fn population_timeline(

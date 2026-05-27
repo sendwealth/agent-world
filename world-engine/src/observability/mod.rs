@@ -173,6 +173,12 @@ pub struct MetricsGuard {
     start: Instant,
 }
 
+impl Default for MetricsGuard {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl MetricsGuard {
     pub fn new() -> Self {
         Self {

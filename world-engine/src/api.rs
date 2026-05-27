@@ -1001,8 +1001,22 @@ async fn claim_task_with_wal(
     State(state): State<AppState>,
     Path(id): Path<String>,
     Json(body): Json<ClaimTaskRequest>,
-) -> impl IntoResponse {
-    claim_task(State(state.board), Path(id), Json(body)).await
+) -> axum::response::Response {
+    // Check reputation eligibility for high-value tasks
+    if let Some(rep) = &state.reputation_system {
+        if let Ok(uuid) = Uuid::parse_str(&id) {
+            let board = state.board.lock().await;
+            if let Some(task) = board.get(uuid) {
+                let reward = task.reward;
+                drop(board);
+                let rep = rep.lock().await;
+                if let Err(e) = rep.check_claim_eligibility(&body.assignee_id, reward) {
+                    return (StatusCode::FORBIDDEN, Json(ErrorResponse { error: e })).into_response();
+                }
+            }
+        }
+    }
+    claim_task(State(state.board), Path(id), Json(body)).await.into_response()
 }
 
 async fn start_task_with_wal(
@@ -1032,14 +1046,73 @@ async fn complete_task_with_wal(
     State(state): State<AppState>,
     Path(id): Path<String>,
 ) -> impl IntoResponse {
-    complete_task(State(state.board), Path(id)).await
+    let id_for_rep = id.clone();
+    let result = complete_task(State(state.board.clone()), Path(id)).await;
+
+    // Update reputation on successful completion
+    if let Some(rep) = &state.reputation_system {
+        if let Ok(uuid) = Uuid::parse_str(&id_for_rep) {
+            let board = state.board.lock().await;
+            if let Some(task) = board.get(uuid) {
+                if task.status == crate::economy::task::TaskStatus::Completed {
+                    if let Some(ref assignee) = task.assignee_id {
+                        let tick = *state.tick_rx.borrow();
+                        let mut rep = rep.lock().await;
+                        rep.on_task_completed_on_time(assignee, tick);
+                    }
+                }
+            }
+        }
+    }
+
+    result
 }
 
 async fn expire_task_with_wal(
     State(state): State<AppState>,
     Path(id): Path<String>,
 ) -> impl IntoResponse {
-    expire_task(State(state.board), Path(id)).await
+    let id_for_rep = id.clone();
+
+    // Capture pre-expiry state to determine penalty type
+    let pre_expiry_assignee = if let Ok(uuid) = Uuid::parse_str(&id) {
+        let board = state.board.lock().await;
+        board.get(uuid).and_then(|t| t.assignee_id.clone())
+    } else {
+        None
+    };
+    let pre_expiry_publisher = if let Ok(uuid) = Uuid::parse_str(&id) {
+        let board = state.board.lock().await;
+        board.get(uuid).map(|t| t.publisher_id.clone())
+    } else {
+        None
+    };
+
+    let result = expire_task(State(state.board.clone()), Path(id)).await;
+
+    // Apply reputation penalties on successful expiry
+    if let Some(rep) = &state.reputation_system {
+        if let Ok(uuid) = Uuid::parse_str(&id_for_rep) {
+            let board = state.board.lock().await;
+            if let Some(task) = board.get(uuid) {
+                if task.status == crate::economy::task::TaskStatus::Expired {
+                    let tick = *state.tick_rx.borrow();
+                    let mut rep = rep.lock().await;
+                    if let Some(assignee) = pre_expiry_assignee {
+                        // Claimed task expired — breach penalty
+                        rep.on_task_breach(&assignee, tick);
+                    } else {
+                        // Published task expired — publisher penalty
+                        if let Some(publisher) = pre_expiry_publisher {
+                            rep.on_task_expired_published(&publisher, tick);
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    result
 }
 
 async fn delete_task_with_wal(

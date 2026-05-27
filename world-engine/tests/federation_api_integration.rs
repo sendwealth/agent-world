@@ -298,7 +298,7 @@ async fn test_fed_treaty_lifecycle() {
     // List treaties
     let (status, body) = get_json(&app, "/api/v1/federation/treaties").await;
     assert_eq!(status, StatusCode::OK);
-    assert!(body.as_array().unwrap().len() >= 1);
+    assert!(!body.as_array().unwrap().is_empty());
 
     // Break treaty
     let (status, body) = post_json(

@@ -45,6 +45,11 @@ class A2AClient:
         await client.stop_streaming()
 
         await client.close()
+
+    Or as an async context manager::
+
+        async with A2AClient(config) as client:
+            ack = await client.send_message(to_agent="bob", ...)
     """
 
     def __init__(self, config: A2AClientConfig) -> None:
@@ -74,6 +79,19 @@ class A2AClient:
             self._channel = None
             self._stub = None
         logger.info("A2A client closed")
+
+    # ------------------------------------------------------------------
+    # Context manager support
+    # ------------------------------------------------------------------
+
+    async def __aenter__(self) -> "A2AClient":
+        """Async context manager entry — open the gRPC channel."""
+        await self.connect()
+        return self
+
+    async def __aexit__(self, exc_type, exc_val, exc_tb) -> None:  # type: ignore[override]
+        """Async context manager exit — close the gRPC channel."""
+        await self.close()
 
     @property
     def connected(self) -> bool:

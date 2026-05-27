@@ -385,6 +385,8 @@ mod tests {
                 tokens,
                 skills: HashMap::new(),
                 personality: String::new(),
+                tasks_completed: 0,
+                tasks_attempted: 0,
             },
         )
     }

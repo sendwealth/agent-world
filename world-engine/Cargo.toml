@@ -34,6 +34,7 @@ rand = "0.8"
 dashmap = "6"
 prometheus = "0.13"
 lazy_static = "1"
+zstd = "0.13"
 
 [dev-dependencies]
 tower = { version = "0.5", features = ["util"] }

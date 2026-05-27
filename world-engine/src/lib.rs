@@ -18,6 +18,7 @@ pub mod observability;
 pub mod organization;
 pub mod persistence;
 pub mod rules;
+pub mod snapshot;
 pub mod time_capsule;
 pub mod tracing;
 pub mod wal;
@@ -74,4 +75,11 @@ pub use dsl::{
 pub use persistence::{
     SerializableAgentEntry, SerializableAgentRecord, SerializableWorldState,
     SqlitePersistence, StatePersistence,
+};
+
+pub use snapshot::{
+    SnapshotEngine, SnapshotEngineHandle, SnapshotRequest,
+    SnapshotStorage, CompressionStats,
+    WorldSnapshot, AgentSnapshot, SnapshotConfig, SnapshotDelta,
+    SnapshotKind, SnapshotRecord,
 };

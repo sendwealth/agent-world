@@ -41,6 +41,7 @@ pub struct GenesisConfig {
     pub migration: MigrationConfigSection,
     #[serde(default)]
     pub federation: FederationConfigSection,
+    pub snapshot: crate::snapshot::SnapshotConfig,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]

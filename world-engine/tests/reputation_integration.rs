@@ -24,6 +24,7 @@ use agent_world_engine::world::state::EventBus;
 // Helpers
 // ══════════════════════════════════════════════════════════════════════════
 
+#[allow(clippy::type_complexity)]
 fn build_app_with_reputation() -> (
     Arc<EventBus>,
     Arc<Mutex<TaskBoard>>,

@@ -246,7 +246,7 @@ async fn test_e2e_smoke_2_agent_conversation_with_dashboard() {
         .json(&serde_json::json!({
             "title": "Gather Resources",
             "description": "Collect 50 wood and 30 stone",
-            "reward": 500,
+            "reward": 499,
             "publisher_id": alice.id,
             "expires_at": 100
         }))

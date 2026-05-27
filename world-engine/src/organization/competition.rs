@@ -124,14 +124,19 @@ impl CompetitionEngine {
     ///
     /// Organization power = member_count * average_skill * treasury_factor.
     /// The winner gets a resource bonus; the loser gets a penalty.
+    ///
+    /// Average skill is computed from each member agent's `AgentRecord.skills`,
+    /// aggregated across all members. Falls back to 1.0 when no skill data
+    /// is available (e.g. agents not found in the world state).
     pub fn evaluate_resource_conflict(
         &mut self,
         org_a: &Organization,
         org_b: &Organization,
         _resource_point_id: &str,
+        world_state: &WorldState,
     ) -> ResourceConflictResult {
-        let power_a = Self::org_power(org_a);
-        let power_b = Self::org_power(org_b);
+        let power_a = Self::org_power(org_a, world_state);
+        let power_b = Self::org_power(org_b, world_state);
 
         let total = power_a + power_b;
         let intensity = if total > 0.0 {
@@ -159,13 +164,57 @@ impl CompetitionEngine {
     /// Compute a composite power score for an organization.
     ///
     /// Power = member_count * avg_skill_level * treasury_factor
-    /// where avg_skill_level defaults to 1.0 (skills not yet modeled in
-    /// the org struct) and treasury_factor = ln(1 + treasury / 100).
-    fn org_power(org: &Organization) -> f64 {
+    /// where treasury_factor = ln(1 + treasury / 100).
+    ///
+    /// `avg_skill_level` is the mean of each member's individual average
+    /// skill level (mean of all their skill levels). Agents not found in
+    /// the world state contribute a default skill level of 1.0.
+    fn org_power(org: &Organization, world_state: &WorldState) -> f64 {
         let member_count = org.members.len() as f64;
-        let avg_skill = 1.0; // placeholder until skill tracking is added
+        let avg_skill = Self::compute_avg_skill(org, world_state);
         let treasury_factor = (1.0 + org.treasury as f64 / 100.0).ln();
         member_count * avg_skill * treasury_factor
+    }
+
+    /// Compute the average skill level across all members of an organization.
+    ///
+    /// For each member, looks up their `AgentRecord` in `world_state.agents`
+    /// and averages all skill levels in their `skills` map. If the agent has
+    /// no skills or is not found, they contribute a default level of 1.0.
+    /// The final result is the mean across all members.
+    fn compute_avg_skill(org: &Organization, world_state: &WorldState) -> f64 {
+        if org.members.is_empty() {
+            return 1.0;
+        }
+
+        let mut total: f64 = 0.0;
+        let mut count: usize = 0;
+
+        for member in &org.members {
+            let agent_skill_avg = world_state
+                .agents
+                .iter()
+                .find(|(id, _, _)| id.to_string() == member.agent_id)
+                .map(|(_, _, record)| {
+                    if record.skills.is_empty() {
+                        1.0
+                    } else {
+                        let skill_sum: f64 =
+                            record.skills.values().map(|s| s.level as f64).sum();
+                        skill_sum / record.skills.len() as f64
+                    }
+                })
+                .unwrap_or(1.0);
+
+            total += agent_skill_avg;
+            count += 1;
+        }
+
+        if count == 0 {
+            1.0
+        } else {
+            total / count as f64
+        }
     }
 
     // ── Recruitment Conflict ──────────────────────────────
@@ -449,8 +498,9 @@ mod tests {
         let mut engine = CompetitionEngine::new();
         let org_a = make_org("Alpha Corp", OrgType::Company, 5, 500, 100);
         let org_b = make_org("Beta Guild", OrgType::Guild, 3, 200, 100);
+        let world_state = make_world_state();
 
-        let result = engine.evaluate_resource_conflict(&org_a, &org_b, "resource-1");
+        let result = engine.evaluate_resource_conflict(&org_a, &org_b, "resource-1", &world_state);
 
         assert_eq!(result.winner_org_id, org_a.id);
         assert_eq!(result.loser_org_id, org_b.id);
@@ -464,8 +514,9 @@ mod tests {
         let mut engine = CompetitionEngine::new();
         let org_big = make_org("BigCorp", OrgType::Company, 20, 10000, 100);
         let org_small = make_org("SmallGuild", OrgType::Guild, 2, 50, 100);
+        let world_state = make_world_state();
 
-        let result = engine.evaluate_resource_conflict(&org_big, &org_small, "mine-1");
+        let result = engine.evaluate_resource_conflict(&org_big, &org_small, "mine-1", &world_state);
 
         assert_eq!(result.winner_org_id, org_big.id);
         assert_eq!(result.loser_org_id, org_small.id);
@@ -729,8 +780,9 @@ mod tests {
         let mut engine = CompetitionEngine::new();
         let org_a = make_org("SameA", OrgType::Company, 5, 500, 100);
         let org_b = make_org("SameB", OrgType::Company, 5, 500, 100);
+        let world_state = make_world_state();
 
-        let result = engine.evaluate_resource_conflict(&org_a, &org_b, "res-1");
+        let result = engine.evaluate_resource_conflict(&org_a, &org_b, "res-1", &world_state);
 
         // Equal power → intensity should be 1.0 (perfect contest)
         assert!(
@@ -738,6 +790,110 @@ mod tests {
             "expected intensity ~1.0 for equal orgs, got {}",
             result.intensity
         );
+    }
+
+    #[test]
+    fn test_resource_conflict_skill_data_affects_power() {
+        use crate::economy::token_burn::SkillRecord;
+
+        let mut engine = CompetitionEngine::new();
+        let bus = Arc::new(EventBus::new(256));
+        let registry = SubsystemRegistry::new();
+
+        // Create agent UUIDs first, then build orgs that reference them
+        let agent_id_a0 = Uuid::new_v4();
+        let agent_id_a1 = Uuid::new_v4();
+        let agent_id_b0 = Uuid::new_v4();
+        let agent_id_b1 = Uuid::new_v4();
+
+        let org_a = Organization {
+            id: Uuid::new_v4().to_string(),
+            name: "SkilledOrg".to_string(),
+            org_type: OrgType::Company,
+            charter: test_charter(),
+            treasury: 500,
+            debts: 0,
+            status: OrgStatus::Active,
+            created_tick: 100,
+            last_activity_tick: 100,
+            members: vec![
+                OrgMember {
+                    agent_id: agent_id_a0.to_string(),
+                    agent_name: "a0".to_string(),
+                    role: MemberRole::Founder,
+                    share: 0.5,
+                    joined_tick: 100,
+                },
+                OrgMember {
+                    agent_id: agent_id_a1.to_string(),
+                    agent_name: "a1".to_string(),
+                    role: MemberRole::Member,
+                    share: 0.5,
+                    joined_tick: 100,
+                },
+            ],
+        };
+
+        let org_b = Organization {
+            id: Uuid::new_v4().to_string(),
+            name: "UnskilledOrg".to_string(),
+            org_type: OrgType::Company,
+            charter: test_charter(),
+            treasury: 500,
+            debts: 0,
+            status: OrgStatus::Active,
+            created_tick: 100,
+            last_activity_tick: 100,
+            members: vec![
+                OrgMember {
+                    agent_id: agent_id_b0.to_string(),
+                    agent_name: "b0".to_string(),
+                    role: MemberRole::Founder,
+                    share: 0.5,
+                    joined_tick: 100,
+                },
+                OrgMember {
+                    agent_id: agent_id_b1.to_string(),
+                    agent_name: "b1".to_string(),
+                    role: MemberRole::Member,
+                    share: 0.5,
+                    joined_tick: 100,
+                },
+            ],
+        };
+
+        // org_a members have high-level skills, org_b members have no skills (default 1.0)
+        let mut skills_a: HashMap<String, SkillRecord> = HashMap::new();
+        skills_a.insert("coding".to_string(), SkillRecord { name: "coding".to_string(), level: 8, experience: 0.0 });
+        skills_a.insert("backend".to_string(), SkillRecord { name: "backend".to_string(), level: 7, experience: 0.0 });
+
+        let agents = vec![
+            (agent_id_a0, 0u64, AgentRecord {
+                id: agent_id_a0, name: "a0".to_string(), phase: AgentPhase::Adult,
+                tokens: 100, skills: skills_a.clone(), personality: String::new(),
+            }),
+            (agent_id_a1, 0u64, AgentRecord {
+                id: agent_id_a1, name: "a1".to_string(), phase: AgentPhase::Adult,
+                tokens: 100, skills: skills_a, personality: String::new(),
+            }),
+            (agent_id_b0, 0u64, AgentRecord {
+                id: agent_id_b0, name: "b0".to_string(), phase: AgentPhase::Adult,
+                tokens: 100, skills: HashMap::new(), personality: String::new(),
+            }),
+            (agent_id_b1, 0u64, AgentRecord {
+                id: agent_id_b1, name: "b1".to_string(), phase: AgentPhase::Adult,
+                tokens: 100, skills: HashMap::new(), personality: String::new(),
+            }),
+        ];
+
+        let world_state = WorldState::new(bus, registry, agents);
+
+        let result = engine.evaluate_resource_conflict(&org_a, &org_b, "skill-res-1", &world_state);
+
+        // org_a has higher skill levels (avg ~7.5) vs org_b (default 1.0),
+        // so org_a should win despite same member count and treasury
+        assert_eq!(result.winner_org_id, org_a.id);
+        assert_eq!(result.loser_org_id, org_b.id);
     }
 
     #[test]

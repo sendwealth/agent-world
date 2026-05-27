@@ -55,6 +55,7 @@ class ActionType(str, Enum):
     MOVE = "move"
     GATHER = "gather"
     BUILD = "build"
+    SOCIALIZE = "socialize"
     FORM_ORG = "form_org"
     JOIN_ORG = "join_org"
     PROPOSE_RULE = "propose_rule"
@@ -114,6 +115,7 @@ _DEFAULT_TOKEN_COSTS: dict[ActionType, int] = {
     ActionType.MOVE: 12,
     ActionType.GATHER: 8,
     ActionType.BUILD: 20,
+    ActionType.SOCIALIZE: 5,
     ActionType.FORM_ORG: 25,
     ActionType.JOIN_ORG: 10,
     ActionType.PROPOSE_RULE: 15,
@@ -357,6 +359,7 @@ class ActionExecutor:
         ActionType.MOVE: "_handle_move",
         ActionType.GATHER: "_handle_gather",
         ActionType.BUILD: "_handle_build",
+        ActionType.SOCIALIZE: "_handle_socialize",
         ActionType.FORM_ORG: "_handle_form_org",
         ActionType.JOIN_ORG: "_handle_join_org",
         ActionType.PROPOSE_RULE: "_handle_propose_rule",
@@ -444,6 +447,27 @@ class ActionExecutor:
                 for k, v in context.parameters.items()
                 if k not in ("structure_type",)
             },
+        )
+
+    async def _handle_socialize(self, context: ActionContext) -> dict[str, Any]:
+        """Socialize with nearby agents — triggers trust and cultural computations.
+
+        Sends a SOCIALIZE intent to the World Engine, which distributes it to
+        nearby agents.  The action carries optional target_agent_id and
+        interaction_type fields that downstream social modules (trust,
+        cultural diffusion) can consume.
+        """
+        target_agent_id = context.parameters.get("target_agent_id", "")
+        interaction_type = context.parameters.get("interaction_type", "casual")
+        return await context.world.send_message(
+            {
+                "type": "SOCIALIZE",
+                "payload": {
+                    "action": "socialize",
+                    "target_agent_id": target_agent_id,
+                    "interaction_type": interaction_type,
+                },
+            }
         )
 
     async def _handle_form_org(self, context: ActionContext) -> dict[str, Any]:

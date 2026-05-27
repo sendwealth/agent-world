@@ -54,7 +54,7 @@ _DECISION_TO_ACTION: dict[DecisionAction, ActionType] = {
     DecisionAction.EXPLORE: ActionType.EXPLORE,
     DecisionAction.TRADE: ActionType.PROPOSE_DEAL,
     DecisionAction.PRACTICE_SKILL: ActionType.TEACH_SKILL,
-    DecisionAction.SOCIALIZE: ActionType.SEND_MESSAGE,
+    DecisionAction.SOCIALIZE: ActionType.SOCIALIZE,
     DecisionAction.MOVE: ActionType.MOVE,
     DecisionAction.GATHER: ActionType.GATHER,
     DecisionAction.BUILD: ActionType.BUILD,

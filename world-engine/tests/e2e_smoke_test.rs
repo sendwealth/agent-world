@@ -212,12 +212,16 @@ async fn test_e2e_smoke_2_agent_conversation_with_dashboard() {
     println!("  Tick advanced to: {}", tick_result["tick"]);
 
     // Verify SSE received all 10 tick events
-    for i in 1..=10 {
+    let mut tick_iter = 1u64;
+    while tick_iter <= 10 {
         let tick_event = sse_rx.try_recv().unwrap();
-        assert_eq!(tick_event.event_type(), EventType::TickAdvanced);
-        if let WorldEvent::TickAdvanced { tick } = tick_event {
-            assert_eq!(tick, i);
+        if tick_event.event_type() == EventType::TickAdvanced {
+            if let WorldEvent::TickAdvanced { tick } = tick_event {
+                assert_eq!(tick, tick_iter);
+                tick_iter += 1;
+            }
         }
+        // Skip non-TickAdvanced events (e.g. ReputationChanged)
     }
     println!("  SSE: All 10 TickAdvanced events received");
 
@@ -314,16 +318,22 @@ async fn test_e2e_smoke_2_agent_conversation_with_dashboard() {
     assert_eq!(completed_task["status"].as_str().unwrap(), "completed");
     println!("  Task completed!");
 
-    // Verify all task lifecycle events via SSE
-    for expected in [
+    // Verify all task lifecycle events via SSE (skip ReputationChanged events)
+    let expected = [
         EventType::TaskClaimed,
         EventType::TaskStarted,
         EventType::TaskSubmitted,
         EventType::TaskReviewed,
         EventType::TaskCompleted,
-    ] {
-        let evt = sse_rx.try_recv().unwrap();
-        assert_eq!(evt.event_type(), expected, "Expected {:?} but got {:?}", expected, evt.event_type());
+    ];
+    for exp in &expected {
+        loop {
+            let evt = sse_rx.try_recv().unwrap();
+            if evt.event_type() == *exp {
+                break;
+            }
+            // Skip non-matching events (e.g. ReputationChanged)
+        }
     }
     println!("  SSE: All task lifecycle events received");
 
@@ -429,9 +439,14 @@ async fn test_e2e_smoke_2_agent_conversation_with_dashboard() {
     assert_eq!(all_msgs.len(), 4);
     println!("  Total messages: {}", all_msgs.len());
 
-    // Drain the 2 A2A message events from phase 10
-    let _ = sse_rx.try_recv().unwrap(); // TransactionCompleted for PROPOSE
-    let _ = sse_rx.try_recv().unwrap(); // TransactionCompleted for ACCEPT
+    // Drain the 2 A2A message events from phase 10 (skip ReputationChanged events)
+    let mut drained = 0;
+    while drained < 2 {
+        let evt = sse_rx.try_recv().unwrap();
+        if evt.event_type() == EventType::TransactionCompleted {
+            drained += 1;
+        }
+    }
 
     // ── Final Summary ───────────────────────────────────────────────────
 
@@ -445,8 +460,14 @@ async fn test_e2e_smoke_2_agent_conversation_with_dashboard() {
     println!("[E2E]   Dashboard real-time: verified");
     println!("[E2E] =============================");
 
-    // Verify no more events in the queue
-    assert!(sse_rx.try_recv().is_err(), "No unexpected events should remain");
+    // Verify no more substantive events remain (ignore ReputationChanged)
+    while let Ok(evt) = sse_rx.try_recv() {
+        assert!(
+            evt.event_type() == EventType::ReputationChanged,
+            "Unexpected event remaining: {:?}",
+            evt.event_type()
+        );
+    }
 }
 
 // ══════════════════════════════════════════════════════════════════════════

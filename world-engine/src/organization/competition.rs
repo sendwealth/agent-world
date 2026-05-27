@@ -225,11 +225,15 @@ impl CompetitionEngine {
     /// Attractiveness = member_count_weight * norm(member_count)
     ///                 + treasury_weight * norm(treasury)
     ///                 + culture_match_weight * culture_match
+    ///
+    /// Culture match is computed from the agent's actual skill levels vs the
+    /// organization type's preferred skill domains.
     pub fn evaluate_recruitment_conflict(
         &self,
         agent_id: &str,
         invitations: &[OrgInvitation],
         organizations: &[Organization],
+        world_state: &WorldState,
     ) -> RecruitmentResult {
         if invitations.is_empty() {
             return RecruitmentResult {
@@ -271,10 +275,14 @@ impl CompetitionEngine {
             let norm_members = org.members.len() as f64 / max_members;
             let norm_treasury = org.treasury as f64 / max_treasury;
 
-            // Culture match bonus: agents gravitate toward org types that match
-            // their skills/interests. Use a deterministic but varied score based
-            // on agent_id + org_id hash for now.
-            let culture_match = Self::culture_match_score(agent_id, &org.id);
+            // Culture match: based on the agent's actual skill levels vs the
+            // organization type's preferred skill domains.
+            let agent_skills = world_state
+                .agents
+                .iter()
+                .find(|(id, _, _)| id.to_string() == agent_id)
+                .map(|(_, _, record)| record.skills.clone());
+            let culture_match = Self::culture_match_score(agent_skills.as_ref(), &org.org_type);
 
             let score = weights::MEMBER_COUNT * norm_members
                 + weights::TREASURY * norm_treasury
@@ -302,13 +310,50 @@ impl CompetitionEngine {
         }
     }
 
-    /// Compute a deterministic culture-match score in [0.0, 1.0].
+    /// Compute a culture-match score in [0.0, 1.0] based on the agent's
+    /// actual skill levels versus the organization type's preferred skill
+    /// domains.
     ///
-    /// This is a placeholder heuristic: hash(agent_id, org_id) mapped to [0, 1].
-    fn culture_match_score(agent_id: &str, org_id: &str) -> f64 {
-        let combined = format!("{}:{}", agent_id, org_id);
-        let hash = combined.bytes().fold(0u64, |acc, b| acc.wrapping_mul(31).wrapping_add(b as u64));
-        (hash % 1000) as f64 / 1000.0
+    /// Each org type prefers certain skill families. The score is the average
+    /// level of the agent's relevant skills (0 if none), normalized by the
+    /// maximum skill level (10).
+    fn culture_match_score(
+        agent_skills: Option<&std::collections::HashMap<String, crate::economy::token_burn::SkillRecord>>,
+        org_type: &OrgType,
+    ) -> f64 {
+        use crate::economy::token_burn::SkillRecord;
+
+        let skills = match agent_skills {
+            Some(s) if !s.is_empty() => s,
+            _ => return 0.0,
+        };
+
+        /// Skill name prefixes associated with each organization type.
+        fn preferred_skills(org_type: &OrgType) -> &'static [&'static str] {
+            match org_type {
+                OrgType::Company => &["backend", "trading", "negotiation"],
+                OrgType::Guild => &["crafting", "mining", "resource_gathering"],
+                OrgType::Alliance => &["risk_assessment", "leadership", "networking"],
+                OrgType::University => &["coding", "frontend", "systems", "teaching"],
+            }
+        }
+
+        let preferred = preferred_skills(org_type);
+        let max_level: f64 = 10.0;
+
+        let (total_level, count) = preferred.iter().fold((0.0f64, 0usize), |(sum, n), name| {
+            if let Some(SkillRecord { level, .. }) = skills.get(*name) {
+                (sum + *level as f64, n + 1)
+            } else {
+                (sum, n)
+            }
+        });
+
+        if count == 0 {
+            0.0
+        } else {
+            (total_level / count as f64) / max_level
+        }
     }
 
     // ── Territory Evaluation ──────────────────────────────
@@ -537,10 +582,12 @@ mod tests {
             OrgInvitation { org_id: org_small.id.clone(), pitch: "We're cozy".to_string() },
         ];
 
+        let world_state = make_world_state();
         let result = engine.evaluate_recruitment_conflict(
             "agent-test",
             &invitations,
             &[org_large.clone(), org_small.clone()],
+            &world_state,
         );
 
         assert_eq!(result.chosen_org_id, org_large.id);
@@ -549,32 +596,58 @@ mod tests {
 
     #[test]
     fn test_recruitment_culture_match_bonus() {
+        use crate::economy::token_burn::SkillRecord;
+
         let engine = CompetitionEngine::new();
 
-        // Two orgs with same size/treasury — winner is decided by culture match
-        let org_a = make_org("OrgA", OrgType::Company, 5, 500, 100);
-        let org_b = make_org("OrgB", OrgType::Company, 5, 500, 100);
+        // Two orgs with same size/treasury but different types
+        let org_company = make_org("OrgA", OrgType::Company, 5, 500, 100);
+        let org_university = make_org("OrgB", OrgType::University, 5, 500, 100);
 
         let invitations = vec![
-            OrgInvitation { org_id: org_a.id.clone(), pitch: "A".to_string() },
-            OrgInvitation { org_id: org_b.id.clone(), pitch: "B".to_string() },
+            OrgInvitation { org_id: org_company.id.clone(), pitch: "A".to_string() },
+            OrgInvitation { org_id: org_university.id.clone(), pitch: "B".to_string() },
         ];
 
+        // Create an agent with coding/backend skills (should match University better than Company)
+        let agent_id = Uuid::new_v4();
+        let mut skills: HashMap<String, SkillRecord> = HashMap::new();
+        skills.insert("coding".to_string(), SkillRecord { name: "coding".to_string(), level: 8, experience: 0.0 });
+        skills.insert("frontend".to_string(), SkillRecord { name: "frontend".to_string(), level: 7, experience: 0.0 });
+
+        let agents = vec![
+            (agent_id, 0u64, AgentRecord {
+                id: agent_id,
+                name: "test-agent-culture".to_string(),
+                phase: AgentPhase::Adult,
+                tokens: 100,
+                skills,
+                personality: String::new(),
+                tasks_completed: 0,
+                tasks_attempted: 0,
+            }),
+        ];
+
+        let bus = Arc::new(EventBus::new(256));
+        let registry = SubsystemRegistry::new();
+        let world_state = WorldState::new(bus, registry, agents);
+
         let result = engine.evaluate_recruitment_conflict(
-            "test-agent-culture",
+            &agent_id.to_string(),
             &invitations,
-            &[org_a.clone(), org_b.clone()],
+            &[org_company.clone(), org_university.clone()],
+            &world_state,
         );
 
-        // Both orgs have equal size/treasury, so the winner is determined by
-        // culture match score (deterministic hash). Just verify a result is chosen.
+        // Both orgs have equal size/treasury; the agent's coding/frontend skills
+        // align with University (preferred: coding, frontend, systems, teaching)
+        // so University should win on culture match.
         assert!(!result.chosen_org_id.is_empty());
         assert_eq!(result.scores.len(), 2);
-        // Verify the culture match makes a difference (scores should differ)
-        let score_a = result.scores.iter().find(|(id, _)| id == &org_a.id).map(|(_, s)| *s).unwrap_or(0.0);
-        let score_b = result.scores.iter().find(|(id, _)| id == &org_b.id).map(|(_, s)| *s).unwrap_or(0.0);
-        // With equal size and treasury, the scores will differ only by culture match
-        assert_ne!(score_a, score_b, "culture match should differentiate equal orgs");
+
+        let score_company = result.scores.iter().find(|(id, _)| id == &org_company.id).map(|(_, s)| *s).unwrap_or(0.0);
+        let score_university = result.scores.iter().find(|(id, _)| id == &org_university.id).map(|(_, s)| *s).unwrap_or(0.0);
+        assert_ne!(score_company, score_university, "culture match should differentiate orgs with different types");
     }
 
     // ── Territory Tests ───────────────────────────────────
@@ -763,7 +836,8 @@ mod tests {
     #[test]
     fn test_recruitment_no_invitations() {
         let engine = CompetitionEngine::new();
-        let result = engine.evaluate_recruitment_conflict("agent-1", &[], &[]);
+        let world_state = make_world_state();
+        let result = engine.evaluate_recruitment_conflict("agent-1", &[], &[], &world_state);
         assert!(result.chosen_org_id.is_empty());
         assert_eq!(result.reason, "no invitations");
     }
@@ -771,6 +845,7 @@ mod tests {
     #[test]
     fn test_recruitment_single_invitation() {
         let engine = CompetitionEngine::new();
+        let world_state = make_world_state();
         let result = engine.evaluate_recruitment_conflict(
             "agent-1",
             &[OrgInvitation {
@@ -778,6 +853,7 @@ mod tests {
                 pitch: "Join us".to_string(),
             }],
             &[],
+            &world_state,
         );
         assert_eq!(result.chosen_org_id, "org-1");
         assert_eq!(result.reason, "only one invitation");
@@ -926,11 +1002,22 @@ mod tests {
 
     #[test]
     fn test_culture_match_deterministic() {
-        let score1 = CompetitionEngine::culture_match_score("agent-1", "org-1");
-        let score2 = CompetitionEngine::culture_match_score("agent-1", "org-1");
-        assert_eq!(score1, score2, "culture match should be deterministic");
+        use crate::economy::token_burn::SkillRecord;
 
-        let score3 = CompetitionEngine::culture_match_score("agent-1", "org-2");
-        assert_ne!(score1, score3, "different org should give different score");
+        let mut skills: HashMap<String, SkillRecord> = HashMap::new();
+        skills.insert("coding".to_string(), SkillRecord { name: "coding".to_string(), level: 5, experience: 0.0 });
+
+        let score1 = CompetitionEngine::culture_match_score(Some(&skills), &OrgType::University);
+        let score2 = CompetitionEngine::culture_match_score(Some(&skills), &OrgType::University);
+        assert_eq!(score1, score2, "culture match should be deterministic for same inputs");
+
+        let score3 = CompetitionEngine::culture_match_score(Some(&skills), &OrgType::Guild);
+        assert_ne!(score1, score3, "different org type should give different score");
+    }
+
+    #[test]
+    fn test_culture_match_no_skills() {
+        let score = CompetitionEngine::culture_match_score(None, &OrgType::Company);
+        assert!((score - 0.0).abs() < f64::EPSILON, "no skills should yield 0.0 culture match");
     }
 }

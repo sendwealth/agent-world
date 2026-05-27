@@ -20,6 +20,7 @@ dependencies = [
 dev = [
     "pytest>=8.0",
     "pytest-asyncio>=0.23",
+    "pytest-timeout>=2.2",
     "ruff>=0.4",
     "mypy>=1.10",
 ]
@@ -50,3 +51,7 @@ strict = true
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 asyncio_mode = "auto"
+timeout = 120
+markers = [
+    "integration: marks tests that spawn real OS processes (deselect with '-m \"not integration\"')",
+]

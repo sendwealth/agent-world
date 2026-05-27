@@ -1,0 +1,2027 @@
+[
+  {
+    "tick": 0,
+    "timestamp": 0,
+    "total_population": 50,
+    "active_agents": 49,
+    "gdp": 0.0,
+    "gini_coefficient": 0.25,
+    "skill_distribution_top5": [
+      {
+        "skill_name": "fishing",
+        "agent_count": 20,
+        "avg_level": 0.25
+      },
+      {
+        "skill_name": "guarding",
+        "agent_count": 20,
+        "avg_level": 0.23
+      },
+      {
+        "skill_name": "smelting",
+        "agent_count": 19,
+        "avg_level": 0.26
+      },
+      {
+        "skill_name": "trading",
+        "agent_count": 17,
+        "avg_level": 0.23
+      },
+      {
+        "skill_name": "weaving",
+        "agent_count": 17,
+        "avg_level": 0.25
+      }
+    ],
+    "key_events": [
+      {
+        "tick": 45,
+        "event_type": "milestone",
+        "agent_id": null,
+        "description": "第一次交易"
+      }
+    ]
+  },
+  {
+    "tick": 100,
+    "timestamp": 100000,
+    "total_population": 50,
+    "active_agents": 48,
+    "gdp": 4.0,
+    "gini_coefficient": 0.26,
+    "skill_distribution_top5": [
+      {
+        "skill_name": "fishing",
+        "agent_count": 20,
+        "avg_level": 0.26
+      },
+      {
+        "skill_name": "guarding",
+        "agent_count": 20,
+        "avg_level": 0.24
+      },
+      {
+        "skill_name": "smelting",
+        "agent_count": 19,
+        "avg_level": 0.27
+      },
+      {
+        "skill_name": "trading",
+        "agent_count": 17,
+        "avg_level": 0.24
+      },
+      {
+        "skill_name": "weaving",
+        "agent_count": 17,
+        "avg_level": 0.26
+      }
+    ],
+    "key_events": []
+  },
+  {
+    "tick": 200,
+    "timestamp": 200000,
+    "total_population": 50,
+    "active_agents": 47,
+    "gdp": 8.0,
+    "gini_coefficient": 0.27,
+    "skill_distribution_top5": [
+      {
+        "skill_name": "fishing",
+        "agent_count": 20,
+        "avg_level": 0.27
+      },
+      {
+        "skill_name": "guarding",
+        "agent_count": 20,
+        "avg_level": 0.25
+      },
+      {
+        "skill_name": "smelting",
+        "agent_count": 19,
+        "avg_level": 0.28
+      },
+      {
+        "skill_name": "trading",
+        "agent_count": 17,
+        "avg_level": 0.26
+      },
+      {
+        "skill_name": "weaving",
+        "agent_count": 17,
+        "avg_level": 0.27
+      }
+    ],
+    "key_events": [
+      {
+        "tick": 180,
+        "event_type": "milestone",
+        "agent_id": null,
+        "description": "首位技能大师"
+      }
+    ]
+  },
+  {
+    "tick": 300,
+    "timestamp": 300000,
+    "total_population": 50,
+    "active_agents": 47,
+    "gdp": 12.0,
+    "gini_coefficient": 0.28,
+    "skill_distribution_top5": [
+      {
+        "skill_name": "fishing",
+        "agent_count": 20,
+        "avg_level": 0.28
+      },
+      {
+        "skill_name": "guarding",
+        "agent_count": 20,
+        "avg_level": 0.26
+      },
+      {
+        "skill_name": "smelting",
+        "agent_count": 19,
+        "avg_level": 0.29
+      },
+      {
+        "skill_name": "trading",
+        "agent_count": 17,
+        "avg_level": 0.27
+      },
+      {
+        "skill_name": "weaving",
+        "agent_count": 17,
+        "avg_level": 0.28
+      }
+    ],
+    "key_events": [
+      {
+        "tick": 320,
+        "event_type": "organization",
+        "agent_id": null,
+        "description": "第一个组织成立"
+      }
+    ]
+  },
+  {
+    "tick": 400,
+    "timestamp": 400000,
+    "total_population": 50,
+    "active_agents": 50,
+    "gdp": 16.0,
+    "gini_coefficient": 0.29,
+    "skill_distribution_top5": [
+      {
+        "skill_name": "fishing",
+        "agent_count": 20,
+        "avg_level": 0.3
+      },
+      {
+        "skill_name": "guarding",
+        "agent_count": 20,
+        "avg_level": 0.27
+      },
+      {
+        "skill_name": "smelting",
+        "agent_count": 19,
+        "avg_level": 0.3
+      },
+      {
+        "skill_name": "trading",
+        "agent_count": 17,
+        "avg_level": 0.28
+      },
+      {
+        "skill_name": "weaving",
+        "agent_count": 17,
+        "avg_level": 0.29
+      }
+    ],
+    "key_events": []
+  },
+  {
+    "tick": 500,
+    "timestamp": 500000,
+    "total_population": 50,
+    "active_agents": 47,
+    "gdp": 20.0,
+    "gini_coefficient": 0.3,
+    "skill_distribution_top5": [
+      {
+        "skill_name": "fishing",
+        "agent_count": 20,
+        "avg_level": 0.31
+      },
+      {
+        "skill_name": "guarding",
+        "agent_count": 20,
+        "avg_level": 0.28
+      },
+      {
+        "skill_name": "smelting",
+        "agent_count": 19,
+        "avg_level": 0.32
+      },
+      {
+        "skill_name": "trading",
+        "agent_count": 17,
+        "avg_level": 0.29
+      },
+      {
+        "skill_name": "weaving",
+        "agent_count": 17,
+        "avg_level": 0.3
+      }
+    ],
+    "key_events": [
+      {
+        "tick": 510,
+        "event_type": "cultural",
+        "agent_id": null,
+        "description": "文化分化初现"
+      }
+    ]
+  },
+  {
+    "tick": 600,
+    "timestamp": 600000,
+    "total_population": 50,
+    "active_agents": 50,
+    "gdp": 60.0,
+    "gini_coefficient": 0.31,
+    "skill_distribution_top5": [
+      {
+        "skill_name": "fishing",
+        "agent_count": 20,
+        "avg_level": 0.32
+      },
+      {
+        "skill_name": "guarding",
+        "agent_count": 20,
+        "avg_level": 0.29
+      },
+      {
+        "skill_name": "smelting",
+        "agent_count": 19,
+        "avg_level": 0.33
+      },
+      {
+        "skill_name": "weaving",
+        "agent_count": 18,
+        "avg_level": 0.3
+      },
+      {
+        "skill_name": "trading",
+        "agent_count": 17,
+        "avg_level": 0.3
+      }
+    ],
+    "key_events": []
+  },
+  {
+    "tick": 700,
+    "timestamp": 700000,
+    "total_population": 50,
+    "active_agents": 48,
+    "gdp": 100.0,
+    "gini_coefficient": 0.32,
+    "skill_distribution_top5": [
+      {
+        "skill_name": "fishing",
+        "agent_count": 20,
+        "avg_level": 0.33
+      },
+      {
+        "skill_name": "guarding",
+        "agent_count": 20,
+        "avg_level": 0.3
+      },
+      {
+        "skill_name": "smelting",
+        "agent_count": 19,
+        "avg_level": 0.34
+      },
+      {
+        "skill_name": "weaving",
+        "agent_count": 18,
+        "avg_level": 0.31
+      },
+      {
+        "skill_name": "trading",
+        "agent_count": 17,
+        "avg_level": 0.31
+      }
+    ],
+    "key_events": [
+      {
+        "tick": 680,
+        "event_type": "economic",
+        "agent_id": null,
+        "description": "贸易网络形成"
+      }
+    ]
+  },
+  {
+    "tick": 800,
+    "timestamp": 800000,
+    "total_population": 50,
+    "active_agents": 50,
+    "gdp": 140.0,
+    "gini_coefficient": 0.33,
+    "skill_distribution_top5": [
+      {
+        "skill_name": "fishing",
+        "agent_count": 20,
+        "avg_level": 0.34
+      },
+      {
+        "skill_name": "guarding",
+        "agent_count": 20,
+        "avg_level": 0.32
+      },
+      {
+        "skill_name": "smelting",
+        "agent_count": 19,
+        "avg_level": 0.35
+      },
+      {
+        "skill_name": "weaving",
+        "agent_count": 18,
+        "avg_level": 0.33
+      },
+      {
+        "skill_name": "trading",
+        "agent_count": 17,
+        "avg_level": 0.32
+      }
+    ],
+    "key_events": [
+      {
+        "tick": 850,
+        "event_type": "governance",
+        "agent_id": null,
+        "description": "第一次选举"
+      }
+    ]
+  },
+  {
+    "tick": 900,
+    "timestamp": 900000,
+    "total_population": 50,
+    "active_agents": 48,
+    "gdp": 180.0,
+    "gini_coefficient": 0.34,
+    "skill_distribution_top5": [
+      {
+        "skill_name": "fishing",
+        "agent_count": 20,
+        "avg_level": 0.35
+      },
+      {
+        "skill_name": "guarding",
+        "agent_count": 20,
+        "avg_level": 0.33
+      },
+      {
+        "skill_name": "smelting",
+        "agent_count": 19,
+        "avg_level": 0.36
+      },
+      {
+        "skill_name": "weaving",
+        "agent_count": 18,
+        "avg_level": 0.34
+      },
+      {
+        "skill_name": "trading",
+        "agent_count": 17,
+        "avg_level": 0.33
+      }
+    ],
+    "key_events": [
+      {
+        "tick": 850,
+        "event_type": "governance",
+        "agent_id": null,
+        "description": "第一次选举"
+      }
+    ]
+  },
+  {
+    "tick": 1000,
+    "timestamp": 1000000,
+    "total_population": 50,
+    "active_agents": 48,
+    "gdp": 220.0,
+    "gini_coefficient": 0.35,
+    "skill_distribution_top5": [
+      {
+        "skill_name": "fishing",
+        "agent_count": 20,
+        "avg_level": 0.37
+      },
+      {
+        "skill_name": "guarding",
+        "agent_count": 20,
+        "avg_level": 0.34
+      },
+      {
+        "skill_name": "smelting",
+        "agent_count": 19,
+        "avg_level": 0.38
+      },
+      {
+        "skill_name": "weaving",
+        "agent_count": 18,
+        "avg_level": 0.35
+      },
+      {
+        "skill_name": "trading",
+        "agent_count": 17,
+        "avg_level": 0.34
+      }
+    ],
+    "key_events": [
+      {
+        "tick": 1050,
+        "event_type": "milestone",
+        "agent_id": null,
+        "description": "第一次大规模贸易"
+      }
+    ]
+  },
+  {
+    "tick": 1100,
+    "timestamp": 1100000,
+    "total_population": 50,
+    "active_agents": 48,
+    "gdp": 260.0,
+    "gini_coefficient": 0.37,
+    "skill_distribution_top5": [
+      {
+        "skill_name": "fishing",
+        "agent_count": 20,
+        "avg_level": 0.38
+      },
+      {
+        "skill_name": "guarding",
+        "agent_count": 20,
+        "avg_level": 0.35
+      },
+      {
+        "skill_name": "smelting",
+        "agent_count": 19,
+        "avg_level": 0.39
+      },
+      {
+        "skill_name": "weaving",
+        "agent_count": 18,
+        "avg_level": 0.36
+      },
+      {
+        "skill_name": "trading",
+        "agent_count": 17,
+        "avg_level": 0.35
+      }
+    ],
+    "key_events": [
+      {
+        "tick": 1050,
+        "event_type": "milestone",
+        "agent_id": null,
+        "description": "第一次大规模贸易"
+      }
+    ]
+  },
+  {
+    "tick": 1200,
+    "timestamp": 1200000,
+    "total_population": 50,
+    "active_agents": 48,
+    "gdp": 300.0,
+    "gini_coefficient": 0.39,
+    "skill_distribution_top5": [
+      {
+        "skill_name": "fishing",
+        "agent_count": 20,
+        "avg_level": 0.39
+      },
+      {
+        "skill_name": "guarding",
+        "agent_count": 20,
+        "avg_level": 0.36
+      },
+      {
+        "skill_name": "smelting",
+        "agent_count": 19,
+        "avg_level": 0.4
+      },
+      {
+        "skill_name": "weaving",
+        "agent_count": 18,
+        "avg_level": 0.37
+      },
+      {
+        "skill_name": "trading",
+        "agent_count": 17,
+        "avg_level": 0.36
+      }
+    ],
+    "key_events": [
+      {
+        "tick": 1200,
+        "event_type": "governance",
+        "agent_id": null,
+        "description": "第一条规则通过"
+      }
+    ]
+  },
+  {
+    "tick": 1300,
+    "timestamp": 1300000,
+    "total_population": 50,
+    "active_agents": 47,
+    "gdp": 340.0,
+    "gini_coefficient": 0.41,
+    "skill_distribution_top5": [
+      {
+        "skill_name": "fishing",
+        "agent_count": 20,
+        "avg_level": 0.4
+      },
+      {
+        "skill_name": "guarding",
+        "agent_count": 20,
+        "avg_level": 0.37
+      },
+      {
+        "skill_name": "smelting",
+        "agent_count": 19,
+        "avg_level": 0.41
+      },
+      {
+        "skill_name": "weaving",
+        "agent_count": 18,
+        "avg_level": 0.38
+      },
+      {
+        "skill_name": "trading",
+        "agent_count": 17,
+        "avg_level": 0.38
+      }
+    ],
+    "key_events": []
+  },
+  {
+    "tick": 1400,
+    "timestamp": 1400000,
+    "total_population": 50,
+    "active_agents": 49,
+    "gdp": 380.0,
+    "gini_coefficient": 0.43,
+    "skill_distribution_top5": [
+      {
+        "skill_name": "fishing",
+        "agent_count": 20,
+        "avg_level": 0.41
+      },
+      {
+        "skill_name": "guarding",
+        "agent_count": 20,
+        "avg_level": 0.38
+      },
+      {
+        "skill_name": "smelting",
+        "agent_count": 19,
+        "avg_level": 0.42
+      },
+      {
+        "skill_name": "weaving",
+        "agent_count": 18,
+        "avg_level": 0.39
+      },
+      {
+        "skill_name": "trading",
+        "agent_count": 17,
+        "avg_level": 0.39
+      }
+    ],
+    "key_events": [
+      {
+        "tick": 1450,
+        "event_type": "cultural",
+        "agent_id": null,
+        "description": "文化分化加剧"
+      }
+    ]
+  },
+  {
+    "tick": 1500,
+    "timestamp": 1500000,
+    "total_population": 50,
+    "active_agents": 48,
+    "gdp": 420.0,
+    "gini_coefficient": 0.45,
+    "skill_distribution_top5": [
+      {
+        "skill_name": "fishing",
+        "agent_count": 20,
+        "avg_level": 0.42
+      },
+      {
+        "skill_name": "guarding",
+        "agent_count": 20,
+        "avg_level": 0.39
+      },
+      {
+        "skill_name": "smelting",
+        "agent_count": 19,
+        "avg_level": 0.44
+      },
+      {
+        "skill_name": "weaving",
+        "agent_count": 18,
+        "avg_level": 0.4
+      },
+      {
+        "skill_name": "trading",
+        "agent_count": 17,
+        "avg_level": 0.4
+      }
+    ],
+    "key_events": [
+      {
+        "tick": 1450,
+        "event_type": "cultural",
+        "agent_id": null,
+        "description": "文化分化加剧"
+      }
+    ]
+  },
+  {
+    "tick": 1600,
+    "timestamp": 1600000,
+    "total_population": 50,
+    "active_agents": 50,
+    "gdp": 460.0,
+    "gini_coefficient": 0.47,
+    "skill_distribution_top5": [
+      {
+        "skill_name": "fishing",
+        "agent_count": 20,
+        "avg_level": 0.44
+      },
+      {
+        "skill_name": "guarding",
+        "agent_count": 20,
+        "avg_level": 0.4
+      },
+      {
+        "skill_name": "smelting",
+        "agent_count": 19,
+        "avg_level": 0.45
+      },
+      {
+        "skill_name": "weaving",
+        "agent_count": 18,
+        "avg_level": 0.41
+      },
+      {
+        "skill_name": "trading",
+        "agent_count": 17,
+        "avg_level": 0.41
+      }
+    ],
+    "key_events": []
+  },
+  {
+    "tick": 1700,
+    "timestamp": 1700000,
+    "total_population": 50,
+    "active_agents": 49,
+    "gdp": 500.0,
+    "gini_coefficient": 0.49,
+    "skill_distribution_top5": [
+      {
+        "skill_name": "fishing",
+        "agent_count": 20,
+        "avg_level": 0.45
+      },
+      {
+        "skill_name": "guarding",
+        "agent_count": 20,
+        "avg_level": 0.41
+      },
+      {
+        "skill_name": "smelting",
+        "agent_count": 19,
+        "avg_level": 0.46
+      },
+      {
+        "skill_name": "weaving",
+        "agent_count": 18,
+        "avg_level": 0.43
+      },
+      {
+        "skill_name": "trading",
+        "agent_count": 17,
+        "avg_level": 0.42
+      }
+    ],
+    "key_events": [
+      {
+        "tick": 1700,
+        "event_type": "economic",
+        "agent_id": null,
+        "description": "经济泡沫"
+      }
+    ]
+  },
+  {
+    "tick": 1800,
+    "timestamp": 1800000,
+    "total_population": 50,
+    "active_agents": 50,
+    "gdp": 540.0,
+    "gini_coefficient": 0.51,
+    "skill_distribution_top5": [
+      {
+        "skill_name": "fishing",
+        "agent_count": 20,
+        "avg_level": 0.46
+      },
+      {
+        "skill_name": "guarding",
+        "agent_count": 20,
+        "avg_level": 0.42
+      },
+      {
+        "skill_name": "smelting",
+        "agent_count": 19,
+        "avg_level": 0.47
+      },
+      {
+        "skill_name": "weaving",
+        "agent_count": 18,
+        "avg_level": 0.44
+      },
+      {
+        "skill_name": "trading",
+        "agent_count": 17,
+        "avg_level": 0.43
+      }
+    ],
+    "key_events": []
+  },
+  {
+    "tick": 1900,
+    "timestamp": 1900000,
+    "total_population": 50,
+    "active_agents": 47,
+    "gdp": 580.0,
+    "gini_coefficient": 0.53,
+    "skill_distribution_top5": [
+      {
+        "skill_name": "fishing",
+        "agent_count": 19,
+        "avg_level": 0.48
+      },
+      {
+        "skill_name": "guarding",
+        "agent_count": 19,
+        "avg_level": 0.44
+      },
+      {
+        "skill_name": "smelting",
+        "agent_count": 18,
+        "avg_level": 0.46
+      },
+      {
+        "skill_name": "weaving",
+        "agent_count": 18,
+        "avg_level": 0.45
+      },
+      {
+        "skill_name": "trading",
+        "agent_count": 16,
+        "avg_level": 0.44
+      }
+    ],
+    "key_events": [
+      {
+        "tick": 1900,
+        "event_type": "economic",
+        "agent_id": null,
+        "description": "泡沫破裂"
+      }
+    ]
+  },
+  {
+    "tick": 2000,
+    "timestamp": 2000000,
+    "total_population": 50,
+    "active_agents": 47,
+    "gdp": 768.4,
+    "gini_coefficient": 0.55,
+    "skill_distribution_top5": [
+      {
+        "skill_name": "fishing",
+        "agent_count": 19,
+        "avg_level": 0.49
+      },
+      {
+        "skill_name": "guarding",
+        "agent_count": 19,
+        "avg_level": 0.45
+      },
+      {
+        "skill_name": "smelting",
+        "agent_count": 18,
+        "avg_level": 0.47
+      },
+      {
+        "skill_name": "weaving",
+        "agent_count": 18,
+        "avg_level": 0.46
+      },
+      {
+        "skill_name": "trading",
+        "agent_count": 16,
+        "avg_level": 0.45
+      }
+    ],
+    "key_events": []
+  },
+  {
+    "tick": 2100,
+    "timestamp": 2100000,
+    "total_population": 50,
+    "active_agents": 45,
+    "gdp": 808.19,
+    "gini_coefficient": 0.57,
+    "skill_distribution_top5": [
+      {
+        "skill_name": "fishing",
+        "agent_count": 19,
+        "avg_level": 0.5
+      },
+      {
+        "skill_name": "guarding",
+        "agent_count": 19,
+        "avg_level": 0.46
+      },
+      {
+        "skill_name": "smelting",
+        "agent_count": 18,
+        "avg_level": 0.48
+      },
+      {
+        "skill_name": "weaving",
+        "agent_count": 18,
+        "avg_level": 0.47
+      },
+      {
+        "skill_name": "trading",
+        "agent_count": 16,
+        "avg_level": 0.46
+      }
+    ],
+    "key_events": [
+      {
+        "tick": 2100,
+        "event_type": "governance",
+        "agent_id": null,
+        "description": "治理危机"
+      }
+    ]
+  },
+  {
+    "tick": 2200,
+    "timestamp": 2200000,
+    "total_population": 50,
+    "active_agents": 44,
+    "gdp": 827.74,
+    "gini_coefficient": 0.59,
+    "skill_distribution_top5": [
+      {
+        "skill_name": "guarding",
+        "agent_count": 19,
+        "avg_level": 0.47
+      },
+      {
+        "skill_name": "fishing",
+        "agent_count": 18,
+        "avg_level": 0.51
+      },
+      {
+        "skill_name": "smelting",
+        "agent_count": 17,
+        "avg_level": 0.5
+      },
+      {
+        "skill_name": "weaving",
+        "agent_count": 17,
+        "avg_level": 0.47
+      },
+      {
+        "skill_name": "trading",
+        "agent_count": 14,
+        "avg_level": 0.47
+      }
+    ],
+    "key_events": []
+  },
+  {
+    "tick": 2300,
+    "timestamp": 2300000,
+    "total_population": 50,
+    "active_agents": 43,
+    "gdp": 833.43,
+    "gini_coefficient": 0.61,
+    "skill_distribution_top5": [
+      {
+        "skill_name": "guarding",
+        "agent_count": 19,
+        "avg_level": 0.48
+      },
+      {
+        "skill_name": "fishing",
+        "agent_count": 18,
+        "avg_level": 0.52
+      },
+      {
+        "skill_name": "smelting",
+        "agent_count": 17,
+        "avg_level": 0.52
+      },
+      {
+        "skill_name": "weaving",
+        "agent_count": 17,
+        "avg_level": 0.49
+      },
+      {
+        "skill_name": "trading",
+        "agent_count": 14,
+        "avg_level": 0.48
+      }
+    ],
+    "key_events": [
+      {
+        "tick": 2350,
+        "event_type": "milestone",
+        "agent_id": null,
+        "description": "跨组织条约"
+      }
+    ]
+  },
+  {
+    "tick": 2400,
+    "timestamp": 2400000,
+    "total_population": 50,
+    "active_agents": 42,
+    "gdp": 833.85,
+    "gini_coefficient": 0.63,
+    "skill_distribution_top5": [
+      {
+        "skill_name": "guarding",
+        "agent_count": 19,
+        "avg_level": 0.49
+      },
+      {
+        "skill_name": "fishing",
+        "agent_count": 18,
+        "avg_level": 0.53
+      },
+      {
+        "skill_name": "smelting",
+        "agent_count": 17,
+        "avg_level": 0.53
+      },
+      {
+        "skill_name": "weaving",
+        "agent_count": 17,
+        "avg_level": 0.5
+      },
+      {
+        "skill_name": "trading",
+        "agent_count": 14,
+        "avg_level": 0.49
+      }
+    ],
+    "key_events": [
+      {
+        "tick": 2350,
+        "event_type": "milestone",
+        "agent_id": null,
+        "description": "跨组织条约"
+      }
+    ]
+  },
+  {
+    "tick": 2500,
+    "timestamp": 2500000,
+    "total_population": 50,
+    "active_agents": 43,
+    "gdp": 838.4,
+    "gini_coefficient": 0.697,
+    "skill_distribution_top5": [
+      {
+        "skill_name": "guarding",
+        "agent_count": 19,
+        "avg_level": 0.5
+      },
+      {
+        "skill_name": "fishing",
+        "agent_count": 18,
+        "avg_level": 0.55
+      },
+      {
+        "skill_name": "smelting",
+        "agent_count": 17,
+        "avg_level": 0.54
+      },
+      {
+        "skill_name": "weaving",
+        "agent_count": 17,
+        "avg_level": 0.51
+      },
+      {
+        "skill_name": "trading",
+        "agent_count": 14,
+        "avg_level": 0.5
+      }
+    ],
+    "key_events": []
+  },
+  {
+    "tick": 2600,
+    "timestamp": 2600000,
+    "total_population": 50,
+    "active_agents": 45,
+    "gdp": 855.83,
+    "gini_coefficient": 0.694,
+    "skill_distribution_top5": [
+      {
+        "skill_name": "guarding",
+        "agent_count": 19,
+        "avg_level": 0.51
+      },
+      {
+        "skill_name": "fishing",
+        "agent_count": 18,
+        "avg_level": 0.56
+      },
+      {
+        "skill_name": "smelting",
+        "agent_count": 17,
+        "avg_level": 0.55
+      },
+      {
+        "skill_name": "weaving",
+        "agent_count": 17,
+        "avg_level": 0.52
+      },
+      {
+        "skill_name": "trading",
+        "agent_count": 14,
+        "avg_level": 0.51
+      }
+    ],
+    "key_events": [
+      {
+        "tick": 2600,
+        "event_type": "cultural",
+        "agent_id": null,
+        "description": "文化融合"
+      }
+    ]
+  },
+  {
+    "tick": 2700,
+    "timestamp": 2700000,
+    "total_population": 50,
+    "active_agents": 42,
+    "gdp": 892.86,
+    "gini_coefficient": 0.686,
+    "skill_distribution_top5": [
+      {
+        "skill_name": "guarding",
+        "agent_count": 19,
+        "avg_level": 0.52
+      },
+      {
+        "skill_name": "fishing",
+        "agent_count": 18,
+        "avg_level": 0.57
+      },
+      {
+        "skill_name": "smelting",
+        "agent_count": 17,
+        "avg_level": 0.56
+      },
+      {
+        "skill_name": "weaving",
+        "agent_count": 17,
+        "avg_level": 0.53
+      },
+      {
+        "skill_name": "trading",
+        "agent_count": 14,
+        "avg_level": 0.52
+      }
+    ],
+    "key_events": []
+  },
+  {
+    "tick": 2800,
+    "timestamp": 2800000,
+    "total_population": 50,
+    "active_agents": 44,
+    "gdp": 953.12,
+    "gini_coefficient": 0.675,
+    "skill_distribution_top5": [
+      {
+        "skill_name": "guarding",
+        "agent_count": 19,
+        "avg_level": 0.54
+      },
+      {
+        "skill_name": "fishing",
+        "agent_count": 18,
+        "avg_level": 0.58
+      },
+      {
+        "skill_name": "smelting",
+        "agent_count": 17,
+        "avg_level": 0.57
+      },
+      {
+        "skill_name": "weaving",
+        "agent_count": 17,
+        "avg_level": 0.54
+      },
+      {
+        "skill_name": "trading",
+        "agent_count": 14,
+        "avg_level": 0.53
+      }
+    ],
+    "key_events": [
+      {
+        "tick": 2850,
+        "event_type": "economic",
+        "agent_id": null,
+        "description": "金融体系建立"
+      }
+    ]
+  },
+  {
+    "tick": 2900,
+    "timestamp": 2900000,
+    "total_population": 50,
+    "active_agents": 42,
+    "gdp": 1036.58,
+    "gini_coefficient": 0.659,
+    "skill_distribution_top5": [
+      {
+        "skill_name": "fishing",
+        "agent_count": 18,
+        "avg_level": 0.59
+      },
+      {
+        "skill_name": "guarding",
+        "agent_count": 18,
+        "avg_level": 0.56
+      },
+      {
+        "skill_name": "weaving",
+        "agent_count": 17,
+        "avg_level": 0.55
+      },
+      {
+        "skill_name": "smelting",
+        "agent_count": 16,
+        "avg_level": 0.58
+      },
+      {
+        "skill_name": "trading",
+        "agent_count": 14,
+        "avg_level": 0.55
+      }
+    ],
+    "key_events": [
+      {
+        "tick": 2850,
+        "event_type": "economic",
+        "agent_id": null,
+        "description": "金融体系建立"
+      }
+    ]
+  },
+  {
+    "tick": 3000,
+    "timestamp": 3000000,
+    "total_population": 50,
+    "active_agents": 41,
+    "gdp": 1139.51,
+    "gini_coefficient": 0.641,
+    "skill_distribution_top5": [
+      {
+        "skill_name": "fishing",
+        "agent_count": 18,
+        "avg_level": 0.6
+      },
+      {
+        "skill_name": "guarding",
+        "agent_count": 18,
+        "avg_level": 0.57
+      },
+      {
+        "skill_name": "weaving",
+        "agent_count": 17,
+        "avg_level": 0.56
+      },
+      {
+        "skill_name": "smelting",
+        "agent_count": 16,
+        "avg_level": 0.59
+      },
+      {
+        "skill_name": "trading",
+        "agent_count": 14,
+        "avg_level": 0.56
+      }
+    ],
+    "key_events": []
+  },
+  {
+    "tick": 3100,
+    "timestamp": 3100000,
+    "total_population": 50,
+    "active_agents": 42,
+    "gdp": 1255.16,
+    "gini_coefficient": 0.62,
+    "skill_distribution_top5": [
+      {
+        "skill_name": "fishing",
+        "agent_count": 18,
+        "avg_level": 0.62
+      },
+      {
+        "skill_name": "guarding",
+        "agent_count": 18,
+        "avg_level": 0.58
+      },
+      {
+        "skill_name": "weaving",
+        "agent_count": 17,
+        "avg_level": 0.57
+      },
+      {
+        "skill_name": "smelting",
+        "agent_count": 16,
+        "avg_level": 0.6
+      },
+      {
+        "skill_name": "trading",
+        "agent_count": 14,
+        "avg_level": 0.57
+      }
+    ],
+    "key_events": [
+      {
+        "tick": 3100,
+        "event_type": "governance",
+        "agent_id": null,
+        "description": "联合治理体"
+      }
+    ]
+  },
+  {
+    "tick": 3200,
+    "timestamp": 3200000,
+    "total_population": 50,
+    "active_agents": 42,
+    "gdp": 1374.73,
+    "gini_coefficient": 0.599,
+    "skill_distribution_top5": [
+      {
+        "skill_name": "fishing",
+        "agent_count": 18,
+        "avg_level": 0.63
+      },
+      {
+        "skill_name": "guarding",
+        "agent_count": 18,
+        "avg_level": 0.59
+      },
+      {
+        "skill_name": "weaving",
+        "agent_count": 17,
+        "avg_level": 0.58
+      },
+      {
+        "skill_name": "smelting",
+        "agent_count": 16,
+        "avg_level": 0.61
+      },
+      {
+        "skill_name": "trading",
+        "agent_count": 14,
+        "avg_level": 0.58
+      }
+    ],
+    "key_events": []
+  },
+  {
+    "tick": 3300,
+    "timestamp": 3300000,
+    "total_population": 50,
+    "active_agents": 41,
+    "gdp": 1488.81,
+    "gini_coefficient": 0.579,
+    "skill_distribution_top5": [
+      {
+        "skill_name": "fishing",
+        "agent_count": 18,
+        "avg_level": 0.64
+      },
+      {
+        "skill_name": "guarding",
+        "agent_count": 18,
+        "avg_level": 0.6
+      },
+      {
+        "skill_name": "weaving",
+        "agent_count": 17,
+        "avg_level": 0.6
+      },
+      {
+        "skill_name": "smelting",
+        "agent_count": 16,
+        "avg_level": 0.63
+      },
+      {
+        "skill_name": "trading",
+        "agent_count": 14,
+        "avg_level": 0.59
+      }
+    ],
+    "key_events": []
+  },
+  {
+    "tick": 3400,
+    "timestamp": 3400000,
+    "total_population": 50,
+    "active_agents": 43,
+    "gdp": 1588.87,
+    "gini_coefficient": 0.561,
+    "skill_distribution_top5": [
+      {
+        "skill_name": "fishing",
+        "agent_count": 18,
+        "avg_level": 0.65
+      },
+      {
+        "skill_name": "guarding",
+        "agent_count": 18,
+        "avg_level": 0.61
+      },
+      {
+        "skill_name": "weaving",
+        "agent_count": 17,
+        "avg_level": 0.61
+      },
+      {
+        "skill_name": "smelting",
+        "agent_count": 16,
+        "avg_level": 0.64
+      },
+      {
+        "skill_name": "trading",
+        "agent_count": 14,
+        "avg_level": 0.6
+      }
+    ],
+    "key_events": [
+      {
+        "tick": 3400,
+        "event_type": "milestone",
+        "agent_id": null,
+        "description": "知识革命"
+      }
+    ]
+  },
+  {
+    "tick": 3500,
+    "timestamp": 3500000,
+    "total_population": 50,
+    "active_agents": 43,
+    "gdp": 1668.59,
+    "gini_coefficient": 0.546,
+    "skill_distribution_top5": [
+      {
+        "skill_name": "fishing",
+        "agent_count": 18,
+        "avg_level": 0.66
+      },
+      {
+        "skill_name": "guarding",
+        "agent_count": 18,
+        "avg_level": 0.62
+      },
+      {
+        "skill_name": "weaving",
+        "agent_count": 17,
+        "avg_level": 0.62
+      },
+      {
+        "skill_name": "smelting",
+        "agent_count": 16,
+        "avg_level": 0.65
+      },
+      {
+        "skill_name": "trading",
+        "agent_count": 14,
+        "avg_level": 0.61
+      }
+    ],
+    "key_events": []
+  },
+  {
+    "tick": 3600,
+    "timestamp": 3600000,
+    "total_population": 50,
+    "active_agents": 43,
+    "gdp": 1724.85,
+    "gini_coefficient": 0.535,
+    "skill_distribution_top5": [
+      {
+        "skill_name": "fishing",
+        "agent_count": 18,
+        "avg_level": 0.67
+      },
+      {
+        "skill_name": "guarding",
+        "agent_count": 18,
+        "avg_level": 0.63
+      },
+      {
+        "skill_name": "weaving",
+        "agent_count": 17,
+        "avg_level": 0.63
+      },
+      {
+        "skill_name": "smelting",
+        "agent_count": 16,
+        "avg_level": 0.66
+      },
+      {
+        "skill_name": "trading",
+        "agent_count": 14,
+        "avg_level": 0.62
+      }
+    ],
+    "key_events": []
+  },
+  {
+    "tick": 3700,
+    "timestamp": 3700000,
+    "total_population": 50,
+    "active_agents": 42,
+    "gdp": 1758.24,
+    "gini_coefficient": 0.528,
+    "skill_distribution_top5": [
+      {
+        "skill_name": "fishing",
+        "agent_count": 18,
+        "avg_level": 0.69
+      },
+      {
+        "skill_name": "guarding",
+        "agent_count": 18,
+        "avg_level": 0.64
+      },
+      {
+        "skill_name": "weaving",
+        "agent_count": 17,
+        "avg_level": 0.64
+      },
+      {
+        "skill_name": "smelting",
+        "agent_count": 16,
+        "avg_level": 0.67
+      },
+      {
+        "skill_name": "trading",
+        "agent_count": 14,
+        "avg_level": 0.63
+      }
+    ],
+    "key_events": [
+      {
+        "tick": 3700,
+        "event_type": "cultural",
+        "agent_id": null,
+        "description": "文化复兴"
+      }
+    ]
+  },
+  {
+    "tick": 3800,
+    "timestamp": 3800000,
+    "total_population": 50,
+    "active_agents": 41,
+    "gdp": 1772.96,
+    "gini_coefficient": 0.526,
+    "skill_distribution_top5": [
+      {
+        "skill_name": "fishing",
+        "agent_count": 18,
+        "avg_level": 0.7
+      },
+      {
+        "skill_name": "guarding",
+        "agent_count": 18,
+        "avg_level": 0.65
+      },
+      {
+        "skill_name": "weaving",
+        "agent_count": 17,
+        "avg_level": 0.65
+      },
+      {
+        "skill_name": "smelting",
+        "agent_count": 16,
+        "avg_level": 0.68
+      },
+      {
+        "skill_name": "trading",
+        "agent_count": 14,
+        "avg_level": 0.64
+      }
+    ],
+    "key_events": []
+  },
+  {
+    "tick": 3900,
+    "timestamp": 3900000,
+    "total_population": 50,
+    "active_agents": 40,
+    "gdp": 1776.16,
+    "gini_coefficient": 0.528,
+    "skill_distribution_top5": [
+      {
+        "skill_name": "fishing",
+        "agent_count": 18,
+        "avg_level": 0.71
+      },
+      {
+        "skill_name": "guarding",
+        "agent_count": 18,
+        "avg_level": 0.67
+      },
+      {
+        "skill_name": "weaving",
+        "agent_count": 17,
+        "avg_level": 0.66
+      },
+      {
+        "skill_name": "smelting",
+        "agent_count": 16,
+        "avg_level": 0.69
+      },
+      {
+        "skill_name": "trading",
+        "agent_count": 13,
+        "avg_level": 0.66
+      }
+    ],
+    "key_events": []
+  },
+  {
+    "tick": 4000,
+    "timestamp": 4000000,
+    "total_population": 50,
+    "active_agents": 39,
+    "gdp": 1776.81,
+    "gini_coefficient": 0.533,
+    "skill_distribution_top5": [
+      {
+        "skill_name": "fishing",
+        "agent_count": 18,
+        "avg_level": 0.72
+      },
+      {
+        "skill_name": "guarding",
+        "agent_count": 18,
+        "avg_level": 0.68
+      },
+      {
+        "skill_name": "smelting",
+        "agent_count": 16,
+        "avg_level": 0.71
+      },
+      {
+        "skill_name": "weaving",
+        "agent_count": 16,
+        "avg_level": 0.67
+      },
+      {
+        "skill_name": "trading",
+        "agent_count": 13,
+        "avg_level": 0.67
+      }
+    ],
+    "key_events": []
+  },
+  {
+    "tick": 4100,
+    "timestamp": 4100000,
+    "total_population": 50,
+    "active_agents": 39,
+    "gdp": 1784.28,
+    "gini_coefficient": 0.541,
+    "skill_distribution_top5": [
+      {
+        "skill_name": "fishing",
+        "agent_count": 18,
+        "avg_level": 0.73
+      },
+      {
+        "skill_name": "guarding",
+        "agent_count": 18,
+        "avg_level": 0.69
+      },
+      {
+        "skill_name": "smelting",
+        "agent_count": 16,
+        "avg_level": 0.72
+      },
+      {
+        "skill_name": "weaving",
+        "agent_count": 16,
+        "avg_level": 0.68
+      },
+      {
+        "skill_name": "trading",
+        "agent_count": 13,
+        "avg_level": 0.68
+      }
+    ],
+    "key_events": [
+      {
+        "tick": 4100,
+        "event_type": "economic",
+        "agent_id": null,
+        "description": "经济稳定期"
+      }
+    ]
+  },
+  {
+    "tick": 4200,
+    "timestamp": 4200000,
+    "total_population": 50,
+    "active_agents": 40,
+    "gdp": 1806.86,
+    "gini_coefficient": 0.55,
+    "skill_distribution_top5": [
+      {
+        "skill_name": "fishing",
+        "agent_count": 18,
+        "avg_level": 0.75
+      },
+      {
+        "skill_name": "guarding",
+        "agent_count": 18,
+        "avg_level": 0.7
+      },
+      {
+        "skill_name": "smelting",
+        "agent_count": 16,
+        "avg_level": 0.73
+      },
+      {
+        "skill_name": "weaving",
+        "agent_count": 16,
+        "avg_level": 0.69
+      },
+      {
+        "skill_name": "trading",
+        "agent_count": 13,
+        "avg_level": 0.69
+      }
+    ],
+    "key_events": []
+  },
+  {
+    "tick": 4300,
+    "timestamp": 4300000,
+    "total_population": 50,
+    "active_agents": 39,
+    "gdp": 1850.46,
+    "gini_coefficient": 0.558,
+    "skill_distribution_top5": [
+      {
+        "skill_name": "fishing",
+        "agent_count": 18,
+        "avg_level": 0.76
+      },
+      {
+        "skill_name": "guarding",
+        "agent_count": 18,
+        "avg_level": 0.71
+      },
+      {
+        "skill_name": "smelting",
+        "agent_count": 16,
+        "avg_level": 0.74
+      },
+      {
+        "skill_name": "weaving",
+        "agent_count": 16,
+        "avg_level": 0.7
+      },
+      {
+        "skill_name": "trading",
+        "agent_count": 13,
+        "avg_level": 0.7
+      }
+    ],
+    "key_events": []
+  },
+  {
+    "tick": 4400,
+    "timestamp": 4400000,
+    "total_population": 50,
+    "active_agents": 40,
+    "gdp": 1917.67,
+    "gini_coefficient": 0.566,
+    "skill_distribution_top5": [
+      {
+        "skill_name": "fishing",
+        "agent_count": 18,
+        "avg_level": 0.77
+      },
+      {
+        "skill_name": "guarding",
+        "agent_count": 18,
+        "avg_level": 0.72
+      },
+      {
+        "skill_name": "smelting",
+        "agent_count": 16,
+        "avg_level": 0.75
+      },
+      {
+        "skill_name": "weaving",
+        "agent_count": 16,
+        "avg_level": 0.71
+      },
+      {
+        "skill_name": "trading",
+        "agent_count": 13,
+        "avg_level": 0.71
+      }
+    ],
+    "key_events": [
+      {
+        "tick": 4400,
+        "event_type": "governance",
+        "agent_id": null,
+        "description": "宪政改革"
+      }
+    ]
+  },
+  {
+    "tick": 4500,
+    "timestamp": 4500000,
+    "total_population": 50,
+    "active_agents": 38,
+    "gdp": 2007.35,
+    "gini_coefficient": 0.57,
+    "skill_distribution_top5": [
+      {
+        "skill_name": "fishing",
+        "agent_count": 18,
+        "avg_level": 0.78
+      },
+      {
+        "skill_name": "guarding",
+        "agent_count": 18,
+        "avg_level": 0.73
+      },
+      {
+        "skill_name": "smelting",
+        "agent_count": 16,
+        "avg_level": 0.76
+      },
+      {
+        "skill_name": "weaving",
+        "agent_count": 16,
+        "avg_level": 0.72
+      },
+      {
+        "skill_name": "trading",
+        "agent_count": 13,
+        "avg_level": 0.72
+      }
+    ],
+    "key_events": []
+  },
+  {
+    "tick": 4600,
+    "timestamp": 4600000,
+    "total_population": 50,
+    "active_agents": 41,
+    "gdp": 2114.82,
+    "gini_coefficient": 0.571,
+    "skill_distribution_top5": [
+      {
+        "skill_name": "fishing",
+        "agent_count": 18,
+        "avg_level": 0.79
+      },
+      {
+        "skill_name": "guarding",
+        "agent_count": 18,
+        "avg_level": 0.74
+      },
+      {
+        "skill_name": "smelting",
+        "agent_count": 16,
+        "avg_level": 0.77
+      },
+      {
+        "skill_name": "weaving",
+        "agent_count": 16,
+        "avg_level": 0.73
+      },
+      {
+        "skill_name": "trading",
+        "agent_count": 13,
+        "avg_level": 0.73
+      }
+    ],
+    "key_events": []
+  },
+  {
+    "tick": 4700,
+    "timestamp": 4700000,
+    "total_population": 50,
+    "active_agents": 41,
+    "gdp": 2232.57,
+    "gini_coefficient": 0.568,
+    "skill_distribution_top5": [
+      {
+        "skill_name": "fishing",
+        "agent_count": 18,
+        "avg_level": 0.8
+      },
+      {
+        "skill_name": "guarding",
+        "agent_count": 18,
+        "avg_level": 0.75
+      },
+      {
+        "skill_name": "smelting",
+        "agent_count": 16,
+        "avg_level": 0.79
+      },
+      {
+        "skill_name": "weaving",
+        "agent_count": 16,
+        "avg_level": 0.75
+      },
+      {
+        "skill_name": "trading",
+        "agent_count": 13,
+        "avg_level": 0.74
+      }
+    ],
+    "key_events": [
+      {
+        "tick": 4700,
+        "event_type": "milestone",
+        "agent_id": null,
+        "description": "文明里程碑"
+      }
+    ]
+  },
+  {
+    "tick": 4800,
+    "timestamp": 4800000,
+    "total_population": 50,
+    "active_agents": 40,
+    "gdp": 2351.5,
+    "gini_coefficient": 0.56,
+    "skill_distribution_top5": [
+      {
+        "skill_name": "fishing",
+        "agent_count": 18,
+        "avg_level": 0.82
+      },
+      {
+        "skill_name": "guarding",
+        "agent_count": 18,
+        "avg_level": 0.76
+      },
+      {
+        "skill_name": "smelting",
+        "agent_count": 16,
+        "avg_level": 0.8
+      },
+      {
+        "skill_name": "weaving",
+        "agent_count": 16,
+        "avg_level": 0.76
+      },
+      {
+        "skill_name": "trading",
+        "agent_count": 13,
+        "avg_level": 0.75
+      }
+    ],
+    "key_events": []
+  },
+  {
+    "tick": 4900,
+    "timestamp": 4900000,
+    "total_population": 50,
+    "active_agents": 41,
+    "gdp": 2462.29,
+    "gini_coefficient": 0.548,
+    "skill_distribution_top5": [
+      {
+        "skill_name": "fishing",
+        "agent_count": 18,
+        "avg_level": 0.83
+      },
+      {
+        "skill_name": "guarding",
+        "agent_count": 18,
+        "avg_level": 0.78
+      },
+      {
+        "skill_name": "smelting",
+        "agent_count": 16,
+        "avg_level": 0.81
+      },
+      {
+        "skill_name": "weaving",
+        "agent_count": 16,
+        "avg_level": 0.77
+      },
+      {
+        "skill_name": "trading",
+        "agent_count": 13,
+        "avg_level": 0.76
+      }
+    ],
+    "key_events": [
+      {
+        "tick": 4900,
+        "event_type": "cultural",
+        "agent_id": null,
+        "description": "文明的黎明"
+      }
+    ]
+  },
+  {
+    "tick": 5000,
+    "timestamp": 5000000,
+    "total_population": 50,
+    "active_agents": 41,
+    "gdp": 2556.94,
+    "gini_coefficient": 0.533,
+    "skill_distribution_top5": [
+      {
+        "skill_name": "fishing",
+        "agent_count": 18,
+        "avg_level": 0.84
+      },
+      {
+        "skill_name": "guarding",
+        "agent_count": 18,
+        "avg_level": 0.79
+      },
+      {
+        "skill_name": "smelting",
+        "agent_count": 16,
+        "avg_level": 0.82
+      },
+      {
+        "skill_name": "weaving",
+        "agent_count": 16,
+        "avg_level": 0.78
+      },
+      {
+        "skill_name": "trading",
+        "agent_count": 13,
+        "avg_level": 0.77
+      }
+    ],
+    "key_events": []
+  }
+]

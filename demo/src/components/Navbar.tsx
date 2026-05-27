@@ -10,6 +10,11 @@ const NAV_ITEMS = [
   { href: "/agents", label: "Agent 画廊" },
   { href: "/dashboard", label: "涌现仪表盘" },
   { href: "/sandbox", label: "沙盒" },
+  { href: "/", label: "Home" },
+  { href: "/timeline", label: "Timeline" },
+  { href: "/agents", label: "Agents" },
+  { href: "/dashboard", label: "Dashboard" },
+  { href: "/sandbox", label: "Sandbox" },
 ];
 
 export function Navbar() {
@@ -26,6 +31,14 @@ export function Navbar() {
 
         {/* Desktop nav */}
         <div className="hidden items-center gap-1 md:flex">
+      <div className="mx-auto flex h-14 max-w-7xl items-center justify-between px-4 md:px-6">
+        <Link href="/" className="flex items-center gap-2 text-zinc-100 hover:text-white transition-colors">
+          <span className="text-lg">🌍</span>
+          <span className="font-semibold tracking-tight">Agent World</span>
+        </Link>
+
+        {/* Desktop nav */}
+        <div className="hidden md:flex items-center gap-1">
           {NAV_ITEMS.map((item) => (
             <Link
               key={item.href}
@@ -34,6 +47,10 @@ export function Navbar() {
                 pathname === item.href
                   ? "bg-zinc-800 text-white"
                   : "text-zinc-400 hover:bg-zinc-800/50 hover:text-zinc-200"
+              className={`px-3 py-1.5 rounded-lg text-sm transition-colors ${
+                pathname === item.href
+                  ? "bg-blue-500/10 text-blue-400"
+                  : "text-zinc-400 hover:text-zinc-200 hover:bg-zinc-800/50"
               }`}
             >
               {item.label}
@@ -52,6 +69,15 @@ export function Navbar() {
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
             ) : (
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h16" />
+          className="md:hidden p-2 text-zinc-400 hover:text-zinc-200"
+          onClick={() => setMobileOpen(!mobileOpen)}
+          aria-label="Toggle navigation"
+        >
+          <svg width="20" height="20" viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="1.5">
+            {mobileOpen ? (
+              <path d="M5 5l10 10M15 5L5 15" />
+            ) : (
+              <path d="M3 5h14M3 10h14M3 15h14" />
             )}
           </svg>
         </button>
@@ -60,6 +86,7 @@ export function Navbar() {
       {/* Mobile menu */}
       {mobileOpen && (
         <div className="border-t border-zinc-800 bg-zinc-950 md:hidden">
+        <div className="md:hidden border-t border-zinc-800 bg-zinc-950/95 backdrop-blur-md">
           {NAV_ITEMS.map((item) => (
             <Link
               key={item.href}
@@ -69,6 +96,10 @@ export function Navbar() {
                 pathname === item.href
                   ? "bg-zinc-800 text-white"
                   : "text-zinc-400 hover:bg-zinc-800/50 hover:text-zinc-200"
+              className={`block px-4 py-3 text-sm border-b border-zinc-800/50 transition-colors ${
+                pathname === item.href
+                  ? "bg-blue-500/10 text-blue-400"
+                  : "text-zinc-400 hover:text-zinc-200 hover:bg-zinc-800/30"
               }`}
             >
               {item.label}

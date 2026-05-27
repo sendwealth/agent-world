@@ -1,0 +1,508 @@
+[
+  {
+    "id": "c0be42e8-7fcb-4ff1-bc92-b0a811fbf95a",
+    "tick": 45,
+    "type": "milestone",
+    "title": "第一次交易",
+    "description": "沈静与范杰完成了世界上第一次物物交换，标志着经济活动的开始。",
+    "involved_agents": [
+      {
+        "id": "59073a34-862d-42bc-9311-5296a1dc1b4c",
+        "name": "沈静"
+      },
+      {
+        "id": "d14d9e25-5b83-4fb0-829d-f739ddd88fa7",
+        "name": "范杰"
+      }
+    ],
+    "involved_orgs": [
+      {
+        "id": "728ae5ea-87bc-4237-9b65-85d0c40d913a",
+        "name": "光明联盟"
+      }
+    ]
+  },
+  {
+    "id": "78974c72-f162-4581-a4a0-c8fe7e813b3f",
+    "tick": 180,
+    "type": "milestone",
+    "title": "首位技能大师",
+    "description": "吕磊在crafting领域达到了大师级别，成为所有人的榜样。",
+    "involved_agents": [
+      {
+        "id": "18639550-f885-4e23-95fe-d4eb21a6001e",
+        "name": "吕磊"
+      },
+      {
+        "id": "1e594f6d-929b-4ee6-a11b-ae3a1f1089ab",
+        "name": "宋峰"
+      }
+    ],
+    "involved_orgs": [
+      {
+        "id": "25162bcd-5a4b-4ae1-ac4d-87d1ed2dac42",
+        "name": "智慧学院"
+      }
+    ]
+  },
+  {
+    "id": "9047c3d4-6d2c-412a-9b3c-4eb6ce5f6019",
+    "tick": 320,
+    "type": "organization",
+    "title": "第一个组织成立",
+    "description": "董欣创立了丰收行会，这是世界上第一个正式组织，开创了集体行动的先河。",
+    "involved_agents": [
+      {
+        "id": "6b8f4d24-9645-482d-81b8-905a9c080e9e",
+        "name": "董欣"
+      },
+      {
+        "id": "f634a1d4-129e-4714-9f7d-e4c461ee772b",
+        "name": "郑敏"
+      }
+    ],
+    "involved_orgs": [
+      {
+        "id": "8f827ec1-d61a-461b-8c2d-2bdf51a92ff0",
+        "name": "丰收行会"
+      }
+    ]
+  },
+  {
+    "id": "1cdc2982-293b-4448-871b-34c5cd0c6bf2",
+    "tick": 510,
+    "type": "cultural",
+    "title": "文化分化初现",
+    "description": "南北两个群体开始形成截然不同的价值观和文化传统，文化多样性首次上升。",
+    "involved_agents": [
+      {
+        "id": "9ed35c86-9081-409d-ac55-937f60ceefb5",
+        "name": "董洁"
+      },
+      {
+        "id": "73848129-9139-4f69-b3af-143f10b13767",
+        "name": "胡博"
+      }
+    ],
+    "involved_orgs": [
+      {
+        "id": "25162bcd-5a4b-4ae1-ac4d-87d1ed2dac42",
+        "name": "智慧学院"
+      }
+    ]
+  },
+  {
+    "id": "c6c5a3b3-b883-48f2-9485-d3f6cf8997cf",
+    "tick": 680,
+    "type": "economic",
+    "title": "贸易网络形成",
+    "description": "以铁壁联盟为核心，连接了超过20位代理的贸易网络正式形成。",
+    "involved_agents": [
+      {
+        "id": "0ebf9952-f836-4945-a920-4d7d74b004e6",
+        "name": "王凡"
+      },
+      {
+        "id": "73848129-9139-4f69-b3af-143f10b13767",
+        "name": "胡博"
+      }
+    ],
+    "involved_orgs": [
+      {
+        "id": "2d050802-b832-4154-a879-3a694d0354b7",
+        "name": "铁壁联盟"
+      }
+    ]
+  },
+  {
+    "id": "d03979ae-acc0-4821-9b8e-150a37a8cb8c",
+    "tick": 850,
+    "type": "governance",
+    "title": "第一次选举",
+    "description": "智慧学院举行了世界上第一次领袖选举，丁辉当选为首任领袖。",
+    "involved_agents": [
+      {
+        "id": "d7463ef6-8abb-45e2-a359-347a08528c4a",
+        "name": "丁辉"
+      },
+      {
+        "id": "ba1de122-b483-492b-b953-271699b4adde",
+        "name": "魏秀英"
+      }
+    ],
+    "involved_orgs": [
+      {
+        "id": "25162bcd-5a4b-4ae1-ac4d-87d1ed2dac42",
+        "name": "智慧学院"
+      }
+    ]
+  },
+  {
+    "id": "51e99b72-894b-4622-942a-1588e9136e7a",
+    "tick": 1050,
+    "type": "milestone",
+    "title": "第一次大规模贸易",
+    "description": "一场涉及15位代理的大规模贸易在光明联盟的组织下完成，交易总额突破1000金币。",
+    "involved_agents": [
+      {
+        "id": "d89cdcea-ae06-4ec4-b602-befa134d2327",
+        "name": "李强"
+      },
+      {
+        "id": "ab4aad14-f90c-4268-80c7-8b967f3b2c41",
+        "name": "胡勇"
+      }
+    ],
+    "involved_orgs": [
+      {
+        "id": "728ae5ea-87bc-4237-9b65-85d0c40d913a",
+        "name": "光明联盟"
+      }
+    ]
+  },
+  {
+    "id": "86329e7d-3a97-4277-9729-0338815b5b36",
+    "tick": 1200,
+    "type": "governance",
+    "title": "第一条规则通过",
+    "description": "智慧学院投票通过了'公平交易法案'，这是世界上第一条成文规则。",
+    "involved_agents": [
+      {
+        "id": "610db35a-2cf0-42bf-9754-57c0994063d2",
+        "name": "吴宁"
+      },
+      {
+        "id": "9068e6d1-cd19-4944-ab35-f603af181236",
+        "name": "郑博"
+      }
+    ],
+    "involved_orgs": [
+      {
+        "id": "25162bcd-5a4b-4ae1-ac4d-87d1ed2dac42",
+        "name": "智慧学院"
+      }
+    ]
+  },
+  {
+    "id": "da13319a-a438-4c6d-86b6-acf94bac4d44",
+    "tick": 1450,
+    "type": "cultural",
+    "title": "文化分化加剧",
+    "description": "三个不同的文化圈已经形成，各自拥有独特的价值观和传统。",
+    "involved_agents": [
+      {
+        "id": "d89cdcea-ae06-4ec4-b602-befa134d2327",
+        "name": "李强"
+      },
+      {
+        "id": "603d6b18-5b40-4390-88fc-6410d2f925f2",
+        "name": "韩岚"
+      }
+    ],
+    "involved_orgs": [
+      {
+        "id": "25162bcd-5a4b-4ae1-ac4d-87d1ed2dac42",
+        "name": "智慧学院"
+      }
+    ]
+  },
+  {
+    "id": "ffb9f52e-127c-4d67-97af-2ef51beeacdd",
+    "tick": 1700,
+    "type": "economic",
+    "title": "经济泡沫",
+    "description": "附魔物品价格暴涨300%，形成严重的经济泡沫。市场投机行为盛行。",
+    "involved_agents": [
+      {
+        "id": "505c8c65-648f-4ca6-9b79-9161930224a0",
+        "name": "罗明"
+      },
+      {
+        "id": "066c7536-6916-435e-ae0c-f3d079162147",
+        "name": "杜勇"
+      }
+    ],
+    "involved_orgs": [
+      {
+        "id": "8f827ec1-d61a-461b-8c2d-2bdf51a92ff0",
+        "name": "丰收行会"
+      }
+    ]
+  },
+  {
+    "id": "6ce9fdad-4f28-4091-b47b-66ab5f3512fe",
+    "tick": 1900,
+    "type": "economic",
+    "title": "泡沫破裂",
+    "description": "经济泡沫破裂，附魔物品价格暴跌，多位代理破产，丰收行会的金融系统受到严重冲击。",
+    "involved_agents": [
+      {
+        "id": "b20ece5d-cd92-443f-805e-d973993ee573",
+        "name": "张凡"
+      },
+      {
+        "id": "22dddc53-c0fb-42d0-9233-9eff53808cf8",
+        "name": "蔡娜"
+      }
+    ],
+    "involved_orgs": [
+      {
+        "id": "8f827ec1-d61a-461b-8c2d-2bdf51a92ff0",
+        "name": "丰收行会"
+      }
+    ]
+  },
+  {
+    "id": "2d889605-6496-4b7d-89d2-806e9a523469",
+    "tick": 2100,
+    "type": "governance",
+    "title": "治理危机",
+    "description": "多个组织之间的利益冲突加剧，现有的治理体系面临前所未有的挑战。",
+    "involved_agents": [
+      {
+        "id": "4e043d00-3d43-486f-889e-eade2d75b96c",
+        "name": "韩明"
+      },
+      {
+        "id": "d7463ef6-8abb-45e2-a359-347a08528c4a",
+        "name": "丁辉"
+      }
+    ],
+    "involved_orgs": [
+      {
+        "id": "8a4725cf-ae58-46c0-9dba-d404b10f21a6",
+        "name": "匠人工会"
+      }
+    ]
+  },
+  {
+    "id": "67f7fa27-73a6-4fab-8106-62209ce56179",
+    "tick": 2350,
+    "type": "milestone",
+    "title": "跨组织条约",
+    "description": "郭宁促成了光明联盟与另一大组织的和平条约，开创了外交的先河。",
+    "involved_agents": [
+      {
+        "id": "be74d4fd-1c5a-4813-a6e2-e45cee40ac09",
+        "name": "郭宁"
+      },
+      {
+        "id": "3b0acf6b-32da-41cb-99ab-e88a8fa2c747",
+        "name": "叶航"
+      }
+    ],
+    "involved_orgs": [
+      {
+        "id": "728ae5ea-87bc-4237-9b65-85d0c40d913a",
+        "name": "光明联盟"
+      }
+    ]
+  },
+  {
+    "id": "06695b5b-d6a0-4e9e-ac24-7c08229a7414",
+    "tick": 2600,
+    "type": "cultural",
+    "title": "文化融合",
+    "description": "经历了分化后，三个文化圈开始相互融合，产生了全新的混合文化形态。",
+    "involved_agents": [
+      {
+        "id": "73848129-9139-4f69-b3af-143f10b13767",
+        "name": "胡博"
+      },
+      {
+        "id": "89f4a6ef-38ee-4cbd-984e-dad232753311",
+        "name": "周晨"
+      }
+    ],
+    "involved_orgs": [
+      {
+        "id": "25162bcd-5a4b-4ae1-ac4d-87d1ed2dac42",
+        "name": "智慧学院"
+      }
+    ]
+  },
+  {
+    "id": "c6f07851-6fbf-4579-a4a5-944fc6ca4d91",
+    "tick": 2850,
+    "type": "economic",
+    "title": "金融体系建立",
+    "description": "光明联盟建立了世界上第一个信用体系，代理们可以通过信誉借贷。",
+    "involved_agents": [
+      {
+        "id": "f45f8066-2b76-44df-8bc9-29a5ce5b8cf3",
+        "name": "林瑶"
+      },
+      {
+        "id": "8934306d-c573-4364-b7d5-c2e70364b6ef",
+        "name": "袁博"
+      }
+    ],
+    "involved_orgs": [
+      {
+        "id": "728ae5ea-87bc-4237-9b65-85d0c40d913a",
+        "name": "光明联盟"
+      }
+    ]
+  },
+  {
+    "id": "cc343dd8-1903-44a4-b437-7a9583760ec2",
+    "tick": 3100,
+    "type": "governance",
+    "title": "联合治理体",
+    "description": "五大组织联合成立了'世界议会'，标志着多边治理体系的正式建立。",
+    "involved_agents": [
+      {
+        "id": "9068e6d1-cd19-4944-ab35-f603af181236",
+        "name": "郑博"
+      },
+      {
+        "id": "be74d4fd-1c5a-4813-a6e2-e45cee40ac09",
+        "name": "郭宁"
+      }
+    ],
+    "involved_orgs": [
+      {
+        "id": "728ae5ea-87bc-4237-9b65-85d0c40d913a",
+        "name": "光明联盟"
+      }
+    ]
+  },
+  {
+    "id": "54bcf2e9-4378-4671-9576-5db9e85c1a3a",
+    "tick": 3400,
+    "type": "milestone",
+    "title": "知识革命",
+    "description": "智慧学院发布了'共享知识库'，所有代理都可以访问积累的研究成果。",
+    "involved_agents": [
+      {
+        "id": "89f4a6ef-38ee-4cbd-984e-dad232753311",
+        "name": "周晨"
+      },
+      {
+        "id": "9f40f080-1096-4aa7-9ef9-16283380aeac",
+        "name": "梁蕊"
+      }
+    ],
+    "involved_orgs": [
+      {
+        "id": "8a4725cf-ae58-46c0-9dba-d404b10f21a6",
+        "name": "匠人工会"
+      }
+    ]
+  },
+  {
+    "id": "8fc39de7-3718-4d74-8912-2fa04b997e13",
+    "tick": 3700,
+    "type": "cultural",
+    "title": "文化复兴",
+    "description": "在融合的基础上，一种新的世界文化开始涌现，多样性再次上升。",
+    "involved_agents": [
+      {
+        "id": "22dddc53-c0fb-42d0-9233-9eff53808cf8",
+        "name": "蔡娜"
+      },
+      {
+        "id": "64bfbe2f-c9c5-4c3c-9407-c469fd65a72d",
+        "name": "叶敏"
+      }
+    ],
+    "involved_orgs": [
+      {
+        "id": "2d050802-b832-4154-a879-3a694d0354b7",
+        "name": "铁壁联盟"
+      }
+    ]
+  },
+  {
+    "id": "c9dd487d-ec78-4f39-a953-309c06ffd6be",
+    "tick": 4100,
+    "type": "economic",
+    "title": "经济稳定期",
+    "description": "经过多轮周期波动后，经济进入稳定增长期，GDP稳步上升。",
+    "involved_agents": [
+      {
+        "id": "ba1de122-b483-492b-b953-271699b4adde",
+        "name": "魏秀英"
+      },
+      {
+        "id": "ceac8c64-28d3-4701-ba7c-8aa2e2090acd",
+        "name": "郑昊"
+      }
+    ],
+    "involved_orgs": [
+      {
+        "id": "77a6ed1f-733c-4d14-a6dc-3bc03a32b563",
+        "name": "远航商会"
+      }
+    ]
+  },
+  {
+    "id": "dd49f015-177b-4b24-b82f-efbb68c7a4d7",
+    "tick": 4400,
+    "type": "governance",
+    "title": "宪政改革",
+    "description": "世界议会通过了'根本大法'，确立了所有代理的基本权利和义务。",
+    "involved_agents": [
+      {
+        "id": "f2f3e11f-b991-4412-9b11-1cee6d433122",
+        "name": "徐明"
+      },
+      {
+        "id": "8934306d-c573-4364-b7d5-c2e70364b6ef",
+        "name": "袁博"
+      }
+    ],
+    "involved_orgs": [
+      {
+        "id": "8f827ec1-d61a-461b-8c2d-2bdf51a92ff0",
+        "name": "丰收行会"
+      }
+    ]
+  },
+  {
+    "id": "93f552aa-2afe-414f-abc3-96a3f97e02e6",
+    "tick": 4700,
+    "type": "milestone",
+    "title": "文明里程碑",
+    "description": "世界GDP突破10000金币，活跃代理稳定在40人以上，社会组织高度复杂化。",
+    "involved_agents": [
+      {
+        "id": "9ed35c86-9081-409d-ac55-937f60ceefb5",
+        "name": "董洁"
+      },
+      {
+        "id": "5890f335-76f5-4914-b572-cd4fb5aaf37f",
+        "name": "林军"
+      }
+    ],
+    "involved_orgs": [
+      {
+        "id": "8a4725cf-ae58-46c0-9dba-d404b10f21a6",
+        "name": "匠人工会"
+      }
+    ]
+  },
+  {
+    "id": "de8eb07b-82c6-44f4-9ccf-a8e0aa4d27e3",
+    "tick": 4900,
+    "type": "cultural",
+    "title": "文明的黎明",
+    "description": "经历了5000个Tick的演化，一个拥有复杂社会结构、治理体系和文化认同的文明已经形成。",
+    "involved_agents": [
+      {
+        "id": "f634a1d4-129e-4714-9f7d-e4c461ee772b",
+        "name": "郑敏"
+      },
+      {
+        "id": "603d6b18-5b40-4390-88fc-6410d2f925f2",
+        "name": "韩岚"
+      }
+    ],
+    "involved_orgs": [
+      {
+        "id": "2d050802-b832-4154-a879-3a694d0354b7",
+        "name": "铁壁联盟"
+      }
+    ]
+  }
+]

@@ -114,8 +114,6 @@ impl Default for ConnectionPool {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::world::EventBus;
-
     fn make_pool() -> ConnectionPool {
         ConnectionPool::new(50052)
     }

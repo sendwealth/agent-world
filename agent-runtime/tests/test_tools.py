@@ -13,9 +13,7 @@ Covers:
 from __future__ import annotations
 
 import asyncio
-import os
 import tempfile
-from pathlib import Path
 
 import pytest
 
@@ -31,6 +29,7 @@ from agent_runtime.tools import (
     create_builtin_tools,
     create_registry_with_builtins,
 )
+
 # _RegistryEntry is internal to registry.py; not imported here
 
 

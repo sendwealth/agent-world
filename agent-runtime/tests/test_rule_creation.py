@@ -2,8 +2,12 @@
 
 from __future__ import annotations
 
-import pytest
-
+from agent_runtime.core.act import _DEFAULT_TOKEN_COSTS, ActionType
+from agent_runtime.core.decide import _TOKEN_COSTS, DecisionAction
+from agent_runtime.organization.rule_evolution import (
+    RuleEvolutionTracker,
+    RuleLifecycleEventType,
+)
 from agent_runtime.organization.rule_proposal import (
     RuleCategory,
     RuleCondition,
@@ -12,15 +16,6 @@ from agent_runtime.organization.rule_proposal import (
     RuleProposalEngine,
     _gini_coefficient,
 )
-from agent_runtime.organization.rule_evolution import (
-    RuleEvolutionTracker,
-    RuleLifecycleEvent,
-    RuleLifecycleEventType,
-    RuleStats,
-)
-from agent_runtime.core.decide import DecisionAction, _TOKEN_COSTS
-from agent_runtime.core.act import ActionType, _DEFAULT_TOKEN_COSTS
-
 
 # ===================================================================
 # DecisionAction / ActionType registration tests

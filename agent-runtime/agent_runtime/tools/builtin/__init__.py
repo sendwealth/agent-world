@@ -10,6 +10,7 @@ from __future__ import annotations
 
 from typing import List, Optional
 
+from ..base import Tool
 from .code_exec import CodeExecTool
 from .file_ops import FileOpsTool
 from .http_request import HttpRequestTool

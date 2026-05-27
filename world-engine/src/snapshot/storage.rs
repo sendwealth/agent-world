@@ -27,6 +27,7 @@ pub struct SnapshotStorage {
 
 /// Index entry for quick lookup without loading compressed data.
 #[derive(Debug, Clone)]
+#[allow(dead_code)]
 struct SnapshotIndexEntry {
     tick: u64,
     kind: SnapshotKind,
@@ -353,7 +354,7 @@ impl SnapshotStorage {
                     current_group = Some((*tick, vec![*tick]));
                 } else {
                     // Delta — append to current group
-                    if let Some((base, ref mut members)) = current_group {
+                    if let Some((_base, ref mut members)) = current_group {
                         members.push(*tick);
                     }
                     // If no current group, this is an orphan delta — skip it
@@ -374,12 +375,12 @@ impl SnapshotStorage {
         let mut total_count = ticks.len();
         let groups_to_remove = groups.len() - 1; // Keep at least the last group
 
-        for i in 0..groups_to_remove {
+        for group in groups.iter().take(groups_to_remove) {
             if total_count <= self.config.max_snapshots {
                 break;
             }
 
-            let (_, group_ticks) = &groups[i];
+            let (_, group_ticks) = group;
             for tick in group_ticks {
                 if let Some(entry) = self.index.remove(tick) {
                     let _ = fs::remove_file(&entry.file_path);

@@ -8,11 +8,7 @@ from __future__ import annotations
 
 import json
 from dataclasses import dataclass, field
-from datetime import datetime
 from typing import Any
-
-from agent_runtime.experiment.config import ExperimentConfig
-
 
 # ---------------------------------------------------------------------------
 # Result data model
@@ -202,7 +198,8 @@ class ExperimentReporter:
 <meta charset="UTF-8">
 <title>Experiment Report: {result.experiment_id}</title>
 <style>
-body {{ font-family: -apple-system, sans-serif; max-width: 800px; margin: 2rem auto; padding: 0 1rem; }}
+body {{ font-family: -apple-system, sans-serif; max-width: 800px;
+        margin: 2rem auto; padding: 0 1rem; }}
 pre {{ background: #f5f5f5; padding: 1rem; overflow-x: auto; }}
 table {{ border-collapse: collapse; width: 100%; }}
 th, td {{ border: 1px solid #ddd; padding: 0.5rem; text-align: left; }}
@@ -222,7 +219,7 @@ th, td {{ border: 1px solid #ddd; padding: 0.5rem; text-align: left; }}
         lines: list[str] = []
         lines.append("# A/B Comparison Report")
         lines.append("")
-        lines.append(f"## Summary")
+        lines.append("## Summary")
         lines.append("")
         lines.append(getattr(comparison, "summary", "No summary available."))
         lines.append("")
@@ -280,7 +277,8 @@ th, td {{ border: 1px solid #ddd; padding: 0.5rem; text-align: left; }}
 <meta charset="UTF-8">
 <title>A/B Comparison Report</title>
 <style>
-body {{ font-family: -apple-system, sans-serif; max-width: 800px; margin: 2rem auto; padding: 0 1rem; }}
+body {{ font-family: -apple-system, sans-serif; max-width: 800px;
+        margin: 2rem auto; padding: 0 1rem; }}
 pre {{ background: #f5f5f5; padding: 1rem; overflow-x: auto; }}
 table {{ border-collapse: collapse; width: 100%; }}
 th, td {{ border: 1px solid #ddd; padding: 0.5rem; text-align: left; }}

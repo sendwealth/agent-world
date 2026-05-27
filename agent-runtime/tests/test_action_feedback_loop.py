@@ -22,6 +22,7 @@ from __future__ import annotations
 from typing import Any
 from unittest.mock import AsyncMock, MagicMock, patch
 
+import httpx
 import pytest
 
 from agent_runtime.__main__ import RESTWorldClient
@@ -31,12 +32,9 @@ from agent_runtime.core.act import (
     ActionStatus,
     ActionType,
 )
-from agent_runtime.core.think_loop import Decision, ThinkLoop, ThinkLoopConfig, _NoOpWorldClient
+from agent_runtime.core.think_loop import Decision, ThinkLoop, ThinkLoopConfig
 from agent_runtime.models.agent_state import AgentState
 from agent_runtime.survival.instinct import SurvivalInstinct
-
-import httpx
-
 
 # ---------------------------------------------------------------------------
 # Helpers

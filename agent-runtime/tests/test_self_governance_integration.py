@@ -19,13 +19,11 @@ from agent_runtime.organization.governance import (
     AllocationStrategy,
     Candidate,
     GovernanceDecider,
-    GovernanceDecision,
     LeadershipAmbition,
     OrgSnapshot,
     Treaty,
     TreatyResponse,
 )
-
 
 # ═══════════════════════════════════════════════════════════════
 # Test Infrastructure — Simulated World Engine

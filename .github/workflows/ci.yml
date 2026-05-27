@@ -124,7 +124,7 @@ jobs:
       - uses: actions/checkout@v4
 
       - name: Build world-engine image
-        run: docker build -t ci-check:world-engine ./world-engine
+        run: docker build -t ci-check:world-engine -f world-engine/Dockerfile .
 
       - name: Build agent-runtime image
         run: docker build -t ci-check:agent-runtime ./agent-runtime

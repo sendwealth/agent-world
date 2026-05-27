@@ -45,18 +45,18 @@ from .recruitment import (
     InvitationStatus,
     RecruitmentEngine,
 )
-from .rule_proposal import (
-    RuleProposalEngine,
-    RuleProposal,
-    RuleCondition,
-    RuleEffect,
-    RuleCategory,
-)
 from .rule_evolution import (
     RuleEvolutionTracker,
     RuleLifecycleEvent,
     RuleLifecycleEventType,
     RuleStats,
+)
+from .rule_proposal import (
+    RuleCategory,
+    RuleCondition,
+    RuleEffect,
+    RuleProposal,
+    RuleProposalEngine,
 )
 
 __all__ = [

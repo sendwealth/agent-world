@@ -205,7 +205,7 @@ impl WorldMap {
     pub fn has_line_of_sight(&self, from: &HexPos, to: &HexPos) -> bool {
         from.line_to(to)
             .iter()
-            .all(|p| self.tiles.get(p).map_or(false, |t| t.is_walkable()))
+            .all(|p| self.tiles.get(p).is_some_and(|t| t.is_walkable()))
     }
 
     // ── Snapshot system ───────────────────────────────────────────────
@@ -393,8 +393,8 @@ mod tests {
         let map = make_test_map();
         let plains = map.tiles_by_terrain(TerrainType::Plains);
         let forests = map.tiles_by_terrain(TerrainType::Forest);
-        assert!(plains.len() > 0);
-        assert!(forests.len() > 0);
+        assert!(!plains.is_empty());
+        assert!(!forests.is_empty());
         assert_eq!(plains.len() + forests.len(), map.tile_count());
     }
 

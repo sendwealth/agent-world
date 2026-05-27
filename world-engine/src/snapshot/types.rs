@@ -306,7 +306,7 @@ impl SnapshotDelta {
             .collect();
 
         // Sort by ID for deterministic ordering
-        agents.sort_by(|a, b| a.id.cmp(&b.id));
+        agents.sort_by_key(|a| a.id);
 
         // Use tick from delta if available, otherwise from prev
         let tick = prev.tick; // Caller sets correct tick
@@ -475,7 +475,7 @@ mod tests {
     #[test]
     fn delta_diff_with_addition() {
         let agent1 = make_agent("Alice", 1000, AgentPhase::Adult);
-        let snapshot_t1 = WorldSnapshot::from_world_state(1, &[agent1.clone()]);
+        let snapshot_t1 = WorldSnapshot::from_world_state(1, std::slice::from_ref(&agent1));
 
         let agent2 = make_agent("Bob", 500, AgentPhase::Childhood);
         let agents_t2 = vec![agent1, agent2];

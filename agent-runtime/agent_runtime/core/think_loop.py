@@ -521,7 +521,6 @@ class ThinkLoop:
                     exc_info=True,
                 )
 
-        perception = await self._perceive_with_cache()
         logger.debug(
             "Tick %d: perceived — token_ratio=%.2f health=%.0f phase=%s",
             self._tick,

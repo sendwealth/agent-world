@@ -422,12 +422,11 @@ class TestABFramework:
         ab2 = ABExperiment(config, config, seed_base=42)
 
         # Compare results manually (since _run_single is async)
-        result = asyncio.get_event_loop().run_until_complete(
+        r1, r2 = asyncio.run(
             asyncio.gather(
                 ab1._run_single(config),
                 ab2._run_single(config),
             )
         )
-        r1, r2 = result
         # Results should be identical (same seed, same config)
         assert r1.metrics_timeline == r2.metrics_timeline

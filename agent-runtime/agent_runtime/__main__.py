@@ -1080,8 +1080,11 @@ class HealthCheckServer:
             extra={"event": "health_server_started", "port": self._port},
         )
         # Keep running until stop() closes the server
-        if self._server is not None:
-            await self._server.serve_forever()
+        try:
+            if self._server is not None:
+                await self._server.serve_forever()
+        except asyncio.CancelledError:
+            pass  # Graceful shutdown via stop()
 
     async def stop(self) -> None:
         """Stop the health check server."""
@@ -1751,7 +1754,10 @@ class AgentPool:
             extra={"event": "pool_api_started", "port": self._api_port},
         )
         if self._api_server is not None:
-            await self._api_server.serve_forever()
+            try:
+                await self._api_server.serve_forever()
+            except asyncio.CancelledError:
+                pass
 
     async def _handle_api_request(
         self,

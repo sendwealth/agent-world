@@ -143,6 +143,11 @@ pub enum EventType {
     MigrationCancelled,
     AgentEmigrated,
     AgentImmigrated,
+    // Soft rule events
+    SoftRuleProposed,
+    SoftRuleActivated,
+    SoftRuleExpired,
+    SoftRuleRepealed,
 }
 
 /// Events emitted by the world engine.
@@ -291,6 +296,11 @@ pub enum WorldEvent {
     MigrationCancelled { migration_id: String, agent_id: String, cancelled_by: String },
     AgentEmigrated { migration_id: String, agent_id: String, agent_name: String, source_world: String },
     AgentImmigrated { migration_id: String, agent_id: String, agent_name: String, target_world: String, tokens: u64 },
+    // Soft rule events
+    SoftRuleProposed { rule_id: String, org_id: String, proposer_id: String, title: String },
+    SoftRuleActivated { rule_id: String, org_id: String },
+    SoftRuleExpired { rule_id: String, org_id: String, tick: u64 },
+    SoftRuleRepealed { rule_id: String, org_id: String, tick: u64 },
 }
 
 impl WorldEvent {
@@ -414,6 +424,10 @@ impl WorldEvent {
             WorldEvent::MigrationCancelled { .. } => EventType::MigrationCancelled,
             WorldEvent::AgentEmigrated { .. } => EventType::AgentEmigrated,
             WorldEvent::AgentImmigrated { .. } => EventType::AgentImmigrated,
+            WorldEvent::SoftRuleProposed { .. } => EventType::SoftRuleProposed,
+            WorldEvent::SoftRuleActivated { .. } => EventType::SoftRuleActivated,
+            WorldEvent::SoftRuleExpired { .. } => EventType::SoftRuleExpired,
+            WorldEvent::SoftRuleRepealed { .. } => EventType::SoftRuleRepealed,
         }
     }
 
@@ -537,6 +551,10 @@ impl WorldEvent {
             WorldEvent::MigrationCancelled { agent_id, .. } => Some(agent_id),
             WorldEvent::AgentEmigrated { agent_id, .. } => Some(agent_id),
             WorldEvent::AgentImmigrated { agent_id, .. } => Some(agent_id),
+            WorldEvent::SoftRuleProposed { proposer_id, .. } => Some(proposer_id),
+            WorldEvent::SoftRuleActivated { .. } => None,
+            WorldEvent::SoftRuleExpired { .. } => None,
+            WorldEvent::SoftRuleRepealed { .. } => None,
         }
     }
 

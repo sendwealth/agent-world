@@ -1,0 +1,4041 @@
+[
+  {
+    "id": "64bfbe2f-c9c5-4c3c-9407-c469fd65a72d",
+    "name": "叶敏",
+    "phase": "idle",
+    "money": 539.51,
+    "tokens": 94.9,
+    "reputation": 41.6,
+    "personality_traits": {
+      "openness": 0.12,
+      "conscientiousness": 0.33,
+      "extraversion": 0.29,
+      "agreeableness": 0.73,
+      "neuroticism": 0.68
+    },
+    "values": [
+      "平等",
+      "团结",
+      "智慧",
+      "自由",
+      "博爱"
+    ],
+    "skills": {
+      "trading": 1.0,
+      "enchanting": 1.0,
+      "researching": 1.0
+    },
+    "relationships": [
+      {
+        "target_id": "b20ece5d-cd92-443f-805e-d973993ee573",
+        "target_name": "张凡",
+        "type": "trade_partner",
+        "strength": 0.68
+      },
+      {
+        "target_id": "6fd4bd19-7dbc-4c47-a63a-27c69f23f9b9",
+        "target_name": "沈芳",
+        "type": "trade_partner",
+        "strength": 0.53
+      },
+      {
+        "target_id": "f634a1d4-129e-4714-9f7d-e4c461ee772b",
+        "target_name": "郑敏",
+        "type": "trade_partner",
+        "strength": 0.97
+      },
+      {
+        "target_id": "ef918350-d0f0-479e-bf20-88142398403a",
+        "target_name": "赵军",
+        "type": "ally",
+        "strength": 0.7
+      }
+    ],
+    "memories": [
+      "在Tick 2809，我学会了researching的基础知识。",
+      "完成了一项高难度的任务，获得了486金币的奖励。",
+      "完成了一项高难度的任务，获得了158金币的奖励。",
+      "见证了世界上第一条规则的通过，这是历史性的一刻。",
+      "在星辰商会的选举中，我投票给了王凡。"
+    ],
+    "birth_tick": 0,
+    "death_tick": null,
+    "alive": true
+  },
+  {
+    "id": "b20ece5d-cd92-443f-805e-d973993ee573",
+    "name": "张凡",
+    "phase": "idle",
+    "money": 797.89,
+    "tokens": 136.2,
+    "reputation": 78.1,
+    "personality_traits": {
+      "openness": 0.78,
+      "conscientiousness": 0.69,
+      "extraversion": 0.39,
+      "agreeableness": 0.23,
+      "neuroticism": 0.91
+    },
+    "values": [
+      "平等",
+      "仁慈",
+      "智慧",
+      "诚实"
+    ],
+    "skills": {
+      "smelting": 0.62,
+      "healing": 0.48,
+      "cooking": 0.86,
+      "building": 0.78,
+      "farming": 0.6
+    },
+    "relationships": [
+      {
+        "target_id": "73848129-9139-4f69-b3af-143f10b13767",
+        "target_name": "胡博",
+        "type": "rival",
+        "strength": 0.71
+      },
+      {
+        "target_id": "8934306d-c573-4364-b7d5-c2e70364b6ef",
+        "target_name": "袁博",
+        "type": "friend",
+        "strength": 0.38
+      },
+      {
+        "target_id": "610db35a-2cf0-42bf-9754-57c0994063d2",
+        "target_name": "吴宁",
+        "type": "mentor",
+        "strength": 0.66
+      },
+      {
+        "target_id": "d89cdcea-ae06-4ec4-b602-befa134d2327",
+        "target_name": "李强",
+        "type": "rival",
+        "strength": 0.5
+      },
+      {
+        "target_id": "d7463ef6-8abb-45e2-a359-347a08528c4a",
+        "target_name": "丁辉",
+        "type": "friend",
+        "strength": 0.39
+      },
+      {
+        "target_id": "b6d8aa0c-fce1-4226-9957-96aa90488cba",
+        "target_name": "吴辉",
+        "type": "ally",
+        "strength": 0.68
+      },
+      {
+        "target_id": "3b0acf6b-32da-41cb-99ab-e88a8fa2c747",
+        "target_name": "叶航",
+        "type": "ally",
+        "strength": 0.57
+      }
+    ],
+    "memories": [
+      "见证了世界上第一条规则的通过，这是历史性的一刻。",
+      "与罗明的第一次交易让我赚取了426金币。",
+      "在智慧学院的培训中提升了我的smelting技能。",
+      "在Tick 3229，我的smelting技能达到了大师级别。",
+      "经历了一次经济危机，损失了380金币。"
+    ],
+    "birth_tick": 0,
+    "death_tick": null,
+    "alive": true
+  },
+  {
+    "id": "44a80206-9266-41a9-91eb-db9ced054092",
+    "name": "杜芳",
+    "phase": "idle",
+    "money": 991.38,
+    "tokens": 87.9,
+    "reputation": 26.0,
+    "personality_traits": {
+      "openness": 0.14,
+      "conscientiousness": 0.29,
+      "extraversion": 0.35,
+      "agreeableness": 0.17,
+      "neuroticism": 0.3
+    },
+    "values": [
+      "智慧",
+      "和谐",
+      "忠诚"
+    ],
+    "skills": {
+      "crafting": 0.62,
+      "healing": 1.0,
+      "smelting": 1.0,
+      "trading": 0.8,
+      "fishing": 0.53
+    },
+    "relationships": [
+      {
+        "target_id": "ba1de122-b483-492b-b953-271699b4adde",
+        "target_name": "魏秀英",
+        "type": "neutral",
+        "strength": 0.7
+      },
+      {
+        "target_id": "b20ece5d-cd92-443f-805e-d973993ee573",
+        "target_name": "张凡",
+        "type": "friend",
+        "strength": 0.98
+      },
+      {
+        "target_id": "852203f6-2403-4901-a4b7-3375e74db9b6",
+        "target_name": "罗涛",
+        "type": "mentor",
+        "strength": 0.28
+      },
+      {
+        "target_id": "f634a1d4-129e-4714-9f7d-e4c461ee772b",
+        "target_name": "郑敏",
+        "type": "trade_partner",
+        "strength": 0.64
+      },
+      {
+        "target_id": "8934306d-c573-4364-b7d5-c2e70364b6ef",
+        "target_name": "袁博",
+        "type": "ally",
+        "strength": 0.95
+      }
+    ],
+    "memories": [
+      "与吕磊成为了好朋友，我们一起合作了很多项目。",
+      "与韩明发生了争执，但最终和解了。",
+      "在Tick 118，我发现了一个新的木材矿脉。",
+      "在Tick 3997，我发现了一个新的水晶矿脉。",
+      "参与了文化节的筹备工作，认识了很多新朋友。",
+      "加入了铁壁联盟，这是我在这个世界的第一个组织。",
+      "在Tick 3951，我学会了healing的基础知识。"
+    ],
+    "birth_tick": 0,
+    "death_tick": null,
+    "alive": true
+  },
+  {
+    "id": "3b0acf6b-32da-41cb-99ab-e88a8fa2c747",
+    "name": "叶航",
+    "phase": "idle",
+    "money": 198.96,
+    "tokens": 76.3,
+    "reputation": 29.2,
+    "personality_traits": {
+      "openness": 0.57,
+      "conscientiousness": 0.68,
+      "extraversion": 0.82,
+      "agreeableness": 0.76,
+      "neuroticism": 0.29
+    },
+    "values": [
+      "坚韧",
+      "勇气",
+      "智慧"
+    ],
+    "skills": {
+      "mining": 0.72,
+      "trading": 0.74,
+      "cooking": 0.87,
+      "hunting": 1.0,
+      "healing": 0.63
+    },
+    "relationships": [
+      {
+        "target_id": "9068e6d1-cd19-4944-ab35-f603af181236",
+        "target_name": "郑博",
+        "type": "friend",
+        "strength": 0.36
+      },
+      {
+        "target_id": "066c7536-6916-435e-ae0c-f3d079162147",
+        "target_name": "杜勇",
+        "type": "trade_partner",
+        "strength": 0.38
+      },
+      {
+        "target_id": "f45f8066-2b76-44df-8bc9-29a5ce5b8cf3",
+        "target_name": "林瑶",
+        "type": "mentor",
+        "strength": 0.89
+      },
+      {
+        "target_id": "1e594f6d-929b-4ee6-a11b-ae3a1f1089ab",
+        "target_name": "宋峰",
+        "type": "friend",
+        "strength": 0.29
+      },
+      {
+        "target_id": "03fcaff3-ca4e-4954-bc88-3deab00db8aa",
+        "target_name": "梁慧",
+        "type": "mentor",
+        "strength": 0.77
+      },
+      {
+        "target_id": "2efe4d44-41c5-4e53-acc3-b65cb461cee1",
+        "target_name": "苏梦",
+        "type": "mentor",
+        "strength": 0.82
+      },
+      {
+        "target_id": "89f4a6ef-38ee-4cbd-984e-dad232753311",
+        "target_name": "周晨",
+        "type": "trade_partner",
+        "strength": 0.25
+      },
+      {
+        "target_id": "4e043d00-3d43-486f-889e-eade2d75b96c",
+        "target_name": "韩明",
+        "type": "neutral",
+        "strength": 0.97
+      }
+    ],
+    "memories": [
+      "与郑敏发生了争执，但最终和解了。",
+      "参与了铁壁联盟的贸易活动，获得了丰厚的利润。",
+      "参与了文化节的筹备工作，认识了很多新朋友。",
+      "在星辰商会的选举中，我投票给了魏秀英。",
+      "在Tick 2592，我学会了hunting的基础知识。",
+      "参与了匠人工会的贸易活动，获得了丰厚的利润。",
+      "参与了丰收行会的贸易活动，获得了丰厚的利润。",
+      "见证了世界上第一条规则的通过，这是历史性的一刻。",
+      "在Tick 1303，我发现了一个新的木材矿脉。",
+      "在Tick 488，我发现了一个新的宝石矿脉。"
+    ],
+    "birth_tick": 0,
+    "death_tick": 3851,
+    "alive": false
+  },
+  {
+    "id": "6b8f4d24-9645-482d-81b8-905a9c080e9e",
+    "name": "董欣",
+    "phase": "idle",
+    "money": 774.9,
+    "tokens": 114.1,
+    "reputation": 25.0,
+    "personality_traits": {
+      "openness": 0.41,
+      "conscientiousness": 0.95,
+      "extraversion": 0.22,
+      "agreeableness": 0.52,
+      "neuroticism": 0.74
+    },
+    "values": [
+      "秩序",
+      "公正",
+      "仁慈"
+    ],
+    "skills": {
+      "cooking": 0.67,
+      "mining": 1.0,
+      "teaching": 0.96,
+      "weaving": 0.52,
+      "enchanting": 0.85,
+      "guarding": 0.81
+    },
+    "relationships": [
+      {
+        "target_id": "73848129-9139-4f69-b3af-143f10b13767",
+        "target_name": "胡博",
+        "type": "rival",
+        "strength": 0.29
+      },
+      {
+        "target_id": "4faa1f5e-b9a9-4b10-8edc-2bd0f233320d",
+        "target_name": "丁凯",
+        "type": "mentor",
+        "strength": 0.99
+      },
+      {
+        "target_id": "9ed27282-5eba-45a1-a044-8aab764fbf33",
+        "target_name": "许洋",
+        "type": "ally",
+        "strength": 0.99
+      },
+      {
+        "target_id": "ceac8c64-28d3-4701-ba7c-8aa2e2090acd",
+        "target_name": "郑昊",
+        "type": "friend",
+        "strength": 0.94
+      },
+      {
+        "target_id": "9f40f080-1096-4aa7-9ef9-16283380aeac",
+        "target_name": "梁蕊",
+        "type": "ally",
+        "strength": 0.78
+      },
+      {
+        "target_id": "852203f6-2403-4901-a4b7-3375e74db9b6",
+        "target_name": "罗涛",
+        "type": "friend",
+        "strength": 0.11
+      }
+    ],
+    "memories": [
+      "在Tick 1331，我发现了一个新的宝石矿脉。",
+      "与袁博成为了好朋友，我们一起合作了很多项目。",
+      "与梁蕊成为了好朋友，我们一起合作了很多项目。",
+      "与韩明发生了争执，但最终和解了。",
+      "在铁壁联盟的选举中，我投票给了董洁。",
+      "在智慧学院的选举中，我投票给了蔡娜。",
+      "在匠人工会的选举中，我投票给了林军。",
+      "与韩明成为了好朋友，我们一起合作了很多项目。",
+      "与吴宁的第一次交易让我赚取了68金币。",
+      "目睹了袁琳的离世，感到非常悲伤。"
+    ],
+    "birth_tick": 0,
+    "death_tick": null,
+    "alive": true
+  },
+  {
+    "id": "3c98774b-f91c-4dc4-a28f-17d20dedac3b",
+    "name": "许军",
+    "phase": "idle",
+    "money": 219.63,
+    "tokens": 61.2,
+    "reputation": 34.5,
+    "personality_traits": {
+      "openness": 0.49,
+      "conscientiousness": 0.91,
+      "extraversion": 0.84,
+      "agreeableness": 0.32,
+      "neuroticism": 0.53
+    },
+    "values": [
+      "繁荣",
+      "平等",
+      "公正"
+    ],
+    "skills": {
+      "smelting": 0.36,
+      "fishing": 1.0,
+      "researching": 1.0,
+      "cooking": 0.54,
+      "trading": 0.83
+    },
+    "relationships": [
+      {
+        "target_id": "5e2380f9-7c77-4955-a326-e5b181714f1a",
+        "target_name": "魏博",
+        "type": "rival",
+        "strength": 0.85
+      },
+      {
+        "target_id": "4faa1f5e-b9a9-4b10-8edc-2bd0f233320d",
+        "target_name": "丁凯",
+        "type": "trade_partner",
+        "strength": 0.6
+      },
+      {
+        "target_id": "18639550-f885-4e23-95fe-d4eb21a6001e",
+        "target_name": "吕磊",
+        "type": "friend",
+        "strength": 0.84
+      },
+      {
+        "target_id": "be74d4fd-1c5a-4813-a6e2-e45cee40ac09",
+        "target_name": "郭宁",
+        "type": "trade_partner",
+        "strength": 0.85
+      },
+      {
+        "target_id": "505c8c65-648f-4ca6-9b79-9161930224a0",
+        "target_name": "罗明",
+        "type": "trade_partner",
+        "strength": 0.54
+      },
+      {
+        "target_id": "59073a34-862d-42bc-9311-5296a1dc1b4c",
+        "target_name": "沈静",
+        "type": "neutral",
+        "strength": 0.52
+      },
+      {
+        "target_id": "9ed27282-5eba-45a1-a044-8aab764fbf33",
+        "target_name": "许洋",
+        "type": "friend",
+        "strength": 0.81
+      },
+      {
+        "target_id": "ba1de122-b483-492b-b953-271699b4adde",
+        "target_name": "魏秀英",
+        "type": "rival",
+        "strength": 0.34
+      }
+    ],
+    "memories": [
+      "在Tick 1105，我的fishing技能达到了大师级别。",
+      "完成了一项高难度的任务，获得了484金币的奖励。",
+      "在Tick 443，我的trading技能达到了大师级别。",
+      "与韩岚发生了争执，但最终和解了。",
+      "与林军的第一次交易让我赚取了90金币。"
+    ],
+    "birth_tick": 0,
+    "death_tick": 2127,
+    "alive": false
+  },
+  {
+    "id": "852203f6-2403-4901-a4b7-3375e74db9b6",
+    "name": "罗涛",
+    "phase": "idle",
+    "money": 100.26,
+    "tokens": 119.0,
+    "reputation": 72.4,
+    "personality_traits": {
+      "openness": 0.15,
+      "conscientiousness": 0.85,
+      "extraversion": 0.9,
+      "agreeableness": 0.17,
+      "neuroticism": 0.51
+    },
+    "values": [
+      "坚韧",
+      "繁荣",
+      "仁慈"
+    ],
+    "skills": {
+      "crafting": 0.71,
+      "fishing": 0.85,
+      "guarding": 1.0,
+      "researching": 1.0
+    },
+    "relationships": [
+      {
+        "target_id": "e876fcf6-6f31-4dfa-b823-1f36e1a2a378",
+        "target_name": "董磊",
+        "type": "mentor",
+        "strength": 0.92
+      },
+      {
+        "target_id": "b6d8aa0c-fce1-4226-9957-96aa90488cba",
+        "target_name": "吴辉",
+        "type": "neutral",
+        "strength": 0.32
+      },
+      {
+        "target_id": "d7463ef6-8abb-45e2-a359-347a08528c4a",
+        "target_name": "丁辉",
+        "type": "friend",
+        "strength": 0.79
+      },
+      {
+        "target_id": "d14d9e25-5b83-4fb0-829d-f739ddd88fa7",
+        "target_name": "范杰",
+        "type": "mentor",
+        "strength": 0.99
+      },
+      {
+        "target_id": "cb0778cd-bbeb-4cc3-bb0b-d1003475de4f",
+        "target_name": "曹洋",
+        "type": "friend",
+        "strength": 0.64
+      },
+      {
+        "target_id": "9ed35c86-9081-409d-ac55-937f60ceefb5",
+        "target_name": "董洁",
+        "type": "trade_partner",
+        "strength": 0.62
+      },
+      {
+        "target_id": "4faa1f5e-b9a9-4b10-8edc-2bd0f233320d",
+        "target_name": "丁凯",
+        "type": "ally",
+        "strength": 0.49
+      },
+      {
+        "target_id": "18639550-f885-4e23-95fe-d4eb21a6001e",
+        "target_name": "吕磊",
+        "type": "trade_partner",
+        "strength": 0.67
+      }
+    ],
+    "memories": [
+      "参与了匠人工会的贸易活动，获得了丰厚的利润。",
+      "加入了星辰商会，这是我在这个世界的第一个组织。",
+      "与吴辉发生了争执，但最终和解了。",
+      "与宋峰成为了好朋友，我们一起合作了很多项目。",
+      "在Tick 3464，我的fishing技能达到了大师级别。",
+      "在Tick 3363，我发现了一个新的石材矿脉。",
+      "完成了一项高难度的任务，获得了236金币的奖励。",
+      "在Tick 580，我的guarding技能达到了大师级别。",
+      "在Tick 3565，我的researching技能达到了大师级别。"
+    ],
+    "birth_tick": 0,
+    "death_tick": null,
+    "alive": true
+  },
+  {
+    "id": "603d6b18-5b40-4390-88fc-6410d2f925f2",
+    "name": "韩岚",
+    "phase": "idle",
+    "money": 953.76,
+    "tokens": 98.5,
+    "reputation": 91.3,
+    "personality_traits": {
+      "openness": 0.65,
+      "conscientiousness": 0.47,
+      "extraversion": 0.54,
+      "agreeableness": 0.2,
+      "neuroticism": 0.29
+    },
+    "values": [
+      "自由",
+      "团结",
+      "繁荣",
+      "创新"
+    ],
+    "skills": {
+      "farming": 0.59,
+      "mining": 0.23,
+      "hunting": 0.41,
+      "fishing": 0.91
+    },
+    "relationships": [
+      {
+        "target_id": "d89cdcea-ae06-4ec4-b602-befa134d2327",
+        "target_name": "李强",
+        "type": "trade_partner",
+        "strength": 0.25
+      },
+      {
+        "target_id": "d7463ef6-8abb-45e2-a359-347a08528c4a",
+        "target_name": "丁辉",
+        "type": "friend",
+        "strength": 0.23
+      },
+      {
+        "target_id": "9068e6d1-cd19-4944-ab35-f603af181236",
+        "target_name": "郑博",
+        "type": "mentor",
+        "strength": 0.89
+      },
+      {
+        "target_id": "ef918350-d0f0-479e-bf20-88142398403a",
+        "target_name": "赵军",
+        "type": "rival",
+        "strength": 0.42
+      },
+      {
+        "target_id": "59073a34-862d-42bc-9311-5296a1dc1b4c",
+        "target_name": "沈静",
+        "type": "friend",
+        "strength": 0.35
+      },
+      {
+        "target_id": "b20ece5d-cd92-443f-805e-d973993ee573",
+        "target_name": "张凡",
+        "type": "mentor",
+        "strength": 0.67
+      }
+    ],
+    "memories": [
+      "加入了智慧学院，这是我在这个世界的第一个组织。",
+      "见证了世界上第一条规则的通过，这是历史性的一刻。",
+      "在Tick 4333，我学会了mining的基础知识。",
+      "完成了一项高难度的任务，获得了329金币的奖励。",
+      "在Tick 3323，我的mining技能达到了大师级别。",
+      "在Tick 2750，我学会了mining的基础知识。",
+      "经历了一次经济危机，损失了271金币。",
+      "在Tick 1320，我的farming技能达到了大师级别。",
+      "经历了一次经济危机，损失了381金币。",
+      "参与了文化节的筹备工作，认识了很多新朋友。"
+    ],
+    "birth_tick": 0,
+    "death_tick": null,
+    "alive": true
+  },
+  {
+    "id": "d7463ef6-8abb-45e2-a359-347a08528c4a",
+    "name": "丁辉",
+    "phase": "idle",
+    "money": 2046.22,
+    "tokens": 69.0,
+    "reputation": 15.3,
+    "personality_traits": {
+      "openness": 0.59,
+      "conscientiousness": 0.31,
+      "extraversion": 0.5,
+      "agreeableness": 0.45,
+      "neuroticism": 0.18
+    },
+    "values": [
+      "智慧",
+      "勇气",
+      "仁慈",
+      "坚韧",
+      "忠诚"
+    ],
+    "skills": {
+      "fishing": 1.0,
+      "enchanting": 1.0,
+      "smelting": 1.0
+    },
+    "relationships": [
+      {
+        "target_id": "3b0acf6b-32da-41cb-99ab-e88a8fa2c747",
+        "target_name": "叶航",
+        "type": "ally",
+        "strength": 0.27
+      },
+      {
+        "target_id": "9ed35c86-9081-409d-ac55-937f60ceefb5",
+        "target_name": "董洁",
+        "type": "neutral",
+        "strength": 0.26
+      },
+      {
+        "target_id": "0ebf9952-f836-4945-a920-4d7d74b004e6",
+        "target_name": "王凡",
+        "type": "friend",
+        "strength": 0.64
+      },
+      {
+        "target_id": "e876fcf6-6f31-4dfa-b823-1f36e1a2a378",
+        "target_name": "董磊",
+        "type": "rival",
+        "strength": 0.59
+      },
+      {
+        "target_id": "6b8f4d24-9645-482d-81b8-905a9c080e9e",
+        "target_name": "董欣",
+        "type": "trade_partner",
+        "strength": 0.84
+      }
+    ],
+    "memories": [
+      "与袁博的第一次交易让我赚取了303金币。",
+      "与胡勇成为了好朋友，我们一起合作了很多项目。",
+      "在丰收行会的培训中提升了我的enchanting技能。",
+      "加入了铁壁联盟，这是我在这个世界的第一个组织。",
+      "与王凡成为了好朋友，我们一起合作了很多项目。",
+      "加入了星辰商会，这是我在这个世界的第一个组织。",
+      "在Tick 1075，我学会了fishing的基础知识。",
+      "与韩明成为了好朋友，我们一起合作了很多项目。",
+      "在Tick 2170，我的enchanting技能达到了大师级别。",
+      "参与了文化节的筹备工作，认识了很多新朋友。"
+    ],
+    "birth_tick": 0,
+    "death_tick": null,
+    "alive": true
+  },
+  {
+    "id": "9ed27282-5eba-45a1-a044-8aab764fbf33",
+    "name": "许洋",
+    "phase": "idle",
+    "money": 791.67,
+    "tokens": 87.9,
+    "reputation": 73.8,
+    "personality_traits": {
+      "openness": 0.34,
+      "conscientiousness": 0.31,
+      "extraversion": 0.88,
+      "agreeableness": 0.48,
+      "neuroticism": 0.83
+    },
+    "values": [
+      "平等",
+      "自由",
+      "公正",
+      "繁荣",
+      "诚实"
+    ],
+    "skills": {
+      "enchanting": 0.64,
+      "weaving": 0.6,
+      "trading": 0.45
+    },
+    "relationships": [
+      {
+        "target_id": "5b50be12-4858-4b49-aa96-e5379a595bb8",
+        "target_name": "于勇",
+        "type": "ally",
+        "strength": 0.42
+      },
+      {
+        "target_id": "5e2380f9-7c77-4955-a326-e5b181714f1a",
+        "target_name": "魏博",
+        "type": "rival",
+        "strength": 0.11
+      },
+      {
+        "target_id": "4e043d00-3d43-486f-889e-eade2d75b96c",
+        "target_name": "韩明",
+        "type": "ally",
+        "strength": 0.35
+      },
+      {
+        "target_id": "d89cdcea-ae06-4ec4-b602-befa134d2327",
+        "target_name": "李强",
+        "type": "mentor",
+        "strength": 0.47
+      },
+      {
+        "target_id": "1e594f6d-929b-4ee6-a11b-ae3a1f1089ab",
+        "target_name": "宋峰",
+        "type": "rival",
+        "strength": 0.19
+      },
+      {
+        "target_id": "9068e6d1-cd19-4944-ab35-f603af181236",
+        "target_name": "郑博",
+        "type": "rival",
+        "strength": 0.55
+      },
+      {
+        "target_id": "852203f6-2403-4901-a4b7-3375e74db9b6",
+        "target_name": "罗涛",
+        "type": "rival",
+        "strength": 0.82
+      },
+      {
+        "target_id": "f634a1d4-129e-4714-9f7d-e4c461ee772b",
+        "target_name": "郑敏",
+        "type": "ally",
+        "strength": 0.65
+      }
+    ],
+    "memories": [
+      "参与了丰收行会的贸易活动，获得了丰厚的利润。",
+      "目睹了韩岚的离世，感到非常悲伤。",
+      "加入了丰收行会，这是我在这个世界的第一个组织。",
+      "在Tick 1000，我发现了一个新的铁矿矿脉。",
+      "目睹了林瑶的离世，感到非常悲伤。",
+      "经历了一次经济危机，损失了415金币。"
+    ],
+    "birth_tick": 0,
+    "death_tick": null,
+    "alive": true
+  },
+  {
+    "id": "f45f8066-2b76-44df-8bc9-29a5ce5b8cf3",
+    "name": "林瑶",
+    "phase": "idle",
+    "money": 1134.76,
+    "tokens": 103.1,
+    "reputation": 61.3,
+    "personality_traits": {
+      "openness": 0.34,
+      "conscientiousness": 0.69,
+      "extraversion": 0.72,
+      "agreeableness": 0.77,
+      "neuroticism": 0.66
+    },
+    "values": [
+      "秩序",
+      "创新",
+      "和谐",
+      "诚实"
+    ],
+    "skills": {
+      "cooking": 0.44,
+      "hunting": 1.0,
+      "researching": 0.59
+    },
+    "relationships": [
+      {
+        "target_id": "f634a1d4-129e-4714-9f7d-e4c461ee772b",
+        "target_name": "郑敏",
+        "type": "friend",
+        "strength": 0.2
+      },
+      {
+        "target_id": "1e594f6d-929b-4ee6-a11b-ae3a1f1089ab",
+        "target_name": "宋峰",
+        "type": "rival",
+        "strength": 0.93
+      },
+      {
+        "target_id": "be74d4fd-1c5a-4813-a6e2-e45cee40ac09",
+        "target_name": "郭宁",
+        "type": "mentor",
+        "strength": 0.41
+      },
+      {
+        "target_id": "d89cdcea-ae06-4ec4-b602-befa134d2327",
+        "target_name": "李强",
+        "type": "neutral",
+        "strength": 0.43
+      },
+      {
+        "target_id": "603d6b18-5b40-4390-88fc-6410d2f925f2",
+        "target_name": "韩岚",
+        "type": "mentor",
+        "strength": 0.9
+      },
+      {
+        "target_id": "4faa1f5e-b9a9-4b10-8edc-2bd0f233320d",
+        "target_name": "丁凯",
+        "type": "ally",
+        "strength": 0.57
+      },
+      {
+        "target_id": "505c8c65-648f-4ca6-9b79-9161930224a0",
+        "target_name": "罗明",
+        "type": "trade_partner",
+        "strength": 0.25
+      }
+    ],
+    "memories": [
+      "在Tick 2509，我发现了一个新的金矿矿脉。",
+      "与沈芳发生了争执，但最终和解了。",
+      "与杜芳的第一次交易让我赚取了256金币。",
+      "参与了丰收行会的贸易活动，获得了丰厚的利润。",
+      "在Tick 4145，我的hunting技能达到了大师级别。",
+      "参与了丰收行会的贸易活动，获得了丰厚的利润。",
+      "在Tick 3249，我发现了一个新的木材矿脉。",
+      "见证了世界上第一条规则的通过，这是历史性的一刻。",
+      "在Tick 2540，我学会了researching的基础知识。"
+    ],
+    "birth_tick": 0,
+    "death_tick": null,
+    "alive": true
+  },
+  {
+    "id": "22dddc53-c0fb-42d0-9233-9eff53808cf8",
+    "name": "蔡娜",
+    "phase": "idle",
+    "money": 766.7,
+    "tokens": 76.6,
+    "reputation": 83.0,
+    "personality_traits": {
+      "openness": 0.82,
+      "conscientiousness": 0.16,
+      "extraversion": 0.16,
+      "agreeableness": 0.83,
+      "neuroticism": 0.44
+    },
+    "values": [
+      "创新",
+      "团结",
+      "诚实",
+      "自由",
+      "坚韧"
+    ],
+    "skills": {
+      "teaching": 1.0,
+      "fishing": 1.0,
+      "cooking": 1.0
+    },
+    "relationships": [
+      {
+        "target_id": "b20ece5d-cd92-443f-805e-d973993ee573",
+        "target_name": "张凡",
+        "type": "neutral",
+        "strength": 0.23
+      },
+      {
+        "target_id": "6fd4bd19-7dbc-4c47-a63a-27c69f23f9b9",
+        "target_name": "沈芳",
+        "type": "rival",
+        "strength": 0.38
+      },
+      {
+        "target_id": "603d6b18-5b40-4390-88fc-6410d2f925f2",
+        "target_name": "韩岚",
+        "type": "rival",
+        "strength": 0.22
+      },
+      {
+        "target_id": "57c76f1e-63be-4e7f-98b6-2d048e7df0ab",
+        "target_name": "袁琳",
+        "type": "friend",
+        "strength": 0.48
+      },
+      {
+        "target_id": "d7463ef6-8abb-45e2-a359-347a08528c4a",
+        "target_name": "丁辉",
+        "type": "friend",
+        "strength": 0.17
+      }
+    ],
+    "memories": [
+      "与魏秀英的第一次交易让我赚取了305金币。",
+      "在星辰商会的选举中，我投票给了苏梦。",
+      "见证了世界上第一条规则的通过，这是历史性的一刻。",
+      "与宋峰发生了争执，但最终和解了。",
+      "与杜勇成为了好朋友，我们一起合作了很多项目。",
+      "在Tick 3409，我发现了一个新的宝石矿脉。",
+      "经历了一次经济危机，损失了60金币。",
+      "加入了铁壁联盟，这是我在这个世界的第一个组织。",
+      "在Tick 1396，我发现了一个新的金矿矿脉。"
+    ],
+    "birth_tick": 0,
+    "death_tick": null,
+    "alive": true
+  },
+  {
+    "id": "18639550-f885-4e23-95fe-d4eb21a6001e",
+    "name": "吕磊",
+    "phase": "idle",
+    "money": 555.01,
+    "tokens": 116.8,
+    "reputation": 66.8,
+    "personality_traits": {
+      "openness": 0.49,
+      "conscientiousness": 0.89,
+      "extraversion": 0.9,
+      "agreeableness": 0.11,
+      "neuroticism": 0.63
+    },
+    "values": [
+      "平等",
+      "仁慈",
+      "繁荣",
+      "创新",
+      "坚韧"
+    ],
+    "skills": {
+      "crafting": 0.88,
+      "healing": 0.69,
+      "mining": 0.78,
+      "trading": 1.0,
+      "smelting": 1.0
+    },
+    "relationships": [
+      {
+        "target_id": "2efe4d44-41c5-4e53-acc3-b65cb461cee1",
+        "target_name": "苏梦",
+        "type": "neutral",
+        "strength": 0.56
+      },
+      {
+        "target_id": "03fcaff3-ca4e-4954-bc88-3deab00db8aa",
+        "target_name": "梁慧",
+        "type": "friend",
+        "strength": 0.52
+      },
+      {
+        "target_id": "44a80206-9266-41a9-91eb-db9ced054092",
+        "target_name": "杜芳",
+        "type": "trade_partner",
+        "strength": 0.14
+      },
+      {
+        "target_id": "ba1de122-b483-492b-b953-271699b4adde",
+        "target_name": "魏秀英",
+        "type": "trade_partner",
+        "strength": 0.7
+      },
+      {
+        "target_id": "852203f6-2403-4901-a4b7-3375e74db9b6",
+        "target_name": "罗涛",
+        "type": "friend",
+        "strength": 0.8
+      },
+      {
+        "target_id": "73848129-9139-4f69-b3af-143f10b13767",
+        "target_name": "胡博",
+        "type": "ally",
+        "strength": 0.28
+      }
+    ],
+    "memories": [
+      "参与了文化节的筹备工作，认识了很多新朋友。",
+      "在Tick 2122，我发现了一个新的金矿矿脉。",
+      "在智慧学院的选举中，我投票给了苏梦。",
+      "在Tick 3164，我的crafting技能达到了大师级别。",
+      "与罗明成为了好朋友，我们一起合作了很多项目。"
+    ],
+    "birth_tick": 0,
+    "death_tick": null,
+    "alive": true
+  },
+  {
+    "id": "ba1de122-b483-492b-b953-271699b4adde",
+    "name": "魏秀英",
+    "phase": "idle",
+    "money": 2081.05,
+    "tokens": 127.1,
+    "reputation": 47.4,
+    "personality_traits": {
+      "openness": 0.9,
+      "conscientiousness": 0.21,
+      "extraversion": 0.2,
+      "agreeableness": 0.19,
+      "neuroticism": 0.57
+    },
+    "values": [
+      "和谐",
+      "团结",
+      "创新",
+      "博爱"
+    ],
+    "skills": {
+      "trading": 0.56,
+      "fishing": 0.63,
+      "smelting": 0.79,
+      "building": 0.2,
+      "researching": 0.43
+    },
+    "relationships": [
+      {
+        "target_id": "22dddc53-c0fb-42d0-9233-9eff53808cf8",
+        "target_name": "蔡娜",
+        "type": "friend",
+        "strength": 0.23
+      },
+      {
+        "target_id": "cb0778cd-bbeb-4cc3-bb0b-d1003475de4f",
+        "target_name": "曹洋",
+        "type": "neutral",
+        "strength": 0.95
+      },
+      {
+        "target_id": "2e2e519e-f303-4483-9580-dbd43c9bebaa",
+        "target_name": "沈昊",
+        "type": "ally",
+        "strength": 0.41
+      },
+      {
+        "target_id": "b20ece5d-cd92-443f-805e-d973993ee573",
+        "target_name": "张凡",
+        "type": "rival",
+        "strength": 0.87
+      }
+    ],
+    "memories": [
+      "完成了一项高难度的任务，获得了147金币的奖励。",
+      "与胡勇的第一次交易让我赚取了343金币。",
+      "在Tick 697，我发现了一个新的石材矿脉。",
+      "加入了丰收行会，这是我在这个世界的第一个组织。",
+      "见证了世界上第一条规则的通过，这是历史性的一刻。",
+      "在智慧学院的培训中提升了我的trading技能。",
+      "在丰收行会的培训中提升了我的fishing技能。",
+      "目睹了董洁的离世，感到非常悲伤。"
+    ],
+    "birth_tick": 0,
+    "death_tick": null,
+    "alive": true
+  },
+  {
+    "id": "5890f335-76f5-4914-b572-cd4fb5aaf37f",
+    "name": "林军",
+    "phase": "idle",
+    "money": 3082.19,
+    "tokens": 116.7,
+    "reputation": 55.9,
+    "personality_traits": {
+      "openness": 0.73,
+      "conscientiousness": 0.57,
+      "extraversion": 0.46,
+      "agreeableness": 0.11,
+      "neuroticism": 0.16
+    },
+    "values": [
+      "仁慈",
+      "秩序",
+      "繁荣",
+      "自由",
+      "勇气"
+    ],
+    "skills": {
+      "teaching": 0.72,
+      "crafting": 0.88,
+      "farming": 0.66,
+      "building": 0.95
+    },
+    "relationships": [
+      {
+        "target_id": "f30323bd-6cfb-4a6c-a111-c67f6128c3ba",
+        "target_name": "吴涛",
+        "type": "ally",
+        "strength": 0.3
+      },
+      {
+        "target_id": "ab4aad14-f90c-4268-80c7-8b967f3b2c41",
+        "target_name": "胡勇",
+        "type": "rival",
+        "strength": 0.97
+      },
+      {
+        "target_id": "ef918350-d0f0-479e-bf20-88142398403a",
+        "target_name": "赵军",
+        "type": "rival",
+        "strength": 0.91
+      },
+      {
+        "target_id": "59073a34-862d-42bc-9311-5296a1dc1b4c",
+        "target_name": "沈静",
+        "type": "ally",
+        "strength": 0.1
+      },
+      {
+        "target_id": "6b8f4d24-9645-482d-81b8-905a9c080e9e",
+        "target_name": "董欣",
+        "type": "neutral",
+        "strength": 0.19
+      },
+      {
+        "target_id": "852203f6-2403-4901-a4b7-3375e74db9b6",
+        "target_name": "罗涛",
+        "type": "rival",
+        "strength": 0.93
+      },
+      {
+        "target_id": "ceac8c64-28d3-4701-ba7c-8aa2e2090acd",
+        "target_name": "郑昊",
+        "type": "neutral",
+        "strength": 0.53
+      },
+      {
+        "target_id": "64bfbe2f-c9c5-4c3c-9407-c469fd65a72d",
+        "target_name": "叶敏",
+        "type": "neutral",
+        "strength": 0.63
+      }
+    ],
+    "memories": [
+      "与杜勇的第一次交易让我赚取了435金币。",
+      "见证了世界上第一条规则的通过，这是历史性的一刻。",
+      "经历了一次经济危机，损失了149金币。",
+      "在星辰商会的选举中，我投票给了罗明。",
+      "参与了智慧学院的贸易活动，获得了丰厚的利润。",
+      "见证了世界上第一条规则的通过，这是历史性的一刻。",
+      "在Tick 645，我的teaching技能达到了大师级别。"
+    ],
+    "birth_tick": 0,
+    "death_tick": null,
+    "alive": true
+  },
+  {
+    "id": "57c76f1e-63be-4e7f-98b6-2d048e7df0ab",
+    "name": "袁琳",
+    "phase": "idle",
+    "money": 1050.11,
+    "tokens": 137.2,
+    "reputation": 78.7,
+    "personality_traits": {
+      "openness": 0.93,
+      "conscientiousness": 0.74,
+      "extraversion": 0.89,
+      "agreeableness": 0.3,
+      "neuroticism": 0.24
+    },
+    "values": [
+      "仁慈",
+      "智慧",
+      "自由"
+    ],
+    "skills": {
+      "hunting": 0.72,
+      "healing": 0.74,
+      "weaving": 0.89,
+      "teaching": 0.59
+    },
+    "relationships": [
+      {
+        "target_id": "4e043d00-3d43-486f-889e-eade2d75b96c",
+        "target_name": "韩明",
+        "type": "rival",
+        "strength": 0.56
+      },
+      {
+        "target_id": "852203f6-2403-4901-a4b7-3375e74db9b6",
+        "target_name": "罗涛",
+        "type": "mentor",
+        "strength": 0.2
+      },
+      {
+        "target_id": "22dddc53-c0fb-42d0-9233-9eff53808cf8",
+        "target_name": "蔡娜",
+        "type": "trade_partner",
+        "strength": 0.21
+      },
+      {
+        "target_id": "2e2e519e-f303-4483-9580-dbd43c9bebaa",
+        "target_name": "沈昊",
+        "type": "friend",
+        "strength": 0.57
+      },
+      {
+        "target_id": "89f4a6ef-38ee-4cbd-984e-dad232753311",
+        "target_name": "周晨",
+        "type": "mentor",
+        "strength": 0.79
+      },
+      {
+        "target_id": "03fcaff3-ca4e-4954-bc88-3deab00db8aa",
+        "target_name": "梁慧",
+        "type": "neutral",
+        "strength": 0.36
+      }
+    ],
+    "memories": [
+      "与周晨成为了好朋友，我们一起合作了很多项目。",
+      "参与了铁壁联盟的贸易活动，获得了丰厚的利润。",
+      "在Tick 2313，我学会了weaving的基础知识。",
+      "与吴涛发生了争执，但最终和解了。",
+      "与杜芳成为了好朋友，我们一起合作了很多项目。"
+    ],
+    "birth_tick": 0,
+    "death_tick": null,
+    "alive": true
+  },
+  {
+    "id": "ab4aad14-f90c-4268-80c7-8b967f3b2c41",
+    "name": "胡勇",
+    "phase": "idle",
+    "money": 119.67,
+    "tokens": 146.3,
+    "reputation": 21.5,
+    "personality_traits": {
+      "openness": 0.79,
+      "conscientiousness": 0.49,
+      "extraversion": 0.36,
+      "agreeableness": 0.78,
+      "neuroticism": 0.29
+    },
+    "values": [
+      "公正",
+      "创新",
+      "智慧"
+    ],
+    "skills": {
+      "building": 1.0,
+      "smelting": 0.94,
+      "mining": 1.0,
+      "enchanting": 0.85,
+      "healing": 0.74
+    },
+    "relationships": [
+      {
+        "target_id": "44a80206-9266-41a9-91eb-db9ced054092",
+        "target_name": "杜芳",
+        "type": "ally",
+        "strength": 0.76
+      },
+      {
+        "target_id": "3c98774b-f91c-4dc4-a28f-17d20dedac3b",
+        "target_name": "许军",
+        "type": "neutral",
+        "strength": 0.98
+      },
+      {
+        "target_id": "b078e4e9-c727-4ef4-a883-b1b1a151dab1",
+        "target_name": "姜龙",
+        "type": "mentor",
+        "strength": 0.3
+      },
+      {
+        "target_id": "f2f3e11f-b991-4412-9b11-1cee6d433122",
+        "target_name": "徐明",
+        "type": "mentor",
+        "strength": 0.36
+      },
+      {
+        "target_id": "603d6b18-5b40-4390-88fc-6410d2f925f2",
+        "target_name": "韩岚",
+        "type": "mentor",
+        "strength": 0.27
+      },
+      {
+        "target_id": "89f4a6ef-38ee-4cbd-984e-dad232753311",
+        "target_name": "周晨",
+        "type": "friend",
+        "strength": 0.91
+      },
+      {
+        "target_id": "9ed35c86-9081-409d-ac55-937f60ceefb5",
+        "target_name": "董洁",
+        "type": "mentor",
+        "strength": 0.95
+      },
+      {
+        "target_id": "505c8c65-648f-4ca6-9b79-9161930224a0",
+        "target_name": "罗明",
+        "type": "trade_partner",
+        "strength": 0.26
+      }
+    ],
+    "memories": [
+      "在Tick 1791，我发现了一个新的宝石矿脉。",
+      "加入了丰收行会，这是我在这个世界的第一个组织。",
+      "加入了铁壁联盟，这是我在这个世界的第一个组织。",
+      "见证了世界上第一条规则的通过，这是历史性的一刻。",
+      "与韩明发生了争执，但最终和解了。",
+      "完成了一项高难度的任务，获得了242金币的奖励。",
+      "完成了一项高难度的任务，获得了447金币的奖励。",
+      "在Tick 259，我发现了一个新的宝石矿脉。",
+      "与王凡成为了好朋友，我们一起合作了很多项目。",
+      "见证了世界上第一条规则的通过，这是历史性的一刻。"
+    ],
+    "birth_tick": 0,
+    "death_tick": 1869,
+    "alive": false
+  },
+  {
+    "id": "179b10d4-2bd4-495a-bcba-9260e6f03e6c",
+    "name": "杨洁",
+    "phase": "idle",
+    "money": 263.87,
+    "tokens": 69.7,
+    "reputation": 72.0,
+    "personality_traits": {
+      "openness": 0.47,
+      "conscientiousness": 0.72,
+      "extraversion": 0.37,
+      "agreeableness": 0.62,
+      "neuroticism": 0.53
+    },
+    "values": [
+      "仁慈",
+      "团结",
+      "创新",
+      "和谐"
+    ],
+    "skills": {
+      "hunting": 0.71,
+      "teaching": 0.84,
+      "farming": 0.64
+    },
+    "relationships": [
+      {
+        "target_id": "f2f3e11f-b991-4412-9b11-1cee6d433122",
+        "target_name": "徐明",
+        "type": "friend",
+        "strength": 0.23
+      },
+      {
+        "target_id": "4e043d00-3d43-486f-889e-eade2d75b96c",
+        "target_name": "韩明",
+        "type": "mentor",
+        "strength": 0.73
+      },
+      {
+        "target_id": "852203f6-2403-4901-a4b7-3375e74db9b6",
+        "target_name": "罗涛",
+        "type": "friend",
+        "strength": 0.77
+      },
+      {
+        "target_id": "066c7536-6916-435e-ae0c-f3d079162147",
+        "target_name": "杜勇",
+        "type": "rival",
+        "strength": 0.16
+      },
+      {
+        "target_id": "8934306d-c573-4364-b7d5-c2e70364b6ef",
+        "target_name": "袁博",
+        "type": "rival",
+        "strength": 0.4
+      },
+      {
+        "target_id": "0ebf9952-f836-4945-a920-4d7d74b004e6",
+        "target_name": "王凡",
+        "type": "ally",
+        "strength": 0.86
+      },
+      {
+        "target_id": "cb0778cd-bbeb-4cc3-bb0b-d1003475de4f",
+        "target_name": "曹洋",
+        "type": "mentor",
+        "strength": 0.21
+      },
+      {
+        "target_id": "3c98774b-f91c-4dc4-a28f-17d20dedac3b",
+        "target_name": "许军",
+        "type": "mentor",
+        "strength": 0.75
+      }
+    ],
+    "memories": [
+      "与许军成为了好朋友，我们一起合作了很多项目。",
+      "在Tick 2057，我发现了一个新的水晶矿脉。",
+      "与董磊的第一次交易让我赚取了24金币。",
+      "在Tick 2748，我学会了teaching的基础知识。",
+      "参与了匠人工会的贸易活动，获得了丰厚的利润。",
+      "在Tick 607，我的farming技能达到了大师级别。"
+    ],
+    "birth_tick": 0,
+    "death_tick": null,
+    "alive": true
+  },
+  {
+    "id": "5e2380f9-7c77-4955-a326-e5b181714f1a",
+    "name": "魏博",
+    "phase": "idle",
+    "money": 995.97,
+    "tokens": 78.7,
+    "reputation": 27.0,
+    "personality_traits": {
+      "openness": 0.63,
+      "conscientiousness": 0.66,
+      "extraversion": 0.21,
+      "agreeableness": 0.87,
+      "neuroticism": 0.53
+    },
+    "values": [
+      "智慧",
+      "勇气",
+      "仁慈",
+      "博爱",
+      "和谐"
+    ],
+    "skills": {
+      "trading": 0.68,
+      "teaching": 0.65,
+      "fishing": 0.56,
+      "smelting": 0.65
+    },
+    "relationships": [
+      {
+        "target_id": "2efe4d44-41c5-4e53-acc3-b65cb461cee1",
+        "target_name": "苏梦",
+        "type": "mentor",
+        "strength": 0.42
+      },
+      {
+        "target_id": "1e594f6d-929b-4ee6-a11b-ae3a1f1089ab",
+        "target_name": "宋峰",
+        "type": "neutral",
+        "strength": 0.64
+      },
+      {
+        "target_id": "ceac8c64-28d3-4701-ba7c-8aa2e2090acd",
+        "target_name": "郑昊",
+        "type": "mentor",
+        "strength": 0.99
+      },
+      {
+        "target_id": "179b10d4-2bd4-495a-bcba-9260e6f03e6c",
+        "target_name": "杨洁",
+        "type": "ally",
+        "strength": 0.35
+      },
+      {
+        "target_id": "d14d9e25-5b83-4fb0-829d-f739ddd88fa7",
+        "target_name": "范杰",
+        "type": "mentor",
+        "strength": 0.2
+      }
+    ],
+    "memories": [
+      "完成了一项高难度的任务，获得了73金币的奖励。",
+      "在Tick 542，我发现了一个新的石材矿脉。",
+      "参与了星辰商会的贸易活动，获得了丰厚的利润。",
+      "完成了一项高难度的任务，获得了36金币的奖励。",
+      "与吴涛的第一次交易让我赚取了129金币。"
+    ],
+    "birth_tick": 0,
+    "death_tick": null,
+    "alive": true
+  },
+  {
+    "id": "9ed35c86-9081-409d-ac55-937f60ceefb5",
+    "name": "董洁",
+    "phase": "idle",
+    "money": 3020.32,
+    "tokens": 95.5,
+    "reputation": 22.0,
+    "personality_traits": {
+      "openness": 0.66,
+      "conscientiousness": 0.5,
+      "extraversion": 0.48,
+      "agreeableness": 0.28,
+      "neuroticism": 0.5
+    },
+    "values": [
+      "秩序",
+      "公正",
+      "平等",
+      "和谐",
+      "繁荣"
+    ],
+    "skills": {
+      "mining": 0.76,
+      "smelting": 1.0,
+      "weaving": 0.75,
+      "trading": 0.87,
+      "fishing": 0.7
+    },
+    "relationships": [
+      {
+        "target_id": "f2f3e11f-b991-4412-9b11-1cee6d433122",
+        "target_name": "徐明",
+        "type": "friend",
+        "strength": 0.76
+      },
+      {
+        "target_id": "5890f335-76f5-4914-b572-cd4fb5aaf37f",
+        "target_name": "林军",
+        "type": "friend",
+        "strength": 0.55
+      },
+      {
+        "target_id": "e876fcf6-6f31-4dfa-b823-1f36e1a2a378",
+        "target_name": "董磊",
+        "type": "friend",
+        "strength": 0.97
+      },
+      {
+        "target_id": "d7463ef6-8abb-45e2-a359-347a08528c4a",
+        "target_name": "丁辉",
+        "type": "mentor",
+        "strength": 0.64
+      },
+      {
+        "target_id": "b20ece5d-cd92-443f-805e-d973993ee573",
+        "target_name": "张凡",
+        "type": "trade_partner",
+        "strength": 0.24
+      }
+    ],
+    "memories": [
+      "在Tick 839，我的mining技能达到了大师级别。",
+      "与郑昊成为了好朋友，我们一起合作了很多项目。",
+      "参与了文化节的筹备工作，认识了很多新朋友。",
+      "完成了一项高难度的任务，获得了191金币的奖励。",
+      "在星辰商会的培训中提升了我的smelting技能。",
+      "加入了匠人工会，这是我在这个世界的第一个组织。",
+      "在匠人工会的培训中提升了我的trading技能。",
+      "与魏博成为了好朋友，我们一起合作了很多项目。"
+    ],
+    "birth_tick": 0,
+    "death_tick": null,
+    "alive": true
+  },
+  {
+    "id": "5b50be12-4858-4b49-aa96-e5379a595bb8",
+    "name": "于勇",
+    "phase": "idle",
+    "money": 929.29,
+    "tokens": 148.8,
+    "reputation": 41.9,
+    "personality_traits": {
+      "openness": 0.71,
+      "conscientiousness": 0.43,
+      "extraversion": 0.44,
+      "agreeableness": 0.23,
+      "neuroticism": 0.68
+    },
+    "values": [
+      "坚韧",
+      "智慧",
+      "创新"
+    ],
+    "skills": {
+      "weaving": 0.86,
+      "hunting": 0.89,
+      "researching": 1.0,
+      "guarding": 0.69
+    },
+    "relationships": [
+      {
+        "target_id": "f30323bd-6cfb-4a6c-a111-c67f6128c3ba",
+        "target_name": "吴涛",
+        "type": "rival",
+        "strength": 0.36
+      },
+      {
+        "target_id": "852203f6-2403-4901-a4b7-3375e74db9b6",
+        "target_name": "罗涛",
+        "type": "mentor",
+        "strength": 0.54
+      },
+      {
+        "target_id": "6b8f4d24-9645-482d-81b8-905a9c080e9e",
+        "target_name": "董欣",
+        "type": "trade_partner",
+        "strength": 0.59
+      },
+      {
+        "target_id": "cb0778cd-bbeb-4cc3-bb0b-d1003475de4f",
+        "target_name": "曹洋",
+        "type": "ally",
+        "strength": 0.59
+      },
+      {
+        "target_id": "0ebf9952-f836-4945-a920-4d7d74b004e6",
+        "target_name": "王凡",
+        "type": "friend",
+        "strength": 0.99
+      },
+      {
+        "target_id": "f2f3e11f-b991-4412-9b11-1cee6d433122",
+        "target_name": "徐明",
+        "type": "friend",
+        "strength": 0.45
+      },
+      {
+        "target_id": "505c8c65-648f-4ca6-9b79-9161930224a0",
+        "target_name": "罗明",
+        "type": "trade_partner",
+        "strength": 0.87
+      }
+    ],
+    "memories": [
+      "加入了智慧学院，这是我在这个世界的第一个组织。",
+      "在匠人工会的选举中，我投票给了吕磊。",
+      "完成了一项高难度的任务，获得了317金币的奖励。",
+      "与吴涛成为了好朋友，我们一起合作了很多项目。",
+      "参与了铁壁联盟的贸易活动，获得了丰厚的利润。",
+      "在匠人工会的选举中，我投票给了罗明。",
+      "参与了文化节的筹备工作，认识了很多新朋友。",
+      "在Tick 2941，我学会了weaving的基础知识。",
+      "参与了星辰商会的贸易活动，获得了丰厚的利润。",
+      "在匠人工会的选举中，我投票给了吕磊。"
+    ],
+    "birth_tick": 0,
+    "death_tick": null,
+    "alive": true
+  },
+  {
+    "id": "b078e4e9-c727-4ef4-a883-b1b1a151dab1",
+    "name": "姜龙",
+    "phase": "idle",
+    "money": 47.21,
+    "tokens": 65.1,
+    "reputation": 31.4,
+    "personality_traits": {
+      "openness": 0.62,
+      "conscientiousness": 0.71,
+      "extraversion": 0.53,
+      "agreeableness": 0.81,
+      "neuroticism": 0.57
+    },
+    "values": [
+      "博爱",
+      "诚实",
+      "忠诚"
+    ],
+    "skills": {
+      "building": 0.26,
+      "weaving": 0.27,
+      "trading": 0.44,
+      "fishing": 0.62,
+      "enchanting": 0.34,
+      "researching": 0.24
+    },
+    "relationships": [
+      {
+        "target_id": "505c8c65-648f-4ca6-9b79-9161930224a0",
+        "target_name": "罗明",
+        "type": "trade_partner",
+        "strength": 0.9
+      },
+      {
+        "target_id": "44a80206-9266-41a9-91eb-db9ced054092",
+        "target_name": "杜芳",
+        "type": "rival",
+        "strength": 0.54
+      },
+      {
+        "target_id": "6fd4bd19-7dbc-4c47-a63a-27c69f23f9b9",
+        "target_name": "沈芳",
+        "type": "rival",
+        "strength": 0.38
+      },
+      {
+        "target_id": "22dddc53-c0fb-42d0-9233-9eff53808cf8",
+        "target_name": "蔡娜",
+        "type": "mentor",
+        "strength": 0.54
+      },
+      {
+        "target_id": "be74d4fd-1c5a-4813-a6e2-e45cee40ac09",
+        "target_name": "郭宁",
+        "type": "friend",
+        "strength": 0.61
+      },
+      {
+        "target_id": "cb0778cd-bbeb-4cc3-bb0b-d1003475de4f",
+        "target_name": "曹洋",
+        "type": "mentor",
+        "strength": 0.69
+      }
+    ],
+    "memories": [
+      "与郭宁成为了好朋友，我们一起合作了很多项目。",
+      "与胡勇发生了争执，但最终和解了。",
+      "完成了一项高难度的任务，获得了489金币的奖励。",
+      "在丰收行会的选举中，我投票给了郑博。",
+      "在铁壁联盟的培训中提升了我的weaving技能。",
+      "在匠人工会的选举中，我投票给了吕磊。"
+    ],
+    "birth_tick": 0,
+    "death_tick": null,
+    "alive": true
+  },
+  {
+    "id": "610db35a-2cf0-42bf-9754-57c0994063d2",
+    "name": "吴宁",
+    "phase": "idle",
+    "money": 66.02,
+    "tokens": 145.3,
+    "reputation": 30.4,
+    "personality_traits": {
+      "openness": 0.28,
+      "conscientiousness": 0.45,
+      "extraversion": 0.38,
+      "agreeableness": 0.5,
+      "neuroticism": 0.15
+    },
+    "values": [
+      "智慧",
+      "坚韧",
+      "团结",
+      "博爱"
+    ],
+    "skills": {
+      "smelting": 1.0,
+      "weaving": 0.7,
+      "cooking": 0.95
+    },
+    "relationships": [
+      {
+        "target_id": "f634a1d4-129e-4714-9f7d-e4c461ee772b",
+        "target_name": "郑敏",
+        "type": "mentor",
+        "strength": 0.34
+      },
+      {
+        "target_id": "59073a34-862d-42bc-9311-5296a1dc1b4c",
+        "target_name": "沈静",
+        "type": "ally",
+        "strength": 0.97
+      },
+      {
+        "target_id": "b6d8aa0c-fce1-4226-9957-96aa90488cba",
+        "target_name": "吴辉",
+        "type": "ally",
+        "strength": 0.71
+      },
+      {
+        "target_id": "73848129-9139-4f69-b3af-143f10b13767",
+        "target_name": "胡博",
+        "type": "trade_partner",
+        "strength": 0.39
+      },
+      {
+        "target_id": "be74d4fd-1c5a-4813-a6e2-e45cee40ac09",
+        "target_name": "郭宁",
+        "type": "friend",
+        "strength": 0.63
+      },
+      {
+        "target_id": "f45f8066-2b76-44df-8bc9-29a5ce5b8cf3",
+        "target_name": "林瑶",
+        "type": "rival",
+        "strength": 0.85
+      },
+      {
+        "target_id": "ef918350-d0f0-479e-bf20-88142398403a",
+        "target_name": "赵军",
+        "type": "trade_partner",
+        "strength": 0.83
+      },
+      {
+        "target_id": "3b0acf6b-32da-41cb-99ab-e88a8fa2c747",
+        "target_name": "叶航",
+        "type": "ally",
+        "strength": 0.12
+      }
+    ],
+    "memories": [
+      "在Tick 2013，我发现了一个新的草药矿脉。",
+      "在匠人工会的选举中，我投票给了郑敏。",
+      "在Tick 2304，我学会了smelting的基础知识。",
+      "见证了世界上第一条规则的通过，这是历史性的一刻。",
+      "完成了一项高难度的任务，获得了95金币的奖励。",
+      "见证了世界上第一条规则的通过，这是历史性的一刻。",
+      "加入了智慧学院，这是我在这个世界的第一个组织。",
+      "参与了丰收行会的贸易活动，获得了丰厚的利润。",
+      "在Tick 1808，我学会了smelting的基础知识。"
+    ],
+    "birth_tick": 0,
+    "death_tick": null,
+    "alive": true
+  },
+  {
+    "id": "2e2e519e-f303-4483-9580-dbd43c9bebaa",
+    "name": "沈昊",
+    "phase": "idle",
+    "money": 4699.17,
+    "tokens": 87.9,
+    "reputation": 86.8,
+    "personality_traits": {
+      "openness": 0.56,
+      "conscientiousness": 0.61,
+      "extraversion": 0.29,
+      "agreeableness": 0.29,
+      "neuroticism": 0.47
+    },
+    "values": [
+      "智慧",
+      "勇气",
+      "公正"
+    ],
+    "skills": {
+      "hunting": 0.41,
+      "crafting": 0.46,
+      "guarding": 0.34,
+      "smelting": 0.18,
+      "cooking": 0.66,
+      "researching": 0.23
+    },
+    "relationships": [
+      {
+        "target_id": "b078e4e9-c727-4ef4-a883-b1b1a151dab1",
+        "target_name": "姜龙",
+        "type": "friend",
+        "strength": 0.7
+      },
+      {
+        "target_id": "89f4a6ef-38ee-4cbd-984e-dad232753311",
+        "target_name": "周晨",
+        "type": "rival",
+        "strength": 0.31
+      },
+      {
+        "target_id": "852203f6-2403-4901-a4b7-3375e74db9b6",
+        "target_name": "罗涛",
+        "type": "trade_partner",
+        "strength": 0.63
+      },
+      {
+        "target_id": "03fcaff3-ca4e-4954-bc88-3deab00db8aa",
+        "target_name": "梁慧",
+        "type": "neutral",
+        "strength": 0.16
+      },
+      {
+        "target_id": "610db35a-2cf0-42bf-9754-57c0994063d2",
+        "target_name": "吴宁",
+        "type": "trade_partner",
+        "strength": 0.2
+      },
+      {
+        "target_id": "d89cdcea-ae06-4ec4-b602-befa134d2327",
+        "target_name": "李强",
+        "type": "rival",
+        "strength": 0.12
+      },
+      {
+        "target_id": "4faa1f5e-b9a9-4b10-8edc-2bd0f233320d",
+        "target_name": "丁凯",
+        "type": "trade_partner",
+        "strength": 0.13
+      },
+      {
+        "target_id": "4e043d00-3d43-486f-889e-eade2d75b96c",
+        "target_name": "韩明",
+        "type": "neutral",
+        "strength": 0.88
+      }
+    ],
+    "memories": [
+      "在Tick 2516，我发现了一个新的金矿矿脉。",
+      "见证了世界上第一条规则的通过，这是历史性的一刻。",
+      "与魏博的第一次交易让我赚取了275金币。",
+      "在Tick 4206，我学会了guarding的基础知识。",
+      "参与了匠人工会的贸易活动，获得了丰厚的利润。",
+      "在Tick 1481，我发现了一个新的木材矿脉。"
+    ],
+    "birth_tick": 0,
+    "death_tick": null,
+    "alive": true
+  },
+  {
+    "id": "9068e6d1-cd19-4944-ab35-f603af181236",
+    "name": "郑博",
+    "phase": "idle",
+    "money": 153.73,
+    "tokens": 52.0,
+    "reputation": 25.8,
+    "personality_traits": {
+      "openness": 0.75,
+      "conscientiousness": 0.42,
+      "extraversion": 0.74,
+      "agreeableness": 0.81,
+      "neuroticism": 0.31
+    },
+    "values": [
+      "忠诚",
+      "自由",
+      "博爱"
+    ],
+    "skills": {
+      "healing": 0.37,
+      "trading": 0.87,
+      "fishing": 0.51
+    },
+    "relationships": [
+      {
+        "target_id": "ef918350-d0f0-479e-bf20-88142398403a",
+        "target_name": "赵军",
+        "type": "friend",
+        "strength": 0.99
+      },
+      {
+        "target_id": "4faa1f5e-b9a9-4b10-8edc-2bd0f233320d",
+        "target_name": "丁凯",
+        "type": "mentor",
+        "strength": 0.61
+      },
+      {
+        "target_id": "179b10d4-2bd4-495a-bcba-9260e6f03e6c",
+        "target_name": "杨洁",
+        "type": "trade_partner",
+        "strength": 0.62
+      },
+      {
+        "target_id": "b20ece5d-cd92-443f-805e-d973993ee573",
+        "target_name": "张凡",
+        "type": "mentor",
+        "strength": 0.19
+      },
+      {
+        "target_id": "d89cdcea-ae06-4ec4-b602-befa134d2327",
+        "target_name": "李强",
+        "type": "neutral",
+        "strength": 0.29
+      },
+      {
+        "target_id": "b6d8aa0c-fce1-4226-9957-96aa90488cba",
+        "target_name": "吴辉",
+        "type": "mentor",
+        "strength": 0.55
+      },
+      {
+        "target_id": "ceac8c64-28d3-4701-ba7c-8aa2e2090acd",
+        "target_name": "郑昊",
+        "type": "neutral",
+        "strength": 0.41
+      }
+    ],
+    "memories": [
+      "与许军成为了好朋友，我们一起合作了很多项目。",
+      "完成了一项高难度的任务，获得了151金币的奖励。",
+      "与沈昊的第一次交易让我赚取了289金币。",
+      "完成了一项高难度的任务，获得了164金币的奖励。",
+      "参与了文化节的筹备工作，认识了很多新朋友。"
+    ],
+    "birth_tick": 0,
+    "death_tick": 1812,
+    "alive": false
+  },
+  {
+    "id": "89f4a6ef-38ee-4cbd-984e-dad232753311",
+    "name": "周晨",
+    "phase": "idle",
+    "money": 495.6,
+    "tokens": 145.8,
+    "reputation": 87.6,
+    "personality_traits": {
+      "openness": 0.67,
+      "conscientiousness": 0.58,
+      "extraversion": 0.29,
+      "agreeableness": 0.69,
+      "neuroticism": 0.75
+    },
+    "values": [
+      "团结",
+      "仁慈",
+      "博爱"
+    ],
+    "skills": {
+      "weaving": 1.0,
+      "smelting": 0.91,
+      "crafting": 1.0
+    },
+    "relationships": [
+      {
+        "target_id": "9ed35c86-9081-409d-ac55-937f60ceefb5",
+        "target_name": "董洁",
+        "type": "ally",
+        "strength": 0.29
+      },
+      {
+        "target_id": "2e2e519e-f303-4483-9580-dbd43c9bebaa",
+        "target_name": "沈昊",
+        "type": "trade_partner",
+        "strength": 0.14
+      },
+      {
+        "target_id": "03fcaff3-ca4e-4954-bc88-3deab00db8aa",
+        "target_name": "梁慧",
+        "type": "ally",
+        "strength": 0.46
+      },
+      {
+        "target_id": "18639550-f885-4e23-95fe-d4eb21a6001e",
+        "target_name": "吕磊",
+        "type": "rival",
+        "strength": 0.66
+      },
+      {
+        "target_id": "f2f3e11f-b991-4412-9b11-1cee6d433122",
+        "target_name": "徐明",
+        "type": "friend",
+        "strength": 0.75
+      },
+      {
+        "target_id": "e876fcf6-6f31-4dfa-b823-1f36e1a2a378",
+        "target_name": "董磊",
+        "type": "ally",
+        "strength": 0.19
+      },
+      {
+        "target_id": "6b8f4d24-9645-482d-81b8-905a9c080e9e",
+        "target_name": "董欣",
+        "type": "trade_partner",
+        "strength": 0.35
+      }
+    ],
+    "memories": [
+      "在Tick 2318，我的smelting技能达到了大师级别。",
+      "与郑昊发生了争执，但最终和解了。",
+      "加入了铁壁联盟，这是我在这个世界的第一个组织。",
+      "在智慧学院的选举中，我投票给了王凡。",
+      "与罗明发生了争执，但最终和解了。"
+    ],
+    "birth_tick": 0,
+    "death_tick": null,
+    "alive": true
+  },
+  {
+    "id": "066c7536-6916-435e-ae0c-f3d079162147",
+    "name": "杜勇",
+    "phase": "idle",
+    "money": 150.89,
+    "tokens": 132.9,
+    "reputation": 78.4,
+    "personality_traits": {
+      "openness": 0.16,
+      "conscientiousness": 0.69,
+      "extraversion": 0.63,
+      "agreeableness": 0.19,
+      "neuroticism": 0.76
+    },
+    "values": [
+      "团结",
+      "坚韧",
+      "平等",
+      "仁慈",
+      "自由"
+    ],
+    "skills": {
+      "researching": 0.83,
+      "teaching": 0.62,
+      "fishing": 1.0,
+      "healing": 0.9,
+      "mining": 0.77
+    },
+    "relationships": [
+      {
+        "target_id": "0ebf9952-f836-4945-a920-4d7d74b004e6",
+        "target_name": "王凡",
+        "type": "trade_partner",
+        "strength": 0.55
+      },
+      {
+        "target_id": "b6d8aa0c-fce1-4226-9957-96aa90488cba",
+        "target_name": "吴辉",
+        "type": "trade_partner",
+        "strength": 0.49
+      },
+      {
+        "target_id": "03fcaff3-ca4e-4954-bc88-3deab00db8aa",
+        "target_name": "梁慧",
+        "type": "ally",
+        "strength": 0.38
+      },
+      {
+        "target_id": "ba1de122-b483-492b-b953-271699b4adde",
+        "target_name": "魏秀英",
+        "type": "mentor",
+        "strength": 0.46
+      },
+      {
+        "target_id": "610db35a-2cf0-42bf-9754-57c0994063d2",
+        "target_name": "吴宁",
+        "type": "ally",
+        "strength": 0.56
+      },
+      {
+        "target_id": "6b8f4d24-9645-482d-81b8-905a9c080e9e",
+        "target_name": "董欣",
+        "type": "neutral",
+        "strength": 0.79
+      },
+      {
+        "target_id": "d14d9e25-5b83-4fb0-829d-f739ddd88fa7",
+        "target_name": "范杰",
+        "type": "rival",
+        "strength": 0.89
+      }
+    ],
+    "memories": [
+      "在Tick 3431，我发现了一个新的石材矿脉。",
+      "目睹了张凡的离世，感到非常悲伤。",
+      "参与了文化节的筹备工作，认识了很多新朋友。",
+      "在Tick 3314，我发现了一个新的水晶矿脉。",
+      "在铁壁联盟的培训中提升了我的researching技能。",
+      "与沈静成为了好朋友，我们一起合作了很多项目。"
+    ],
+    "birth_tick": 0,
+    "death_tick": null,
+    "alive": true
+  },
+  {
+    "id": "4faa1f5e-b9a9-4b10-8edc-2bd0f233320d",
+    "name": "丁凯",
+    "phase": "idle",
+    "money": 141.35,
+    "tokens": 71.2,
+    "reputation": 16.0,
+    "personality_traits": {
+      "openness": 0.92,
+      "conscientiousness": 0.33,
+      "extraversion": 0.79,
+      "agreeableness": 0.56,
+      "neuroticism": 0.51
+    },
+    "values": [
+      "诚实",
+      "博爱",
+      "团结",
+      "和谐"
+    ],
+    "skills": {
+      "smelting": 0.71,
+      "trading": 0.7,
+      "mining": 1.0,
+      "building": 0.78,
+      "guarding": 0.58
+    },
+    "relationships": [
+      {
+        "target_id": "1e594f6d-929b-4ee6-a11b-ae3a1f1089ab",
+        "target_name": "宋峰",
+        "type": "trade_partner",
+        "strength": 0.94
+      },
+      {
+        "target_id": "0ebf9952-f836-4945-a920-4d7d74b004e6",
+        "target_name": "王凡",
+        "type": "ally",
+        "strength": 0.83
+      },
+      {
+        "target_id": "22dddc53-c0fb-42d0-9233-9eff53808cf8",
+        "target_name": "蔡娜",
+        "type": "mentor",
+        "strength": 0.94
+      },
+      {
+        "target_id": "59073a34-862d-42bc-9311-5296a1dc1b4c",
+        "target_name": "沈静",
+        "type": "neutral",
+        "strength": 0.66
+      },
+      {
+        "target_id": "f2f3e11f-b991-4412-9b11-1cee6d433122",
+        "target_name": "徐明",
+        "type": "ally",
+        "strength": 0.28
+      },
+      {
+        "target_id": "ba1de122-b483-492b-b953-271699b4adde",
+        "target_name": "魏秀英",
+        "type": "mentor",
+        "strength": 0.23
+      },
+      {
+        "target_id": "cb0778cd-bbeb-4cc3-bb0b-d1003475de4f",
+        "target_name": "曹洋",
+        "type": "rival",
+        "strength": 0.77
+      },
+      {
+        "target_id": "505c8c65-648f-4ca6-9b79-9161930224a0",
+        "target_name": "罗明",
+        "type": "trade_partner",
+        "strength": 0.86
+      }
+    ],
+    "memories": [
+      "与郑敏的第一次交易让我赚取了106金币。",
+      "在星辰商会的培训中提升了我的trading技能。",
+      "目睹了蔡娜的离世，感到非常悲伤。",
+      "加入了匠人工会，这是我在这个世界的第一个组织。",
+      "在星辰商会的选举中，我投票给了魏博。",
+      "目睹了叶敏的离世，感到非常悲伤。",
+      "与丁辉的第一次交易让我赚取了224金币。",
+      "见证了世界上第一条规则的通过，这是历史性的一刻。"
+    ],
+    "birth_tick": 0,
+    "death_tick": null,
+    "alive": true
+  },
+  {
+    "id": "03fcaff3-ca4e-4954-bc88-3deab00db8aa",
+    "name": "梁慧",
+    "phase": "idle",
+    "money": 1181.34,
+    "tokens": 84.4,
+    "reputation": 67.0,
+    "personality_traits": {
+      "openness": 0.85,
+      "conscientiousness": 0.7,
+      "extraversion": 0.33,
+      "agreeableness": 0.11,
+      "neuroticism": 0.91
+    },
+    "values": [
+      "创新",
+      "博爱",
+      "智慧"
+    ],
+    "skills": {
+      "researching": 1.0,
+      "weaving": 0.98,
+      "trading": 0.77,
+      "hunting": 0.73,
+      "guarding": 1.0,
+      "fishing": 0.87
+    },
+    "relationships": [
+      {
+        "target_id": "5b50be12-4858-4b49-aa96-e5379a595bb8",
+        "target_name": "于勇",
+        "type": "trade_partner",
+        "strength": 0.68
+      },
+      {
+        "target_id": "6b8f4d24-9645-482d-81b8-905a9c080e9e",
+        "target_name": "董欣",
+        "type": "trade_partner",
+        "strength": 0.72
+      },
+      {
+        "target_id": "e876fcf6-6f31-4dfa-b823-1f36e1a2a378",
+        "target_name": "董磊",
+        "type": "rival",
+        "strength": 0.47
+      },
+      {
+        "target_id": "ba1de122-b483-492b-b953-271699b4adde",
+        "target_name": "魏秀英",
+        "type": "friend",
+        "strength": 0.23
+      },
+      {
+        "target_id": "066c7536-6916-435e-ae0c-f3d079162147",
+        "target_name": "杜勇",
+        "type": "friend",
+        "strength": 0.32
+      },
+      {
+        "target_id": "179b10d4-2bd4-495a-bcba-9260e6f03e6c",
+        "target_name": "杨洁",
+        "type": "trade_partner",
+        "strength": 0.52
+      }
+    ],
+    "memories": [
+      "完成了一项高难度的任务，获得了319金币的奖励。",
+      "在星辰商会的选举中，我投票给了赵军。",
+      "参与了丰收行会的贸易活动，获得了丰厚的利润。",
+      "见证了世界上第一条规则的通过，这是历史性的一刻。",
+      "参与了文化节的筹备工作，认识了很多新朋友。",
+      "与宋峰发生了争执，但最终和解了。",
+      "在铁壁联盟的选举中，我投票给了蔡娜。",
+      "在铁壁联盟的培训中提升了我的researching技能。",
+      "加入了星辰商会，这是我在这个世界的第一个组织。",
+      "参与了文化节的筹备工作，认识了很多新朋友。"
+    ],
+    "birth_tick": 0,
+    "death_tick": null,
+    "alive": true
+  },
+  {
+    "id": "8934306d-c573-4364-b7d5-c2e70364b6ef",
+    "name": "袁博",
+    "phase": "idle",
+    "money": 1043.14,
+    "tokens": 79.6,
+    "reputation": 39.1,
+    "personality_traits": {
+      "openness": 0.4,
+      "conscientiousness": 0.49,
+      "extraversion": 0.36,
+      "agreeableness": 0.3,
+      "neuroticism": 0.71
+    },
+    "values": [
+      "平等",
+      "博爱",
+      "繁荣",
+      "诚实"
+    ],
+    "skills": {
+      "trading": 0.82,
+      "enchanting": 1.0,
+      "hunting": 0.92,
+      "guarding": 0.54
+    },
+    "relationships": [
+      {
+        "target_id": "4faa1f5e-b9a9-4b10-8edc-2bd0f233320d",
+        "target_name": "丁凯",
+        "type": "rival",
+        "strength": 0.13
+      },
+      {
+        "target_id": "2efe4d44-41c5-4e53-acc3-b65cb461cee1",
+        "target_name": "苏梦",
+        "type": "trade_partner",
+        "strength": 0.69
+      },
+      {
+        "target_id": "d14d9e25-5b83-4fb0-829d-f739ddd88fa7",
+        "target_name": "范杰",
+        "type": "rival",
+        "strength": 0.68
+      },
+      {
+        "target_id": "44a80206-9266-41a9-91eb-db9ced054092",
+        "target_name": "杜芳",
+        "type": "friend",
+        "strength": 0.97
+      },
+      {
+        "target_id": "18639550-f885-4e23-95fe-d4eb21a6001e",
+        "target_name": "吕磊",
+        "type": "mentor",
+        "strength": 0.8
+      },
+      {
+        "target_id": "f45f8066-2b76-44df-8bc9-29a5ce5b8cf3",
+        "target_name": "林瑶",
+        "type": "friend",
+        "strength": 0.87
+      },
+      {
+        "target_id": "179b10d4-2bd4-495a-bcba-9260e6f03e6c",
+        "target_name": "杨洁",
+        "type": "friend",
+        "strength": 0.38
+      }
+    ],
+    "memories": [
+      "与沈昊的第一次交易让我赚取了396金币。",
+      "在Tick 3369，我的enchanting技能达到了大师级别。",
+      "目睹了杜芳的离世，感到非常悲伤。",
+      "与沈芳成为了好朋友，我们一起合作了很多项目。",
+      "在Tick 949，我学会了enchanting的基础知识。",
+      "参与了文化节的筹备工作，认识了很多新朋友。",
+      "完成了一项高难度的任务，获得了81金币的奖励。",
+      "加入了铁壁联盟，这是我在这个世界的第一个组织。",
+      "与郑敏的第一次交易让我赚取了96金币。"
+    ],
+    "birth_tick": 0,
+    "death_tick": null,
+    "alive": true
+  },
+  {
+    "id": "505c8c65-648f-4ca6-9b79-9161930224a0",
+    "name": "罗明",
+    "phase": "idle",
+    "money": 176.82,
+    "tokens": 112.9,
+    "reputation": 11.9,
+    "personality_traits": {
+      "openness": 0.7,
+      "conscientiousness": 0.21,
+      "extraversion": 0.14,
+      "agreeableness": 0.15,
+      "neuroticism": 0.35
+    },
+    "values": [
+      "公正",
+      "诚实",
+      "坚韧"
+    ],
+    "skills": {
+      "mining": 0.93,
+      "smelting": 0.98,
+      "farming": 1.0,
+      "cooking": 0.75,
+      "building": 0.96,
+      "guarding": 0.53
+    },
+    "relationships": [
+      {
+        "target_id": "6b8f4d24-9645-482d-81b8-905a9c080e9e",
+        "target_name": "董欣",
+        "type": "mentor",
+        "strength": 0.95
+      },
+      {
+        "target_id": "066c7536-6916-435e-ae0c-f3d079162147",
+        "target_name": "杜勇",
+        "type": "neutral",
+        "strength": 0.86
+      },
+      {
+        "target_id": "2e2e519e-f303-4483-9580-dbd43c9bebaa",
+        "target_name": "沈昊",
+        "type": "rival",
+        "strength": 0.2
+      },
+      {
+        "target_id": "cb0778cd-bbeb-4cc3-bb0b-d1003475de4f",
+        "target_name": "曹洋",
+        "type": "neutral",
+        "strength": 0.55
+      },
+      {
+        "target_id": "3c98774b-f91c-4dc4-a28f-17d20dedac3b",
+        "target_name": "许军",
+        "type": "friend",
+        "strength": 0.57
+      }
+    ],
+    "memories": [
+      "加入了星辰商会，这是我在这个世界的第一个组织。",
+      "目睹了魏秀英的离世，感到非常悲伤。",
+      "完成了一项高难度的任务，获得了469金币的奖励。",
+      "经历了一次经济危机，损失了316金币。",
+      "在Tick 1032，我发现了一个新的铁矿矿脉。",
+      "在Tick 124，我学会了farming的基础知识。",
+      "完成了一项高难度的任务，获得了500金币的奖励。"
+    ],
+    "birth_tick": 0,
+    "death_tick": 2814,
+    "alive": false
+  },
+  {
+    "id": "b6d8aa0c-fce1-4226-9957-96aa90488cba",
+    "name": "吴辉",
+    "phase": "idle",
+    "money": 3936.97,
+    "tokens": 74.0,
+    "reputation": 53.5,
+    "personality_traits": {
+      "openness": 0.91,
+      "conscientiousness": 0.17,
+      "extraversion": 0.31,
+      "agreeableness": 0.57,
+      "neuroticism": 0.45
+    },
+    "values": [
+      "坚韧",
+      "团结",
+      "创新",
+      "繁荣",
+      "智慧"
+    ],
+    "skills": {
+      "enchanting": 0.79,
+      "guarding": 0.61,
+      "building": 0.99,
+      "cooking": 0.68,
+      "teaching": 1.0,
+      "weaving": 1.0
+    },
+    "relationships": [
+      {
+        "target_id": "0ebf9952-f836-4945-a920-4d7d74b004e6",
+        "target_name": "王凡",
+        "type": "trade_partner",
+        "strength": 0.4
+      },
+      {
+        "target_id": "ab4aad14-f90c-4268-80c7-8b967f3b2c41",
+        "target_name": "胡勇",
+        "type": "ally",
+        "strength": 0.76
+      },
+      {
+        "target_id": "f2f3e11f-b991-4412-9b11-1cee6d433122",
+        "target_name": "徐明",
+        "type": "neutral",
+        "strength": 0.77
+      },
+      {
+        "target_id": "3c98774b-f91c-4dc4-a28f-17d20dedac3b",
+        "target_name": "许军",
+        "type": "mentor",
+        "strength": 0.3
+      },
+      {
+        "target_id": "57c76f1e-63be-4e7f-98b6-2d048e7df0ab",
+        "target_name": "袁琳",
+        "type": "friend",
+        "strength": 0.26
+      },
+      {
+        "target_id": "9f40f080-1096-4aa7-9ef9-16283380aeac",
+        "target_name": "梁蕊",
+        "type": "trade_partner",
+        "strength": 0.5
+      },
+      {
+        "target_id": "603d6b18-5b40-4390-88fc-6410d2f925f2",
+        "target_name": "韩岚",
+        "type": "trade_partner",
+        "strength": 0.88
+      }
+    ],
+    "memories": [
+      "在Tick 4208，我学会了building的基础知识。",
+      "完成了一项高难度的任务，获得了488金币的奖励。",
+      "与林军的第一次交易让我赚取了64金币。",
+      "在Tick 2600，我学会了cooking的基础知识。",
+      "在匠人工会的选举中，我投票给了董欣。",
+      "与魏秀英的第一次交易让我赚取了164金币。"
+    ],
+    "birth_tick": 0,
+    "death_tick": null,
+    "alive": true
+  },
+  {
+    "id": "f2f3e11f-b991-4412-9b11-1cee6d433122",
+    "name": "徐明",
+    "phase": "idle",
+    "money": 401.71,
+    "tokens": 76.6,
+    "reputation": 67.6,
+    "personality_traits": {
+      "openness": 0.45,
+      "conscientiousness": 0.69,
+      "extraversion": 0.5,
+      "agreeableness": 0.13,
+      "neuroticism": 0.34
+    },
+    "values": [
+      "博爱",
+      "诚实",
+      "忠诚",
+      "平等"
+    ],
+    "skills": {
+      "enchanting": 0.92,
+      "building": 1.0,
+      "weaving": 1.0,
+      "fishing": 1.0
+    },
+    "relationships": [
+      {
+        "target_id": "b6d8aa0c-fce1-4226-9957-96aa90488cba",
+        "target_name": "吴辉",
+        "type": "neutral",
+        "strength": 0.95
+      },
+      {
+        "target_id": "f634a1d4-129e-4714-9f7d-e4c461ee772b",
+        "target_name": "郑敏",
+        "type": "trade_partner",
+        "strength": 0.59
+      },
+      {
+        "target_id": "2e2e519e-f303-4483-9580-dbd43c9bebaa",
+        "target_name": "沈昊",
+        "type": "mentor",
+        "strength": 0.71
+      }
+    ],
+    "memories": [
+      "目睹了沈静的离世，感到非常悲伤。",
+      "完成了一项高难度的任务，获得了357金币的奖励。",
+      "完成了一项高难度的任务，获得了445金币的奖励。",
+      "在Tick 4802，我学会了fishing的基础知识。",
+      "参与了文化节的筹备工作，认识了很多新朋友。",
+      "在智慧学院的培训中提升了我的building技能。",
+      "在匠人工会的选举中，我投票给了吴涛。",
+      "经历了一次经济危机，损失了202金币。",
+      "见证了世界上第一条规则的通过，这是历史性的一刻。",
+      "与范杰成为了好朋友，我们一起合作了很多项目。"
+    ],
+    "birth_tick": 0,
+    "death_tick": null,
+    "alive": true
+  },
+  {
+    "id": "ef918350-d0f0-479e-bf20-88142398403a",
+    "name": "赵军",
+    "phase": "idle",
+    "money": 383.91,
+    "tokens": 136.1,
+    "reputation": 48.9,
+    "personality_traits": {
+      "openness": 0.77,
+      "conscientiousness": 0.61,
+      "extraversion": 0.8,
+      "agreeableness": 0.88,
+      "neuroticism": 0.47
+    },
+    "values": [
+      "博爱",
+      "和谐",
+      "仁慈",
+      "智慧"
+    ],
+    "skills": {
+      "researching": 1.0,
+      "enchanting": 0.81,
+      "guarding": 0.93,
+      "weaving": 1.0,
+      "mining": 0.87
+    },
+    "relationships": [
+      {
+        "target_id": "9ed27282-5eba-45a1-a044-8aab764fbf33",
+        "target_name": "许洋",
+        "type": "friend",
+        "strength": 0.68
+      },
+      {
+        "target_id": "2e2e519e-f303-4483-9580-dbd43c9bebaa",
+        "target_name": "沈昊",
+        "type": "ally",
+        "strength": 0.13
+      },
+      {
+        "target_id": "505c8c65-648f-4ca6-9b79-9161930224a0",
+        "target_name": "罗明",
+        "type": "neutral",
+        "strength": 0.7
+      },
+      {
+        "target_id": "1e594f6d-929b-4ee6-a11b-ae3a1f1089ab",
+        "target_name": "宋峰",
+        "type": "friend",
+        "strength": 0.72
+      },
+      {
+        "target_id": "9ed35c86-9081-409d-ac55-937f60ceefb5",
+        "target_name": "董洁",
+        "type": "neutral",
+        "strength": 0.32
+      }
+    ],
+    "memories": [
+      "在铁壁联盟的选举中，我投票给了胡博。",
+      "在Tick 2044，我学会了enchanting的基础知识。",
+      "在Tick 2644，我发现了一个新的铁矿矿脉。",
+      "与吴辉发生了争执，但最终和解了。",
+      "加入了丰收行会，这是我在这个世界的第一个组织。"
+    ],
+    "birth_tick": 0,
+    "death_tick": null,
+    "alive": true
+  },
+  {
+    "id": "0ebf9952-f836-4945-a920-4d7d74b004e6",
+    "name": "王凡",
+    "phase": "idle",
+    "money": 172.55,
+    "tokens": 95.5,
+    "reputation": 17.3,
+    "personality_traits": {
+      "openness": 0.67,
+      "conscientiousness": 0.33,
+      "extraversion": 0.13,
+      "agreeableness": 0.74,
+      "neuroticism": 0.5
+    },
+    "values": [
+      "忠诚",
+      "和谐",
+      "秩序",
+      "团结",
+      "智慧"
+    ],
+    "skills": {
+      "mining": 0.63,
+      "guarding": 0.82,
+      "healing": 0.85,
+      "teaching": 1.0,
+      "weaving": 0.67,
+      "fishing": 0.69
+    },
+    "relationships": [
+      {
+        "target_id": "9068e6d1-cd19-4944-ab35-f603af181236",
+        "target_name": "郑博",
+        "type": "ally",
+        "strength": 0.88
+      },
+      {
+        "target_id": "9ed35c86-9081-409d-ac55-937f60ceefb5",
+        "target_name": "董洁",
+        "type": "mentor",
+        "strength": 0.45
+      },
+      {
+        "target_id": "e876fcf6-6f31-4dfa-b823-1f36e1a2a378",
+        "target_name": "董磊",
+        "type": "mentor",
+        "strength": 0.93
+      },
+      {
+        "target_id": "d89cdcea-ae06-4ec4-b602-befa134d2327",
+        "target_name": "李强",
+        "type": "trade_partner",
+        "strength": 0.37
+      },
+      {
+        "target_id": "2e2e519e-f303-4483-9580-dbd43c9bebaa",
+        "target_name": "沈昊",
+        "type": "rival",
+        "strength": 0.37
+      },
+      {
+        "target_id": "4e043d00-3d43-486f-889e-eade2d75b96c",
+        "target_name": "韩明",
+        "type": "rival",
+        "strength": 0.92
+      },
+      {
+        "target_id": "603d6b18-5b40-4390-88fc-6410d2f925f2",
+        "target_name": "韩岚",
+        "type": "neutral",
+        "strength": 0.39
+      }
+    ],
+    "memories": [
+      "在智慧学院的选举中，我投票给了徐明。",
+      "加入了铁壁联盟，这是我在这个世界的第一个组织。",
+      "在铁壁联盟的选举中，我投票给了董洁。",
+      "与罗明发生了争执，但最终和解了。",
+      "加入了丰收行会，这是我在这个世界的第一个组织。",
+      "在Tick 1286，我发现了一个新的石材矿脉。"
+    ],
+    "birth_tick": 0,
+    "death_tick": null,
+    "alive": true
+  },
+  {
+    "id": "f634a1d4-129e-4714-9f7d-e4c461ee772b",
+    "name": "郑敏",
+    "phase": "idle",
+    "money": 2139.22,
+    "tokens": 147.3,
+    "reputation": 94.6,
+    "personality_traits": {
+      "openness": 0.92,
+      "conscientiousness": 0.44,
+      "extraversion": 0.54,
+      "agreeableness": 0.94,
+      "neuroticism": 0.66
+    },
+    "values": [
+      "忠诚",
+      "智慧",
+      "自由",
+      "创新",
+      "繁荣"
+    ],
+    "skills": {
+      "cooking": 0.9,
+      "weaving": 0.43,
+      "guarding": 1.0,
+      "fishing": 0.98,
+      "smelting": 0.75
+    },
+    "relationships": [
+      {
+        "target_id": "066c7536-6916-435e-ae0c-f3d079162147",
+        "target_name": "杜勇",
+        "type": "neutral",
+        "strength": 0.48
+      },
+      {
+        "target_id": "44a80206-9266-41a9-91eb-db9ced054092",
+        "target_name": "杜芳",
+        "type": "friend",
+        "strength": 0.84
+      },
+      {
+        "target_id": "179b10d4-2bd4-495a-bcba-9260e6f03e6c",
+        "target_name": "杨洁",
+        "type": "neutral",
+        "strength": 0.33
+      },
+      {
+        "target_id": "3c98774b-f91c-4dc4-a28f-17d20dedac3b",
+        "target_name": "许军",
+        "type": "friend",
+        "strength": 0.42
+      },
+      {
+        "target_id": "b6d8aa0c-fce1-4226-9957-96aa90488cba",
+        "target_name": "吴辉",
+        "type": "ally",
+        "strength": 0.76
+      },
+      {
+        "target_id": "505c8c65-648f-4ca6-9b79-9161930224a0",
+        "target_name": "罗明",
+        "type": "ally",
+        "strength": 0.76
+      },
+      {
+        "target_id": "2efe4d44-41c5-4e53-acc3-b65cb461cee1",
+        "target_name": "苏梦",
+        "type": "mentor",
+        "strength": 0.73
+      },
+      {
+        "target_id": "b078e4e9-c727-4ef4-a883-b1b1a151dab1",
+        "target_name": "姜龙",
+        "type": "friend",
+        "strength": 0.68
+      }
+    ],
+    "memories": [
+      "在Tick 2469，我发现了一个新的草药矿脉。",
+      "参与了文化节的筹备工作，认识了很多新朋友。",
+      "经历了一次经济危机，损失了320金币。",
+      "加入了铁壁联盟，这是我在这个世界的第一个组织。",
+      "在Tick 3075，我学会了fishing的基础知识。",
+      "参与了文化节的筹备工作，认识了很多新朋友。",
+      "在Tick 1029，我发现了一个新的金矿矿脉。",
+      "在Tick 2101，我的guarding技能达到了大师级别。"
+    ],
+    "birth_tick": 0,
+    "death_tick": null,
+    "alive": true
+  },
+  {
+    "id": "be74d4fd-1c5a-4813-a6e2-e45cee40ac09",
+    "name": "郭宁",
+    "phase": "idle",
+    "money": 921.0,
+    "tokens": 69.1,
+    "reputation": 67.7,
+    "personality_traits": {
+      "openness": 0.23,
+      "conscientiousness": 0.57,
+      "extraversion": 0.57,
+      "agreeableness": 0.18,
+      "neuroticism": 0.94
+    },
+    "values": [
+      "忠诚",
+      "平等",
+      "公正"
+    ],
+    "skills": {
+      "guarding": 0.6,
+      "hunting": 0.49,
+      "building": 1.0,
+      "researching": 0.88
+    },
+    "relationships": [
+      {
+        "target_id": "e876fcf6-6f31-4dfa-b823-1f36e1a2a378",
+        "target_name": "董磊",
+        "type": "friend",
+        "strength": 0.46
+      },
+      {
+        "target_id": "03fcaff3-ca4e-4954-bc88-3deab00db8aa",
+        "target_name": "梁慧",
+        "type": "neutral",
+        "strength": 0.37
+      },
+      {
+        "target_id": "d14d9e25-5b83-4fb0-829d-f739ddd88fa7",
+        "target_name": "范杰",
+        "type": "ally",
+        "strength": 0.17
+      },
+      {
+        "target_id": "d7463ef6-8abb-45e2-a359-347a08528c4a",
+        "target_name": "丁辉",
+        "type": "rival",
+        "strength": 0.32
+      }
+    ],
+    "memories": [
+      "完成了一项高难度的任务，获得了366金币的奖励。",
+      "参与了文化节的筹备工作，认识了很多新朋友。",
+      "参与了文化节的筹备工作，认识了很多新朋友。",
+      "参与了丰收行会的贸易活动，获得了丰厚的利润。",
+      "完成了一项高难度的任务，获得了69金币的奖励。",
+      "参与了文化节的筹备工作，认识了很多新朋友。",
+      "与丁凯发生了争执，但最终和解了。",
+      "完成了一项高难度的任务，获得了167金币的奖励。"
+    ],
+    "birth_tick": 0,
+    "death_tick": null,
+    "alive": true
+  },
+  {
+    "id": "59073a34-862d-42bc-9311-5296a1dc1b4c",
+    "name": "沈静",
+    "phase": "idle",
+    "money": 980.12,
+    "tokens": 135.6,
+    "reputation": 88.7,
+    "personality_traits": {
+      "openness": 0.83,
+      "conscientiousness": 0.33,
+      "extraversion": 0.77,
+      "agreeableness": 0.45,
+      "neuroticism": 0.89
+    },
+    "values": [
+      "和谐",
+      "诚实",
+      "自由",
+      "仁慈",
+      "博爱"
+    ],
+    "skills": {
+      "smelting": 0.97,
+      "crafting": 0.94,
+      "guarding": 0.92,
+      "researching": 0.51,
+      "weaving": 1.0,
+      "healing": 1.0
+    },
+    "relationships": [
+      {
+        "target_id": "d14d9e25-5b83-4fb0-829d-f739ddd88fa7",
+        "target_name": "范杰",
+        "type": "neutral",
+        "strength": 0.22
+      },
+      {
+        "target_id": "d7463ef6-8abb-45e2-a359-347a08528c4a",
+        "target_name": "丁辉",
+        "type": "rival",
+        "strength": 0.72
+      },
+      {
+        "target_id": "9f40f080-1096-4aa7-9ef9-16283380aeac",
+        "target_name": "梁蕊",
+        "type": "trade_partner",
+        "strength": 0.82
+      },
+      {
+        "target_id": "4e043d00-3d43-486f-889e-eade2d75b96c",
+        "target_name": "韩明",
+        "type": "rival",
+        "strength": 0.18
+      },
+      {
+        "target_id": "066c7536-6916-435e-ae0c-f3d079162147",
+        "target_name": "杜勇",
+        "type": "trade_partner",
+        "strength": 0.26
+      },
+      {
+        "target_id": "5b50be12-4858-4b49-aa96-e5379a595bb8",
+        "target_name": "于勇",
+        "type": "mentor",
+        "strength": 0.95
+      },
+      {
+        "target_id": "03fcaff3-ca4e-4954-bc88-3deab00db8aa",
+        "target_name": "梁慧",
+        "type": "ally",
+        "strength": 0.3
+      },
+      {
+        "target_id": "505c8c65-648f-4ca6-9b79-9161930224a0",
+        "target_name": "罗明",
+        "type": "friend",
+        "strength": 0.93
+      }
+    ],
+    "memories": [
+      "在铁壁联盟的培训中提升了我的healing技能。",
+      "在Tick 2533，我发现了一个新的铁矿矿脉。",
+      "与董欣的第一次交易让我赚取了278金币。",
+      "在Tick 1455，我发现了一个新的金矿矿脉。",
+      "参与了智慧学院的贸易活动，获得了丰厚的利润。",
+      "与魏秀英发生了争执，但最终和解了。",
+      "在Tick 2134，我的researching技能达到了大师级别。",
+      "见证了世界上第一条规则的通过，这是历史性的一刻。",
+      "经历了一次经济危机，损失了73金币。",
+      "在Tick 1933，我学会了researching的基础知识。"
+    ],
+    "birth_tick": 0,
+    "death_tick": null,
+    "alive": true
+  },
+  {
+    "id": "ceac8c64-28d3-4701-ba7c-8aa2e2090acd",
+    "name": "郑昊",
+    "phase": "idle",
+    "money": 265.87,
+    "tokens": 119.3,
+    "reputation": 7.3,
+    "personality_traits": {
+      "openness": 0.5,
+      "conscientiousness": 0.88,
+      "extraversion": 0.42,
+      "agreeableness": 0.94,
+      "neuroticism": 0.77
+    },
+    "values": [
+      "秩序",
+      "忠诚",
+      "自由",
+      "仁慈",
+      "繁荣"
+    ],
+    "skills": {
+      "smelting": 1.0,
+      "mining": 0.55,
+      "guarding": 0.63,
+      "enchanting": 0.83,
+      "researching": 0.84
+    },
+    "relationships": [
+      {
+        "target_id": "f30323bd-6cfb-4a6c-a111-c67f6128c3ba",
+        "target_name": "吴涛",
+        "type": "friend",
+        "strength": 0.46
+      },
+      {
+        "target_id": "e876fcf6-6f31-4dfa-b823-1f36e1a2a378",
+        "target_name": "董磊",
+        "type": "mentor",
+        "strength": 0.64
+      },
+      {
+        "target_id": "5890f335-76f5-4914-b572-cd4fb5aaf37f",
+        "target_name": "林军",
+        "type": "rival",
+        "strength": 0.18
+      },
+      {
+        "target_id": "3c98774b-f91c-4dc4-a28f-17d20dedac3b",
+        "target_name": "许军",
+        "type": "trade_partner",
+        "strength": 0.25
+      },
+      {
+        "target_id": "8934306d-c573-4364-b7d5-c2e70364b6ef",
+        "target_name": "袁博",
+        "type": "ally",
+        "strength": 0.21
+      },
+      {
+        "target_id": "18639550-f885-4e23-95fe-d4eb21a6001e",
+        "target_name": "吕磊",
+        "type": "neutral",
+        "strength": 0.57
+      },
+      {
+        "target_id": "ab4aad14-f90c-4268-80c7-8b967f3b2c41",
+        "target_name": "胡勇",
+        "type": "mentor",
+        "strength": 0.84
+      },
+      {
+        "target_id": "f45f8066-2b76-44df-8bc9-29a5ce5b8cf3",
+        "target_name": "林瑶",
+        "type": "mentor",
+        "strength": 0.21
+      }
+    ],
+    "memories": [
+      "经历了一次经济危机，损失了350金币。",
+      "在丰收行会的选举中，我投票给了赵军。",
+      "在Tick 1005，我的guarding技能达到了大师级别。",
+      "与沈昊成为了好朋友，我们一起合作了很多项目。",
+      "在丰收行会的选举中，我投票给了沈昊。"
+    ],
+    "birth_tick": 0,
+    "death_tick": 1885,
+    "alive": false
+  },
+  {
+    "id": "9f40f080-1096-4aa7-9ef9-16283380aeac",
+    "name": "梁蕊",
+    "phase": "idle",
+    "money": 258.51,
+    "tokens": 79.3,
+    "reputation": 9.7,
+    "personality_traits": {
+      "openness": 0.83,
+      "conscientiousness": 0.42,
+      "extraversion": 0.37,
+      "agreeableness": 0.71,
+      "neuroticism": 0.75
+    },
+    "values": [
+      "自由",
+      "团结",
+      "平等",
+      "创新",
+      "公正"
+    ],
+    "skills": {
+      "trading": 0.74,
+      "hunting": 1.0,
+      "mining": 0.4,
+      "teaching": 0.45,
+      "weaving": 0.95
+    },
+    "relationships": [
+      {
+        "target_id": "ba1de122-b483-492b-b953-271699b4adde",
+        "target_name": "魏秀英",
+        "type": "rival",
+        "strength": 0.64
+      },
+      {
+        "target_id": "18639550-f885-4e23-95fe-d4eb21a6001e",
+        "target_name": "吕磊",
+        "type": "trade_partner",
+        "strength": 0.75
+      },
+      {
+        "target_id": "179b10d4-2bd4-495a-bcba-9260e6f03e6c",
+        "target_name": "杨洁",
+        "type": "rival",
+        "strength": 0.48
+      },
+      {
+        "target_id": "5e2380f9-7c77-4955-a326-e5b181714f1a",
+        "target_name": "魏博",
+        "type": "mentor",
+        "strength": 0.81
+      },
+      {
+        "target_id": "b6d8aa0c-fce1-4226-9957-96aa90488cba",
+        "target_name": "吴辉",
+        "type": "friend",
+        "strength": 0.36
+      },
+      {
+        "target_id": "9068e6d1-cd19-4944-ab35-f603af181236",
+        "target_name": "郑博",
+        "type": "trade_partner",
+        "strength": 0.31
+      },
+      {
+        "target_id": "d7463ef6-8abb-45e2-a359-347a08528c4a",
+        "target_name": "丁辉",
+        "type": "mentor",
+        "strength": 0.92
+      },
+      {
+        "target_id": "4faa1f5e-b9a9-4b10-8edc-2bd0f233320d",
+        "target_name": "丁凯",
+        "type": "trade_partner",
+        "strength": 0.62
+      }
+    ],
+    "memories": [
+      "与姜龙发生了争执，但最终和解了。",
+      "与丁辉发生了争执，但最终和解了。",
+      "参与了文化节的筹备工作，认识了很多新朋友。",
+      "完成了一项高难度的任务，获得了221金币的奖励。",
+      "与于勇发生了争执，但最终和解了。",
+      "参与了文化节的筹备工作，认识了很多新朋友。",
+      "参与了文化节的筹备工作，认识了很多新朋友。"
+    ],
+    "birth_tick": 0,
+    "death_tick": 2128,
+    "alive": false
+  },
+  {
+    "id": "f30323bd-6cfb-4a6c-a111-c67f6128c3ba",
+    "name": "吴涛",
+    "phase": "idle",
+    "money": 235.84,
+    "tokens": 57.4,
+    "reputation": 76.5,
+    "personality_traits": {
+      "openness": 0.55,
+      "conscientiousness": 0.58,
+      "extraversion": 0.77,
+      "agreeableness": 0.24,
+      "neuroticism": 0.17
+    },
+    "values": [
+      "团结",
+      "公正",
+      "创新",
+      "忠诚"
+    ],
+    "skills": {
+      "trading": 0.98,
+      "guarding": 1.0,
+      "fishing": 0.87,
+      "building": 1.0
+    },
+    "relationships": [
+      {
+        "target_id": "8934306d-c573-4364-b7d5-c2e70364b6ef",
+        "target_name": "袁博",
+        "type": "neutral",
+        "strength": 0.45
+      },
+      {
+        "target_id": "3c98774b-f91c-4dc4-a28f-17d20dedac3b",
+        "target_name": "许军",
+        "type": "mentor",
+        "strength": 0.76
+      },
+      {
+        "target_id": "64bfbe2f-c9c5-4c3c-9407-c469fd65a72d",
+        "target_name": "叶敏",
+        "type": "trade_partner",
+        "strength": 0.17
+      },
+      {
+        "target_id": "505c8c65-648f-4ca6-9b79-9161930224a0",
+        "target_name": "罗明",
+        "type": "ally",
+        "strength": 0.15
+      },
+      {
+        "target_id": "d7463ef6-8abb-45e2-a359-347a08528c4a",
+        "target_name": "丁辉",
+        "type": "trade_partner",
+        "strength": 0.94
+      },
+      {
+        "target_id": "5b50be12-4858-4b49-aa96-e5379a595bb8",
+        "target_name": "于勇",
+        "type": "mentor",
+        "strength": 0.92
+      },
+      {
+        "target_id": "89f4a6ef-38ee-4cbd-984e-dad232753311",
+        "target_name": "周晨",
+        "type": "ally",
+        "strength": 0.95
+      },
+      {
+        "target_id": "ba1de122-b483-492b-b953-271699b4adde",
+        "target_name": "魏秀英",
+        "type": "ally",
+        "strength": 0.74
+      }
+    ],
+    "memories": [
+      "见证了世界上第一条规则的通过，这是历史性的一刻。",
+      "目睹了郭宁的离世，感到非常悲伤。",
+      "与董洁的第一次交易让我赚取了457金币。",
+      "与罗明的第一次交易让我赚取了133金币。",
+      "在Tick 742，我的building技能达到了大师级别。",
+      "见证了世界上第一条规则的通过，这是历史性的一刻。",
+      "经历了一次经济危机，损失了497金币。",
+      "完成了一项高难度的任务，获得了56金币的奖励。",
+      "在Tick 539，我的fishing技能达到了大师级别。",
+      "参与了文化节的筹备工作，认识了很多新朋友。"
+    ],
+    "birth_tick": 0,
+    "death_tick": null,
+    "alive": true
+  },
+  {
+    "id": "e876fcf6-6f31-4dfa-b823-1f36e1a2a378",
+    "name": "董磊",
+    "phase": "idle",
+    "money": 177.18,
+    "tokens": 133.3,
+    "reputation": 9.1,
+    "personality_traits": {
+      "openness": 0.64,
+      "conscientiousness": 0.46,
+      "extraversion": 0.31,
+      "agreeableness": 0.82,
+      "neuroticism": 0.27
+    },
+    "values": [
+      "诚实",
+      "忠诚",
+      "平等",
+      "创新"
+    ],
+    "skills": {
+      "cooking": 1.0,
+      "healing": 0.7,
+      "enchanting": 0.82,
+      "building": 0.61,
+      "hunting": 0.85,
+      "farming": 0.73
+    },
+    "relationships": [
+      {
+        "target_id": "64bfbe2f-c9c5-4c3c-9407-c469fd65a72d",
+        "target_name": "叶敏",
+        "type": "ally",
+        "strength": 0.44
+      },
+      {
+        "target_id": "ab4aad14-f90c-4268-80c7-8b967f3b2c41",
+        "target_name": "胡勇",
+        "type": "mentor",
+        "strength": 0.7
+      },
+      {
+        "target_id": "f2f3e11f-b991-4412-9b11-1cee6d433122",
+        "target_name": "徐明",
+        "type": "rival",
+        "strength": 0.97
+      }
+    ],
+    "memories": [
+      "与魏博的第一次交易让我赚取了67金币。",
+      "在丰收行会的培训中提升了我的cooking技能。",
+      "加入了星辰商会，这是我在这个世界的第一个组织。",
+      "在Tick 2203，我学会了building的基础知识。",
+      "在Tick 3276，我的healing技能达到了大师级别。",
+      "在星辰商会的培训中提升了我的building技能。",
+      "与袁博发生了争执，但最终和解了。"
+    ],
+    "birth_tick": 0,
+    "death_tick": 3283,
+    "alive": false
+  },
+  {
+    "id": "d14d9e25-5b83-4fb0-829d-f739ddd88fa7",
+    "name": "范杰",
+    "phase": "idle",
+    "money": 398.15,
+    "tokens": 141.0,
+    "reputation": 75.7,
+    "personality_traits": {
+      "openness": 0.62,
+      "conscientiousness": 0.4,
+      "extraversion": 0.64,
+      "agreeableness": 0.63,
+      "neuroticism": 0.68
+    },
+    "values": [
+      "坚韧",
+      "公正",
+      "诚实",
+      "秩序",
+      "仁慈"
+    ],
+    "skills": {
+      "enchanting": 1.0,
+      "fishing": 0.9,
+      "smelting": 1.0
+    },
+    "relationships": [
+      {
+        "target_id": "44a80206-9266-41a9-91eb-db9ced054092",
+        "target_name": "杜芳",
+        "type": "trade_partner",
+        "strength": 0.89
+      },
+      {
+        "target_id": "59073a34-862d-42bc-9311-5296a1dc1b4c",
+        "target_name": "沈静",
+        "type": "rival",
+        "strength": 0.18
+      },
+      {
+        "target_id": "22dddc53-c0fb-42d0-9233-9eff53808cf8",
+        "target_name": "蔡娜",
+        "type": "neutral",
+        "strength": 0.58
+      },
+      {
+        "target_id": "ab4aad14-f90c-4268-80c7-8b967f3b2c41",
+        "target_name": "胡勇",
+        "type": "rival",
+        "strength": 0.33
+      },
+      {
+        "target_id": "f45f8066-2b76-44df-8bc9-29a5ce5b8cf3",
+        "target_name": "林瑶",
+        "type": "trade_partner",
+        "strength": 0.14
+      },
+      {
+        "target_id": "f2f3e11f-b991-4412-9b11-1cee6d433122",
+        "target_name": "徐明",
+        "type": "rival",
+        "strength": 0.55
+      },
+      {
+        "target_id": "b6d8aa0c-fce1-4226-9957-96aa90488cba",
+        "target_name": "吴辉",
+        "type": "trade_partner",
+        "strength": 0.77
+      }
+    ],
+    "memories": [
+      "参与了星辰商会的贸易活动，获得了丰厚的利润。",
+      "与董洁成为了好朋友，我们一起合作了很多项目。",
+      "参与了文化节的筹备工作，认识了很多新朋友。",
+      "参与了文化节的筹备工作，认识了很多新朋友。",
+      "参与了文化节的筹备工作，认识了很多新朋友。",
+      "在Tick 4003，我的fishing技能达到了大师级别。",
+      "完成了一项高难度的任务，获得了290金币的奖励。",
+      "完成了一项高难度的任务，获得了397金币的奖励。",
+      "目睹了胡博的离世，感到非常悲伤。",
+      "与郑敏发生了争执，但最终和解了。"
+    ],
+    "birth_tick": 0,
+    "death_tick": null,
+    "alive": true
+  },
+  {
+    "id": "cb0778cd-bbeb-4cc3-bb0b-d1003475de4f",
+    "name": "曹洋",
+    "phase": "idle",
+    "money": 555.31,
+    "tokens": 130.5,
+    "reputation": 29.9,
+    "personality_traits": {
+      "openness": 0.27,
+      "conscientiousness": 0.77,
+      "extraversion": 0.84,
+      "agreeableness": 0.41,
+      "neuroticism": 0.53
+    },
+    "values": [
+      "诚实",
+      "秩序",
+      "和谐",
+      "忠诚"
+    ],
+    "skills": {
+      "hunting": 1.0,
+      "smelting": 0.7,
+      "healing": 1.0,
+      "mining": 1.0,
+      "guarding": 1.0
+    },
+    "relationships": [
+      {
+        "target_id": "5e2380f9-7c77-4955-a326-e5b181714f1a",
+        "target_name": "魏博",
+        "type": "mentor",
+        "strength": 0.9
+      },
+      {
+        "target_id": "ab4aad14-f90c-4268-80c7-8b967f3b2c41",
+        "target_name": "胡勇",
+        "type": "trade_partner",
+        "strength": 0.76
+      },
+      {
+        "target_id": "9f40f080-1096-4aa7-9ef9-16283380aeac",
+        "target_name": "梁蕊",
+        "type": "mentor",
+        "strength": 0.79
+      },
+      {
+        "target_id": "6fd4bd19-7dbc-4c47-a63a-27c69f23f9b9",
+        "target_name": "沈芳",
+        "type": "rival",
+        "strength": 0.6
+      },
+      {
+        "target_id": "ef918350-d0f0-479e-bf20-88142398403a",
+        "target_name": "赵军",
+        "type": "neutral",
+        "strength": 0.67
+      },
+      {
+        "target_id": "5b50be12-4858-4b49-aa96-e5379a595bb8",
+        "target_name": "于勇",
+        "type": "mentor",
+        "strength": 0.15
+      }
+    ],
+    "memories": [
+      "与叶航发生了争执，但最终和解了。",
+      "参与了铁壁联盟的贸易活动，获得了丰厚的利润。",
+      "在Tick 1612，我的hunting技能达到了大师级别。",
+      "与郭宁发生了争执，但最终和解了。",
+      "完成了一项高难度的任务，获得了59金币的奖励。",
+      "在Tick 4232，我学会了healing的基础知识。",
+      "加入了星辰商会，这是我在这个世界的第一个组织。",
+      "在Tick 2489，我发现了一个新的木材矿脉。",
+      "参与了文化节的筹备工作，认识了很多新朋友。"
+    ],
+    "birth_tick": 0,
+    "death_tick": null,
+    "alive": true
+  },
+  {
+    "id": "4e043d00-3d43-486f-889e-eade2d75b96c",
+    "name": "韩明",
+    "phase": "idle",
+    "money": 115.95,
+    "tokens": 114.9,
+    "reputation": 83.1,
+    "personality_traits": {
+      "openness": 0.32,
+      "conscientiousness": 0.21,
+      "extraversion": 0.41,
+      "agreeableness": 0.74,
+      "neuroticism": 0.32
+    },
+    "values": [
+      "诚实",
+      "公正",
+      "勇气",
+      "平等"
+    ],
+    "skills": {
+      "guarding": 0.56,
+      "farming": 0.49,
+      "cooking": 0.58,
+      "researching": 0.58
+    },
+    "relationships": [
+      {
+        "target_id": "3b0acf6b-32da-41cb-99ab-e88a8fa2c747",
+        "target_name": "叶航",
+        "type": "mentor",
+        "strength": 0.33
+      },
+      {
+        "target_id": "5890f335-76f5-4914-b572-cd4fb5aaf37f",
+        "target_name": "林军",
+        "type": "neutral",
+        "strength": 0.52
+      },
+      {
+        "target_id": "22dddc53-c0fb-42d0-9233-9eff53808cf8",
+        "target_name": "蔡娜",
+        "type": "friend",
+        "strength": 1.0
+      },
+      {
+        "target_id": "44a80206-9266-41a9-91eb-db9ced054092",
+        "target_name": "杜芳",
+        "type": "mentor",
+        "strength": 0.14
+      }
+    ],
+    "memories": [
+      "完成了一项高难度的任务，获得了15金币的奖励。",
+      "与吴辉的第一次交易让我赚取了125金币。",
+      "在丰收行会的培训中提升了我的guarding技能。",
+      "在Tick 3562，我发现了一个新的水晶矿脉。",
+      "与宋峰的第一次交易让我赚取了104金币。",
+      "目睹了王凡的离世，感到非常悲伤。",
+      "在星辰商会的培训中提升了我的farming技能。",
+      "与郑昊发生了争执，但最终和解了。",
+      "在Tick 4721，我学会了farming的基础知识。",
+      "经历了一次经济危机，损失了53金币。"
+    ],
+    "birth_tick": 0,
+    "death_tick": null,
+    "alive": true
+  },
+  {
+    "id": "d89cdcea-ae06-4ec4-b602-befa134d2327",
+    "name": "李强",
+    "phase": "idle",
+    "money": 45.63,
+    "tokens": 86.3,
+    "reputation": 90.1,
+    "personality_traits": {
+      "openness": 0.36,
+      "conscientiousness": 0.52,
+      "extraversion": 0.18,
+      "agreeableness": 0.85,
+      "neuroticism": 0.22
+    },
+    "values": [
+      "勇气",
+      "公正",
+      "博爱",
+      "坚韧"
+    ],
+    "skills": {
+      "cooking": 0.59,
+      "hunting": 0.51,
+      "smelting": 0.85,
+      "crafting": 0.79,
+      "teaching": 0.74,
+      "mining": 0.56
+    },
+    "relationships": [
+      {
+        "target_id": "1e594f6d-929b-4ee6-a11b-ae3a1f1089ab",
+        "target_name": "宋峰",
+        "type": "neutral",
+        "strength": 0.88
+      },
+      {
+        "target_id": "f634a1d4-129e-4714-9f7d-e4c461ee772b",
+        "target_name": "郑敏",
+        "type": "friend",
+        "strength": 0.41
+      },
+      {
+        "target_id": "b6d8aa0c-fce1-4226-9957-96aa90488cba",
+        "target_name": "吴辉",
+        "type": "rival",
+        "strength": 0.88
+      },
+      {
+        "target_id": "8934306d-c573-4364-b7d5-c2e70364b6ef",
+        "target_name": "袁博",
+        "type": "rival",
+        "strength": 0.85
+      },
+      {
+        "target_id": "603d6b18-5b40-4390-88fc-6410d2f925f2",
+        "target_name": "韩岚",
+        "type": "neutral",
+        "strength": 0.56
+      }
+    ],
+    "memories": [
+      "目睹了林瑶的离世，感到非常悲伤。",
+      "经历了一次经济危机，损失了473金币。",
+      "加入了丰收行会，这是我在这个世界的第一个组织。",
+      "在星辰商会的培训中提升了我的mining技能。",
+      "与杜芳发生了争执，但最终和解了。",
+      "与魏秀英发生了争执，但最终和解了。",
+      "与杨洁成为了好朋友，我们一起合作了很多项目。"
+    ],
+    "birth_tick": 0,
+    "death_tick": null,
+    "alive": true
+  },
+  {
+    "id": "1e594f6d-929b-4ee6-a11b-ae3a1f1089ab",
+    "name": "宋峰",
+    "phase": "idle",
+    "money": 505.88,
+    "tokens": 108.6,
+    "reputation": 8.2,
+    "personality_traits": {
+      "openness": 0.87,
+      "conscientiousness": 0.65,
+      "extraversion": 0.15,
+      "agreeableness": 0.33,
+      "neuroticism": 0.92
+    },
+    "values": [
+      "平等",
+      "公正",
+      "创新",
+      "诚实"
+    ],
+    "skills": {
+      "farming": 0.97,
+      "weaving": 0.83,
+      "healing": 0.99
+    },
+    "relationships": [
+      {
+        "target_id": "be74d4fd-1c5a-4813-a6e2-e45cee40ac09",
+        "target_name": "郭宁",
+        "type": "ally",
+        "strength": 0.79
+      },
+      {
+        "target_id": "d14d9e25-5b83-4fb0-829d-f739ddd88fa7",
+        "target_name": "范杰",
+        "type": "rival",
+        "strength": 0.47
+      },
+      {
+        "target_id": "59073a34-862d-42bc-9311-5296a1dc1b4c",
+        "target_name": "沈静",
+        "type": "friend",
+        "strength": 0.32
+      },
+      {
+        "target_id": "ba1de122-b483-492b-b953-271699b4adde",
+        "target_name": "魏秀英",
+        "type": "mentor",
+        "strength": 0.71
+      },
+      {
+        "target_id": "64bfbe2f-c9c5-4c3c-9407-c469fd65a72d",
+        "target_name": "叶敏",
+        "type": "trade_partner",
+        "strength": 0.12
+      }
+    ],
+    "memories": [
+      "经历了一次经济危机，损失了342金币。",
+      "与胡勇的第一次交易让我赚取了227金币。",
+      "在铁壁联盟的选举中，我投票给了董欣。",
+      "与郭宁成为了好朋友，我们一起合作了很多项目。",
+      "在Tick 1305，我发现了一个新的铁矿矿脉。",
+      "在丰收行会的培训中提升了我的farming技能。",
+      "完成了一项高难度的任务，获得了43金币的奖励。",
+      "见证了世界上第一条规则的通过，这是历史性的一刻。",
+      "在Tick 1554，我学会了weaving的基础知识。"
+    ],
+    "birth_tick": 0,
+    "death_tick": 3934,
+    "alive": false
+  },
+  {
+    "id": "73848129-9139-4f69-b3af-143f10b13767",
+    "name": "胡博",
+    "phase": "idle",
+    "money": 117.53,
+    "tokens": 124.2,
+    "reputation": 20.7,
+    "personality_traits": {
+      "openness": 0.76,
+      "conscientiousness": 0.77,
+      "extraversion": 0.61,
+      "agreeableness": 0.34,
+      "neuroticism": 0.94
+    },
+    "values": [
+      "繁荣",
+      "和谐",
+      "坚韧"
+    ],
+    "skills": {
+      "mining": 1.0,
+      "fishing": 1.0,
+      "farming": 0.69,
+      "crafting": 1.0
+    },
+    "relationships": [
+      {
+        "target_id": "cb0778cd-bbeb-4cc3-bb0b-d1003475de4f",
+        "target_name": "曹洋",
+        "type": "friend",
+        "strength": 0.17
+      },
+      {
+        "target_id": "603d6b18-5b40-4390-88fc-6410d2f925f2",
+        "target_name": "韩岚",
+        "type": "neutral",
+        "strength": 0.69
+      },
+      {
+        "target_id": "89f4a6ef-38ee-4cbd-984e-dad232753311",
+        "target_name": "周晨",
+        "type": "mentor",
+        "strength": 0.67
+      },
+      {
+        "target_id": "2e2e519e-f303-4483-9580-dbd43c9bebaa",
+        "target_name": "沈昊",
+        "type": "trade_partner",
+        "strength": 0.63
+      },
+      {
+        "target_id": "59073a34-862d-42bc-9311-5296a1dc1b4c",
+        "target_name": "沈静",
+        "type": "friend",
+        "strength": 0.4
+      },
+      {
+        "target_id": "852203f6-2403-4901-a4b7-3375e74db9b6",
+        "target_name": "罗涛",
+        "type": "friend",
+        "strength": 0.69
+      },
+      {
+        "target_id": "5b50be12-4858-4b49-aa96-e5379a595bb8",
+        "target_name": "于勇",
+        "type": "mentor",
+        "strength": 0.39
+      },
+      {
+        "target_id": "9ed27282-5eba-45a1-a044-8aab764fbf33",
+        "target_name": "许洋",
+        "type": "neutral",
+        "strength": 1.0
+      }
+    ],
+    "memories": [
+      "加入了星辰商会，这是我在这个世界的第一个组织。",
+      "与韩明成为了好朋友，我们一起合作了很多项目。",
+      "在智慧学院的培训中提升了我的farming技能。",
+      "与沈芳成为了好朋友，我们一起合作了很多项目。",
+      "加入了铁壁联盟，这是我在这个世界的第一个组织。"
+    ],
+    "birth_tick": 0,
+    "death_tick": null,
+    "alive": true
+  },
+  {
+    "id": "6fd4bd19-7dbc-4c47-a63a-27c69f23f9b9",
+    "name": "沈芳",
+    "phase": "idle",
+    "money": 111.56,
+    "tokens": 64.8,
+    "reputation": 39.4,
+    "personality_traits": {
+      "openness": 0.5,
+      "conscientiousness": 0.76,
+      "extraversion": 0.54,
+      "agreeableness": 0.19,
+      "neuroticism": 0.53
+    },
+    "values": [
+      "自由",
+      "博爱",
+      "坚韧",
+      "公正",
+      "繁荣"
+    ],
+    "skills": {
+      "guarding": 0.76,
+      "fishing": 1.0,
+      "farming": 0.22,
+      "weaving": 0.78,
+      "enchanting": 0.79
+    },
+    "relationships": [
+      {
+        "target_id": "d7463ef6-8abb-45e2-a359-347a08528c4a",
+        "target_name": "丁辉",
+        "type": "neutral",
+        "strength": 0.16
+      },
+      {
+        "target_id": "ba1de122-b483-492b-b953-271699b4adde",
+        "target_name": "魏秀英",
+        "type": "ally",
+        "strength": 0.44
+      },
+      {
+        "target_id": "3b0acf6b-32da-41cb-99ab-e88a8fa2c747",
+        "target_name": "叶航",
+        "type": "mentor",
+        "strength": 0.33
+      },
+      {
+        "target_id": "e876fcf6-6f31-4dfa-b823-1f36e1a2a378",
+        "target_name": "董磊",
+        "type": "rival",
+        "strength": 0.97
+      },
+      {
+        "target_id": "5e2380f9-7c77-4955-a326-e5b181714f1a",
+        "target_name": "魏博",
+        "type": "mentor",
+        "strength": 0.18
+      },
+      {
+        "target_id": "5b50be12-4858-4b49-aa96-e5379a595bb8",
+        "target_name": "于勇",
+        "type": "rival",
+        "strength": 0.25
+      },
+      {
+        "target_id": "1e594f6d-929b-4ee6-a11b-ae3a1f1089ab",
+        "target_name": "宋峰",
+        "type": "mentor",
+        "strength": 0.36
+      }
+    ],
+    "memories": [
+      "在铁壁联盟的培训中提升了我的farming技能。",
+      "在匠人工会的培训中提升了我的weaving技能。",
+      "参与了丰收行会的贸易活动，获得了丰厚的利润。",
+      "见证了世界上第一条规则的通过，这是历史性的一刻。",
+      "在Tick 748，我的guarding技能达到了大师级别。",
+      "在星辰商会的选举中，我投票给了许军。",
+      "经历了一次经济危机，损失了423金币。",
+      "目睹了宋峰的离世，感到非常悲伤。"
+    ],
+    "birth_tick": 0,
+    "death_tick": null,
+    "alive": true
+  },
+  {
+    "id": "2efe4d44-41c5-4e53-acc3-b65cb461cee1",
+    "name": "苏梦",
+    "phase": "idle",
+    "money": 4801.6,
+    "tokens": 87.4,
+    "reputation": 89.2,
+    "personality_traits": {
+      "openness": 0.6,
+      "conscientiousness": 0.71,
+      "extraversion": 0.42,
+      "agreeableness": 0.61,
+      "neuroticism": 0.35
+    },
+    "values": [
+      "团结",
+      "智慧",
+      "平等",
+      "博爱",
+      "坚韧"
+    ],
+    "skills": {
+      "teaching": 0.75,
+      "guarding": 1.0,
+      "trading": 1.0,
+      "enchanting": 0.9
+    },
+    "relationships": [
+      {
+        "target_id": "9ed27282-5eba-45a1-a044-8aab764fbf33",
+        "target_name": "许洋",
+        "type": "trade_partner",
+        "strength": 0.7
+      },
+      {
+        "target_id": "603d6b18-5b40-4390-88fc-6410d2f925f2",
+        "target_name": "韩岚",
+        "type": "trade_partner",
+        "strength": 0.56
+      },
+      {
+        "target_id": "9ed35c86-9081-409d-ac55-937f60ceefb5",
+        "target_name": "董洁",
+        "type": "mentor",
+        "strength": 0.5
+      },
+      {
+        "target_id": "b6d8aa0c-fce1-4226-9957-96aa90488cba",
+        "target_name": "吴辉",
+        "type": "mentor",
+        "strength": 0.53
+      },
+      {
+        "target_id": "4faa1f5e-b9a9-4b10-8edc-2bd0f233320d",
+        "target_name": "丁凯",
+        "type": "ally",
+        "strength": 0.64
+      },
+      {
+        "target_id": "1e594f6d-929b-4ee6-a11b-ae3a1f1089ab",
+        "target_name": "宋峰",
+        "type": "friend",
+        "strength": 0.78
+      },
+      {
+        "target_id": "ceac8c64-28d3-4701-ba7c-8aa2e2090acd",
+        "target_name": "郑昊",
+        "type": "trade_partner",
+        "strength": 0.65
+      },
+      {
+        "target_id": "d7463ef6-8abb-45e2-a359-347a08528c4a",
+        "target_name": "丁辉",
+        "type": "mentor",
+        "strength": 0.67
+      }
+    ],
+    "memories": [
+      "见证了世界上第一条规则的通过，这是历史性的一刻。",
+      "见证了世界上第一条规则的通过，这是历史性的一刻。",
+      "与袁琳成为了好朋友，我们一起合作了很多项目。",
+      "加入了铁壁联盟，这是我在这个世界的第一个组织。",
+      "与丁辉成为了好朋友，我们一起合作了很多项目。",
+      "在Tick 3067，我发现了一个新的石材矿脉。",
+      "目睹了韩岚的离世，感到非常悲伤。",
+      "在匠人工会的选举中，我投票给了叶敏。",
+      "目睹了杜芳的离世，感到非常悲伤。",
+      "在Tick 3781，我学会了trading的基础知识。"
+    ],
+    "birth_tick": 0,
+    "death_tick": null,
+    "alive": true
+  }
+]

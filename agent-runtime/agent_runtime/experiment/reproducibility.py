@@ -8,10 +8,11 @@ Ensures experiments produce deterministic results by:
 
 from __future__ import annotations
 
+import copy
 import hashlib
 import json
 import random as stdlib_random
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import Any
 
 from agent_runtime.experiment.config import ExperimentConfig

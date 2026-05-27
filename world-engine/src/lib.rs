@@ -1,6 +1,10 @@
 pub mod a2a;
 pub mod api;
 pub mod auth;
+pub mod api_auth;
+pub mod api_experiment;
+pub mod api_export;
+pub mod api_research;
 pub mod config;
 pub mod dsl;
 pub mod economy;
@@ -14,6 +18,7 @@ pub mod observability;
 pub mod organization;
 pub mod persistence;
 pub mod rules;
+pub mod snapshot;
 pub mod time_capsule;
 pub mod tracing;
 pub mod wal;
@@ -70,4 +75,11 @@ pub use dsl::{
 pub use persistence::{
     SerializableAgentEntry, SerializableAgentRecord, SerializableWorldState,
     SqlitePersistence, StatePersistence,
+};
+
+pub use snapshot::{
+    SnapshotEngine, SnapshotEngineHandle, SnapshotRequest,
+    SnapshotStorage, CompressionStats,
+    WorldSnapshot, AgentSnapshot, SnapshotConfig, SnapshotDelta,
+    SnapshotKind, SnapshotRecord,
 };

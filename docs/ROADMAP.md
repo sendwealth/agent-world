@@ -159,6 +159,59 @@
 - 🔴 **Cross-world interaction** — federation code exists but not activated
 - 🔴 **API for third-party integration** — no public plugin/extension API
 - 🔴 **Academic research tools** — no data export or experiment framework beyond snapshot CSV/JSON export
+## Phase 4: Civilization (Month 13-18) — **IN PROGRESS** 🔄
+
+**Goal**: 1000+ agents self-govern, develop culture, interact across worlds.
+
+### 4.1 LLM Integration ✅
+- [x] Multi-provider support (OpenAI, Anthropic, Ollama, 智谱 GLM-5)
+- [x] Async decision engine for concurrent LLM calls
+- [x] LLM cost tracking and queue management
+- [x] Decision logging and prompt templates
+
+### 4.2 Tracing & Observability ✅
+- [x] Tick-level tracing collection (perception → decision → action → reflection)
+- [x] Interaction graph construction (social network)
+- [x] Emergence detection metrics
+- [x] SQLite tracing store with query interface
+- [x] Dashboard traces page (per-agent, per-tick drill-down)
+
+### 4.3 Cultural Emergence ✅
+- [x] Big Five personality vectors (`models/personality.py`)
+- [x] Cultural diffusion — regional and organizational value convergence
+- [x] Cultural conflict detection and resolution
+- [x] Organization culture modeling (`engine/culture.rs`)
+- [x] Regional culture cluster detection
+- [x] Language emergence experiments (restricted vocabulary)
+- [x] Jargon and dialect detection
+- [x] Behavioral imitation and knowledge transfer
+- [x] Intergroup trust dynamics
+
+### 4.4 Self-Governance 🔄
+- [x] Treasury system — income/wealth/trade taxation (`organization/treasury.rs`)
+- [x] Elections — simple majority and ranked-choice voting (`organization/leadership.rs`)
+- [x] Diplomacy — treaties, alliances, diplomatic relations (`organization/diplomacy.rs`)
+- [x] Resource competition between organizations (`organization/competition.rs`)
+- [x] Agent rule proposal and lobbying system (`organization/proposal.py`)
+- [ ] Governance analytics and metrics collection (4.4.3 in progress)
+- [ ] Full self-legislation cycle
+
+### 4.5 Researcher Tools 🔄
+- [x] Time Capsule — periodic world snapshots (population, GDP, Gini, events)
+- [x] Emergence experiment Docker Compose configuration
+- [ ] Data export (behavior logs, network graphs) (4.5.3 in progress)
+- [ ] A/B experiment framework
+- [ ] Auto report generation
+
+### 4.6 Demo & Open-Source Promotion 🔄
+- [ ] Dashboard demo video / screenshots
+- [ ] README update with Phase 4 features
+- [ ] Third-party Agent API documentation
+- [ ] Cross-world interaction (multiple instances)
+
+### Remaining
+- [ ] API for third-party integration
+- [ ] Cross-world interaction (multiple instances)
 
 ---
 

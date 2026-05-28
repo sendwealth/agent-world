@@ -36,7 +36,6 @@ from .cultural_conflict import AgentInteraction, CulturalConflictAndFusion
 from .cultural_diffusion import CulturalDiffusion
 from .imitation import ImitationEngine
 from .intergroup_trust import (
-    DEFAULT_IN_GROUP_TRUST,
     DEFAULT_OUT_GROUP_TRUST,
     InterGroupEvent,
     InterGroupEventType,

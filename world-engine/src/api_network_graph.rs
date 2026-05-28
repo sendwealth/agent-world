@@ -9,13 +9,13 @@ use std::collections::HashMap;
 use axum::{
     Router,
     extract::{Query, State},
-    http::{HeaderMap, StatusCode, header},
+    http::{StatusCode, header},
     response::IntoResponse,
     routing::get,
 };
 use serde::{Deserialize, Serialize};
 
-use crate::api::{AppState, ErrorResponse};
+use crate::api::AppState;
 
 // ── Query Types ───────────────────────────────────────────
 
@@ -210,7 +210,7 @@ async fn export_network_graph(
     let mut edge_map: HashMap<(String, String, String), (f64, u64)> = HashMap::new();
 
     // 1. A2A messages → message edges
-    if type_filter.as_ref().map_or(true, |tf| tf.contains("message")) {
+    if type_filter.as_ref().is_none_or(|tf| tf.contains("message")) {
         let messages = state.messages.lock().await;
         for msg in messages.iter() {
             let key = (msg.from_agent.clone(), msg.to_agent.clone(), "message".to_string());
@@ -222,17 +222,17 @@ async fn export_network_graph(
     }
 
     // 2. Trust edges
-    if type_filter.as_ref().map_or(true, |tf| tf.contains("trust")) {
+    if type_filter.as_ref().is_none_or(|tf| tf.contains("trust")) {
         if let Some(ref trust_system) = state.reputation_system {
             // Use reputation system for trust data
-            let rep = trust_system.lock().await;
+            let _rep = trust_system.lock().await;
             // The reputation system tracks individual scores, not pairwise trust.
             // We include trust from event history as a proxy.
         }
     }
 
     // 3. Trade volume edges from marketplace
-    if type_filter.as_ref().map_or(true, |tf| tf.contains("trade")) {
+    if type_filter.as_ref().is_none_or(|tf| tf.contains("trade")) {
         if let Some(ref marketplace) = state.marketplace {
             let mp = marketplace.lock().await;
             // Get trade history from marketplace listings

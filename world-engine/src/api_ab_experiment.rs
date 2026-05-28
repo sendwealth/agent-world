@@ -18,6 +18,8 @@ use axum::{
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 use tokio::sync::Mutex;
+
+type MetricFn = fn(&VariantSnapshot) -> f64;
 use uuid::Uuid;
 
 use crate::api::{AppState, ErrorResponse};
@@ -221,18 +223,18 @@ fn compare_variant_snapshots(
 ) -> VariantComparison {
     let mut metrics = Vec::new();
 
-    let compute_mean = |snaps: &[VariantSnapshot], extractor: fn(&VariantSnapshot) -> f64| -> f64 {
+    let compute_mean = |snaps: &[VariantSnapshot], extractor: MetricFn| -> f64 {
         if snaps.is_empty() {
             return 0.0;
         }
         snaps.iter().map(extractor).sum::<f64>() / snaps.len() as f64
     };
 
-    let get_final = |snaps: &[VariantSnapshot], extractor: fn(&VariantSnapshot) -> f64| -> Option<f64> {
+    let get_final = |snaps: &[VariantSnapshot], extractor: MetricFn| -> Option<f64> {
         snaps.last().map(extractor)
     };
 
-    let metric_fns: Vec<(&str, fn(&VariantSnapshot) -> f64)> = vec![
+    let metric_fns: Vec<(&str, MetricFn)> = vec![
         ("agent_count", |s| s.agent_count as f64),
         ("alive_count", |s| s.alive_count as f64),
         ("total_tokens", |s| s.total_tokens as f64),

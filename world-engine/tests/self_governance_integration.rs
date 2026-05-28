@@ -19,9 +19,7 @@ use agent_world_engine::organization::leadership::{
     ElectionStatus, LeadershipEngine, VotingMethod,
 };
 use agent_world_engine::organization::org::{OrgType, OrganizationStore};
-use agent_world_engine::organization::treasury::{
-    TaxKind, Treasury,
-};
+use agent_world_engine::organization::treasury::{TaxKind, Treasury};
 use agent_world_engine::world::event::WorldEvent;
 use agent_world_engine::world::state::EventBus;
 
@@ -66,9 +64,7 @@ fn drain_events(
 }
 
 /// Collect ALL pending events into a Vec, preserving them for multi-pass analysis.
-fn collect_all_events(
-    rx: &mut tokio::sync::broadcast::Receiver<WorldEvent>,
-) -> Vec<WorldEvent> {
+fn collect_all_events(rx: &mut tokio::sync::broadcast::Receiver<WorldEvent>) -> Vec<WorldEvent> {
     let mut collected = Vec::new();
     while let Ok(event) = rx.try_recv() {
         collected.push(event);
@@ -130,7 +126,9 @@ fn test_treasury_collect_and_distribute_with_events() {
         .unwrap();
 
     // Verify TreasuryDistributed event
-    let dist_events = drain_events(&mut rx, |e| matches!(e, WorldEvent::TreasuryDistributed { .. }));
+    let dist_events = drain_events(&mut rx, |e| {
+        matches!(e, WorldEvent::TreasuryDistributed { .. })
+    });
     assert_eq!(dist_events.len(), 1, "Expected 1 TreasuryDistributed event");
 
     // Remaining: 500 - 400 = 100
@@ -179,24 +177,46 @@ fn test_leadership_election_lifecycle_with_events() {
         .unwrap();
 
     // Verify LeadershipElectionStarted event
-    let started_events = drain_events(&mut rx, |e| matches!(e, WorldEvent::LeadershipElectionStarted { .. }));
+    let started_events = drain_events(&mut rx, |e| {
+        matches!(e, WorldEvent::LeadershipElectionStarted { .. })
+    });
     assert_eq!(started_events.len(), 1);
 
     // Cast votes: 3 for agent-0, 2 for agent-1
     leadership
-        .cast_vote(org_uuid, "vote-agent-3".to_string(), vec!["vote-agent-0".to_string()])
+        .cast_vote(
+            org_uuid,
+            "vote-agent-3".to_string(),
+            vec!["vote-agent-0".to_string()],
+        )
         .unwrap();
     leadership
-        .cast_vote(org_uuid, "vote-agent-4".to_string(), vec!["vote-agent-0".to_string()])
+        .cast_vote(
+            org_uuid,
+            "vote-agent-4".to_string(),
+            vec!["vote-agent-0".to_string()],
+        )
         .unwrap();
     leadership
-        .cast_vote(org_uuid, "vote-agent-0".to_string(), vec!["vote-agent-0".to_string()])
+        .cast_vote(
+            org_uuid,
+            "vote-agent-0".to_string(),
+            vec!["vote-agent-0".to_string()],
+        )
         .unwrap();
     leadership
-        .cast_vote(org_uuid, "vote-agent-1".to_string(), vec!["vote-agent-1".to_string()])
+        .cast_vote(
+            org_uuid,
+            "vote-agent-1".to_string(),
+            vec!["vote-agent-1".to_string()],
+        )
         .unwrap();
     leadership
-        .cast_vote(org_uuid, "vote-agent-2".to_string(), vec!["vote-agent-1".to_string()])
+        .cast_vote(
+            org_uuid,
+            "vote-agent-2".to_string(),
+            vec!["vote-agent-1".to_string()],
+        )
         .unwrap();
 
     // Resolve: agent-0 wins (3 out of 5)
@@ -205,7 +225,9 @@ fn test_leadership_election_lifecycle_with_events() {
     assert_eq!(leadership.get_leader(org_uuid), Some("vote-agent-0"));
 
     // Verify LeadershipChanged event
-    let changed_events = drain_events(&mut rx, |e| matches!(e, WorldEvent::LeadershipChanged { .. }));
+    let changed_events = drain_events(&mut rx, |e| {
+        matches!(e, WorldEvent::LeadershipChanged { .. })
+    });
     assert_eq!(changed_events.len(), 1);
     if let WorldEvent::LeadershipChanged {
         new_leader_id,
@@ -305,7 +327,10 @@ fn test_diplomacy_treaty_lifecycle_with_events() {
     // Verify TreatyBroken event
     let broken_events = drain_events(&mut rx, |e| matches!(e, WorldEvent::TreatyBroken { .. }));
     assert_eq!(broken_events.len(), 1);
-    if let WorldEvent::TreatyBroken { breaker, reason, .. } = &broken_events[0] {
+    if let WorldEvent::TreatyBroken {
+        breaker, reason, ..
+    } = &broken_events[0]
+    {
         assert_eq!(breaker, &org_a.id);
         assert_eq!(reason, "dispute over resources");
     }
@@ -344,10 +369,7 @@ fn test_leadership_succession_on_departure() {
     leadership
         .initiate_election(
             org_uuid,
-            vec![
-                "succ-agent-0".to_string(),
-                "succ-agent-1".to_string(),
-            ],
+            vec!["succ-agent-0".to_string(), "succ-agent-1".to_string()],
             VotingMethod::SimpleMajority,
             50,
         )
@@ -355,16 +377,32 @@ fn test_leadership_succession_on_departure() {
     let _ = rx.try_recv(); // LeadershipElectionStarted
 
     leadership
-        .cast_vote(org_uuid, "succ-agent-0".to_string(), vec!["succ-agent-0".to_string()])
+        .cast_vote(
+            org_uuid,
+            "succ-agent-0".to_string(),
+            vec!["succ-agent-0".to_string()],
+        )
         .unwrap();
     leadership
-        .cast_vote(org_uuid, "succ-agent-1".to_string(), vec!["succ-agent-0".to_string()])
+        .cast_vote(
+            org_uuid,
+            "succ-agent-1".to_string(),
+            vec!["succ-agent-0".to_string()],
+        )
         .unwrap();
     leadership
-        .cast_vote(org_uuid, "succ-agent-2".to_string(), vec!["succ-agent-0".to_string()])
+        .cast_vote(
+            org_uuid,
+            "succ-agent-2".to_string(),
+            vec!["succ-agent-0".to_string()],
+        )
         .unwrap();
     leadership
-        .cast_vote(org_uuid, "succ-agent-3".to_string(), vec!["succ-agent-1".to_string()])
+        .cast_vote(
+            org_uuid,
+            "succ-agent-3".to_string(),
+            vec!["succ-agent-1".to_string()],
+        )
         .unwrap();
 
     let winner = leadership.resolve_election(org_uuid).unwrap();
@@ -386,7 +424,9 @@ fn test_leadership_succession_on_departure() {
     assert_eq!(leadership.get_leader(org_uuid), Some("succ-agent-3"));
 
     // Verify LeadershipChanged event for succession
-    let changed = drain_events(&mut rx, |e| matches!(e, WorldEvent::LeadershipChanged { .. }));
+    let changed = drain_events(&mut rx, |e| {
+        matches!(e, WorldEvent::LeadershipChanged { .. })
+    });
     assert_eq!(changed.len(), 1);
     if let WorldEvent::LeadershipChanged {
         old_leader_id,
@@ -510,13 +550,8 @@ fn test_three_orgs_200_tick_simulation() {
             let org_a_ref = store.get(&org_a.id).unwrap();
             if org_a_ref.treasury > 50 {
                 let amt = org_a_ref.treasury / 2;
-                let _ = treasury_a.distribute(
-                    store.get_mut(&org_a.id).unwrap(),
-                    amt,
-                    tick,
-                    None,
-                    None,
-                );
+                let _ =
+                    treasury_a.distribute(store.get_mut(&org_a.id).unwrap(), amt, tick, None, None);
             }
         }
 
@@ -525,10 +560,7 @@ fn test_three_orgs_200_tick_simulation() {
             // Org A: election with simple majority
             let _ = leadership.initiate_election(
                 uuid_a,
-                vec![
-                    "miner-agent-0".to_string(),
-                    "miner-agent-1".to_string(),
-                ],
+                vec!["miner-agent-0".to_string(), "miner-agent-1".to_string()],
                 VotingMethod::SimpleMajority,
                 tick,
             );
@@ -656,22 +688,49 @@ fn test_three_orgs_200_tick_simulation() {
     // Collect all remaining events for multi-pass analysis
     let all_events = collect_all_events(&mut rx);
 
-    let tax_events = all_events.iter().filter(|e| matches!(e, WorldEvent::TaxCollected { .. })).count();
+    let tax_events = all_events
+        .iter()
+        .filter(|e| matches!(e, WorldEvent::TaxCollected { .. }))
+        .count();
     assert!(tax_events > 0, "Expected TaxCollected events, got 0");
 
-    let dist_events = all_events.iter().filter(|e| matches!(e, WorldEvent::TreasuryDistributed { .. })).count();
-    assert!(dist_events > 0, "Expected TreasuryDistributed events, got 0");
+    let dist_events = all_events
+        .iter()
+        .filter(|e| matches!(e, WorldEvent::TreasuryDistributed { .. }))
+        .count();
+    assert!(
+        dist_events > 0,
+        "Expected TreasuryDistributed events, got 0"
+    );
 
-    let election_started = all_events.iter().filter(|e| matches!(e, WorldEvent::LeadershipElectionStarted { .. })).count();
-    assert!(election_started > 0, "Expected LeadershipElectionStarted events, got 0");
+    let election_started = all_events
+        .iter()
+        .filter(|e| matches!(e, WorldEvent::LeadershipElectionStarted { .. }))
+        .count();
+    assert!(
+        election_started > 0,
+        "Expected LeadershipElectionStarted events, got 0"
+    );
 
-    let leadership_changed = all_events.iter().filter(|e| matches!(e, WorldEvent::LeadershipChanged { .. })).count();
-    assert!(leadership_changed > 0, "Expected LeadershipChanged events, got 0");
+    let leadership_changed = all_events
+        .iter()
+        .filter(|e| matches!(e, WorldEvent::LeadershipChanged { .. }))
+        .count();
+    assert!(
+        leadership_changed > 0,
+        "Expected LeadershipChanged events, got 0"
+    );
 
-    let treaty_proposed = all_events.iter().filter(|e| matches!(e, WorldEvent::TreatyProposed { .. })).count();
+    let treaty_proposed = all_events
+        .iter()
+        .filter(|e| matches!(e, WorldEvent::TreatyProposed { .. }))
+        .count();
     assert!(treaty_proposed > 0, "Expected TreatyProposed events, got 0");
 
-    let treaty_signed = all_events.iter().filter(|e| matches!(e, WorldEvent::TreatySigned { .. })).count();
+    let treaty_signed = all_events
+        .iter()
+        .filter(|e| matches!(e, WorldEvent::TreatySigned { .. }))
+        .count();
     assert!(treaty_signed > 0, "Expected TreatySigned events, got 0");
 
     // Verify final state
@@ -683,10 +742,16 @@ fn test_three_orgs_200_tick_simulation() {
 
     // Orgs have positive treasury from tax collection
     let org_a_ref = store.get(&org_a.id).unwrap();
-    assert!(org_a_ref.treasury > 0, "Org A should have treasury from taxes");
+    assert!(
+        org_a_ref.treasury > 0,
+        "Org A should have treasury from taxes"
+    );
 
     let org_b_ref = store.get(&org_b.id).unwrap();
-    assert!(org_b_ref.treasury > 0, "Org B should have treasury from taxes");
+    assert!(
+        org_b_ref.treasury > 0,
+        "Org B should have treasury from taxes"
+    );
 
     // Diplomacy: B↔C non-aggression should have expired (signed at tick 55, duration 100, expired at tick 155)
     let treaty_bc = diplomacy.get_treaty("treaty-2").unwrap();
@@ -749,13 +814,25 @@ fn test_tax_collection_after_leadership_change() {
     let _ = rx.try_recv(); // LeadershipElectionStarted
 
     leadership
-        .cast_vote(org_uuid, "tg-agent-0".to_string(), vec!["tg-agent-0".to_string()])
+        .cast_vote(
+            org_uuid,
+            "tg-agent-0".to_string(),
+            vec!["tg-agent-0".to_string()],
+        )
         .unwrap();
     leadership
-        .cast_vote(org_uuid, "tg-agent-1".to_string(), vec!["tg-agent-0".to_string()])
+        .cast_vote(
+            org_uuid,
+            "tg-agent-1".to_string(),
+            vec!["tg-agent-0".to_string()],
+        )
         .unwrap();
     leadership
-        .cast_vote(org_uuid, "tg-agent-2".to_string(), vec!["tg-agent-1".to_string()])
+        .cast_vote(
+            org_uuid,
+            "tg-agent-2".to_string(),
+            vec!["tg-agent-1".to_string()],
+        )
         .unwrap();
     leadership.resolve_election(org_uuid).unwrap();
     let _ = rx.try_recv(); // LeadershipChanged
@@ -772,7 +849,11 @@ fn test_tax_collection_after_leadership_change() {
         .unwrap();
 
     let tax_events = drain_events(&mut rx, |e| matches!(e, WorldEvent::TaxCollected { .. }));
-    assert_eq!(tax_events.len(), 1, "Tax should still be collected after election");
+    assert_eq!(
+        tax_events.len(),
+        1,
+        "Tax should still be collected after election"
+    );
 
     // Verify total: 100 (creation) + 100 (first tax) + 200 (second tax) = 400
     assert_eq!(store.get(&org.id).unwrap().treasury, 400);
@@ -846,9 +927,10 @@ fn test_diplomacy_and_tax_interaction() {
         )
         .unwrap();
 
-    let trade_events: Vec<_> = drain_events(&mut rx, |e| {
-        matches!(e, WorldEvent::TaxCollected { tax_kind, .. } if tax_kind == "trade_tax")
-    });
+    let trade_events: Vec<_> = drain_events(
+        &mut rx,
+        |e| matches!(e, WorldEvent::TaxCollected { tax_kind, .. } if tax_kind == "trade_tax"),
+    );
     assert_eq!(trade_events.len(), 1, "Trade tax should be collected");
 
     // Verify final balance: 100 + 3*100 (income) + 25 (trade) = 425

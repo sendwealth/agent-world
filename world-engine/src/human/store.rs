@@ -1,5 +1,5 @@
-use std::sync::Arc;
 use std::collections::HashMap;
+use std::sync::Arc;
 
 use serde::{Deserialize, Serialize};
 use tokio::sync::Mutex;
@@ -357,19 +357,30 @@ impl HumanParticipationStore {
         self.portfolios.get(human_id)
     }
 
-    pub fn invest(&mut self, human_id: &str, agent_id: &str, agent_name: &str, amount: u64) -> HumanPortfolio {
-        let portfolio = self.portfolios.entry(human_id.to_string()).or_insert_with(|| {
-            HumanPortfolio {
+    pub fn invest(
+        &mut self,
+        human_id: &str,
+        agent_id: &str,
+        agent_name: &str,
+        amount: u64,
+    ) -> HumanPortfolio {
+        let portfolio = self
+            .portfolios
+            .entry(human_id.to_string())
+            .or_insert_with(|| HumanPortfolio {
                 human_id: human_id.to_string(),
                 total_assets: 0,
                 total_invested: 0,
                 total_pnl: 0,
                 holdings: Vec::new(),
                 history: Vec::new(),
-            }
-        });
+            });
 
-        if let Some(holding) = portfolio.holdings.iter_mut().find(|h| h.agent_id == agent_id) {
+        if let Some(holding) = portfolio
+            .holdings
+            .iter_mut()
+            .find(|h| h.agent_id == agent_id)
+        {
             holding.invested += amount;
             holding.current_value += amount;
         } else {
@@ -398,7 +409,17 @@ impl HumanParticipationStore {
     // ── Claimed agent operations ──────────────────────────────
 
     #[allow(clippy::too_many_arguments)]
-    pub fn claim_agent(&mut self, human_id: &str, agent_id: &str, agent_name: &str, tokens: u64, money: u64, reputation: f64, skills: HashMap<String, u32>, age: u64) -> ClaimedAgent {
+    pub fn claim_agent(
+        &mut self,
+        human_id: &str,
+        agent_id: &str,
+        agent_name: &str,
+        tokens: u64,
+        money: u64,
+        reputation: f64,
+        skills: HashMap<String, u32>,
+        age: u64,
+    ) -> ClaimedAgent {
         let claimed = ClaimedAgent {
             agent_id: agent_id.to_string(),
             agent_name: agent_name.to_string(),
@@ -420,7 +441,10 @@ impl HumanParticipationStore {
     }
 
     pub fn list_claimed_agents(&self, human_id: &str) -> Vec<&ClaimedAgent> {
-        self.claimed_agents.get(human_id).map(|v| v.iter().collect()).unwrap_or_default()
+        self.claimed_agents
+            .get(human_id)
+            .map(|v| v.iter().collect())
+            .unwrap_or_default()
     }
 
     // ── Influence rankings ───────────────────────────────────
@@ -438,15 +462,39 @@ impl HumanParticipationStore {
     }
 
     fn touch_influence(&mut self, human_id: &str) {
-        if let Some(entry) = self.influence_entries.iter_mut().find(|e| e.human_id == *human_id) {
-            entry.oracle_count = self.oracles.iter().filter(|o| o.human_id == human_id).count();
-            entry.bounty_count = self.bounties.iter().filter(|b| b.human_id == human_id).count();
+        if let Some(entry) = self
+            .influence_entries
+            .iter_mut()
+            .find(|e| e.human_id == *human_id)
+        {
+            entry.oracle_count = self
+                .oracles
+                .iter()
+                .filter(|o| o.human_id == human_id)
+                .count();
+            entry.bounty_count = self
+                .bounties
+                .iter()
+                .filter(|b| b.human_id == human_id)
+                .count();
             let oracle_impact: u64 = entry.oracle_count as u64 * 10;
             let bounty_impact: u64 = entry.bounty_count as u64 * 15;
-            entry.total_influence = oracle_impact + bounty_impact + entry.economic_impact + entry.political_impact + entry.cultural_impact;
+            entry.total_influence = oracle_impact
+                + bounty_impact
+                + entry.economic_impact
+                + entry.political_impact
+                + entry.cultural_impact;
         } else {
-            let oracle_count = self.oracles.iter().filter(|o| o.human_id == human_id).count();
-            let bounty_count = self.bounties.iter().filter(|b| b.human_id == human_id).count();
+            let oracle_count = self
+                .oracles
+                .iter()
+                .filter(|o| o.human_id == human_id)
+                .count();
+            let bounty_count = self
+                .bounties
+                .iter()
+                .filter(|b| b.human_id == human_id)
+                .count();
             self.influence_entries.push(HumanInfluenceEntry {
                 human_id: human_id.to_string(),
                 display_name: format!("Human-{}", &human_id[..8.min(human_id.len())]),
@@ -463,9 +511,16 @@ impl HumanParticipationStore {
 
     // ── Intervention events ──────────────────────────────────
 
-    pub fn list_interventions(&self, human_id: Option<&str>, limit: usize) -> Vec<&HumanInterventionEvent> {
+    pub fn list_interventions(
+        &self,
+        human_id: Option<&str>,
+        limit: usize,
+    ) -> Vec<&HumanInterventionEvent> {
         let mut result: Vec<&HumanInterventionEvent> = if let Some(hid) = human_id {
-            self.interventions.iter().filter(|e| e.human_id == hid).collect()
+            self.interventions
+                .iter()
+                .filter(|e| e.human_id == hid)
+                .collect()
         } else {
             self.interventions.iter().collect()
         };
@@ -478,7 +533,9 @@ impl HumanParticipationStore {
     // ── Stats ────────────────────────────────────────────────
 
     pub fn get_stats(&self) -> HumanStats {
-        let unique_humans: std::collections::HashSet<&str> = self.oracles.iter()
+        let unique_humans: std::collections::HashSet<&str> = self
+            .oracles
+            .iter()
             .map(|o| o.human_id.as_str())
             .chain(self.bounties.iter().map(|b| b.human_id.as_str()))
             .chain(self.portfolios.keys().map(|s| s.as_str()))
@@ -486,7 +543,9 @@ impl HumanParticipationStore {
 
         let mut type_counts: HashMap<String, usize> = HashMap::new();
         for iv in &self.interventions {
-            *type_counts.entry(format!("{:?}", iv.intervention_type).to_lowercase()).or_default() += 1;
+            *type_counts
+                .entry(format!("{:?}", iv.intervention_type).to_lowercase())
+                .or_default() += 1;
         }
 
         HumanStats {

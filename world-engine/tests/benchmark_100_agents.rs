@@ -16,13 +16,13 @@ use tokio::sync::RwLock;
 use uuid::Uuid;
 
 use agent_world_engine::economy::stock_market::{
-    OrderKind, StockMarket, ListingStatus, IPO_MIN_MEMBERS, IPO_MIN_TREASURY,
+    ListingStatus, OrderKind, StockMarket, IPO_MIN_MEMBERS, IPO_MIN_TREASURY,
 };
-use agent_world_engine::economy::token_burn::{AgentRecord, ConsumptionConfig, SkillRecord, TokenBurnEngine};
+use agent_world_engine::economy::token_burn::{
+    AgentRecord, ConsumptionConfig, SkillRecord, TokenBurnEngine,
+};
 use agent_world_engine::economy::TaskBoard;
-use agent_world_engine::organization::governance::{
-    DecisionMode, GovernanceSystem, ProposalType,
-};
+use agent_world_engine::organization::governance::{DecisionMode, GovernanceSystem, ProposalType};
 use agent_world_engine::world::enums::AgentPhase;
 use agent_world_engine::world::event::WorldEvent;
 use agent_world_engine::world::state::EventBus;
@@ -108,12 +108,7 @@ async fn test_full_pipeline_100_agents_2000_ticks() {
             if batch_end > batch_start + 1 {
                 let org_name = format!("Org-{}", tick);
                 let founder_id = agent_ids[batch_start].clone();
-                let result = gov.create_org(
-                    org_name,
-                    founder_id,
-                    DecisionMode::Vote,
-                    tick,
-                );
+                let result = gov.create_org(org_name, founder_id, DecisionMode::Vote, tick);
                 if let Ok(org_id) = result {
                     // Join members
                     for id in agent_ids.iter().take(batch_end).skip(batch_start + 1) {
@@ -122,13 +117,9 @@ async fn test_full_pipeline_100_agents_2000_ticks() {
 
                     // Issue stock
                     let ticker = format!("ORG{}", tick);
-                    if let Ok(stock) = stock_market.issue_shares(
-                        org_id.to_string(),
-                        ticker,
-                        1000,
-                        10 + tick,
-                        tick,
-                    ) {
+                    if let Ok(stock) =
+                        stock_market.issue_shares(org_id.to_string(), ticker, 1000, 10 + tick, tick)
+                    {
                         // Credit shares to org members
                         for id in agent_ids.iter().take(batch_end).skip(batch_start) {
                             stock_market.credit_shares(&stock.id, id, 10);
@@ -136,12 +127,7 @@ async fn test_full_pipeline_100_agents_2000_ticks() {
 
                         // IPO
                         let member_count = batch_end - batch_start;
-                        let _ = stock_market.ipo(
-                            &stock.id,
-                            member_count,
-                            IPO_MIN_TREASURY,
-                            tick,
-                        );
+                        let _ = stock_market.ipo(&stock.id, member_count, IPO_MIN_TREASURY, tick);
                     }
                 }
             }
@@ -149,7 +135,9 @@ async fn test_full_pipeline_100_agents_2000_ticks() {
 
         // 3. Stock trading (every tick after IPO)
         if tick > 10 && tick % 2 == 0 {
-            let trade_stock_ids: Vec<String> = stock_market.list_stocks().iter()
+            let trade_stock_ids: Vec<String> = stock_market
+                .list_stocks()
+                .iter()
                 .filter(|s| s.status == ListingStatus::Listed)
                 .map(|s| s.id.clone())
                 .collect();
@@ -230,13 +218,14 @@ async fn test_full_pipeline_100_agents_2000_ticks() {
                 // Complete the task
                 let worker_idx = (agent_idx + 1) % NUM_AGENTS;
                 let worker_id = agent_ids[worker_idx].clone();
-                if b.claim_task(task_id, worker_id.clone()).is_ok()
-                    && b.start_task(task_id).is_ok() {
+                if b.claim_task(task_id, worker_id.clone()).is_ok() && b.start_task(task_id).is_ok()
+                {
                     let _ = b.submit_result(task_id, "Done".to_string());
                     let publisher = agent_ids[agent_idx].clone();
                     if b.review_task(task_id, &publisher, true).is_ok()
-                        && b.complete_task(task_id, tick).is_ok() {
-                            total_tasks_completed += 1;
+                        && b.complete_task(task_id, tick).is_ok()
+                    {
+                        total_tasks_completed += 1;
                     }
                 }
             }
@@ -260,15 +249,27 @@ async fn test_full_pipeline_100_agents_2000_ticks() {
 
     // All agents alive
     let alive = agent_records.iter().filter(|a| a.tokens > 0).count();
-    assert_eq!(alive, NUM_AGENTS, "All {} agents should survive 2000 ticks", NUM_AGENTS);
+    assert_eq!(
+        alive, NUM_AGENTS,
+        "All {} agents should survive 2000 ticks",
+        NUM_AGENTS
+    );
 
     // Organizations
     let org_count = gov.list_orgs().len();
-    assert!(org_count >= 5, "Should have at least 5 organizations, got {}", org_count);
+    assert!(
+        org_count >= 5,
+        "Should have at least 5 organizations, got {}",
+        org_count
+    );
 
     // Stock trades
     let trade_count = stock_market.list_trades(None).len();
-    assert!(trade_count >= 100, "Should have at least 100 trades, got {}", trade_count);
+    assert!(
+        trade_count >= 100,
+        "Should have at least 100 trades, got {}",
+        trade_count
+    );
 
     // Tick latency
     let avg_latency_us = tick_latencies.iter().sum::<u64>() / tick_latencies.len() as u64;
@@ -407,7 +408,11 @@ async fn test_token_burn_100_agents_2000_ticks() {
     println!("  Alive: {}/{}", alive, NUM_AGENTS);
 
     assert_eq!(alive, NUM_AGENTS, "All agents should survive");
-    assert!(ops_per_sec > 10_000.0, "Token burn ops/s should be > 10,000, got {:.0}", ops_per_sec);
+    assert!(
+        ops_per_sec > 10_000.0,
+        "Token burn ops/s should be > 10,000, got {:.0}",
+        ops_per_sec
+    );
 }
 
 // ══════════════════════════════════════════════════════════════════════════
@@ -427,13 +432,7 @@ async fn test_tick_latency_100_agents() {
     for org_idx in 0..5u32 {
         let org_id = format!("org-{}", org_idx);
         let ticker = format!("ORG{}", org_idx);
-        if let Ok(stock) = stock_market.issue_shares(
-            org_id,
-            ticker,
-            1000,
-            10,
-            1,
-        ) {
+        if let Ok(stock) = stock_market.issue_shares(org_id, ticker, 1000, 10, 1) {
             // Credit shares to agents
             for (i, agent_id) in agent_ids.iter().enumerate() {
                 if i % 20 == org_idx as usize {
@@ -491,7 +490,10 @@ async fn test_tick_latency_100_agents() {
     let p99_us = sorted[sorted.len() * 99 / 100];
     let max_us = sorted[sorted.len() - 1];
 
-    println!("\n[Tick Latency] {} agents × {} ticks", NUM_AGENTS, TOTAL_TICKS);
+    println!(
+        "\n[Tick Latency] {} agents × {} ticks",
+        NUM_AGENTS, TOTAL_TICKS
+    );
     println!("  Avg: {:.3}ms", avg_us as f64 / 1000.0);
     println!("  P50: {:.3}ms", p50_us as f64 / 1000.0);
     println!("  P99: {:.3}ms", p99_us as f64 / 1000.0);
@@ -535,13 +537,9 @@ async fn test_org_stock_market_scale() {
 
             // Issue and IPO stock
             let ticker = format!("T{}", i);
-            if let Ok(stock) = stock_market.issue_shares(
-                org_id.to_string(),
-                ticker,
-                1000,
-                10 + i as u64,
-                1,
-            ) {
+            if let Ok(stock) =
+                stock_market.issue_shares(org_id.to_string(), ticker, 1000, 10 + i as u64, 1)
+            {
                 for j in 0..10 {
                     let member_idx = (i as usize) * 10 + j;
                     if member_idx < NUM_AGENTS {
@@ -554,7 +552,9 @@ async fn test_org_stock_market_scale() {
     }
 
     // Perform 200 trades
-    let stock_ids: Vec<String> = stock_market.list_stocks().iter()
+    let stock_ids: Vec<String> = stock_market
+        .list_stocks()
+        .iter()
         .filter(|s| s.status == ListingStatus::Listed)
         .map(|s| s.id.clone())
         .collect();
@@ -564,22 +564,28 @@ async fn test_org_stock_market_scale() {
             let buyer_idx = (tick as usize) % NUM_AGENTS;
             let seller_idx = (tick as usize + 7) % NUM_AGENTS;
 
-            if stock_market.place_buy_order(
-                stock_id,
-                &agent_ids[buyer_idx],
-                OrderKind::Market,
-                0,
-                3,
-                100_000,
-                tick,
-            ).is_ok() && stock_market.place_sell_order(
-                stock_id,
-                &agent_ids[seller_idx],
-                OrderKind::Market,
-                0,
-                3,
-                tick,
-            ).is_ok() {
+            if stock_market
+                .place_buy_order(
+                    stock_id,
+                    &agent_ids[buyer_idx],
+                    OrderKind::Market,
+                    0,
+                    3,
+                    100_000,
+                    tick,
+                )
+                .is_ok()
+                && stock_market
+                    .place_sell_order(
+                        stock_id,
+                        &agent_ids[seller_idx],
+                        OrderKind::Market,
+                        0,
+                        3,
+                        tick,
+                    )
+                    .is_ok()
+            {
                 trades_done += 1;
             }
             if trades_done >= 200 {
@@ -596,10 +602,17 @@ async fn test_org_stock_market_scale() {
     let org_count = gov.list_orgs().len();
     let actual_trades = stock_market.list_trades(None).len();
 
-    println!("\n[Org+Stock] {} orgs, {} trades in {:?}", org_count, actual_trades, elapsed);
+    println!(
+        "\n[Org+Stock] {} orgs, {} trades in {:?}",
+        org_count, actual_trades, elapsed
+    );
 
     assert!(org_count >= 5, "Should have ≥5 orgs, got {}", org_count);
-    assert!(actual_trades >= 100, "Should have ≥100 trades, got {}", actual_trades);
+    assert!(
+        actual_trades >= 100,
+        "Should have ≥100 trades, got {}",
+        actual_trades
+    );
 }
 
 // ══════════════════════════════════════════════════════════════════════════
@@ -649,7 +662,9 @@ async fn test_concurrent_task_operations_100_agents() {
 
     println!(
         "[Tasks] {} created in {:?} ({:.0} creates/s)",
-        task_ids.len(), create_elapsed, creates_per_sec
+        task_ids.len(),
+        create_elapsed,
+        creates_per_sec
     );
 
     assert!(

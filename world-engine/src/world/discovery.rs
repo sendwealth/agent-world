@@ -176,10 +176,7 @@ impl AgentRegistry {
         self.agents.insert(agent_id.clone(), profile);
 
         if let Some(ref bus) = self.event_bus {
-            bus.emit(WorldEvent::AgentRegistered {
-                agent_id,
-                name,
-            });
+            bus.emit(WorldEvent::AgentRegistered { agent_id, name });
         }
 
         Ok(())
@@ -274,11 +271,7 @@ impl AgentRegistry {
         let skill_lower = skill.to_lowercase();
         self.agents
             .values()
-            .filter(|p| {
-                p.skills
-                    .iter()
-                    .any(|s| s.to_lowercase() == skill_lower)
-            })
+            .filter(|p| p.skills.iter().any(|s| s.to_lowercase() == skill_lower))
             .collect()
     }
 
@@ -383,8 +376,7 @@ mod tests {
         registry
             .register_with_id("a1".into(), "Alice".into(), vec![], vec![])
             .unwrap();
-        let result =
-            registry.register_with_id("a1".into(), "Alice".into(), vec![], vec![]);
+        let result = registry.register_with_id("a1".into(), "Alice".into(), vec![], vec![]);
         assert!(matches!(result, Err(DiscoveryError::AlreadyRegistered(_))));
     }
 
@@ -431,8 +423,7 @@ mod tests {
 
     #[test]
     fn expire_stale_agents() {
-        let mut registry =
-            AgentRegistry::new().with_heartbeat_timeout(Duration::from_millis(50));
+        let mut registry = AgentRegistry::new().with_heartbeat_timeout(Duration::from_millis(50));
 
         let id1 = registry.register("Fresh".into(), vec![], vec![]).unwrap();
         let id2 = registry.register("Stale".into(), vec![], vec![]).unwrap();
@@ -460,7 +451,11 @@ mod tests {
             .register("Bob".into(), vec![], vec!["Fishing".into()])
             .unwrap();
         registry
-            .register("Carol".into(), vec![], vec!["mining".into(), "crafting".into()])
+            .register(
+                "Carol".into(),
+                vec![],
+                vec!["mining".into(), "crafting".into()],
+            )
             .unwrap();
 
         let miners = registry.find_by_skill("mining");
@@ -483,18 +478,18 @@ mod tests {
             .register("Carol".into(), vec![], vec!["crafting".into()])
             .unwrap();
 
-        let results =
-            registry.find_by_skills(&["mining".into(), "fishing".into()]);
+        let results = registry.find_by_skills(&["mining".into(), "fishing".into()]);
         assert_eq!(results.len(), 2);
     }
 
     #[test]
     fn list_by_status() {
-        let mut registry =
-            AgentRegistry::new().with_heartbeat_timeout(Duration::from_millis(50));
+        let mut registry = AgentRegistry::new().with_heartbeat_timeout(Duration::from_millis(50));
 
         let _id1 = registry.register("Online".into(), vec![], vec![]).unwrap();
-        let id2 = registry.register("ToBeOffline".into(), vec![], vec![]).unwrap();
+        let id2 = registry
+            .register("ToBeOffline".into(), vec![], vec![])
+            .unwrap();
 
         // Age id2
         {
@@ -511,8 +506,7 @@ mod tests {
 
     #[test]
     fn count_and_count_online() {
-        let mut registry =
-            AgentRegistry::new().with_heartbeat_timeout(Duration::from_millis(50));
+        let mut registry = AgentRegistry::new().with_heartbeat_timeout(Duration::from_millis(50));
 
         registry.register("A".into(), vec![], vec![]).unwrap();
         let id2 = registry.register("B".into(), vec![], vec![]).unwrap();
@@ -614,7 +608,10 @@ mod tests {
 
         let event = rx.try_recv().unwrap();
         match event {
-            WorldEvent::AgentHeartbeat { agent_id, timestamp } => {
+            WorldEvent::AgentHeartbeat {
+                agent_id,
+                timestamp,
+            } => {
                 assert_eq!(agent_id, id);
                 assert!(timestamp > 0);
             }

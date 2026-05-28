@@ -396,8 +396,8 @@ async fn test_token_burn_1000_ticks_consistency() {
                 m
             },
             personality: String::new(),
-                tasks_completed: 0,
-                tasks_attempted: 0,
+            tasks_completed: 0,
+            tasks_attempted: 0,
         },
         AgentRecord {
             id: Uuid::new_v4(),
@@ -406,8 +406,8 @@ async fn test_token_burn_1000_ticks_consistency() {
             tokens: 500_000,
             skills: HashMap::new(),
             personality: String::new(),
-                tasks_completed: 0,
-                tasks_attempted: 0,
+            tasks_completed: 0,
+            tasks_attempted: 0,
         },
     ];
 

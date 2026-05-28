@@ -7,12 +7,11 @@
 use std::sync::Arc;
 
 use axum::{
-    Json,
-    Router,
     extract::{Path, State},
     http::StatusCode,
     response::IntoResponse,
     routing::{get, post},
+    Json, Router,
 };
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
@@ -142,7 +141,10 @@ pub fn experiment_routes() -> Router<AppState> {
         .route("/api/v2/experiments/{id}/pause", post(pause_experiment))
         .route("/api/v2/experiments/{id}/resume", post(resume_experiment))
         .route("/api/v2/experiments/{id}/inject", post(inject_experiment))
-        .route("/api/v2/experiments/{id}/results", get(get_experiment_results))
+        .route(
+            "/api/v2/experiments/{id}/results",
+            get(get_experiment_results),
+        )
 }
 
 // ── Helpers ───────────────────────────────────────────────
@@ -213,13 +215,15 @@ async fn create_experiment(
 
     state.experiment_store.lock().await.push(experiment);
 
-    (StatusCode::CREATED, Json(serde_json::json!({ "experiment_id": id }))).into_response()
+    (
+        StatusCode::CREATED,
+        Json(serde_json::json!({ "experiment_id": id })),
+    )
+        .into_response()
 }
 
 /// `GET /api/v2/experiments` — list all experiments.
-async fn list_experiments(
-    State(state): State<AppState>,
-) -> impl IntoResponse {
+async fn list_experiments(State(state): State<AppState>) -> impl IntoResponse {
     let experiments = state.experiment_store.lock().await;
     let summaries: Vec<ExperimentSummary> = experiments
         .iter()
@@ -256,10 +260,7 @@ async fn start_experiment(
             return (
                 StatusCode::CONFLICT,
                 Json(ErrorResponse {
-                    error: format!(
-                        "experiment is {:?}, expected created",
-                        experiment.status
-                    ),
+                    error: format!("experiment is {:?}, expected created", experiment.status),
                 }),
             )
                 .into_response();
@@ -504,8 +505,7 @@ mod tests {
 
     #[test]
     fn create_experiment_request_defaults() {
-        let req: CreateExperimentRequest =
-            serde_json::from_str("{}").unwrap();
+        let req: CreateExperimentRequest = serde_json::from_str("{}").unwrap();
         assert!(req.agent_count.is_none());
         assert!(req.target_ticks.is_none());
         assert!(req.llm_model.is_none());

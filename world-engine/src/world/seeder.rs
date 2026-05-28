@@ -17,9 +17,9 @@
 
 use std::collections::HashMap;
 
-use rand::SeedableRng;
 use rand::rngs::StdRng;
 use rand::Rng;
+use rand::SeedableRng;
 use serde::{Deserialize, Serialize};
 
 use super::agent::Agent;
@@ -42,7 +42,12 @@ pub enum Terrain {
 impl Terrain {
     /// All terrain variants.
     pub fn all() -> &'static [Terrain] {
-        &[Terrain::Plains, Terrain::Forest, Terrain::Water, Terrain::Mountain]
+        &[
+            Terrain::Plains,
+            Terrain::Forest,
+            Terrain::Water,
+            Terrain::Mountain,
+        ]
     }
 }
 
@@ -115,11 +120,7 @@ impl WorldSeeder {
     /// - `density`: Resource density 0.0–1.0 (probability per walkable cell).
     ///
     /// Returns a list of resources with random types and amounts.
-    pub fn generate_resources(
-        &mut self,
-        terrain: &[Vec<Terrain>],
-        density: f64,
-    ) -> Vec<Resource> {
+    pub fn generate_resources(&mut self, terrain: &[Vec<Terrain>], density: f64) -> Vec<Resource> {
         let resource_kinds = ["food", "wood", "stone", "mineral"];
         let mut resources = Vec::new();
         let mut counter = 0u64;
@@ -157,10 +158,10 @@ impl WorldSeeder {
     /// - `initial_tokens`: Starting token balance for each agent.
     pub fn generate_agents(&mut self, count: usize, initial_tokens: u64) -> Vec<Agent> {
         let names = [
-            "Alice", "Bob", "Carol", "Dave", "Eve", "Frank", "Grace", "Henry",
-            "Iris", "Jack", "Kate", "Leo", "Mia", "Noah", "Olga", "Paul",
-            "Quinn", "Rosa", "Sven", "Tara", "Uma", "Victor", "Wendy", "Xavier",
-            "Yuki", "Zara", "Amir", "Bela", "Chen", "Dara", "Elena", "Felix",
+            "Alice", "Bob", "Carol", "Dave", "Eve", "Frank", "Grace", "Henry", "Iris", "Jack",
+            "Kate", "Leo", "Mia", "Noah", "Olga", "Paul", "Quinn", "Rosa", "Sven", "Tara", "Uma",
+            "Victor", "Wendy", "Xavier", "Yuki", "Zara", "Amir", "Bela", "Chen", "Dara", "Elena",
+            "Felix",
         ];
 
         let mut agents = Vec::with_capacity(count);
@@ -238,7 +239,9 @@ mod tests {
         let t = s.generate_terrain(10, 10);
         let r = s.generate_resources(&t, 1.0);
         // All walkable cells should have resources
-        let walkable = t.iter().flat_map(|row| row.iter())
+        let walkable = t
+            .iter()
+            .flat_map(|row| row.iter())
             .filter(|c| matches!(c, Terrain::Plains | Terrain::Forest))
             .count();
         assert_eq!(r.len(), walkable);

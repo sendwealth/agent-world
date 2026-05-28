@@ -156,7 +156,11 @@ impl AgentRegistry {
 
     /// Total money across all alive agents.
     pub fn total_money(&self) -> u64 {
-        self.agents.values().filter(|a| a.alive).map(|a| a.money).sum()
+        self.agents
+            .values()
+            .filter(|a| a.alive)
+            .map(|a| a.money)
+            .sum()
     }
 
     /// Set the current tick.

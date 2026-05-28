@@ -185,7 +185,10 @@ impl Building {
 
     /// Whether the building is operational (active or damaged).
     pub fn is_operational(&self) -> bool {
-        matches!(self.status, BuildingStatus::Active | BuildingStatus::Damaged)
+        matches!(
+            self.status,
+            BuildingStatus::Active | BuildingStatus::Damaged
+        )
     }
 }
 
@@ -281,7 +284,12 @@ impl BuildingManager {
             .map(|ids| {
                 ids.iter()
                     .filter_map(|id| self.buildings.get(id))
-                    .filter(|b| !matches!(b.status, BuildingStatus::Destroyed | BuildingStatus::Demolished))
+                    .filter(|b| {
+                        !matches!(
+                            b.status,
+                            BuildingStatus::Destroyed | BuildingStatus::Demolished
+                        )
+                    })
                     .collect()
             })
             .unwrap_or_default()
@@ -292,7 +300,12 @@ impl BuildingManager {
         self.buildings
             .values()
             .filter(|b| b.owner_id == owner_id)
-            .filter(|b| !matches!(b.status, BuildingStatus::Destroyed | BuildingStatus::Demolished))
+            .filter(|b| {
+                !matches!(
+                    b.status,
+                    BuildingStatus::Destroyed | BuildingStatus::Demolished
+                )
+            })
             .collect()
     }
 
@@ -301,7 +314,9 @@ impl BuildingManager {
     pub fn tick_construction(&mut self) -> Vec<BuildingId> {
         let mut completed = Vec::new();
         for building in self.buildings.values_mut() {
-            if building.status == BuildingStatus::Constructing && building.construction_ticks_left > 0 {
+            if building.status == BuildingStatus::Constructing
+                && building.construction_ticks_left > 0
+            {
                 building.construction_ticks_left -= 1;
                 if building.construction_ticks_left == 0 {
                     building.status = BuildingStatus::Active;
@@ -324,7 +339,10 @@ impl BuildingManager {
                 } else if building.health < 50 {
                     building.status = BuildingStatus::Damaged;
                 }
-                if matches!(building.status, BuildingStatus::Damaged | BuildingStatus::Destroyed) {
+                if matches!(
+                    building.status,
+                    BuildingStatus::Damaged | BuildingStatus::Destroyed
+                ) {
                     damaged.push((building.id.clone(), building.health));
                 }
             }
@@ -335,9 +353,15 @@ impl BuildingManager {
     /// Maintain (repair) a building, restoring its health.
     /// Costs tokens proportional to damage.
     pub fn maintain(&mut self, building_id: &str, health_restore: u32) -> Result<Building, String> {
-        let building = self.buildings.get_mut(building_id).ok_or("building not found")?;
+        let building = self
+            .buildings
+            .get_mut(building_id)
+            .ok_or("building not found")?;
 
-        if matches!(building.status, BuildingStatus::Destroyed | BuildingStatus::Demolished) {
+        if matches!(
+            building.status,
+            BuildingStatus::Destroyed | BuildingStatus::Demolished
+        ) {
             return Err("cannot repair a destroyed or demolished building".into());
         }
 
@@ -351,9 +375,15 @@ impl BuildingManager {
 
     /// Demolish a building, removing it from active use.
     pub fn demolish(&mut self, building_id: &str) -> Result<Building, String> {
-        let building = self.buildings.get_mut(building_id).ok_or("building not found")?;
+        let building = self
+            .buildings
+            .get_mut(building_id)
+            .ok_or("building not found")?;
 
-        if matches!(building.status, BuildingStatus::Destroyed | BuildingStatus::Demolished) {
+        if matches!(
+            building.status,
+            BuildingStatus::Destroyed | BuildingStatus::Demolished
+        ) {
             return Err("building is already destroyed or demolished".into());
         }
 
@@ -364,7 +394,10 @@ impl BuildingManager {
 
     /// Upgrade a building to the next level.
     pub fn upgrade(&mut self, building_id: &str) -> Result<Building, String> {
-        let building = self.buildings.get_mut(building_id).ok_or("building not found")?;
+        let building = self
+            .buildings
+            .get_mut(building_id)
+            .ok_or("building not found")?;
 
         if building.status != BuildingStatus::Active {
             return Err("can only upgrade active buildings".into());
@@ -387,7 +420,12 @@ impl BuildingManager {
         let to_remove: Vec<BuildingId> = self
             .buildings
             .iter()
-            .filter(|(_, b)| matches!(b.status, BuildingStatus::Destroyed | BuildingStatus::Demolished))
+            .filter(|(_, b)| {
+                matches!(
+                    b.status,
+                    BuildingStatus::Destroyed | BuildingStatus::Demolished
+                )
+            })
             .map(|(id, _)| id.clone())
             .collect();
 
@@ -423,7 +461,13 @@ mod tests {
     fn construct_building() {
         let mut mgr = make_manager();
         let b = mgr
-            .construct(BuildingType::Warehouse, (5, 10), OwnerType::Personal, "agent-1".into(), 0)
+            .construct(
+                BuildingType::Warehouse,
+                (5, 10),
+                OwnerType::Personal,
+                "agent-1".into(),
+                0,
+            )
             .unwrap();
         assert_eq!(b.building_type, BuildingType::Warehouse);
         assert_eq!(b.position, (5, 10));
@@ -444,7 +488,13 @@ mod tests {
     fn construction_completes_after_ticks() {
         let mut mgr = make_manager();
         let b = mgr
-            .construct(BuildingType::Housing, (0, 0), OwnerType::Personal, "a1".into(), 0)
+            .construct(
+                BuildingType::Housing,
+                (0, 0),
+                OwnerType::Personal,
+                "a1".into(),
+                0,
+            )
             .unwrap();
         let ticks_needed = b.construction_ticks_left;
 
@@ -464,7 +514,13 @@ mod tests {
     fn durability_decay_and_damage() {
         let mut mgr = make_manager();
         let b = mgr
-            .construct(BuildingType::Market, (1, 1), OwnerType::Personal, "a1".into(), 0)
+            .construct(
+                BuildingType::Market,
+                (1, 1),
+                OwnerType::Personal,
+                "a1".into(),
+                0,
+            )
             .unwrap();
 
         // Fast-forward construction
@@ -485,7 +541,13 @@ mod tests {
     fn maintenance_repairs() {
         let mut mgr = make_manager();
         let b = mgr
-            .construct(BuildingType::Workshop, (2, 2), OwnerType::Organization, "org-1".into(), 0)
+            .construct(
+                BuildingType::Workshop,
+                (2, 2),
+                OwnerType::Organization,
+                "org-1".into(),
+                0,
+            )
             .unwrap();
 
         // Fast-forward construction
@@ -505,7 +567,13 @@ mod tests {
     fn demolish_building() {
         let mut mgr = make_manager();
         let b = mgr
-            .construct(BuildingType::Warehouse, (3, 3), OwnerType::Personal, "a1".into(), 0)
+            .construct(
+                BuildingType::Warehouse,
+                (3, 3),
+                OwnerType::Personal,
+                "a1".into(),
+                0,
+            )
             .unwrap();
 
         let result = mgr.demolish(&b.id).unwrap();
@@ -518,9 +586,30 @@ mod tests {
     #[test]
     fn get_buildings_at_position() {
         let mut mgr = make_manager();
-        mgr.construct(BuildingType::Warehouse, (0, 0), OwnerType::Personal, "a1".into(), 0).unwrap();
-        mgr.construct(BuildingType::Market, (0, 0), OwnerType::Personal, "a1".into(), 0).unwrap();
-        mgr.construct(BuildingType::Housing, (1, 1), OwnerType::Personal, "a1".into(), 0).unwrap();
+        mgr.construct(
+            BuildingType::Warehouse,
+            (0, 0),
+            OwnerType::Personal,
+            "a1".into(),
+            0,
+        )
+        .unwrap();
+        mgr.construct(
+            BuildingType::Market,
+            (0, 0),
+            OwnerType::Personal,
+            "a1".into(),
+            0,
+        )
+        .unwrap();
+        mgr.construct(
+            BuildingType::Housing,
+            (1, 1),
+            OwnerType::Personal,
+            "a1".into(),
+            0,
+        )
+        .unwrap();
 
         let at_origin = mgr.get_at((0, 0));
         assert_eq!(at_origin.len(), 2);
@@ -535,9 +624,30 @@ mod tests {
     #[test]
     fn get_buildings_by_owner() {
         let mut mgr = make_manager();
-        mgr.construct(BuildingType::Warehouse, (0, 0), OwnerType::Personal, "agent-a".into(), 0).unwrap();
-        mgr.construct(BuildingType::Market, (1, 0), OwnerType::Personal, "agent-a".into(), 0).unwrap();
-        mgr.construct(BuildingType::Housing, (2, 0), OwnerType::Personal, "agent-b".into(), 0).unwrap();
+        mgr.construct(
+            BuildingType::Warehouse,
+            (0, 0),
+            OwnerType::Personal,
+            "agent-a".into(),
+            0,
+        )
+        .unwrap();
+        mgr.construct(
+            BuildingType::Market,
+            (1, 0),
+            OwnerType::Personal,
+            "agent-a".into(),
+            0,
+        )
+        .unwrap();
+        mgr.construct(
+            BuildingType::Housing,
+            (2, 0),
+            OwnerType::Personal,
+            "agent-b".into(),
+            0,
+        )
+        .unwrap();
 
         let owned_by_a = mgr.get_by_owner("agent-a");
         assert_eq!(owned_by_a.len(), 2);
@@ -550,7 +660,13 @@ mod tests {
     fn upgrade_building() {
         let mut mgr = make_manager();
         let b = mgr
-            .construct(BuildingType::Warehouse, (0, 0), OwnerType::Personal, "a1".into(), 0)
+            .construct(
+                BuildingType::Warehouse,
+                (0, 0),
+                OwnerType::Personal,
+                "a1".into(),
+                0,
+            )
             .unwrap();
 
         // Fast-forward construction
@@ -564,15 +680,39 @@ mod tests {
 
         // Cannot upgrade non-active
         let mut mgr2 = make_manager();
-        let b2 = mgr2.construct(BuildingType::Market, (0, 0), OwnerType::Personal, "a1".into(), 0).unwrap();
+        let b2 = mgr2
+            .construct(
+                BuildingType::Market,
+                (0, 0),
+                OwnerType::Personal,
+                "a1".into(),
+                0,
+            )
+            .unwrap();
         assert!(mgr2.upgrade(&b2.id).is_err()); // still constructing
     }
 
     #[test]
     fn cleanup_removed_buildings() {
         let mut mgr = make_manager();
-        let b1 = mgr.construct(BuildingType::Warehouse, (0, 0), OwnerType::Personal, "a1".into(), 0).unwrap();
-        let _b2 = mgr.construct(BuildingType::Market, (1, 0), OwnerType::Personal, "a1".into(), 0).unwrap();
+        let b1 = mgr
+            .construct(
+                BuildingType::Warehouse,
+                (0, 0),
+                OwnerType::Personal,
+                "a1".into(),
+                0,
+            )
+            .unwrap();
+        let _b2 = mgr
+            .construct(
+                BuildingType::Market,
+                (1, 0),
+                OwnerType::Personal,
+                "a1".into(),
+                0,
+            )
+            .unwrap();
 
         mgr.demolish(&b1.id).unwrap();
         let removed = mgr.cleanup(0);
@@ -583,15 +723,36 @@ mod tests {
     #[test]
     fn duplicate_building_type_at_position() {
         let mut mgr = make_manager();
-        mgr.construct(BuildingType::Warehouse, (0, 0), OwnerType::Personal, "a1".into(), 0).unwrap();
-        let result = mgr.construct(BuildingType::Warehouse, (0, 0), OwnerType::Personal, "a1".into(), 0);
+        mgr.construct(
+            BuildingType::Warehouse,
+            (0, 0),
+            OwnerType::Personal,
+            "a1".into(),
+            0,
+        )
+        .unwrap();
+        let result = mgr.construct(
+            BuildingType::Warehouse,
+            (0, 0),
+            OwnerType::Personal,
+            "a1".into(),
+            0,
+        );
         assert!(result.is_err());
     }
 
     #[test]
     fn max_level_upgrade() {
         let mut mgr = make_manager();
-        let b = mgr.construct(BuildingType::Warehouse, (0, 0), OwnerType::Personal, "a1".into(), 0).unwrap();
+        let b = mgr
+            .construct(
+                BuildingType::Warehouse,
+                (0, 0),
+                OwnerType::Personal,
+                "a1".into(),
+                0,
+            )
+            .unwrap();
         for _ in 0..100 {
             mgr.tick_construction();
         }

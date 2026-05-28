@@ -178,7 +178,12 @@ impl SnapshotStore {
     }
 
     /// List snapshots in a tick range, ordered by tick.
-    pub fn list(&self, from_tick: Option<u64>, to_tick: Option<u64>, limit: Option<u64>) -> Result<Vec<WorldSnapshotData>, rusqlite::Error> {
+    pub fn list(
+        &self,
+        from_tick: Option<u64>,
+        to_tick: Option<u64>,
+        limit: Option<u64>,
+    ) -> Result<Vec<WorldSnapshotData>, rusqlite::Error> {
         let mut sql = "SELECT snapshot_data FROM snapshots WHERE 1=1".to_string();
         let mut param_idx = 1;
 
@@ -209,7 +214,8 @@ impl SnapshotStore {
             param_values.push(Box::new(lim));
         }
 
-        let param_refs: Vec<&dyn rusqlite::types::ToSql> = param_values.iter().map(|p| p.as_ref()).collect();
+        let param_refs: Vec<&dyn rusqlite::types::ToSql> =
+            param_values.iter().map(|p| p.as_ref()).collect();
         let mut rows = stmt.query(param_refs.as_slice())?;
 
         let mut results = Vec::new();
@@ -223,9 +229,9 @@ impl SnapshotStore {
 
     /// Get the latest snapshot.
     pub fn latest(&self) -> Result<Option<WorldSnapshotData>, rusqlite::Error> {
-        let mut stmt = self.conn.prepare(
-            "SELECT snapshot_data FROM snapshots ORDER BY tick DESC LIMIT 1",
-        )?;
+        let mut stmt = self
+            .conn
+            .prepare("SELECT snapshot_data FROM snapshots ORDER BY tick DESC LIMIT 1")?;
         let mut rows = stmt.query([])?;
         match rows.next()? {
             Some(row) => {
@@ -239,11 +245,9 @@ impl SnapshotStore {
 
     /// Get count of stored snapshots.
     pub fn count(&self) -> Result<u64, rusqlite::Error> {
-        let count: u64 = self.conn.query_row(
-            "SELECT COUNT(*) FROM snapshots",
-            [],
-            |row| row.get(0),
-        )?;
+        let count: u64 = self
+            .conn
+            .query_row("SELECT COUNT(*) FROM snapshots", [], |row| row.get(0))?;
         Ok(count)
     }
 
@@ -289,11 +293,13 @@ pub fn build_snapshot(
     key_events: &[KeyEvent],
 ) -> WorldSnapshotData {
     let total_population = agents.len() as u64;
-    let active_agents = agents.iter()
+    let active_agents = agents
+        .iter()
         .filter(|(_, _, a)| a.phase != AgentPhase::Dead)
         .count() as u64;
 
-    let token_values: Vec<u64> = agents.iter()
+    let token_values: Vec<u64> = agents
+        .iter()
         .filter(|(_, _, a)| a.phase != AgentPhase::Dead)
         .map(|(_, _, a)| a.tokens)
         .collect();
@@ -314,11 +320,16 @@ pub fn build_snapshot(
         }
     }
 
-    let mut skill_counts: Vec<SkillCount> = skill_map.into_iter()
+    let mut skill_counts: Vec<SkillCount> = skill_map
+        .into_iter()
         .map(|(name, (count, total_level))| SkillCount {
             skill_name: name,
             agent_count: count,
-            avg_level: if count > 0 { total_level / count as f64 } else { 0.0 },
+            avg_level: if count > 0 {
+                total_level / count as f64
+            } else {
+                0.0
+            },
         })
         .collect();
     skill_counts.sort_by_key(|b| std::cmp::Reverse(b.agent_count));
@@ -352,7 +363,9 @@ pub fn extract_key_events(events: &[WorldEvent]) -> Vec<KeyEvent> {
                     description: format!("Agent died: {:?}", reason),
                 });
             }
-            WorldEvent::TransactionCompleted { from, to, amount, .. } if *amount >= 100 => {
+            WorldEvent::TransactionCompleted {
+                from, to, amount, ..
+            } if *amount >= 100 => {
                 key_events.push(KeyEvent {
                     tick: 0,
                     event_type: "large_transaction".to_string(),
@@ -368,7 +381,11 @@ pub fn extract_key_events(events: &[WorldEvent]) -> Vec<KeyEvent> {
                     description: format!("New agent spawned: {}", name),
                 });
             }
-            WorldEvent::PhaseChanged { agent_id, old_phase, new_phase } => {
+            WorldEvent::PhaseChanged {
+                agent_id,
+                old_phase,
+                new_phase,
+            } => {
                 key_events.push(KeyEvent {
                     tick: 0,
                     event_type: "phase_changed".to_string(),
@@ -408,8 +425,8 @@ mod tests {
                 tokens,
                 skills: HashMap::new(),
                 personality: String::new(),
-            tasks_completed: 0,
-            tasks_attempted: 0,
+                tasks_completed: 0,
+                tasks_attempted: 0,
             },
         )
     }
@@ -427,16 +444,22 @@ mod tests {
                 name: "test".to_string(),
                 phase,
                 tokens,
-                skills: skills.into_iter().map(|(n, l)| {
-                    (n.to_string(), SkillRecord {
-                        name: n.to_string(),
-                        level: l,
-                        experience: 0.0,
+                skills: skills
+                    .into_iter()
+                    .map(|(n, l)| {
+                        (
+                            n.to_string(),
+                            SkillRecord {
+                                name: n.to_string(),
+                                level: l,
+                                experience: 0.0,
+                            },
+                        )
                     })
-                }).collect(),
+                    .collect(),
                 personality: String::new(),
-            tasks_completed: 0,
-            tasks_attempted: 0,
+                tasks_completed: 0,
+                tasks_attempted: 0,
             },
         )
     }
@@ -452,7 +475,11 @@ mod tests {
     fn test_gini_perfect_inequality() {
         let values = vec![0, 0, 0, 100];
         let gini = calculate_gini(&values);
-        assert!(gini > 0.5, "gini should be high for unequal distribution, got {}", gini);
+        assert!(
+            gini > 0.5,
+            "gini should be high for unequal distribution, got {}",
+            gini
+        );
     }
 
     #[test]

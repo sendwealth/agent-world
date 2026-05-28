@@ -88,10 +88,7 @@ impl SerializableAgentRecord {
 
 impl SerializableWorldState {
     /// Build a serializable snapshot from the live world state components.
-    pub fn from_world_state(
-        tick: u64,
-        agents: &[(Uuid, u64, AgentRecord)],
-    ) -> Self {
+    pub fn from_world_state(tick: u64, agents: &[(Uuid, u64, AgentRecord)]) -> Self {
         Self {
             tick,
             agents: agents
@@ -151,18 +148,15 @@ mod tests {
                 tokens,
                 skills: HashMap::new(),
                 personality: String::new(),
-            tasks_completed: 0,
-            tasks_attempted: 0,
+                tasks_completed: 0,
+                tasks_attempted: 0,
             },
         )
     }
 
     #[test]
     fn serializable_world_state_roundtrip() {
-        let agents = vec![
-            make_test_agent("Alice", 1000),
-            make_test_agent("Bob", 500),
-        ];
+        let agents = vec![make_test_agent("Alice", 1000), make_test_agent("Bob", 500)];
         let original = SerializableWorldState::from_world_state(42, &agents);
 
         let json = serde_json::to_string(&original).unwrap();
@@ -176,9 +170,7 @@ mod tests {
 
     #[test]
     fn serializable_world_state_to_world_parts() {
-        let agents = vec![
-            make_test_agent("Carol", 800),
-        ];
+        let agents = vec![make_test_agent("Carol", 800)];
         let snapshot = SerializableWorldState::from_world_state(10, &agents);
         let (tick, restored_agents) = snapshot.to_world_state_parts();
 

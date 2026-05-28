@@ -12,9 +12,9 @@
 
 use std::sync::Arc;
 
-use tokio::sync::{Mutex, watch};
+use tokio::sync::{watch, Mutex};
 
-use agent_world_engine::api::{self, AgentRecord, A2AMessage};
+use agent_world_engine::api::{self, A2AMessage, AgentRecord};
 use agent_world_engine::economy::TaskBoard;
 use agent_world_engine::wal::WAL;
 use agent_world_engine::world::event::{EventType, WorldEvent};
@@ -29,7 +29,9 @@ use reqwest::Client;
 async fn start_server() -> (String, Arc<EventBus>) {
     let event_bus = Arc::new(EventBus::new(4096));
     // TaskBoard shares the same EventBus as the AppState for full event flow
-    let board = Arc::new(Mutex::new(TaskBoard::with_shared_event_bus(event_bus.clone())));
+    let board = Arc::new(Mutex::new(TaskBoard::with_shared_event_bus(
+        event_bus.clone(),
+    )));
 
     // Use a temp dir for WAL. Leak it intentionally so it stays alive for the server's lifetime.
     let tmp = tempfile::tempdir().unwrap();
@@ -41,13 +43,7 @@ async fn start_server() -> (String, Arc<EventBus>) {
 
     let (tick_tx, tick_rx) = watch::channel(0u64);
 
-    let app = api::create_router_for_test(
-        board,
-        shared_wal,
-        event_bus.clone(),
-        tick_tx,
-        tick_rx,
-    );
+    let app = api::create_router_for_test(board, shared_wal, event_bus.clone(), tick_tx, tick_rx);
 
     let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
     let port = listener.local_addr().unwrap().port();
@@ -151,7 +147,10 @@ async fn test_e2e_smoke_2_agent_conversation_with_dashboard() {
     assert_eq!(msg_ab.from_agent, alice.id);
     assert_eq!(msg_ab.to_agent, bob.id);
     assert_eq!(msg_ab.message_type, "INFORM");
-    println!("  Message sent: {} → {} (tick={})", msg_ab.from_agent, msg_ab.to_agent, msg_ab.tick);
+    println!(
+        "  Message sent: {} → {} (tick={})",
+        msg_ab.from_agent, msg_ab.to_agent, msg_ab.tick
+    );
 
     // ── Phase 3: Agent B receives and replies ──────────────────────────
 
@@ -173,7 +172,10 @@ async fn test_e2e_smoke_2_agent_conversation_with_dashboard() {
     assert_eq!(msg_ba.from_agent, bob.id);
     assert_eq!(msg_ba.to_agent, alice.id);
     assert_eq!(msg_ba.message_type, "ACCEPT");
-    println!("  Reply sent: {} → {} (tick={})", msg_ba.from_agent, msg_ba.to_agent, msg_ba.tick);
+    println!(
+        "  Reply sent: {} → {} (tick={})",
+        msg_ba.from_agent, msg_ba.to_agent, msg_ba.tick
+    );
 
     // Verify messages stored
     let msgs_resp = client
@@ -240,7 +242,10 @@ async fn test_e2e_smoke_2_agent_conversation_with_dashboard() {
     assert_eq!(stats["alive_count"], 2);
     assert_eq!(stats["dead_count"], 0);
     assert_eq!(stats["tick"], 10);
-    println!("  Stats: {} agents, tick={}, alive={}", stats["agent_count"], stats["tick"], stats["alive_count"]);
+    println!(
+        "  Stats: {} agents, tick={}, alive={}",
+        stats["agent_count"], stats["tick"], stats["alive_count"]
+    );
 
     // ── Phase 6: Task Lifecycle (Alice creates, Bob claims/completes) ──
 
@@ -261,7 +266,10 @@ async fn test_e2e_smoke_2_agent_conversation_with_dashboard() {
     let task: serde_json::Value = create_task_resp.json().await.unwrap();
     let task_id = task["id"].as_str().unwrap();
     assert_eq!(task["status"].as_str().unwrap(), "published");
-    println!("  Task created: {} (reward={})", task["title"], task["reward"]);
+    println!(
+        "  Task created: {} (reward={})",
+        task["title"], task["reward"]
+    );
 
     // Verify SSE received TaskCreated
     let task_created_evt = sse_rx.try_recv().unwrap();
@@ -350,7 +358,10 @@ async fn test_e2e_smoke_2_agent_conversation_with_dashboard() {
     assert_eq!(wal_verify_resp.status(), StatusCode::OK);
     let wal_result: serde_json::Value = wal_verify_resp.json().await.unwrap();
     assert_eq!(wal_result["consistent"], true);
-    println!("  WAL consistency: ok (events={})", wal_result["event_count"]);
+    println!(
+        "  WAL consistency: ok (events={})",
+        wal_result["event_count"]
+    );
 
     // ── Phase 8: WAL Snapshot and Recovery ──────────────────────────────
 

@@ -6,8 +6,6 @@
 use std::convert::Infallible;
 
 use axum::{
-    Json,
-    Router,
     extract::{Path, Query, State},
     http::StatusCode,
     response::{
@@ -15,13 +13,14 @@ use axum::{
         IntoResponse,
     },
     routing::get,
+    Json, Router,
 };
 use futures::stream::Stream;
 use serde::{Deserialize, Serialize};
 use tokio_stream::wrappers::BroadcastStream;
 use tokio_stream::StreamExt;
 
-use crate::api::{AppState, ErrorResponse, AgentRecord, SseQuery, parse_event_types};
+use crate::api::{parse_event_types, AgentRecord, AppState, ErrorResponse, SseQuery};
 
 // ── Response Types ────────────────────────────────────────
 
@@ -154,9 +153,7 @@ pub fn research_routes() -> Router<AppState> {
 // ── Handlers ──────────────────────────────────────────────
 
 /// `GET /api/v2/world/state`
-async fn get_world_state(
-    State(state): State<AppState>,
-) -> impl IntoResponse {
+async fn get_world_state(State(state): State<AppState>) -> impl IntoResponse {
     let agents = state.agents.lock().await;
     let tick = *state.tick_rx.borrow();
 
@@ -204,9 +201,7 @@ async fn get_world_state(
 }
 
 /// `GET /api/v2/agents` — list all agents (v2, auth-protected).
-async fn list_agents_v2(
-    State(state): State<AppState>,
-) -> impl IntoResponse {
+async fn list_agents_v2(State(state): State<AppState>) -> impl IntoResponse {
     let agents = state.agents.lock().await;
     Json(&*agents).into_response()
 }
@@ -312,9 +307,7 @@ async fn get_world_history(
 }
 
 /// `GET /api/v2/metrics/emergence`
-async fn get_emergence_metrics(
-    State(state): State<AppState>,
-) -> impl IntoResponse {
+async fn get_emergence_metrics(State(state): State<AppState>) -> impl IntoResponse {
     let agents = state.agents.lock().await;
     let tick = *state.tick_rx.borrow();
 
@@ -344,16 +337,37 @@ async fn get_emergence_metrics(
     let org_metrics = if let Some(ref org_store) = state.org_store {
         let store = org_store.lock().await;
         let orgs = store.list();
-        let active = orgs.iter().filter(|o| o.status == crate::organization::org::OrgStatus::Active).count();
-        let inactive = orgs.iter().filter(|o| o.status == crate::organization::org::OrgStatus::Inactive).count();
-        let dissolved = orgs.iter().filter(|o| o.status == crate::organization::org::OrgStatus::Dissolved).count();
+        let active = orgs
+            .iter()
+            .filter(|o| o.status == crate::organization::org::OrgStatus::Active)
+            .count();
+        let inactive = orgs
+            .iter()
+            .filter(|o| o.status == crate::organization::org::OrgStatus::Inactive)
+            .count();
+        let dissolved = orgs
+            .iter()
+            .filter(|o| o.status == crate::organization::org::OrgStatus::Dissolved)
+            .count();
         let total_members: usize = orgs.iter().map(|o| o.member_count()).sum();
 
         let type_dist = OrgTypeDistribution {
-            company: orgs.iter().filter(|o| matches!(o.org_type, crate::organization::org::OrgType::Company)).count(),
-            guild: orgs.iter().filter(|o| matches!(o.org_type, crate::organization::org::OrgType::Guild)).count(),
-            alliance: orgs.iter().filter(|o| matches!(o.org_type, crate::organization::org::OrgType::Alliance)).count(),
-            university: orgs.iter().filter(|o| matches!(o.org_type, crate::organization::org::OrgType::University)).count(),
+            company: orgs
+                .iter()
+                .filter(|o| matches!(o.org_type, crate::organization::org::OrgType::Company))
+                .count(),
+            guild: orgs
+                .iter()
+                .filter(|o| matches!(o.org_type, crate::organization::org::OrgType::Guild))
+                .count(),
+            alliance: orgs
+                .iter()
+                .filter(|o| matches!(o.org_type, crate::organization::org::OrgType::Alliance))
+                .count(),
+            university: orgs
+                .iter()
+                .filter(|o| matches!(o.org_type, crate::organization::org::OrgType::University))
+                .count(),
         };
 
         OrganizationMetrics {
@@ -403,12 +417,12 @@ async fn get_emergence_metrics(
 async fn research_events_sse(
     State(state): State<AppState>,
     Query(query): Query<SseQuery>,
-) -> Result<Sse<impl Stream<Item = Result<SseEvent, Infallible>>>, (StatusCode, Json<ErrorResponse>)> {
+) -> Result<Sse<impl Stream<Item = Result<SseEvent, Infallible>>>, (StatusCode, Json<ErrorResponse>)>
+{
     let type_filter: Option<std::collections::HashSet<crate::world::event::EventType>> =
         if let Some(ref types_str) = query.types {
-            let parsed = parse_event_types(types_str).map_err(|e| {
-                (StatusCode::BAD_REQUEST, Json(ErrorResponse { error: e }))
-            })?;
+            let parsed = parse_event_types(types_str)
+                .map_err(|e| (StatusCode::BAD_REQUEST, Json(ErrorResponse { error: e })))?;
             if parsed.is_empty() {
                 None
             } else {
@@ -555,9 +569,7 @@ mod tests {
     #[test]
     fn top_percent_share_basic() {
         let agents: Vec<AgentRecord> = (0..10)
-            .map(|i| {
-                make_agent(&i.to_string(), (i as u64 + 1) * 10, true)
-            })
+            .map(|i| make_agent(&i.to_string(), (i as u64 + 1) * 10, true))
             .collect();
         let share = compute_top_percent_share(&agents, 0.1).unwrap();
         // Top 10% of 10 agents = top 1 agent (100 tokens), total = 550

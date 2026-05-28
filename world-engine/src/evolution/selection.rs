@@ -220,13 +220,23 @@ impl SelectionEngine {
 
             living_count += 1;
 
-            let last_active = self.last_active.get(&id.to_string()).copied().unwrap_or(*spawn_tick);
-            let report = self.evaluator.evaluate(agent, *spawn_tick, tick, last_active);
+            let last_active = self
+                .last_active
+                .get(&id.to_string())
+                .copied()
+                .unwrap_or(*spawn_tick);
+            let report = self
+                .evaluator
+                .evaluate(agent, *spawn_tick, tick, last_active);
             reports.push(report);
         }
 
         // Sort ascending by score (worst first)
-        reports.sort_by(|a, b| a.score.partial_cmp(&b.score).unwrap_or(std::cmp::Ordering::Equal));
+        reports.sort_by(|a, b| {
+            a.score
+                .partial_cmp(&b.score)
+                .unwrap_or(std::cmp::Ordering::Equal)
+        });
 
         // Determine culling pressure
         let over_capacity = living_count as u32 > self.config.max_agents;
@@ -330,10 +340,13 @@ mod tests {
 
     #[test]
     fn decline_after_inactivity() {
-        let mut engine = SelectionEngine::new(SelectionConfig {
-            inactivity_threshold: 500,
-            ..Default::default()
-        }, 100_000);
+        let mut engine = SelectionEngine::new(
+            SelectionConfig {
+                inactivity_threshold: 500,
+                ..Default::default()
+            },
+            100_000,
+        );
         let agent = make_agent(AgentPhase::Adult, 100, 0);
         engine.mark_active(&agent.0.to_string(), 100);
 
@@ -343,12 +356,15 @@ mod tests {
 
     #[test]
     fn evaluate_cycle_culls_low_fitness() {
-        let mut engine = SelectionEngine::new(SelectionConfig {
-            evaluation_interval: 1000,
-            over_capacity_cull_rate: 0.5,
-            max_agents: 1, // trigger over-capacity
-            ..Default::default()
-        }, 100_000);
+        let mut engine = SelectionEngine::new(
+            SelectionConfig {
+                evaluation_interval: 1000,
+                over_capacity_cull_rate: 0.5,
+                max_agents: 1, // trigger over-capacity
+                ..Default::default()
+            },
+            100_000,
+        );
 
         let a1 = make_agent(AgentPhase::Adult, 90_000, 5); // high fitness
         let a2 = make_agent(AgentPhase::Adult, 10_000, 0); // low fitness
@@ -368,11 +384,14 @@ mod tests {
 
     #[test]
     fn evaluate_cycle_culls_inactive() {
-        let mut engine = SelectionEngine::new(SelectionConfig {
-            evaluation_interval: 1000,
-            inactivity_threshold: 500,
-            ..Default::default()
-        }, 100_000);
+        let mut engine = SelectionEngine::new(
+            SelectionConfig {
+                evaluation_interval: 1000,
+                inactivity_threshold: 500,
+                ..Default::default()
+            },
+            100_000,
+        );
 
         let a1 = make_agent(AgentPhase::Adult, 100, 0);
         // Agent active long ago
@@ -386,14 +405,17 @@ mod tests {
 
     #[test]
     fn no_culling_without_pressure() {
-        let mut engine = SelectionEngine::new(SelectionConfig {
-            evaluation_interval: 1000,
-            max_agents: 100,
-            base_cull_rate: 0.0,
-            over_capacity_cull_rate: 0.0,
-            inactivity_threshold: 500,
-            ..Default::default()
-        }, 100_000);
+        let mut engine = SelectionEngine::new(
+            SelectionConfig {
+                evaluation_interval: 1000,
+                max_agents: 100,
+                base_cull_rate: 0.0,
+                over_capacity_cull_rate: 0.0,
+                inactivity_threshold: 500,
+                ..Default::default()
+            },
+            100_000,
+        );
 
         let a1 = make_agent(AgentPhase::Adult, 100, 0);
         engine.mark_active(&a1.0.to_string(), 600); // recently active (within threshold)

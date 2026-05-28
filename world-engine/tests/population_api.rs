@@ -4,7 +4,7 @@
 
 use std::sync::Arc;
 
-use tokio::sync::{Mutex, watch};
+use tokio::sync::{watch, Mutex};
 
 use agent_world_engine::api::{self, AgentRecord};
 use agent_world_engine::economy::TaskBoard;
@@ -18,7 +18,9 @@ use reqwest::Client;
 
 async fn start_server() -> String {
     let event_bus = Arc::new(EventBus::new(4096));
-    let board = Arc::new(Mutex::new(TaskBoard::with_shared_event_bus(event_bus.clone())));
+    let board = Arc::new(Mutex::new(TaskBoard::with_shared_event_bus(
+        event_bus.clone(),
+    )));
 
     let tmp = tempfile::tempdir().unwrap();
     let tmp_path = tmp.path().to_path_buf();
@@ -29,13 +31,7 @@ async fn start_server() -> String {
 
     let (tick_tx, tick_rx) = watch::channel(0u64);
 
-    let app = api::create_router_for_test(
-        board,
-        shared_wal,
-        event_bus,
-        tick_tx,
-        tick_rx,
-    );
+    let app = api::create_router_for_test(board, shared_wal, event_bus, tick_tx, tick_rx);
 
     let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
     let port = listener.local_addr().unwrap().port();
@@ -46,9 +42,12 @@ async fn start_server() -> String {
 /// Spawn a single agent and return its record.
 async fn spawn_one(base: &str, name: &str) -> AgentRecord {
     let client = Client::new();
-    let resp = client.post(format!("{}/api/v1/agents", base))
+    let resp = client
+        .post(format!("{}/api/v1/agents", base))
         .json(&serde_json::json!({"name": name, "tokens": 1000, "money": 500}))
-        .send().await.unwrap();
+        .send()
+        .await
+        .unwrap();
     assert_eq!(resp.status(), StatusCode::CREATED);
     resp.json().await.unwrap()
 }
@@ -60,8 +59,11 @@ async fn test_population_stats_empty() {
     let base = start_server().await;
     let client = Client::new();
 
-    let resp = client.get(format!("{}/api/v1/population/stats", base))
-        .send().await.unwrap();
+    let resp = client
+        .get(format!("{}/api/v1/population/stats", base))
+        .send()
+        .await
+        .unwrap();
     assert_eq!(resp.status(), StatusCode::OK);
 
     let body: serde_json::Value = resp.json().await.unwrap();
@@ -78,8 +80,11 @@ async fn test_population_stats_after_spawns() {
     let _a = spawn_one(&base, "Alpha").await;
     let _b = spawn_one(&base, "Beta").await;
 
-    let resp = client.get(format!("{}/api/v1/population/stats", base))
-        .send().await.unwrap();
+    let resp = client
+        .get(format!("{}/api/v1/population/stats", base))
+        .send()
+        .await
+        .unwrap();
     assert_eq!(resp.status(), StatusCode::OK);
 
     let body: serde_json::Value = resp.json().await.unwrap();
@@ -104,8 +109,11 @@ async fn test_population_species_groups_by_skills() {
     let _b = spawn_one(&base, "B").await;
     let _c = spawn_one(&base, "C").await;
 
-    let resp = client.get(format!("{}/api/v1/population/species", base))
-        .send().await.unwrap();
+    let resp = client
+        .get(format!("{}/api/v1/population/species", base))
+        .send()
+        .await
+        .unwrap();
     assert_eq!(resp.status(), StatusCode::OK);
 
     let body: serde_json::Value = resp.json().await.unwrap();
@@ -123,8 +131,11 @@ async fn test_population_diversity_empty() {
     let base = start_server().await;
     let client = Client::new();
 
-    let resp = client.get(format!("{}/api/v1/population/diversity", base))
-        .send().await.unwrap();
+    let resp = client
+        .get(format!("{}/api/v1/population/diversity", base))
+        .send()
+        .await
+        .unwrap();
     assert_eq!(resp.status(), StatusCode::OK);
 
     let body: serde_json::Value = resp.json().await.unwrap();
@@ -140,8 +151,11 @@ async fn test_population_diversity_with_agents() {
     let client = Client::new();
     let _a = spawn_one(&base, "X").await;
 
-    let resp = client.get(format!("{}/api/v1/population/diversity", base))
-        .send().await.unwrap();
+    let resp = client
+        .get(format!("{}/api/v1/population/diversity", base))
+        .send()
+        .await
+        .unwrap();
     assert_eq!(resp.status(), StatusCode::OK);
 
     let body: serde_json::Value = resp.json().await.unwrap();
@@ -156,15 +170,19 @@ async fn test_population_events_returns_event_types() {
     let base = start_server().await;
     let client = Client::new();
 
-    let resp = client.get(format!("{}/api/v1/population/events", base))
-        .send().await.unwrap();
+    let resp = client
+        .get(format!("{}/api/v1/population/events", base))
+        .send()
+        .await
+        .unwrap();
     assert_eq!(resp.status(), StatusCode::OK);
 
     let body: serde_json::Value = resp.json().await.unwrap();
     let events = body.as_array().unwrap();
     assert!(!events.is_empty());
     // Check that known event types are present
-    let types: Vec<&str> = events.iter()
+    let types: Vec<&str> = events
+        .iter()
         .filter_map(|e| e["event_type"].as_str())
         .collect();
     assert!(types.contains(&"agent_spawned"));
@@ -180,8 +198,11 @@ async fn test_population_genealogy_found() {
     let client = Client::new();
     let agent = spawn_one(&base, "Founder").await;
 
-    let resp = client.get(format!("{}/api/v1/population/genealogy/{}", base, agent.id))
-        .send().await.unwrap();
+    let resp = client
+        .get(format!("{}/api/v1/population/genealogy/{}", base, agent.id))
+        .send()
+        .await
+        .unwrap();
     assert_eq!(resp.status(), StatusCode::OK);
 
     let body: serde_json::Value = resp.json().await.unwrap();
@@ -198,8 +219,14 @@ async fn test_population_genealogy_not_found() {
     let base = start_server().await;
     let client = Client::new();
 
-    let resp = client.get(format!("{}/api/v1/population/genealogy/nonexistent-id", base))
-        .send().await.unwrap();
+    let resp = client
+        .get(format!(
+            "{}/api/v1/population/genealogy/nonexistent-id",
+            base
+        ))
+        .send()
+        .await
+        .unwrap();
     assert_eq!(resp.status(), StatusCode::NOT_FOUND);
 }
 
@@ -212,8 +239,11 @@ async fn test_population_timeline_returns_current_state() {
     let _a = spawn_one(&base, "T1").await;
     let _b = spawn_one(&base, "T2").await;
 
-    let resp = client.get(format!("{}/api/v1/population/timeline", base))
-        .send().await.unwrap();
+    let resp = client
+        .get(format!("{}/api/v1/population/timeline", base))
+        .send()
+        .await
+        .unwrap();
     assert_eq!(resp.status(), StatusCode::OK);
 
     let body: serde_json::Value = resp.json().await.unwrap();
@@ -229,8 +259,14 @@ async fn test_population_timeline_with_params() {
     let base = start_server().await;
     let client = Client::new();
 
-    let resp = client.get(format!("{}/api/v1/population/timeline?from_tick=0&to_tick=100&interval=50", base))
-        .send().await.unwrap();
+    let resp = client
+        .get(format!(
+            "{}/api/v1/population/timeline?from_tick=0&to_tick=100&interval=50",
+            base
+        ))
+        .send()
+        .await
+        .unwrap();
     assert_eq!(resp.status(), StatusCode::OK);
 
     let body: serde_json::Value = resp.json().await.unwrap();
@@ -246,14 +282,27 @@ async fn test_population_csv_export() {
     let _a = spawn_one(&base, "CsvAgent1").await;
     let _b = spawn_one(&base, "CsvAgent2").await;
 
-    let resp = client.get(format!("{}/api/v1/population/export/csv", base))
-        .send().await.unwrap();
+    let resp = client
+        .get(format!("{}/api/v1/population/export/csv", base))
+        .send()
+        .await
+        .unwrap();
     assert_eq!(resp.status(), StatusCode::OK);
 
-    let ct = resp.headers().get("content-type").unwrap().to_str().unwrap();
+    let ct = resp
+        .headers()
+        .get("content-type")
+        .unwrap()
+        .to_str()
+        .unwrap();
     assert!(ct.contains("text/csv"));
 
-    let cd = resp.headers().get("content-disposition").unwrap().to_str().unwrap();
+    let cd = resp
+        .headers()
+        .get("content-disposition")
+        .unwrap()
+        .to_str()
+        .unwrap();
     assert!(cd.contains("population_tick_"));
 
     let csv = resp.text().await.unwrap();
@@ -272,13 +321,19 @@ async fn test_population_csv_escapes_special_chars() {
     let client = Client::new();
 
     // Spawn agent with CSV-dangerous name (contains comma and quote)
-    let resp = client.post(format!("{}/api/v1/agents", base))
+    let resp = client
+        .post(format!("{}/api/v1/agents", base))
         .json(&serde_json::json!({"name": "Test, \"Agent\"", "tokens": 1000, "money": 500}))
-        .send().await.unwrap();
+        .send()
+        .await
+        .unwrap();
     assert_eq!(resp.status(), StatusCode::CREATED);
 
-    let resp = client.get(format!("{}/api/v1/population/export/csv", base))
-        .send().await.unwrap();
+    let resp = client
+        .get(format!("{}/api/v1/population/export/csv", base))
+        .send()
+        .await
+        .unwrap();
     assert_eq!(resp.status(), StatusCode::OK);
 
     let csv = resp.text().await.unwrap();
@@ -299,13 +354,19 @@ async fn test_population_csv_injection_prevention() {
     let client = Client::new();
 
     // Try CSV injection via formula in name
-    let resp = client.post(format!("{}/api/v1/agents", base))
+    let resp = client
+        .post(format!("{}/api/v1/agents", base))
         .json(&serde_json::json!({"name": "=CMD(\"danger\")", "tokens": 1000, "money": 500}))
-        .send().await.unwrap();
+        .send()
+        .await
+        .unwrap();
     assert_eq!(resp.status(), StatusCode::CREATED);
 
-    let resp = client.get(format!("{}/api/v1/population/export/csv", base))
-        .send().await.unwrap();
+    let resp = client
+        .get(format!("{}/api/v1/population/export/csv", base))
+        .send()
+        .await
+        .unwrap();
     let csv = resp.text().await.unwrap();
 
     // The name field is escaped via csv_escape which wraps it in quotes

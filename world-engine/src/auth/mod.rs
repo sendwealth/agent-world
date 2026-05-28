@@ -6,10 +6,10 @@
 //!            HumanRole, Capability, AuthUser, RequireAuth, OptionalAuth
 //! Depends on: config
 //!
+pub mod extractors;
 pub mod roles;
 pub mod store;
-pub mod extractors;
 
-pub use roles::{HumanRole, Capability};
-pub use store::{AuthStore, SharedAuthStore, HumanUser, Claims};
-pub use extractors::{AuthUser, RequireAuth, OptionalAuth};
+pub use extractors::{AuthUser, OptionalAuth, RequireAuth};
+pub use roles::{Capability, HumanRole};
+pub use store::{AuthStore, Claims, HumanUser, SharedAuthStore};

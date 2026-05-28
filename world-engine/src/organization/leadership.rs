@@ -4,8 +4,8 @@ use std::sync::Arc;
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
-use crate::world::state::EventBus;
 use crate::world::event::WorldEvent;
+use crate::world::state::EventBus;
 
 // ── Voting Method ─────────────────────────────────────────
 
@@ -187,9 +187,18 @@ pub enum LeadershipError {
     OrganizationNotFound(Uuid),
     ElectionNotFound(Uuid),
     ElectionNotVoting(Uuid),
-    AlreadyVoted { election_id: Uuid, voter_id: String },
-    NotACandidate { election_id: Uuid, candidate_id: String },
-    NotAMember { org_id: Uuid, agent_id: String },
+    AlreadyVoted {
+        election_id: Uuid,
+        voter_id: String,
+    },
+    NotACandidate {
+        election_id: Uuid,
+        candidate_id: String,
+    },
+    NotAMember {
+        org_id: Uuid,
+        agent_id: String,
+    },
     NoCandidates,
     NoVotes,
     ElectionAlreadyResolved(Uuid),
@@ -208,11 +217,25 @@ impl std::fmt::Display for LeadershipError {
             LeadershipError::ElectionNotVoting(id) => {
                 write!(f, "election {} is not open for voting", id)
             }
-            LeadershipError::AlreadyVoted { election_id, voter_id } => {
-                write!(f, "agent {} already voted in election {}", voter_id, election_id)
+            LeadershipError::AlreadyVoted {
+                election_id,
+                voter_id,
+            } => {
+                write!(
+                    f,
+                    "agent {} already voted in election {}",
+                    voter_id, election_id
+                )
             }
-            LeadershipError::NotACandidate { election_id, candidate_id } => {
-                write!(f, "agent {} is not a candidate in election {}", candidate_id, election_id)
+            LeadershipError::NotACandidate {
+                election_id,
+                candidate_id,
+            } => {
+                write!(
+                    f,
+                    "agent {} is not a candidate in election {}",
+                    candidate_id, election_id
+                )
             }
             LeadershipError::NotAMember { org_id, agent_id } => {
                 write!(f, "agent {} is not a member of org {}", agent_id, org_id)
@@ -314,7 +337,9 @@ impl LeadershipEngine {
         ranked_candidates: Vec<String>,
     ) -> Result<(), LeadershipError> {
         // Find the active election for this org
-        let active_election_id = self.elections.values()
+        let active_election_id = self
+            .elections
+            .values()
             .find(|e| e.org_id == org_id && e.status == ElectionStatus::Voting)
             .map(|e| e.id);
 
@@ -322,7 +347,9 @@ impl LeadershipEngine {
             Some(id) => id,
             None => {
                 // Check if there's a resolved election
-                if let Some(resolved) = self.elections.values()
+                if let Some(resolved) = self
+                    .elections
+                    .values()
                     .find(|e| e.org_id == org_id && e.status == ElectionStatus::Resolved)
                 {
                     return Err(LeadershipError::ElectionAlreadyResolved(resolved.id));
@@ -363,7 +390,9 @@ impl LeadershipEngine {
 
     /// Resolve the active election for an org, tallying votes and declaring a winner.
     pub fn resolve_election(&mut self, org_id: Uuid) -> Result<Option<String>, LeadershipError> {
-        let election = self.elections.values_mut()
+        let election = self
+            .elections
+            .values_mut()
             .find(|e| e.org_id == org_id && e.status == ElectionStatus::Voting)
             .ok_or(LeadershipError::ElectionNotFound(org_id))?;
 
@@ -406,7 +435,9 @@ impl LeadershipEngine {
         tick: u64,
     ) -> Result<Option<String>, LeadershipError> {
         // Clear the departed leader
-        if self.current_leaders.get(&org_id).map(|s| s.as_str()) == Some(departed_leader_id.as_str()) {
+        if self.current_leaders.get(&org_id).map(|s| s.as_str())
+            == Some(departed_leader_id.as_str())
+        {
             self.current_leaders.remove(&org_id);
         }
 
@@ -463,7 +494,9 @@ impl LeadershipEngine {
 
     /// Get the active election for an org, if any.
     pub fn get_active_election(&self, org_id: Uuid) -> Option<&Election> {
-        self.elections.values().find(|e| e.org_id == org_id && e.status == ElectionStatus::Voting)
+        self.elections
+            .values()
+            .find(|e| e.org_id == org_id && e.status == ElectionStatus::Voting)
     }
 
     // ── Helpers ────────────────────────────────────────────
@@ -502,12 +535,14 @@ mod tests {
         let mut engine = make_engine();
         let org_id = make_org_id();
 
-        let election_id = engine.initiate_election(
-            org_id,
-            vec!["alice".to_string(), "bob".to_string()],
-            VotingMethod::SimpleMajority,
-            0,
-        ).unwrap();
+        let election_id = engine
+            .initiate_election(
+                org_id,
+                vec!["alice".to_string(), "bob".to_string()],
+                VotingMethod::SimpleMajority,
+                0,
+            )
+            .unwrap();
 
         let election = engine.get_election(election_id).unwrap();
         assert_eq!(election.status, ElectionStatus::Voting);
@@ -531,16 +566,24 @@ mod tests {
         let mut engine = make_engine();
         let org_id = make_org_id();
 
-        engine.initiate_election(
-            org_id,
-            vec!["alice".to_string(), "bob".to_string()],
-            VotingMethod::SimpleMajority,
-            0,
-        ).unwrap();
+        engine
+            .initiate_election(
+                org_id,
+                vec!["alice".to_string(), "bob".to_string()],
+                VotingMethod::SimpleMajority,
+                0,
+            )
+            .unwrap();
 
-        engine.cast_vote(org_id, "voter1".to_string(), vec!["alice".to_string()]).unwrap();
-        engine.cast_vote(org_id, "voter2".to_string(), vec!["alice".to_string()]).unwrap();
-        engine.cast_vote(org_id, "voter3".to_string(), vec!["bob".to_string()]).unwrap();
+        engine
+            .cast_vote(org_id, "voter1".to_string(), vec!["alice".to_string()])
+            .unwrap();
+        engine
+            .cast_vote(org_id, "voter2".to_string(), vec!["alice".to_string()])
+            .unwrap();
+        engine
+            .cast_vote(org_id, "voter3".to_string(), vec!["bob".to_string()])
+            .unwrap();
 
         let election = engine.get_active_election(org_id).unwrap();
         assert_eq!(election.ballots.len(), 3);
@@ -551,14 +594,18 @@ mod tests {
         let mut engine = make_engine();
         let org_id = make_org_id();
 
-        engine.initiate_election(
-            org_id,
-            vec!["alice".to_string(), "bob".to_string()],
-            VotingMethod::SimpleMajority,
-            0,
-        ).unwrap();
+        engine
+            .initiate_election(
+                org_id,
+                vec!["alice".to_string(), "bob".to_string()],
+                VotingMethod::SimpleMajority,
+                0,
+            )
+            .unwrap();
 
-        engine.cast_vote(org_id, "voter1".to_string(), vec!["alice".to_string()]).unwrap();
+        engine
+            .cast_vote(org_id, "voter1".to_string(), vec!["alice".to_string()])
+            .unwrap();
         let result = engine.cast_vote(org_id, "voter1".to_string(), vec!["bob".to_string()]);
         assert!(result.is_err());
     }
@@ -568,12 +615,14 @@ mod tests {
         let mut engine = make_engine();
         let org_id = make_org_id();
 
-        engine.initiate_election(
-            org_id,
-            vec!["alice".to_string(), "bob".to_string()],
-            VotingMethod::SimpleMajority,
-            0,
-        ).unwrap();
+        engine
+            .initiate_election(
+                org_id,
+                vec!["alice".to_string(), "bob".to_string()],
+                VotingMethod::SimpleMajority,
+                0,
+            )
+            .unwrap();
 
         let result = engine.cast_vote(org_id, "voter1".to_string(), vec!["charlie".to_string()]);
         assert!(result.is_err());
@@ -586,16 +635,24 @@ mod tests {
         let mut engine = make_engine();
         let org_id = make_org_id();
 
-        engine.initiate_election(
-            org_id,
-            vec!["alice".to_string(), "bob".to_string()],
-            VotingMethod::SimpleMajority,
-            0,
-        ).unwrap();
+        engine
+            .initiate_election(
+                org_id,
+                vec!["alice".to_string(), "bob".to_string()],
+                VotingMethod::SimpleMajority,
+                0,
+            )
+            .unwrap();
 
-        engine.cast_vote(org_id, "v1".to_string(), vec!["alice".to_string()]).unwrap();
-        engine.cast_vote(org_id, "v2".to_string(), vec!["alice".to_string()]).unwrap();
-        engine.cast_vote(org_id, "v3".to_string(), vec!["bob".to_string()]).unwrap();
+        engine
+            .cast_vote(org_id, "v1".to_string(), vec!["alice".to_string()])
+            .unwrap();
+        engine
+            .cast_vote(org_id, "v2".to_string(), vec!["alice".to_string()])
+            .unwrap();
+        engine
+            .cast_vote(org_id, "v3".to_string(), vec!["bob".to_string()])
+            .unwrap();
 
         let winner = engine.resolve_election(org_id).unwrap();
         assert_eq!(winner, Some("alice".to_string()));
@@ -607,16 +664,22 @@ mod tests {
         let mut engine = make_engine();
         let org_id = make_org_id();
 
-        engine.initiate_election(
-            org_id,
-            vec!["alice".to_string(), "bob".to_string()],
-            VotingMethod::SimpleMajority,
-            0,
-        ).unwrap();
+        engine
+            .initiate_election(
+                org_id,
+                vec!["alice".to_string(), "bob".to_string()],
+                VotingMethod::SimpleMajority,
+                0,
+            )
+            .unwrap();
 
         // 1-1 tie: no majority
-        engine.cast_vote(org_id, "v1".to_string(), vec!["alice".to_string()]).unwrap();
-        engine.cast_vote(org_id, "v2".to_string(), vec!["bob".to_string()]).unwrap();
+        engine
+            .cast_vote(org_id, "v1".to_string(), vec!["alice".to_string()])
+            .unwrap();
+        engine
+            .cast_vote(org_id, "v2".to_string(), vec!["bob".to_string()])
+            .unwrap();
 
         let winner = engine.resolve_election(org_id).unwrap();
         assert_eq!(winner, None);
@@ -629,20 +692,52 @@ mod tests {
         let mut engine = make_engine();
         let org_id = make_org_id();
 
-        engine.initiate_election(
-            org_id,
-            vec!["alice".to_string(), "bob".to_string(), "carol".to_string()],
-            VotingMethod::RankedChoice,
-            0,
-        ).unwrap();
+        engine
+            .initiate_election(
+                org_id,
+                vec!["alice".to_string(), "bob".to_string(), "carol".to_string()],
+                VotingMethod::RankedChoice,
+                0,
+            )
+            .unwrap();
 
         // 5 voters: 2 for alice first, 2 for bob first, 1 for carol first
         // carol eliminated first, then her voter's 2nd choice decides
-        engine.cast_vote(org_id, "v1".to_string(), vec!["alice".to_string(), "bob".to_string(), "carol".to_string()]).unwrap();
-        engine.cast_vote(org_id, "v2".to_string(), vec!["alice".to_string(), "carol".to_string(), "bob".to_string()]).unwrap();
-        engine.cast_vote(org_id, "v3".to_string(), vec!["bob".to_string(), "alice".to_string(), "carol".to_string()]).unwrap();
-        engine.cast_vote(org_id, "v4".to_string(), vec!["bob".to_string(), "carol".to_string(), "alice".to_string()]).unwrap();
-        engine.cast_vote(org_id, "v5".to_string(), vec!["carol".to_string(), "alice".to_string(), "bob".to_string()]).unwrap();
+        engine
+            .cast_vote(
+                org_id,
+                "v1".to_string(),
+                vec!["alice".to_string(), "bob".to_string(), "carol".to_string()],
+            )
+            .unwrap();
+        engine
+            .cast_vote(
+                org_id,
+                "v2".to_string(),
+                vec!["alice".to_string(), "carol".to_string(), "bob".to_string()],
+            )
+            .unwrap();
+        engine
+            .cast_vote(
+                org_id,
+                "v3".to_string(),
+                vec!["bob".to_string(), "alice".to_string(), "carol".to_string()],
+            )
+            .unwrap();
+        engine
+            .cast_vote(
+                org_id,
+                "v4".to_string(),
+                vec!["bob".to_string(), "carol".to_string(), "alice".to_string()],
+            )
+            .unwrap();
+        engine
+            .cast_vote(
+                org_id,
+                "v5".to_string(),
+                vec!["carol".to_string(), "alice".to_string(), "bob".to_string()],
+            )
+            .unwrap();
 
         let winner = engine.resolve_election(org_id).unwrap();
         // alice gets carol's 2nd-preference vote -> 3 votes (majority of 5)
@@ -657,20 +752,34 @@ mod tests {
         let mut engine = make_engine();
         let org_id = make_org_id();
 
-        engine.initiate_election(
-            org_id,
-            vec!["alice".to_string(), "bob".to_string(), "carol".to_string()],
-            VotingMethod::Consensus,
-            0,
-        ).unwrap();
+        engine
+            .initiate_election(
+                org_id,
+                vec!["alice".to_string(), "bob".to_string(), "carol".to_string()],
+                VotingMethod::Consensus,
+                0,
+            )
+            .unwrap();
 
         // 6 voters, 4 for alice (4 >= ceil(2/3*6) = 4)
-        engine.cast_vote(org_id, "v1".to_string(), vec!["alice".to_string()]).unwrap();
-        engine.cast_vote(org_id, "v2".to_string(), vec!["alice".to_string()]).unwrap();
-        engine.cast_vote(org_id, "v3".to_string(), vec!["alice".to_string()]).unwrap();
-        engine.cast_vote(org_id, "v4".to_string(), vec!["alice".to_string()]).unwrap();
-        engine.cast_vote(org_id, "v5".to_string(), vec!["bob".to_string()]).unwrap();
-        engine.cast_vote(org_id, "v6".to_string(), vec!["carol".to_string()]).unwrap();
+        engine
+            .cast_vote(org_id, "v1".to_string(), vec!["alice".to_string()])
+            .unwrap();
+        engine
+            .cast_vote(org_id, "v2".to_string(), vec!["alice".to_string()])
+            .unwrap();
+        engine
+            .cast_vote(org_id, "v3".to_string(), vec!["alice".to_string()])
+            .unwrap();
+        engine
+            .cast_vote(org_id, "v4".to_string(), vec!["alice".to_string()])
+            .unwrap();
+        engine
+            .cast_vote(org_id, "v5".to_string(), vec!["bob".to_string()])
+            .unwrap();
+        engine
+            .cast_vote(org_id, "v6".to_string(), vec!["carol".to_string()])
+            .unwrap();
 
         let winner = engine.resolve_election(org_id).unwrap();
         assert_eq!(winner, Some("alice".to_string()));
@@ -681,20 +790,34 @@ mod tests {
         let mut engine = make_engine();
         let org_id = make_org_id();
 
-        engine.initiate_election(
-            org_id,
-            vec!["alice".to_string(), "bob".to_string(), "carol".to_string()],
-            VotingMethod::Consensus,
-            0,
-        ).unwrap();
+        engine
+            .initiate_election(
+                org_id,
+                vec!["alice".to_string(), "bob".to_string(), "carol".to_string()],
+                VotingMethod::Consensus,
+                0,
+            )
+            .unwrap();
 
         // 6 voters, 3 for alice (3 < ceil(2/3*6) = 4)
-        engine.cast_vote(org_id, "v1".to_string(), vec!["alice".to_string()]).unwrap();
-        engine.cast_vote(org_id, "v2".to_string(), vec!["alice".to_string()]).unwrap();
-        engine.cast_vote(org_id, "v3".to_string(), vec!["alice".to_string()]).unwrap();
-        engine.cast_vote(org_id, "v4".to_string(), vec!["bob".to_string()]).unwrap();
-        engine.cast_vote(org_id, "v5".to_string(), vec!["bob".to_string()]).unwrap();
-        engine.cast_vote(org_id, "v6".to_string(), vec!["carol".to_string()]).unwrap();
+        engine
+            .cast_vote(org_id, "v1".to_string(), vec!["alice".to_string()])
+            .unwrap();
+        engine
+            .cast_vote(org_id, "v2".to_string(), vec!["alice".to_string()])
+            .unwrap();
+        engine
+            .cast_vote(org_id, "v3".to_string(), vec!["alice".to_string()])
+            .unwrap();
+        engine
+            .cast_vote(org_id, "v4".to_string(), vec!["bob".to_string()])
+            .unwrap();
+        engine
+            .cast_vote(org_id, "v5".to_string(), vec!["bob".to_string()])
+            .unwrap();
+        engine
+            .cast_vote(org_id, "v6".to_string(), vec!["carol".to_string()])
+            .unwrap();
 
         let winner = engine.resolve_election(org_id).unwrap();
         assert_eq!(winner, None);
@@ -707,15 +830,19 @@ mod tests {
         let mut engine = make_engine();
         let org_id = make_org_id();
 
-        engine.current_leaders.insert(org_id, "old_leader".to_string());
+        engine
+            .current_leaders
+            .insert(org_id, "old_leader".to_string());
 
-        let winner = engine.handle_succession(
-            org_id,
-            "old_leader".to_string(),
-            vec!["new_leader".to_string()],
-            VotingMethod::SimpleMajority,
-            10,
-        ).unwrap();
+        let winner = engine
+            .handle_succession(
+                org_id,
+                "old_leader".to_string(),
+                vec!["new_leader".to_string()],
+                VotingMethod::SimpleMajority,
+                10,
+            )
+            .unwrap();
 
         assert_eq!(winner, Some("new_leader".to_string()));
         assert_eq!(engine.get_leader(org_id), Some("new_leader"));
@@ -726,15 +853,19 @@ mod tests {
         let mut engine = make_engine();
         let org_id = make_org_id();
 
-        engine.current_leaders.insert(org_id, "old_leader".to_string());
+        engine
+            .current_leaders
+            .insert(org_id, "old_leader".to_string());
 
-        let winner = engine.handle_succession(
-            org_id,
-            "old_leader".to_string(),
-            vec!["alice".to_string(), "bob".to_string()],
-            VotingMethod::SimpleMajority,
-            10,
-        ).unwrap();
+        let winner = engine
+            .handle_succession(
+                org_id,
+                "old_leader".to_string(),
+                vec!["alice".to_string(), "bob".to_string()],
+                VotingMethod::SimpleMajority,
+                10,
+            )
+            .unwrap();
 
         // All candidates now vote for the first candidate, ensuring a majority
         assert_eq!(winner, Some("alice".to_string()));
@@ -746,15 +877,19 @@ mod tests {
         let mut engine = make_engine();
         let org_id = make_org_id();
 
-        engine.current_leaders.insert(org_id, "old_leader".to_string());
+        engine
+            .current_leaders
+            .insert(org_id, "old_leader".to_string());
 
-        let winner = engine.handle_succession(
-            org_id,
-            "old_leader".to_string(),
-            vec![],
-            VotingMethod::SimpleMajority,
-            10,
-        ).unwrap();
+        let winner = engine
+            .handle_succession(
+                org_id,
+                "old_leader".to_string(),
+                vec![],
+                VotingMethod::SimpleMajority,
+                10,
+            )
+            .unwrap();
 
         assert_eq!(winner, None);
     }
@@ -766,12 +901,14 @@ mod tests {
         let mut engine = make_engine();
         let org_id = make_org_id();
 
-        engine.initiate_election(
-            org_id,
-            vec!["alice".to_string(), "bob".to_string()],
-            VotingMethod::SimpleMajority,
-            0,
-        ).unwrap();
+        engine
+            .initiate_election(
+                org_id,
+                vec!["alice".to_string(), "bob".to_string()],
+                VotingMethod::SimpleMajority,
+                0,
+            )
+            .unwrap();
 
         let result = engine.resolve_election(org_id);
         assert_eq!(result.unwrap_err(), LeadershipError::NoVotes);
@@ -785,28 +922,44 @@ mod tests {
         let org_id = make_org_id();
 
         // First election
-        engine.initiate_election(
-            org_id,
-            vec!["alice".to_string(), "bob".to_string()],
-            VotingMethod::SimpleMajority,
-            0,
-        ).unwrap();
-        engine.cast_vote(org_id, "v1".to_string(), vec!["alice".to_string()]).unwrap();
-        engine.cast_vote(org_id, "v2".to_string(), vec!["alice".to_string()]).unwrap();
-        engine.cast_vote(org_id, "v3".to_string(), vec!["bob".to_string()]).unwrap();
+        engine
+            .initiate_election(
+                org_id,
+                vec!["alice".to_string(), "bob".to_string()],
+                VotingMethod::SimpleMajority,
+                0,
+            )
+            .unwrap();
+        engine
+            .cast_vote(org_id, "v1".to_string(), vec!["alice".to_string()])
+            .unwrap();
+        engine
+            .cast_vote(org_id, "v2".to_string(), vec!["alice".to_string()])
+            .unwrap();
+        engine
+            .cast_vote(org_id, "v3".to_string(), vec!["bob".to_string()])
+            .unwrap();
         engine.resolve_election(org_id).unwrap();
         assert_eq!(engine.get_leader(org_id), Some("alice"));
 
         // Second election replaces leader
-        engine.initiate_election(
-            org_id,
-            vec!["alice".to_string(), "bob".to_string()],
-            VotingMethod::SimpleMajority,
-            10,
-        ).unwrap();
-        engine.cast_vote(org_id, "v1".to_string(), vec!["bob".to_string()]).unwrap();
-        engine.cast_vote(org_id, "v2".to_string(), vec!["bob".to_string()]).unwrap();
-        engine.cast_vote(org_id, "v3".to_string(), vec!["bob".to_string()]).unwrap();
+        engine
+            .initiate_election(
+                org_id,
+                vec!["alice".to_string(), "bob".to_string()],
+                VotingMethod::SimpleMajority,
+                10,
+            )
+            .unwrap();
+        engine
+            .cast_vote(org_id, "v1".to_string(), vec!["bob".to_string()])
+            .unwrap();
+        engine
+            .cast_vote(org_id, "v2".to_string(), vec!["bob".to_string()])
+            .unwrap();
+        engine
+            .cast_vote(org_id, "v3".to_string(), vec!["bob".to_string()])
+            .unwrap();
         let winner = engine.resolve_election(org_id).unwrap();
         assert_eq!(winner, Some("bob".to_string()));
         assert_eq!(engine.get_leader(org_id), Some("bob"));
@@ -821,16 +974,22 @@ mod tests {
         let mut engine = LeadershipEngine::with_event_bus(bus);
 
         let org_id = make_org_id();
-        engine.initiate_election(
-            org_id,
-            vec!["alice".to_string(), "bob".to_string()],
-            VotingMethod::SimpleMajority,
-            0,
-        ).unwrap();
+        engine
+            .initiate_election(
+                org_id,
+                vec!["alice".to_string(), "bob".to_string()],
+                VotingMethod::SimpleMajority,
+                0,
+            )
+            .unwrap();
 
         let event = rx.try_recv().unwrap();
         match event {
-            WorldEvent::LeadershipElectionStarted { org_id: eid, candidates, voting_method } => {
+            WorldEvent::LeadershipElectionStarted {
+                org_id: eid,
+                candidates,
+                voting_method,
+            } => {
                 assert_eq!(eid, org_id);
                 assert_eq!(candidates, vec!["alice", "bob"]);
                 assert_eq!(voting_method, "simple_majority");
@@ -846,23 +1005,35 @@ mod tests {
         let mut engine = LeadershipEngine::with_event_bus(bus);
 
         let org_id = make_org_id();
-        engine.initiate_election(
-            org_id,
-            vec!["alice".to_string(), "bob".to_string()],
-            VotingMethod::SimpleMajority,
-            0,
-        ).unwrap();
+        engine
+            .initiate_election(
+                org_id,
+                vec!["alice".to_string(), "bob".to_string()],
+                VotingMethod::SimpleMajority,
+                0,
+            )
+            .unwrap();
         // Drain the LeadershipElectionStarted event
         let _ = rx.try_recv();
 
-        engine.cast_vote(org_id, "v1".to_string(), vec!["alice".to_string()]).unwrap();
-        engine.cast_vote(org_id, "v2".to_string(), vec!["alice".to_string()]).unwrap();
-        engine.cast_vote(org_id, "v3".to_string(), vec!["bob".to_string()]).unwrap();
+        engine
+            .cast_vote(org_id, "v1".to_string(), vec!["alice".to_string()])
+            .unwrap();
+        engine
+            .cast_vote(org_id, "v2".to_string(), vec!["alice".to_string()])
+            .unwrap();
+        engine
+            .cast_vote(org_id, "v3".to_string(), vec!["bob".to_string()])
+            .unwrap();
         engine.resolve_election(org_id).unwrap();
 
         let event = rx.try_recv().unwrap();
         match event {
-            WorldEvent::LeadershipChanged { org_id: eid, old_leader_id, new_leader_id } => {
+            WorldEvent::LeadershipChanged {
+                org_id: eid,
+                old_leader_id,
+                new_leader_id,
+            } => {
                 assert_eq!(eid, org_id);
                 assert_eq!(old_leader_id, None);
                 assert_eq!(new_leader_id, "alice");
@@ -878,20 +1049,28 @@ mod tests {
         let mut engine = LeadershipEngine::with_event_bus(bus);
 
         let org_id = make_org_id();
-        engine.current_leaders.insert(org_id, "old_leader".to_string());
+        engine
+            .current_leaders
+            .insert(org_id, "old_leader".to_string());
 
-        engine.handle_succession(
-            org_id,
-            "old_leader".to_string(),
-            vec!["new_leader".to_string()],
-            VotingMethod::SimpleMajority,
-            10,
-        ).unwrap();
+        engine
+            .handle_succession(
+                org_id,
+                "old_leader".to_string(),
+                vec!["new_leader".to_string()],
+                VotingMethod::SimpleMajority,
+                10,
+            )
+            .unwrap();
 
         // Skip LeadershipElectionStarted (not emitted for single remaining member)
         let event = rx.try_recv().unwrap();
         match event {
-            WorldEvent::LeadershipChanged { org_id: eid, old_leader_id, new_leader_id } => {
+            WorldEvent::LeadershipChanged {
+                org_id: eid,
+                old_leader_id,
+                new_leader_id,
+            } => {
                 assert_eq!(eid, org_id);
                 assert_eq!(old_leader_id, Some("old_leader".to_string()));
                 assert_eq!(new_leader_id, "new_leader");

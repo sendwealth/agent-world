@@ -106,11 +106,7 @@ impl Subsystem for InterventionCheckerSubsystem {
         "intervention_checker"
     }
 
-    fn on_tick(
-        &self,
-        tick: u64,
-        agents: &mut [(Uuid, u64, AgentRecord)],
-    ) -> Vec<WorldEvent> {
+    fn on_tick(&self, tick: u64, agents: &mut [(Uuid, u64, AgentRecord)]) -> Vec<WorldEvent> {
         let mut events = Vec::new();
 
         // Reset broadcast tracking for new tick
@@ -132,10 +128,7 @@ impl Subsystem for InterventionCheckerSubsystem {
                 events.push(WorldEvent::RuleViolated {
                     agent_id: agent_id_str.clone(),
                     rule: "IC-05".to_string(),
-                    details: format!(
-                        "Agent is Dead — no actions allowed (tick {})",
-                        tick
-                    ),
+                    details: format!("Agent is Dead — no actions allowed (tick {})", tick),
                 });
                 continue; // No further checks needed for dead agents
             }
@@ -144,10 +137,7 @@ impl Subsystem for InterventionCheckerSubsystem {
                 events.push(WorldEvent::RuleViolated {
                     agent_id: agent_id_str.clone(),
                     rule: "IC-05".to_string(),
-                    details: format!(
-                        "Agent is Dying — no actions allowed (tick {})",
-                        tick
-                    ),
+                    details: format!("Agent is Dying — no actions allowed (tick {})", tick),
                 });
                 continue;
             }
@@ -167,9 +157,7 @@ impl Subsystem for InterventionCheckerSubsystem {
             }
 
             // IC-04: Token sufficiency — flag agents at zero tokens
-            if agent.tokens <= self.config.token_threshold
-                && agent.phase != AgentPhase::Birth
-            {
+            if agent.tokens <= self.config.token_threshold && agent.phase != AgentPhase::Birth {
                 events.push(WorldEvent::RuleViolated {
                     agent_id: agent_id_str.clone(),
                     rule: "IC-04".to_string(),
@@ -217,11 +205,7 @@ impl MessageInterventionGuard {
 
     /// Check if a broadcast is allowed for the given agent.
     /// Returns `Ok(())` if allowed, `Err(reason)` if blocked.
-    pub fn check_broadcast(
-        &self,
-        agent_id: &str,
-        broadcast_count: u32,
-    ) -> Result<(), String> {
+    pub fn check_broadcast(&self, agent_id: &str, broadcast_count: u32) -> Result<(), String> {
         if broadcast_count >= self.broadcast_max_per_tick {
             return Err(format!(
                 "[IC-01] Broadcast rate limit exceeded for agent {} (max {}/tick)",
@@ -264,8 +248,8 @@ mod tests {
                 tokens,
                 skills: HashMap::new(),
                 personality: String::new(),
-            tasks_completed: 0,
-            tasks_attempted: 0,
+                tasks_completed: 0,
+                tasks_attempted: 0,
             },
         )
     }
@@ -285,8 +269,8 @@ mod tests {
                 tokens,
                 skills: HashMap::new(),
                 personality: String::new(),
-            tasks_completed: 0,
-            tasks_attempted: 0,
+                tasks_completed: 0,
+                tasks_attempted: 0,
             },
         )
     }

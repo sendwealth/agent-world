@@ -100,14 +100,17 @@ impl SnapshotStorage {
 
             // Load the record to get uncompressed_size and content_hash
             if let Ok(record) = self.load_record_from_disk(&path) {
-                self.index.insert(tick, SnapshotIndexEntry {
+                self.index.insert(
                     tick,
-                    kind,
-                    file_path: path,
-                    compressed_size,
-                    uncompressed_size: record.uncompressed_size,
-                    content_hash: record.content_hash,
-                });
+                    SnapshotIndexEntry {
+                        tick,
+                        kind,
+                        file_path: path,
+                        compressed_size,
+                        uncompressed_size: record.uncompressed_size,
+                        content_hash: record.content_hash,
+                    },
+                );
             }
         }
 
@@ -116,8 +119,7 @@ impl SnapshotStorage {
 
     /// Store a full snapshot.
     pub fn save_full(&mut self, snapshot: &WorldSnapshot) -> Result<SnapshotRecord> {
-        let json = serde_json::to_vec(snapshot)
-            .context("Failed to serialize full snapshot")?;
+        let json = serde_json::to_vec(snapshot).context("Failed to serialize full snapshot")?;
         let uncompressed_size = json.len();
 
         let compressed_data = zstd::encode_all(&json[..], self.config.compression_level)
@@ -145,20 +147,23 @@ impl SnapshotStorage {
             }
         }
 
-        let record_json = serde_json::to_vec(&record)
-            .context("Failed to serialize snapshot record")?;
+        let record_json =
+            serde_json::to_vec(&record).context("Failed to serialize snapshot record")?;
         fs::write(&path, &record_json)
             .with_context(|| format!("Failed to write snapshot to {:?}", path))?;
 
         // Update index
-        self.index.insert(snapshot.tick, SnapshotIndexEntry {
-            tick: snapshot.tick,
-            kind: SnapshotKind::Full,
-            file_path: path,
-            compressed_size,
-            uncompressed_size,
-            content_hash: snapshot.content_hash.clone(),
-        });
+        self.index.insert(
+            snapshot.tick,
+            SnapshotIndexEntry {
+                tick: snapshot.tick,
+                kind: SnapshotKind::Full,
+                file_path: path,
+                compressed_size,
+                uncompressed_size,
+                content_hash: snapshot.content_hash.clone(),
+            },
+        );
 
         self.prune_if_needed()?;
 
@@ -181,8 +186,7 @@ impl SnapshotStorage {
             }
         }
 
-        let json = serde_json::to_vec(delta)
-            .context("Failed to serialize snapshot delta")?;
+        let json = serde_json::to_vec(delta).context("Failed to serialize snapshot delta")?;
         let uncompressed_size = json.len();
 
         let compressed_data = zstd::encode_all(&json[..], self.config.compression_level)
@@ -202,19 +206,22 @@ impl SnapshotStorage {
 
         let filename = format!("tick_{}_delta.snap", delta.tick);
         let path = self.directory.join(&filename);
-        let record_json = serde_json::to_vec(&record)
-            .context("Failed to serialize delta record")?;
+        let record_json =
+            serde_json::to_vec(&record).context("Failed to serialize delta record")?;
         fs::write(&path, &record_json)
             .with_context(|| format!("Failed to write delta to {:?}", path))?;
 
-        self.index.insert(delta.tick, SnapshotIndexEntry {
-            tick: delta.tick,
-            kind: SnapshotKind::Delta,
-            file_path: path,
-            compressed_size,
-            uncompressed_size,
-            content_hash: delta.content_hash.clone(),
-        });
+        self.index.insert(
+            delta.tick,
+            SnapshotIndexEntry {
+                tick: delta.tick,
+                kind: SnapshotKind::Delta,
+                file_path: path,
+                compressed_size,
+                uncompressed_size,
+                content_hash: delta.content_hash.clone(),
+            },
+        );
 
         self.prune_if_needed()?;
 
@@ -223,7 +230,9 @@ impl SnapshotStorage {
 
     /// Load the latest full snapshot.
     pub fn load_latest_full(&self) -> Result<Option<WorldSnapshot>> {
-        let latest_tick = self.index.iter()
+        let latest_tick = self
+            .index
+            .iter()
             .filter(|(_, e)| e.kind == SnapshotKind::Full)
             .map(|(tick, _)| *tick)
             .max();
@@ -236,7 +245,9 @@ impl SnapshotStorage {
 
     /// Load a full snapshot at a specific tick.
     pub fn load_full_at(&self, tick: u64) -> Result<WorldSnapshot> {
-        let entry = self.index.get(&tick)
+        let entry = self
+            .index
+            .get(&tick)
             .ok_or_else(|| anyhow::anyhow!("No snapshot at tick {}", tick))?;
 
         if entry.kind != SnapshotKind::Full {
@@ -246,8 +257,8 @@ impl SnapshotStorage {
         let record = self.load_record_from_disk(&entry.file_path)?;
         let json = zstd::decode_all(&record.compressed_data[..])
             .context("Failed to decompress snapshot")?;
-        let snapshot: WorldSnapshot = serde_json::from_slice(&json)
-            .context("Failed to deserialize snapshot")?;
+        let snapshot: WorldSnapshot =
+            serde_json::from_slice(&json).context("Failed to deserialize snapshot")?;
         Ok(snapshot)
     }
 
@@ -257,7 +268,9 @@ impl SnapshotStorage {
     /// forward to reconstruct the state at `tick`.
     pub fn reconstruct_at(&self, tick: u64) -> Result<WorldSnapshot> {
         // Find the latest full snapshot at or before the target tick
-        let base_tick = self.index.iter()
+        let base_tick = self
+            .index
+            .iter()
             .filter(|(t, e)| **t <= tick && e.kind == SnapshotKind::Full)
             .map(|(t, _)| *t)
             .max()
@@ -314,8 +327,8 @@ impl SnapshotStorage {
 
     /// Load a snapshot record from disk.
     fn load_record_from_disk(&self, path: &Path) -> Result<SnapshotRecord> {
-        let data = fs::read(path)
-            .with_context(|| format!("Failed to read snapshot file: {:?}", path))?;
+        let data =
+            fs::read(path).with_context(|| format!("Failed to read snapshot file: {:?}", path))?;
         let record: SnapshotRecord = serde_json::from_slice(&data)
             .with_context(|| format!("Failed to parse snapshot file: {:?}", path))?;
         Ok(record)
@@ -416,8 +429,8 @@ impl CompressionStats {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::world::enums::AgentPhase;
     use crate::economy::token_burn::AgentRecord;
+    use crate::world::enums::AgentPhase;
     use std::collections::HashMap;
 
     fn make_agent(name: &str, tokens: u64) -> (uuid::Uuid, u64, AgentRecord) {

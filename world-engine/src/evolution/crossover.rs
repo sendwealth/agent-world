@@ -10,8 +10,8 @@ use rand::Rng;
 use serde::{Deserialize, Serialize};
 
 use super::mutation::{
-    EnvironmentPressure, HeritableMutation, MutationEngine,
-    OffspringMutationConfig, OffspringMutationResult, OffspringMutationType,
+    EnvironmentPressure, HeritableMutation, MutationEngine, OffspringMutationConfig,
+    OffspringMutationResult, OffspringMutationType,
 };
 
 /// Strategy for combining skill levels from two parents.
@@ -97,11 +97,8 @@ impl CrossoverEngine {
         parent_a_id: &str,
         parent_b_id: &str,
     ) -> CrossoverResult {
-        let inherited_skills = self.crossover_skills(
-            parent_a_skills,
-            parent_b_skills,
-            &self.config.strategy,
-        );
+        let inherited_skills =
+            self.crossover_skills(parent_a_skills, parent_b_skills, &self.config.strategy);
 
         let inherited_personality = self.crossover_personality(
             parent_a_personality,
@@ -178,9 +175,7 @@ impl CrossoverEngine {
                         (level.max(1), xp)
                     }
                 },
-                (Some(&(level, xp)), None) | (None, Some(&(level, xp))) => {
-                    (level, xp)
-                }
+                (Some(&(level, xp)), None) | (None, Some(&(level, xp))) => (level, xp),
                 (None, None) => unreachable!(),
             };
 
@@ -248,12 +243,10 @@ impl CrossoverEngine {
 
     /// Apply offspring mutations to a CrossoverResult, updating inherited
     /// skills and personality in place.
-    pub fn apply_mutation_effects(
-        &self,
-        result: &mut CrossoverResult,
-        max_skill_level: u32,
-    ) {
-        let mutations = result.mutation_result.as_ref()
+    pub fn apply_mutation_effects(&self, result: &mut CrossoverResult, max_skill_level: u32) {
+        let mutations = result
+            .mutation_result
+            .as_ref()
             .map(|r| r.mutations.clone())
             .unwrap_or_default();
 
@@ -279,7 +272,8 @@ impl CrossoverEngine {
                 }
                 OffspringMutationType::NovelSkill => {
                     if let Some(ref skill_name) = m.skill_name {
-                        result.inherited_skills
+                        result
+                            .inherited_skills
                             .entry(skill_name.clone())
                             .or_insert((1, 0.0));
                     }
@@ -481,11 +475,16 @@ mod tests {
 
         let result = engine.crossover(
             &mut rng,
-            &a_skills, &b_skills,
-            &a_personality, &b_personality,
-            &[], &[],
+            &a_skills,
+            &b_skills,
+            &a_personality,
+            &b_personality,
+            &[],
+            &[],
             &env,
-            "offspring-1", "parent-a", "parent-b",
+            "offspring-1",
+            "parent-a",
+            "parent-b",
         );
 
         assert_eq!(result.offspring_id, "offspring-1");
@@ -521,7 +520,9 @@ mod tests {
                 effective_mutation_rate: 1.0,
             }),
         };
-        result.inherited_skills.insert("coding".to_string(), (3, 100.0));
+        result
+            .inherited_skills
+            .insert("coding".to_string(), (3, 100.0));
 
         engine.apply_mutation_effects(&mut result, 10);
 
@@ -551,7 +552,9 @@ mod tests {
                 effective_mutation_rate: 1.0,
             }),
         };
-        result.inherited_skills.insert("coding".to_string(), (2, 100.0));
+        result
+            .inherited_skills
+            .insert("coding".to_string(), (2, 100.0));
 
         engine.apply_mutation_effects(&mut result, 10);
 
@@ -641,7 +644,9 @@ mod tests {
                 effective_mutation_rate: 1.0,
             }),
         };
-        result.inherited_skills.insert("coding".to_string(), (8, 100.0));
+        result
+            .inherited_skills
+            .insert("coding".to_string(), (8, 100.0));
 
         engine.apply_mutation_effects(&mut result, 10);
 

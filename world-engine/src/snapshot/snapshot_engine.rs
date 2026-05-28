@@ -48,11 +48,14 @@ impl SnapshotEngineHandle {
         agents: Vec<(Uuid, u64, AgentRecord)>,
         events: Vec<WorldEvent>,
     ) {
-        let _ = self.sender.send(SnapshotRequest::TickCompleted {
-            tick,
-            agents,
-            events,
-        }).await;
+        let _ = self
+            .sender
+            .send(SnapshotRequest::TickCompleted {
+                tick,
+                agents,
+                events,
+            })
+            .await;
     }
 
     /// Request engine shutdown.
@@ -137,7 +140,11 @@ impl SnapshotEngine {
     pub async fn run(&mut self) {
         while let Some(request) = self.receiver.recv().await {
             match request {
-                SnapshotRequest::TickCompleted { tick, agents, events } => {
+                SnapshotRequest::TickCompleted {
+                    tick,
+                    agents,
+                    events,
+                } => {
                     self.process_tick(tick, &agents, &events);
                 }
                 SnapshotRequest::Shutdown => {
@@ -154,7 +161,11 @@ impl SnapshotEngine {
         match self.receiver.try_recv() {
             Ok(request) => {
                 match request {
-                    SnapshotRequest::TickCompleted { tick, agents, events } => {
+                    SnapshotRequest::TickCompleted {
+                        tick,
+                        agents,
+                        events,
+                    } => {
                         self.process_tick(tick, &agents, &events);
                     }
                     SnapshotRequest::Shutdown => {}
@@ -215,11 +226,7 @@ impl SnapshotEngine {
     }
 
     /// Take a full snapshot.
-    fn take_full_snapshot(
-        &mut self,
-        tick: u64,
-        agents: &[(Uuid, u64, AgentRecord)],
-    ) {
+    fn take_full_snapshot(&mut self, tick: u64, agents: &[(Uuid, u64, AgentRecord)]) {
         let snapshot = WorldSnapshot::from_world_state(tick, agents);
 
         match self.storage.save_full(&snapshot) {
@@ -229,17 +236,16 @@ impl SnapshotEngine {
                 self.last_full_snapshot = Some(snapshot);
             }
             Err(e) => {
-                eprintln!("[SnapshotEngine] Failed to save full snapshot at tick {}: {}", tick, e);
+                eprintln!(
+                    "[SnapshotEngine] Failed to save full snapshot at tick {}: {}",
+                    tick, e
+                );
             }
         }
     }
 
     /// Take an incremental delta snapshot.
-    fn take_delta_snapshot(
-        &mut self,
-        tick: u64,
-        agents: &[(Uuid, u64, AgentRecord)],
-    ) {
+    fn take_delta_snapshot(&mut self, tick: u64, agents: &[(Uuid, u64, AgentRecord)]) {
         if let Some(ref prev) = self.last_full_snapshot {
             let delta = SnapshotDelta::diff(prev, tick, agents);
 
@@ -385,11 +391,8 @@ mod tests {
     async fn spawn_actually_creates_snapshots() {
         let dir = tempfile::tempdir().unwrap();
         let config = make_config();
-        let (handle, storage) = SnapshotEngine::spawn(
-            config,
-            dir.path().to_path_buf(),
-            256,
-        ).unwrap();
+        let (handle, storage) =
+            SnapshotEngine::spawn(config, dir.path().to_path_buf(), 256).unwrap();
 
         let agents = vec![make_agent("Alice", 1000)];
 

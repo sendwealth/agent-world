@@ -4,8 +4,8 @@ use std::sync::Arc;
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
-use crate::world::state::EventBus;
 use crate::organization::rule_engine::RuleEngine;
+use crate::world::state::EventBus;
 
 // ── Decision Mode ─────────────────────────────────────────
 
@@ -23,7 +23,11 @@ pub enum DecisionMode {
 
 impl DecisionMode {
     pub fn all() -> Vec<DecisionMode> {
-        vec![DecisionMode::Vote, DecisionMode::Dictator, DecisionMode::Council]
+        vec![
+            DecisionMode::Vote,
+            DecisionMode::Dictator,
+            DecisionMode::Council,
+        ]
     }
 }
 
@@ -211,12 +215,20 @@ pub struct Proposal {
 impl Proposal {
     /// Total weighted votes in favor.
     pub fn votes_for(&self) -> u32 {
-        self.votes.iter().filter(|v| v.in_favor).map(|v| v.weight).sum()
+        self.votes
+            .iter()
+            .filter(|v| v.in_favor)
+            .map(|v| v.weight)
+            .sum()
     }
 
     /// Total weighted votes against.
     pub fn votes_against(&self) -> u32 {
-        self.votes.iter().filter(|v| !v.in_favor).map(|v| v.weight).sum()
+        self.votes
+            .iter()
+            .filter(|v| !v.in_favor)
+            .map(|v| v.weight)
+            .sum()
     }
 }
 
@@ -277,15 +289,23 @@ pub struct Organization {
 }
 
 impl Organization {
-    pub fn new(name: String, founder_id: String, decision_mode: DecisionMode, created_at: u64) -> Self {
+    pub fn new(
+        name: String,
+        founder_id: String,
+        decision_mode: DecisionMode,
+        created_at: u64,
+    ) -> Self {
         let id = Uuid::new_v4();
         let mut members = HashMap::new();
-        members.insert(founder_id.clone(), OrgMember {
-            agent_id: founder_id,
-            role: MemberRole::Founder,
-            contribution_score: 0,
-            joined_at: created_at,
-        });
+        members.insert(
+            founder_id.clone(),
+            OrgMember {
+                agent_id: founder_id,
+                role: MemberRole::Founder,
+                contribution_score: 0,
+                joined_at: created_at,
+            },
+        );
 
         Organization {
             id,
@@ -306,7 +326,9 @@ impl Organization {
     }
 
     pub fn is_founder(&self, agent_id: &str) -> bool {
-        self.members.get(agent_id).is_some_and(|m| m.role == MemberRole::Founder)
+        self.members
+            .get(agent_id)
+            .is_some_and(|m| m.role == MemberRole::Founder)
     }
 
     pub fn member_role(&self, agent_id: &str) -> Option<MemberRole> {
@@ -320,12 +342,15 @@ impl Organization {
 
     /// Add a member with the given role.
     pub fn add_member(&mut self, agent_id: String, role: MemberRole, tick: u64) {
-        self.members.insert(agent_id.clone(), OrgMember {
-            agent_id,
-            role,
-            contribution_score: 0,
-            joined_at: tick,
-        });
+        self.members.insert(
+            agent_id.clone(),
+            OrgMember {
+                agent_id,
+                role,
+                contribution_score: 0,
+                joined_at: tick,
+            },
+        );
     }
 
     /// Remove a member. Returns the removed member if they existed.
@@ -352,7 +377,11 @@ impl Organization {
                 dist
             }
             ProfitSharingMode::Proportional => {
-                let total_contribution: u64 = self.members.values().map(|m| m.contribution_score.max(1)).sum();
+                let total_contribution: u64 = self
+                    .members
+                    .values()
+                    .map(|m| m.contribution_score.max(1))
+                    .sum();
                 let mut dist = HashMap::new();
                 let mut allocated = 0u64;
                 for (agent_id, member) in &self.members {
@@ -410,26 +439,50 @@ impl Organization {
 pub enum GovernanceError {
     NotFound(String),
     OrganizationNotFound(Uuid),
-    AlreadyMember { org_id: Uuid, agent_id: String },
-    NotMember { org_id: Uuid, agent_id: String },
-    NotFounder { org_id: Uuid, agent_id: String },
-    InvalidTransition { from: ProposalStatus, to: ProposalStatus },
-    AlreadyVoted { proposal_id: Uuid, voter_id: String },
+    AlreadyMember {
+        org_id: Uuid,
+        agent_id: String,
+    },
+    NotMember {
+        org_id: Uuid,
+        agent_id: String,
+    },
+    NotFounder {
+        org_id: Uuid,
+        agent_id: String,
+    },
+    InvalidTransition {
+        from: ProposalStatus,
+        to: ProposalStatus,
+    },
+    AlreadyVoted {
+        proposal_id: Uuid,
+        voter_id: String,
+    },
     VotingNotOpen(Uuid),
     ProposalNotOpen(Uuid),
     OrganizationDissolved(Uuid),
     CannotRemoveFounder,
     EmptyName,
-    DiscussionPeriodNotElapsed { proposal_id: Uuid, remaining_ticks: u64 },
+    DiscussionPeriodNotElapsed {
+        proposal_id: Uuid,
+        remaining_ticks: u64,
+    },
 }
 
 impl std::fmt::Display for GovernanceError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
             GovernanceError::NotFound(id) => write!(f, "proposal not found: {}", id),
-            GovernanceError::OrganizationNotFound(id) => write!(f, "organization not found: {}", id),
+            GovernanceError::OrganizationNotFound(id) => {
+                write!(f, "organization not found: {}", id)
+            }
             GovernanceError::AlreadyMember { org_id, agent_id } => {
-                write!(f, "agent {} is already a member of org {}", agent_id, org_id)
+                write!(
+                    f,
+                    "agent {} is already a member of org {}",
+                    agent_id, org_id
+                )
             }
             GovernanceError::NotMember { org_id, agent_id } => {
                 write!(f, "agent {} is not a member of org {}", agent_id, org_id)
@@ -440,8 +493,15 @@ impl std::fmt::Display for GovernanceError {
             GovernanceError::InvalidTransition { from, to } => {
                 write!(f, "invalid proposal transition: {} -> {}", from, to)
             }
-            GovernanceError::AlreadyVoted { proposal_id, voter_id } => {
-                write!(f, "agent {} already voted on proposal {}", voter_id, proposal_id)
+            GovernanceError::AlreadyVoted {
+                proposal_id,
+                voter_id,
+            } => {
+                write!(
+                    f,
+                    "agent {} already voted on proposal {}",
+                    voter_id, proposal_id
+                )
             }
             GovernanceError::VotingNotOpen(id) => {
                 write!(f, "voting is not open for proposal {}", id)
@@ -456,8 +516,15 @@ impl std::fmt::Display for GovernanceError {
                 write!(f, "cannot remove the founder; transfer ownership first")
             }
             GovernanceError::EmptyName => write!(f, "organization name cannot be empty"),
-            GovernanceError::DiscussionPeriodNotElapsed { proposal_id, remaining_ticks } => {
-                write!(f, "discussion period not elapsed for proposal {}: {} ticks remaining", proposal_id, remaining_ticks)
+            GovernanceError::DiscussionPeriodNotElapsed {
+                proposal_id,
+                remaining_ticks,
+            } => {
+                write!(
+                    f,
+                    "discussion period not elapsed for proposal {}: {} ticks remaining",
+                    proposal_id, remaining_ticks
+                )
             }
         }
     }
@@ -585,22 +652,28 @@ impl GovernanceSystem {
     }
 
     /// Dissolve an organization. Only the founder can dissolve.
-    pub fn dissolve_org(&mut self, org_id: Uuid, requester_id: &str) -> Result<(), GovernanceError> {
-        let org = self.organizations.get(&org_id)
+    pub fn dissolve_org(
+        &mut self,
+        org_id: Uuid,
+        requester_id: &str,
+    ) -> Result<(), GovernanceError> {
+        let org = self
+            .organizations
+            .get(&org_id)
             .ok_or(GovernanceError::OrganizationNotFound(org_id))?;
 
         if !org.is_founder(requester_id) {
-            return Err(GovernanceError::NotFounder { org_id, agent_id: requester_id.to_string() });
+            return Err(GovernanceError::NotFounder {
+                org_id,
+                agent_id: requester_id.to_string(),
+            });
         }
 
         let org = self.organizations.get_mut(&org_id).unwrap();
         org.dissolved = true;
         let name = org.name.clone();
 
-        self.emit(crate::world::event::WorldEvent::OrganizationDissolved {
-            org_id,
-            name,
-        });
+        self.emit(crate::world::event::WorldEvent::OrganizationDissolved { org_id, name });
 
         Ok(())
     }
@@ -608,8 +681,15 @@ impl GovernanceSystem {
     // ── Member Management ──────────────────────────────────
 
     /// Join an organization directly (for open orgs or when approved).
-    pub fn join_org(&mut self, org_id: Uuid, agent_id: String, tick: u64) -> Result<(), GovernanceError> {
-        let org = self.organizations.get_mut(&org_id)
+    pub fn join_org(
+        &mut self,
+        org_id: Uuid,
+        agent_id: String,
+        tick: u64,
+    ) -> Result<(), GovernanceError> {
+        let org = self
+            .organizations
+            .get_mut(&org_id)
             .ok_or(GovernanceError::OrganizationNotFound(org_id))?;
 
         if org.dissolved {
@@ -632,11 +712,16 @@ impl GovernanceSystem {
 
     /// Leave an organization. Founders cannot leave (must dissolve or transfer).
     pub fn leave_org(&mut self, org_id: Uuid, agent_id: &str) -> Result<(), GovernanceError> {
-        let org = self.organizations.get(&org_id)
+        let org = self
+            .organizations
+            .get(&org_id)
             .ok_or(GovernanceError::OrganizationNotFound(org_id))?;
 
         if !org.is_member(agent_id) {
-            return Err(GovernanceError::NotMember { org_id, agent_id: agent_id.to_string() });
+            return Err(GovernanceError::NotMember {
+                org_id,
+                agent_id: agent_id.to_string(),
+            });
         }
         if org.is_founder(agent_id) {
             return Err(GovernanceError::CannotRemoveFounder);
@@ -661,14 +746,22 @@ impl GovernanceSystem {
         new_role: MemberRole,
         requester_id: &str,
     ) -> Result<(), GovernanceError> {
-        let org = self.organizations.get(&org_id)
+        let org = self
+            .organizations
+            .get(&org_id)
             .ok_or(GovernanceError::OrganizationNotFound(org_id))?;
 
         if !org.is_founder(requester_id) {
-            return Err(GovernanceError::NotFounder { org_id, agent_id: requester_id.to_string() });
+            return Err(GovernanceError::NotFounder {
+                org_id,
+                agent_id: requester_id.to_string(),
+            });
         }
         if !org.is_member(agent_id) {
-            return Err(GovernanceError::NotMember { org_id, agent_id: agent_id.to_string() });
+            return Err(GovernanceError::NotMember {
+                org_id,
+                agent_id: agent_id.to_string(),
+            });
         }
 
         let org = self.organizations.get_mut(&org_id).unwrap();
@@ -693,14 +786,19 @@ impl GovernanceSystem {
         tick: u64,
         payload: Option<serde_json::Value>,
     ) -> Result<Uuid, GovernanceError> {
-        let org = self.organizations.get(&org_id)
+        let org = self
+            .organizations
+            .get(&org_id)
             .ok_or(GovernanceError::OrganizationNotFound(org_id))?;
 
         if org.dissolved {
             return Err(GovernanceError::OrganizationDissolved(org_id));
         }
         if !org.is_member(&proposer_id) {
-            return Err(GovernanceError::NotMember { org_id, agent_id: proposer_id });
+            return Err(GovernanceError::NotMember {
+                org_id,
+                agent_id: proposer_id,
+            });
         }
 
         // In dictator mode, if the proposer is the founder, auto-execute
@@ -745,15 +843,27 @@ impl GovernanceSystem {
             proposal_id,
             org_id,
             proposer_id,
-            proposal_type: self.proposals.get(&proposal_id).unwrap().proposal_type.to_string(),
+            proposal_type: self
+                .proposals
+                .get(&proposal_id)
+                .unwrap()
+                .proposal_type
+                .to_string(),
         });
 
         Ok(proposal_id)
     }
 
     /// Move a proposal from Discussion to Voting phase.
-    pub fn start_voting(&mut self, proposal_id: Uuid, requester_id: &str, current_tick: u64) -> Result<(), GovernanceError> {
-        let proposal = self.proposals.get(&proposal_id)
+    pub fn start_voting(
+        &mut self,
+        proposal_id: Uuid,
+        requester_id: &str,
+        current_tick: u64,
+    ) -> Result<(), GovernanceError> {
+        let proposal = self
+            .proposals
+            .get(&proposal_id)
             .ok_or(GovernanceError::NotFound(proposal_id.to_string()))?;
 
         if proposal.status != ProposalStatus::Discussion {
@@ -764,15 +874,21 @@ impl GovernanceSystem {
         }
 
         let org_id = proposal.org_id;
-        let org = self.organizations.get(&org_id)
+        let org = self
+            .organizations
+            .get(&org_id)
             .ok_or(GovernanceError::OrganizationNotFound(org_id))?;
 
         if !org.is_member(requester_id) {
-            return Err(GovernanceError::NotMember { org_id, agent_id: requester_id.to_string() });
+            return Err(GovernanceError::NotMember {
+                org_id,
+                agent_id: requester_id.to_string(),
+            });
         }
 
         // Enforce discussion period: use org-level override if set, otherwise system config
-        let discussion_period = org.governance_config
+        let discussion_period = org
+            .governance_config
             .as_ref()
             .map(|c| c.discussion_period_ticks)
             .unwrap_or(self.config.discussion_period_ticks);
@@ -805,7 +921,9 @@ impl GovernanceSystem {
         in_favor: bool,
         tick: u64,
     ) -> Result<(), GovernanceError> {
-        let proposal = self.proposals.get(&proposal_id)
+        let proposal = self
+            .proposals
+            .get(&proposal_id)
             .ok_or(GovernanceError::NotFound(proposal_id.to_string()))?;
 
         if proposal.status != ProposalStatus::Voting {
@@ -814,15 +932,23 @@ impl GovernanceSystem {
 
         // Check if already voted
         if proposal.votes.iter().any(|v| v.voter_id == voter_id) {
-            return Err(GovernanceError::AlreadyVoted { proposal_id, voter_id });
+            return Err(GovernanceError::AlreadyVoted {
+                proposal_id,
+                voter_id,
+            });
         }
 
         let org_id = proposal.org_id;
-        let org = self.organizations.get(&org_id)
+        let org = self
+            .organizations
+            .get(&org_id)
             .ok_or(GovernanceError::OrganizationNotFound(org_id))?;
 
         if !org.is_member(&voter_id) {
-            return Err(GovernanceError::NotMember { org_id, agent_id: voter_id });
+            return Err(GovernanceError::NotMember {
+                org_id,
+                agent_id: voter_id,
+            });
         }
 
         let role = org.member_role(&voter_id).unwrap();
@@ -850,7 +976,9 @@ impl GovernanceSystem {
 
     /// Tally votes and close the proposal.
     pub fn tally_proposal(&mut self, proposal_id: Uuid) -> Result<ProposalStatus, GovernanceError> {
-        let proposal = self.proposals.get(&proposal_id)
+        let proposal = self
+            .proposals
+            .get(&proposal_id)
             .ok_or(GovernanceError::NotFound(proposal_id.to_string()))?;
 
         if proposal.status != ProposalStatus::Voting {
@@ -865,7 +993,9 @@ impl GovernanceSystem {
         let votes_against = proposal.votes_against();
         let total_votes = votes_for + votes_against;
 
-        let org = self.organizations.get(&org_id)
+        let org = self
+            .organizations
+            .get(&org_id)
             .ok_or(GovernanceError::OrganizationNotFound(org_id))?;
         let total_weight = org.total_vote_weight();
 
@@ -922,17 +1052,27 @@ impl GovernanceSystem {
     }
 
     /// Cancel a proposal. Only the proposer can cancel.
-    pub fn cancel_proposal(&mut self, proposal_id: Uuid, requester_id: &str) -> Result<(), GovernanceError> {
-        let proposal = self.proposals.get(&proposal_id)
+    pub fn cancel_proposal(
+        &mut self,
+        proposal_id: Uuid,
+        requester_id: &str,
+    ) -> Result<(), GovernanceError> {
+        let proposal = self
+            .proposals
+            .get(&proposal_id)
             .ok_or(GovernanceError::NotFound(proposal_id.to_string()))?;
 
         if proposal.proposer_id != requester_id {
             return Err(GovernanceError::NotFound(format!(
-                "only the proposer can cancel proposal {}", proposal_id
+                "only the proposer can cancel proposal {}",
+                proposal_id
             )));
         }
 
-        if !proposal.status.can_transition_to(&ProposalStatus::Cancelled) {
+        if !proposal
+            .status
+            .can_transition_to(&ProposalStatus::Cancelled)
+        {
             return Err(GovernanceError::InvalidTransition {
                 from: proposal.status,
                 to: ProposalStatus::Cancelled,
@@ -952,14 +1092,19 @@ impl GovernanceSystem {
     }
 
     pub fn list_org_proposals(&self, org_id: Uuid) -> Vec<&Proposal> {
-        self.proposals.values().filter(|p| p.org_id == org_id).collect()
+        self.proposals
+            .values()
+            .filter(|p| p.org_id == org_id)
+            .collect()
     }
 
     // ── Side Effect Execution ──────────────────────────────
 
     /// Execute the side effect of an approved proposal.
     fn execute_proposal_side_effect(&mut self, proposal_id: Uuid) -> Result<(), GovernanceError> {
-        let proposal = self.proposals.get(&proposal_id)
+        let proposal = self
+            .proposals
+            .get(&proposal_id)
             .ok_or(GovernanceError::NotFound(proposal_id.to_string()))?;
 
         let org_id = proposal.org_id;
@@ -970,10 +1115,16 @@ impl GovernanceSystem {
             ProposalType::AcceptMember => {
                 if let Some(payload) = payload {
                     if let Some(agent_id) = payload.get("agent_id").and_then(|v| v.as_str()) {
-                        let org = self.organizations.get_mut(&org_id)
+                        let org = self
+                            .organizations
+                            .get_mut(&org_id)
                             .ok_or(GovernanceError::OrganizationNotFound(org_id))?;
                         if !org.is_member(agent_id) {
-                            org.add_member(agent_id.to_string(), MemberRole::Member, proposal.created_at);
+                            org.add_member(
+                                agent_id.to_string(),
+                                MemberRole::Member,
+                                proposal.created_at,
+                            );
                         }
                     }
                 }
@@ -981,7 +1132,9 @@ impl GovernanceSystem {
             ProposalType::ExpelMember => {
                 if let Some(payload) = payload {
                     if let Some(agent_id) = payload.get("agent_id").and_then(|v| v.as_str()) {
-                        let org = self.organizations.get_mut(&org_id)
+                        let org = self
+                            .organizations
+                            .get_mut(&org_id)
                             .ok_or(GovernanceError::OrganizationNotFound(org_id))?;
                         if org.is_founder(agent_id) {
                             // Cannot expel founder
@@ -992,7 +1145,9 @@ impl GovernanceSystem {
                 }
             }
             ProposalType::DissolveOrg => {
-                let org = self.organizations.get_mut(&org_id)
+                let org = self
+                    .organizations
+                    .get_mut(&org_id)
                     .ok_or(GovernanceError::OrganizationNotFound(org_id))?;
                 org.dissolved = true;
             }
@@ -1005,13 +1160,17 @@ impl GovernanceSystem {
                             "custom" => ProfitSharingMode::Custom,
                             _ => ProfitSharingMode::Equal,
                         };
-                        let org = self.organizations.get_mut(&org_id)
+                        let org = self
+                            .organizations
+                            .get_mut(&org_id)
                             .ok_or(GovernanceError::OrganizationNotFound(org_id))?;
                         org.profit_sharing = new_mode;
 
                         // If custom, load weights from payload
                         if new_mode == ProfitSharingMode::Custom {
-                            if let Some(weights) = payload.get("weights").and_then(|v| v.as_object()) {
+                            if let Some(weights) =
+                                payload.get("weights").and_then(|v| v.as_object())
+                            {
                                 let mut custom_weights = HashMap::new();
                                 for (k, v) in weights {
                                     if let Some(w) = v.as_u64() {
@@ -1027,7 +1186,9 @@ impl GovernanceSystem {
             ProposalType::AmendCharter => {
                 if let Some(payload) = payload {
                     if let Some(charter) = payload.get("charter").and_then(|v| v.as_str()) {
-                        let org = self.organizations.get_mut(&org_id)
+                        let org = self
+                            .organizations
+                            .get_mut(&org_id)
                             .ok_or(GovernanceError::OrganizationNotFound(org_id))?;
                         org.charter = charter.to_string();
                     }
@@ -1038,7 +1199,8 @@ impl GovernanceSystem {
                     // Check if payload has a pre-existing rule_id (backward compat)
                     // or full rule definition to create + activate
                     // Extract rule data from payload and activate in the rule engine
-                    let rule_id = payload.get("rule_id")
+                    let rule_id = payload
+                        .get("rule_id")
                         .and_then(|v| v.as_str())
                         .unwrap_or("")
                         .to_string();
@@ -1071,22 +1233,29 @@ impl GovernanceSystem {
     ) {
         use crate::organization::rule_engine::{RuleCondition, RuleEffect, RuleType};
 
-        let proposer_id = payload.get("proposer_id")
+        let proposer_id = payload
+            .get("proposer_id")
             .and_then(|v| v.as_str())
             .unwrap_or("")
             .to_string();
 
-        let title = payload.get("title")
+        let title = payload
+            .get("title")
             .and_then(|v| v.as_str())
             .unwrap_or("Proposed Rule")
             .to_string();
 
-        let description = payload.get("description")
+        let description = payload
+            .get("description")
             .and_then(|v| v.as_str())
             .unwrap_or("")
             .to_string();
 
-        let rule_type = match payload.get("rule_type").and_then(|v| v.as_str()).unwrap_or("custom") {
+        let rule_type = match payload
+            .get("rule_type")
+            .and_then(|v| v.as_str())
+            .unwrap_or("custom")
+        {
             "tax" => RuleType::Tax,
             "behavior" => RuleType::Behavior,
             "trade" => RuleType::Trade,
@@ -1094,24 +1263,30 @@ impl GovernanceSystem {
             _ => RuleType::Custom,
         };
 
-        let conditions: Vec<RuleCondition> = payload.get("conditions")
+        let conditions: Vec<RuleCondition> = payload
+            .get("conditions")
             .and_then(|v| v.as_array())
             .map(|arr| {
-                arr.iter().filter_map(|c| serde_json::from_value(c.clone()).ok()).collect()
+                arr.iter()
+                    .filter_map(|c| serde_json::from_value(c.clone()).ok())
+                    .collect()
             })
             .unwrap_or_default();
 
-        let effects: Vec<RuleEffect> = payload.get("effects")
+        let effects: Vec<RuleEffect> = payload
+            .get("effects")
             .and_then(|v| v.as_array())
             .map(|arr| {
-                arr.iter().filter_map(|e| serde_json::from_value(e.clone()).ok()).collect()
+                arr.iter()
+                    .filter_map(|e| serde_json::from_value(e.clone()).ok())
+                    .collect()
             })
             .unwrap_or_default();
 
-        let expires_tick = payload.get("expires_tick")
-            .and_then(|v| v.as_u64());
+        let expires_tick = payload.get("expires_tick").and_then(|v| v.as_u64());
 
-        let created_tick = payload.get("created_tick")
+        let created_tick = payload
+            .get("created_tick")
             .and_then(|v| v.as_u64())
             .unwrap_or(0);
 
@@ -1142,7 +1317,9 @@ impl GovernanceSystem {
         content: String,
         tick: u64,
     ) -> Result<Uuid, GovernanceError> {
-        let proposal = self.proposals.get(&proposal_id)
+        let proposal = self
+            .proposals
+            .get(&proposal_id)
             .ok_or(GovernanceError::NotFound(proposal_id.to_string()))?;
 
         if proposal.status != ProposalStatus::Discussion {
@@ -1150,11 +1327,16 @@ impl GovernanceSystem {
         }
 
         let org_id = proposal.org_id;
-        let org = self.organizations.get(&org_id)
+        let org = self
+            .organizations
+            .get(&org_id)
             .ok_or(GovernanceError::OrganizationNotFound(org_id))?;
 
         if !org.is_member(&author_id) {
-            return Err(GovernanceError::NotMember { org_id, agent_id: author_id });
+            return Err(GovernanceError::NotMember {
+                org_id,
+                agent_id: author_id,
+            });
         }
 
         let argument = DebateArgument {
@@ -1193,7 +1375,9 @@ impl GovernanceSystem {
         content: String,
         tick: u64,
     ) -> Result<Uuid, GovernanceError> {
-        let proposal = self.proposals.get(&proposal_id)
+        let proposal = self
+            .proposals
+            .get(&proposal_id)
             .ok_or(GovernanceError::NotFound(proposal_id.to_string()))?;
 
         if proposal.status != ProposalStatus::Discussion {
@@ -1201,17 +1385,28 @@ impl GovernanceSystem {
         }
 
         let org_id = proposal.org_id;
-        let org = self.organizations.get(&org_id)
+        let org = self
+            .organizations
+            .get(&org_id)
             .ok_or(GovernanceError::OrganizationNotFound(org_id))?;
 
         if !org.is_member(&author_id) {
-            return Err(GovernanceError::NotMember { org_id, agent_id: author_id });
+            return Err(GovernanceError::NotMember {
+                org_id,
+                agent_id: author_id,
+            });
         }
 
         // Verify parent argument exists
-        let parent_exists = proposal.arguments.iter().any(|a| a.id == parent_argument_id);
+        let parent_exists = proposal
+            .arguments
+            .iter()
+            .any(|a| a.id == parent_argument_id);
         if !parent_exists {
-            return Err(GovernanceError::NotFound(format!("argument {}", parent_argument_id)));
+            return Err(GovernanceError::NotFound(format!(
+                "argument {}",
+                parent_argument_id
+            )));
         }
 
         let reply = DebateArgument {
@@ -1230,7 +1425,11 @@ impl GovernanceSystem {
         // Add the reply to the top-level arguments list for flat access,
         // and also push it into the parent's replies
         let proposal = self.proposals.get_mut(&proposal_id).unwrap();
-        if let Some(parent) = proposal.arguments.iter_mut().find(|a| a.id == parent_argument_id) {
+        if let Some(parent) = proposal
+            .arguments
+            .iter_mut()
+            .find(|a| a.id == parent_argument_id)
+        {
             parent.replies.push(reply_id);
         }
         proposal.arguments.push(reply);
@@ -1247,8 +1446,13 @@ impl GovernanceSystem {
     }
 
     /// List all arguments for a proposal.
-    pub fn list_arguments(&self, proposal_id: Uuid) -> Result<Vec<&DebateArgument>, GovernanceError> {
-        let proposal = self.proposals.get(&proposal_id)
+    pub fn list_arguments(
+        &self,
+        proposal_id: Uuid,
+    ) -> Result<Vec<&DebateArgument>, GovernanceError> {
+        let proposal = self
+            .proposals
+            .get(&proposal_id)
             .ok_or(GovernanceError::NotFound(proposal_id.to_string()))?;
 
         Ok(proposal.arguments.iter().collect())
@@ -1279,7 +1483,14 @@ mod tests {
     }
 
     fn make_org(system: &mut GovernanceSystem) -> Uuid {
-        system.create_org("Test Org".to_string(), "founder".to_string(), DecisionMode::Vote, 0).unwrap()
+        system
+            .create_org(
+                "Test Org".to_string(),
+                "founder".to_string(),
+                DecisionMode::Vote,
+                0,
+            )
+            .unwrap()
     }
 
     // ── Organization Creation ──────────────────────────────
@@ -1364,15 +1575,17 @@ mod tests {
         sys.join_org(org_id, "member1".to_string(), 1).unwrap();
 
         // Create proposal
-        let proposal_id = sys.create_proposal(
-            org_id,
-            "member1".to_string(),
-            ProposalType::AmendCharter,
-            "Update Charter".to_string(),
-            "New charter text".to_string(),
-            5,
-            Some(serde_json::json!({ "charter": "New charter text" })),
-        ).unwrap();
+        let proposal_id = sys
+            .create_proposal(
+                org_id,
+                "member1".to_string(),
+                ProposalType::AmendCharter,
+                "Update Charter".to_string(),
+                "New charter text".to_string(),
+                5,
+                Some(serde_json::json!({ "charter": "New charter text" })),
+            )
+            .unwrap();
 
         let proposal = sys.get_proposal(proposal_id).unwrap();
         assert_eq!(proposal.status, ProposalStatus::Discussion);
@@ -1383,8 +1596,10 @@ mod tests {
         assert_eq!(proposal.status, ProposalStatus::Voting);
 
         // Vote
-        sys.vote(proposal_id, "founder".to_string(), true, 10).unwrap();
-        sys.vote(proposal_id, "member1".to_string(), true, 10).unwrap();
+        sys.vote(proposal_id, "founder".to_string(), true, 10)
+            .unwrap();
+        sys.vote(proposal_id, "member1".to_string(), true, 10)
+            .unwrap();
 
         // Tally
         let result = sys.tally_proposal(proposal_id).unwrap();
@@ -1401,19 +1616,23 @@ mod tests {
         let org_id = make_org(&mut sys);
         sys.join_org(org_id, "member1".to_string(), 1).unwrap();
 
-        let proposal_id = sys.create_proposal(
-            org_id,
-            "member1".to_string(),
-            ProposalType::AmendCharter,
-            "Bad Idea".to_string(),
-            "No".to_string(),
-            5,
-            Some(serde_json::json!({ "charter": "Bad" })),
-        ).unwrap();
+        let proposal_id = sys
+            .create_proposal(
+                org_id,
+                "member1".to_string(),
+                ProposalType::AmendCharter,
+                "Bad Idea".to_string(),
+                "No".to_string(),
+                5,
+                Some(serde_json::json!({ "charter": "Bad" })),
+            )
+            .unwrap();
 
         sys.start_voting(proposal_id, "member1", 10).unwrap();
-        sys.vote(proposal_id, "founder".to_string(), false, 10).unwrap();
-        sys.vote(proposal_id, "member1".to_string(), true, 10).unwrap();
+        sys.vote(proposal_id, "founder".to_string(), false, 10)
+            .unwrap();
+        sys.vote(proposal_id, "member1".to_string(), true, 10)
+            .unwrap();
 
         // founder weight=3, member1 weight=1; against=3, for=1 → rejected
         let result = sys.tally_proposal(proposal_id).unwrap();
@@ -1423,17 +1642,26 @@ mod tests {
     #[test]
     fn test_dictator_mode_auto_executes() {
         let mut sys = make_system();
-        let org_id = sys.create_org("Dictator Org".to_string(), "founder".to_string(), DecisionMode::Dictator, 0).unwrap();
+        let org_id = sys
+            .create_org(
+                "Dictator Org".to_string(),
+                "founder".to_string(),
+                DecisionMode::Dictator,
+                0,
+            )
+            .unwrap();
 
-        let proposal_id = sys.create_proposal(
-            org_id,
-            "founder".to_string(),
-            ProposalType::AmendCharter,
-            "Update".to_string(),
-            "By fiat".to_string(),
-            5,
-            Some(serde_json::json!({ "charter": "Dictator's charter" })),
-        ).unwrap();
+        let proposal_id = sys
+            .create_proposal(
+                org_id,
+                "founder".to_string(),
+                ProposalType::AmendCharter,
+                "Update".to_string(),
+                "By fiat".to_string(),
+                5,
+                Some(serde_json::json!({ "charter": "Dictator's charter" })),
+            )
+            .unwrap();
 
         // Should auto-execute without voting
         let proposal = sys.get_proposal(proposal_id).unwrap();
@@ -1448,18 +1676,21 @@ mod tests {
         let mut sys = make_system();
         let org_id = make_org(&mut sys);
 
-        let proposal_id = sys.create_proposal(
-            org_id,
-            "founder".to_string(),
-            ProposalType::AcceptMember,
-            "Accept Bob".to_string(),
-            "Bob is cool".to_string(),
-            5,
-            Some(serde_json::json!({ "agent_id": "bob" })),
-        ).unwrap();
+        let proposal_id = sys
+            .create_proposal(
+                org_id,
+                "founder".to_string(),
+                ProposalType::AcceptMember,
+                "Accept Bob".to_string(),
+                "Bob is cool".to_string(),
+                5,
+                Some(serde_json::json!({ "agent_id": "bob" })),
+            )
+            .unwrap();
 
         sys.start_voting(proposal_id, "founder", 10).unwrap();
-        sys.vote(proposal_id, "founder".to_string(), true, 10).unwrap();
+        sys.vote(proposal_id, "founder".to_string(), true, 10)
+            .unwrap();
         sys.tally_proposal(proposal_id).unwrap();
 
         let org = sys.get_org(org_id).unwrap();
@@ -1472,18 +1703,21 @@ mod tests {
         let org_id = make_org(&mut sys);
         sys.join_org(org_id, "bad_actor".to_string(), 1).unwrap();
 
-        let proposal_id = sys.create_proposal(
-            org_id,
-            "founder".to_string(),
-            ProposalType::ExpelMember,
-            "Kick bad_actor".to_string(),
-            "Misconduct".to_string(),
-            5,
-            Some(serde_json::json!({ "agent_id": "bad_actor" })),
-        ).unwrap();
+        let proposal_id = sys
+            .create_proposal(
+                org_id,
+                "founder".to_string(),
+                ProposalType::ExpelMember,
+                "Kick bad_actor".to_string(),
+                "Misconduct".to_string(),
+                5,
+                Some(serde_json::json!({ "agent_id": "bad_actor" })),
+            )
+            .unwrap();
 
         sys.start_voting(proposal_id, "founder", 10).unwrap();
-        sys.vote(proposal_id, "founder".to_string(), true, 10).unwrap();
+        sys.vote(proposal_id, "founder".to_string(), true, 10)
+            .unwrap();
         sys.tally_proposal(proposal_id).unwrap();
 
         let org = sys.get_org(org_id).unwrap();
@@ -1495,18 +1729,21 @@ mod tests {
         let mut sys = make_system();
         let org_id = make_org(&mut sys);
 
-        let proposal_id = sys.create_proposal(
-            org_id,
-            "founder".to_string(),
-            ProposalType::DissolveOrg,
-            "Dissolve".to_string(),
-            "We're done".to_string(),
-            5,
-            None,
-        ).unwrap();
+        let proposal_id = sys
+            .create_proposal(
+                org_id,
+                "founder".to_string(),
+                ProposalType::DissolveOrg,
+                "Dissolve".to_string(),
+                "We're done".to_string(),
+                5,
+                None,
+            )
+            .unwrap();
 
         sys.start_voting(proposal_id, "founder", 10).unwrap();
-        sys.vote(proposal_id, "founder".to_string(), true, 10).unwrap();
+        sys.vote(proposal_id, "founder".to_string(), true, 10)
+            .unwrap();
         sys.tally_proposal(proposal_id).unwrap();
 
         let org = sys.get_org(org_id).unwrap();
@@ -1518,18 +1755,21 @@ mod tests {
         let mut sys = make_system();
         let org_id = make_org(&mut sys);
 
-        let proposal_id = sys.create_proposal(
-            org_id,
-            "founder".to_string(),
-            ProposalType::ChangeProfitSharing,
-            "Change to proportional".to_string(),
-            "Fair distribution".to_string(),
-            5,
-            Some(serde_json::json!({ "mode": "proportional" })),
-        ).unwrap();
+        let proposal_id = sys
+            .create_proposal(
+                org_id,
+                "founder".to_string(),
+                ProposalType::ChangeProfitSharing,
+                "Change to proportional".to_string(),
+                "Fair distribution".to_string(),
+                5,
+                Some(serde_json::json!({ "mode": "proportional" })),
+            )
+            .unwrap();
 
         sys.start_voting(proposal_id, "founder", 10).unwrap();
-        sys.vote(proposal_id, "founder".to_string(), true, 10).unwrap();
+        sys.vote(proposal_id, "founder".to_string(), true, 10)
+            .unwrap();
         sys.tally_proposal(proposal_id).unwrap();
 
         let org = sys.get_org(org_id).unwrap();
@@ -1558,18 +1798,21 @@ mod tests {
         let mut sys = make_system();
         let org_id = make_org(&mut sys);
 
-        let proposal_id = sys.create_proposal(
-            org_id,
-            "founder".to_string(),
-            ProposalType::AmendCharter,
-            "Test".to_string(),
-            "Test".to_string(),
-            5,
-            None,
-        ).unwrap();
+        let proposal_id = sys
+            .create_proposal(
+                org_id,
+                "founder".to_string(),
+                ProposalType::AmendCharter,
+                "Test".to_string(),
+                "Test".to_string(),
+                5,
+                None,
+            )
+            .unwrap();
 
         sys.start_voting(proposal_id, "founder", 10).unwrap();
-        sys.vote(proposal_id, "founder".to_string(), true, 10).unwrap();
+        sys.vote(proposal_id, "founder".to_string(), true, 10)
+            .unwrap();
 
         let result = sys.vote(proposal_id, "founder".to_string(), true, 10);
         assert!(result.is_err());
@@ -1580,15 +1823,17 @@ mod tests {
         let mut sys = make_system();
         let org_id = make_org(&mut sys);
 
-        let proposal_id = sys.create_proposal(
-            org_id,
-            "founder".to_string(),
-            ProposalType::AmendCharter,
-            "Test".to_string(),
-            "Cancel me".to_string(),
-            5,
-            None,
-        ).unwrap();
+        let proposal_id = sys
+            .create_proposal(
+                org_id,
+                "founder".to_string(),
+                ProposalType::AmendCharter,
+                "Test".to_string(),
+                "Cancel me".to_string(),
+                5,
+                None,
+            )
+            .unwrap();
 
         sys.cancel_proposal(proposal_id, "founder").unwrap();
         let proposal = sys.get_proposal(proposal_id).unwrap();
@@ -1622,7 +1867,12 @@ mod tests {
         sys.join_org(org_id, "m1".to_string(), 1).unwrap();
 
         // Set contribution scores
-        sys.get_org_mut(org_id).unwrap().members.get_mut("m1").unwrap().contribution_score = 100;
+        sys.get_org_mut(org_id)
+            .unwrap()
+            .members
+            .get_mut("m1")
+            .unwrap()
+            .contribution_score = 100;
 
         let org = sys.get_org(org_id).unwrap();
         // Verify contribution scores
@@ -1635,14 +1885,26 @@ mod tests {
         // m1 should get the lion's share
         let m1_share = *dist.get("m1").unwrap();
         let founder_share = *dist.get("founder").unwrap();
-        assert!(m1_share > founder_share, "m1 share ({}) should be > founder share ({})", m1_share, founder_share);
+        assert!(
+            m1_share > founder_share,
+            "m1 share ({}) should be > founder share ({})",
+            m1_share,
+            founder_share
+        );
         assert_eq!(m1_share + founder_share, 101);
     }
 
     #[test]
     fn test_custom_profit_distribution() {
         let mut sys = make_system();
-        let org_id = sys.create_org("Custom".to_string(), "founder".to_string(), DecisionMode::Vote, 0).unwrap();
+        let org_id = sys
+            .create_org(
+                "Custom".to_string(),
+                "founder".to_string(),
+                DecisionMode::Vote,
+                0,
+            )
+            .unwrap();
         sys.join_org(org_id, "m1".to_string(), 1).unwrap();
 
         {
@@ -1704,7 +1966,12 @@ mod tests {
 
     #[test]
     fn test_organization_serialization() {
-        let org = Organization::new("Test".to_string(), "founder".to_string(), DecisionMode::Council, 100);
+        let org = Organization::new(
+            "Test".to_string(),
+            "founder".to_string(),
+            DecisionMode::Council,
+            100,
+        );
         let json = serde_json::to_string(&org).unwrap();
         let back: Organization = serde_json::from_str(&json).unwrap();
         assert_eq!(org.id, back.id);
@@ -1721,11 +1988,22 @@ mod tests {
         let mut rx = bus.subscribe();
         let mut sys = GovernanceSystem::with_event_bus(bus);
 
-        let org_id = sys.create_org("Event Org".to_string(), "founder".to_string(), DecisionMode::Vote, 0).unwrap();
+        let org_id = sys
+            .create_org(
+                "Event Org".to_string(),
+                "founder".to_string(),
+                DecisionMode::Vote,
+                0,
+            )
+            .unwrap();
 
         let event = rx.try_recv().unwrap();
         match event {
-            crate::world::event::WorldEvent::OrganizationCreated { org_id: eid, name, founder_id } => {
+            crate::world::event::WorldEvent::OrganizationCreated {
+                org_id: eid,
+                name,
+                founder_id,
+            } => {
                 assert_eq!(eid, org_id);
                 assert_eq!(name, "Event Org");
                 assert_eq!(founder_id, "founder");
@@ -1742,21 +2020,25 @@ mod tests {
         sys.config.discussion_period_ticks = 10;
         let org_id = make_org(&mut sys);
 
-        let proposal_id = sys.create_proposal(
-            org_id,
-            "founder".to_string(),
-            ProposalType::AmendCharter,
-            "Test".to_string(),
-            "Wait for discussion".to_string(),
-            5, // created at tick 5
-            None,
-        ).unwrap();
+        let proposal_id = sys
+            .create_proposal(
+                org_id,
+                "founder".to_string(),
+                ProposalType::AmendCharter,
+                "Test".to_string(),
+                "Wait for discussion".to_string(),
+                5, // created at tick 5
+                None,
+            )
+            .unwrap();
 
         // Attempt to start voting at tick 8 (only 3 ticks elapsed, need 10)
         let result = sys.start_voting(proposal_id, "founder", 8);
         assert!(result.is_err());
         match result.unwrap_err() {
-            GovernanceError::DiscussionPeriodNotElapsed { remaining_ticks, .. } => {
+            GovernanceError::DiscussionPeriodNotElapsed {
+                remaining_ticks, ..
+            } => {
                 assert_eq!(remaining_ticks, 7); // 10 - (8 - 5) = 7
             }
             e => panic!("Expected DiscussionPeriodNotElapsed, got: {}", e),
@@ -1774,19 +2056,24 @@ mod tests {
         sys.config.discussion_period_ticks = 0;
         let org_id = make_org(&mut sys);
 
-        let proposal_id = sys.create_proposal(
-            org_id,
-            "founder".to_string(),
-            ProposalType::AmendCharter,
-            "Test".to_string(),
-            "No wait".to_string(),
-            5,
-            None,
-        ).unwrap();
+        let proposal_id = sys
+            .create_proposal(
+                org_id,
+                "founder".to_string(),
+                ProposalType::AmendCharter,
+                "Test".to_string(),
+                "No wait".to_string(),
+                5,
+                None,
+            )
+            .unwrap();
 
         // Should succeed immediately with discussion_period_ticks = 0
         sys.start_voting(proposal_id, "founder", 5).unwrap();
-        assert_eq!(sys.get_proposal(proposal_id).unwrap().status, ProposalStatus::Voting);
+        assert_eq!(
+            sys.get_proposal(proposal_id).unwrap().status,
+            ProposalStatus::Voting
+        );
     }
 
     #[test]
@@ -1804,15 +2091,17 @@ mod tests {
             pass_threshold: 0.6,
         });
 
-        let proposal_id = sys.create_proposal(
-            org_id,
-            "founder".to_string(),
-            ProposalType::AmendCharter,
-            "Test".to_string(),
-            "Org override".to_string(),
-            10,
-            None,
-        ).unwrap();
+        let proposal_id = sys
+            .create_proposal(
+                org_id,
+                "founder".to_string(),
+                ProposalType::AmendCharter,
+                "Test".to_string(),
+                "Org override".to_string(),
+                10,
+                None,
+            )
+            .unwrap();
 
         // System default allows immediate voting, but org override requires 5 ticks
         let result = sys.start_voting(proposal_id, "founder", 12);
@@ -1820,7 +2109,10 @@ mod tests {
 
         // After 5 ticks, should succeed
         sys.start_voting(proposal_id, "founder", 15).unwrap();
-        assert_eq!(sys.get_proposal(proposal_id).unwrap().status, ProposalStatus::Voting);
+        assert_eq!(
+            sys.get_proposal(proposal_id).unwrap().status,
+            ProposalStatus::Voting
+        );
     }
 
     #[test]
@@ -1836,19 +2128,22 @@ mod tests {
             pass_threshold: 0.75,  // 75% must be in favor
         });
 
-        let proposal_id = sys.create_proposal(
-            org_id,
-            "founder".to_string(),
-            ProposalType::AmendCharter,
-            "Test".to_string(),
-            "High threshold".to_string(),
-            0,
-            None,
-        ).unwrap();
+        let proposal_id = sys
+            .create_proposal(
+                org_id,
+                "founder".to_string(),
+                ProposalType::AmendCharter,
+                "Test".to_string(),
+                "High threshold".to_string(),
+                0,
+                None,
+            )
+            .unwrap();
 
         sys.start_voting(proposal_id, "founder", 0).unwrap();
         // Only founder votes in favor (weight=3), no one against
-        sys.vote(proposal_id, "founder".to_string(), true, 1).unwrap();
+        sys.vote(proposal_id, "founder".to_string(), true, 1)
+            .unwrap();
 
         // Founder alone should pass (3/4 total weight = 75% quorum met, 3/3 votes = 100% >= 75%)
         let result = sys.tally_proposal(proposal_id).unwrap();
@@ -1862,36 +2157,51 @@ mod tests {
         let bus = crate::world::state::EventBus::new(64);
         let mut rx = bus.subscribe();
         let mut sys = GovernanceSystem::with_event_bus(bus);
-        let org_id = sys.create_org("Test".to_string(), "founder".to_string(), DecisionMode::Vote, 0).unwrap();
+        let org_id = sys
+            .create_org(
+                "Test".to_string(),
+                "founder".to_string(),
+                DecisionMode::Vote,
+                0,
+            )
+            .unwrap();
         sys.join_org(org_id, "m1".to_string(), 1).unwrap();
 
-        let proposal_id = sys.create_proposal(
-            org_id,
-            "founder".to_string(),
-            ProposalType::AmendCharter,
-            "Debate me".to_string(),
-            "Let's discuss".to_string(),
-            0,
-            None,
-        ).unwrap();
+        let proposal_id = sys
+            .create_proposal(
+                org_id,
+                "founder".to_string(),
+                ProposalType::AmendCharter,
+                "Debate me".to_string(),
+                "Let's discuss".to_string(),
+                0,
+                None,
+            )
+            .unwrap();
 
         // Drain all preceding events (OrganizationCreated, OrganizationMemberJoined, ProposalCreated)
         while rx.try_recv().is_ok() {}
 
         // Add argument in favor
-        let arg_id = sys.add_argument(
-            proposal_id,
-            "founder".to_string(),
-            DebateStance::InFavor,
-            "This proposal is great because...".to_string(),
-            1,
-        ).unwrap();
+        let arg_id = sys
+            .add_argument(
+                proposal_id,
+                "founder".to_string(),
+                DebateStance::InFavor,
+                "This proposal is great because...".to_string(),
+                1,
+            )
+            .unwrap();
 
         // Verify event was emitted
         let event = rx.try_recv().unwrap();
         match event {
             crate::world::event::WorldEvent::ArgumentAdded {
-                argument_id, proposal_id: pid, author_id, tick, ..
+                argument_id,
+                proposal_id: pid,
+                author_id,
+                tick,
+                ..
             } => {
                 assert_eq!(argument_id, arg_id);
                 assert_eq!(pid, proposal_id);
@@ -1915,33 +2225,39 @@ mod tests {
         let org_id = make_org(&mut sys);
         sys.join_org(org_id, "m1".to_string(), 1).unwrap();
 
-        let proposal_id = sys.create_proposal(
-            org_id,
-            "founder".to_string(),
-            ProposalType::AmendCharter,
-            "Debate".to_string(),
-            "Discuss".to_string(),
-            0,
-            None,
-        ).unwrap();
+        let proposal_id = sys
+            .create_proposal(
+                org_id,
+                "founder".to_string(),
+                ProposalType::AmendCharter,
+                "Debate".to_string(),
+                "Discuss".to_string(),
+                0,
+                None,
+            )
+            .unwrap();
 
-        let arg_id = sys.add_argument(
-            proposal_id,
-            "founder".to_string(),
-            DebateStance::InFavor,
-            "Pro argument".to_string(),
-            1,
-        ).unwrap();
+        let arg_id = sys
+            .add_argument(
+                proposal_id,
+                "founder".to_string(),
+                DebateStance::InFavor,
+                "Pro argument".to_string(),
+                1,
+            )
+            .unwrap();
 
         // Reply to the argument
-        let reply_id = sys.reply_to_argument(
-            proposal_id,
-            arg_id,
-            "m1".to_string(),
-            DebateStance::Against,
-            "Counter-argument".to_string(),
-            2,
-        ).unwrap();
+        let reply_id = sys
+            .reply_to_argument(
+                proposal_id,
+                arg_id,
+                "m1".to_string(),
+                DebateStance::Against,
+                "Counter-argument".to_string(),
+                2,
+            )
+            .unwrap();
 
         let args = sys.list_arguments(proposal_id).unwrap();
         assert_eq!(args.len(), 2);
@@ -1961,15 +2277,17 @@ mod tests {
         let mut sys = make_system();
         let org_id = make_org(&mut sys);
 
-        let proposal_id = sys.create_proposal(
-            org_id,
-            "founder".to_string(),
-            ProposalType::AmendCharter,
-            "Test".to_string(),
-            "Test".to_string(),
-            0,
-            None,
-        ).unwrap();
+        let proposal_id = sys
+            .create_proposal(
+                org_id,
+                "founder".to_string(),
+                ProposalType::AmendCharter,
+                "Test".to_string(),
+                "Test".to_string(),
+                0,
+                None,
+            )
+            .unwrap();
 
         // Move to Voting
         sys.start_voting(proposal_id, "founder", 0).unwrap();
@@ -1990,15 +2308,17 @@ mod tests {
         let mut sys = make_system();
         let org_id = make_org(&mut sys);
 
-        let proposal_id = sys.create_proposal(
-            org_id,
-            "founder".to_string(),
-            ProposalType::AmendCharter,
-            "Test".to_string(),
-            "Test".to_string(),
-            0,
-            None,
-        ).unwrap();
+        let proposal_id = sys
+            .create_proposal(
+                org_id,
+                "founder".to_string(),
+                ProposalType::AmendCharter,
+                "Test".to_string(),
+                "Test".to_string(),
+                0,
+                None,
+            )
+            .unwrap();
 
         let result = sys.add_argument(
             proposal_id,
@@ -2034,18 +2354,21 @@ mod tests {
             "created_tick": 5
         });
 
-        let proposal_id = sys.create_proposal(
-            org_id,
-            "founder".to_string(),
-            ProposalType::SoftRuleProposal,
-            "Tax outsiders".to_string(),
-            "10% extra tax".to_string(),
-            5,
-            Some(rule_payload),
-        ).unwrap();
+        let proposal_id = sys
+            .create_proposal(
+                org_id,
+                "founder".to_string(),
+                ProposalType::SoftRuleProposal,
+                "Tax outsiders".to_string(),
+                "10% extra tax".to_string(),
+                5,
+                Some(rule_payload),
+            )
+            .unwrap();
 
         sys.start_voting(proposal_id, "founder", 10).unwrap();
-        sys.vote(proposal_id, "founder".to_string(), true, 10).unwrap();
+        sys.vote(proposal_id, "founder".to_string(), true, 10)
+            .unwrap();
         sys.vote(proposal_id, "m1".to_string(), true, 10).unwrap();
         let result = sys.tally_proposal(proposal_id).unwrap();
         assert_eq!(result, ProposalStatus::Executed);

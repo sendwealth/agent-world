@@ -121,7 +121,10 @@ pub enum MarketplaceError {
     /// The listing has been delisted.
     ListingDelisted,
     /// Buyer does not have enough balance.
-    InsufficientBalance { required: u64, available: u64 },
+    InsufficientBalance {
+        required: u64,
+        available: u64,
+    },
     /// The buyer is the publisher (cannot buy own knowledge).
     SelfPurchase,
     /// The listing already exists with the same content hash from the same publisher.
@@ -144,8 +147,15 @@ impl std::fmt::Display for MarketplaceError {
             MarketplaceError::NotFound(id) => write!(f, "listing not found: {}", id),
             MarketplaceError::ListingInactive => write!(f, "listing is not active"),
             MarketplaceError::ListingDelisted => write!(f, "listing has been delisted"),
-            MarketplaceError::InsufficientBalance { required, available } => {
-                write!(f, "insufficient balance: required {}, available {}", required, available)
+            MarketplaceError::InsufficientBalance {
+                required,
+                available,
+            } => {
+                write!(
+                    f,
+                    "insufficient balance: required {}, available {}",
+                    required, available
+                )
             }
             MarketplaceError::SelfPurchase => write!(f, "cannot purchase your own knowledge"),
             MarketplaceError::DuplicateContent => write!(f, "duplicate content listing"),
@@ -269,56 +279,41 @@ impl Marketplace {
 
     /// Search/filter listings with optional sorting.
     pub fn search(&self, filter: &MarketplaceFilter) -> Vec<&KnowledgeListing> {
-        let mut results: Vec<&KnowledgeListing> = self.listings
+        let mut results: Vec<&KnowledgeListing> = self
+            .listings
             .values()
             .filter(|l| l.status == ListingStatus::Active)
-            .filter(|l| {
-                match filter.category {
-                    Some(ref cat) => l.category == *cat,
-                    None => true,
-                }
+            .filter(|l| match filter.category {
+                Some(ref cat) => l.category == *cat,
+                None => true,
             })
-            .filter(|l| {
-                match filter.publisher_id {
-                    Some(ref pid) => l.publisher_id == *pid,
-                    None => true,
-                }
+            .filter(|l| match filter.publisher_id {
+                Some(ref pid) => l.publisher_id == *pid,
+                None => true,
             })
-            .filter(|l| {
-                match filter.min_price {
-                    Some(min) => l.price >= min,
-                    None => true,
-                }
+            .filter(|l| match filter.min_price {
+                Some(min) => l.price >= min,
+                None => true,
             })
-            .filter(|l| {
-                match filter.max_price {
-                    Some(max) => l.price <= max,
-                    None => true,
-                }
+            .filter(|l| match filter.max_price {
+                Some(max) => l.price <= max,
+                None => true,
             })
-            .filter(|l| {
-                match filter.tag {
-                    Some(ref tag) => l.tags.iter().any(|t| t.eq_ignore_ascii_case(tag)),
-                    None => true,
-                }
+            .filter(|l| match filter.tag {
+                Some(ref tag) => l.tags.iter().any(|t| t.eq_ignore_ascii_case(tag)),
+                None => true,
             })
-            .filter(|l| {
-                match filter.query {
-                    Some(ref query) => l.title.to_lowercase().contains(&query.to_lowercase()),
-                    None => true,
-                }
+            .filter(|l| match filter.query {
+                Some(ref query) => l.title.to_lowercase().contains(&query.to_lowercase()),
+                None => true,
             })
-            .filter(|l| {
-                match filter.min_purchases {
-                    Some(min) => l.purchase_count >= min,
-                    None => true,
-                }
+            .filter(|l| match filter.min_purchases {
+                Some(min) => l.purchase_count >= min,
+                None => true,
             })
-            .filter(|l| {
-                match filter.min_rating {
-                    Some(min) => l.average_rating() >= min,
-                    None => true,
-                }
+            .filter(|l| match filter.min_rating {
+                Some(min) => l.average_rating() >= min,
+                None => true,
             })
             .collect();
 
@@ -328,9 +323,10 @@ impl Marketplace {
             MarketplaceSort::Oldest => a.created_tick.cmp(&b.created_tick),
             MarketplaceSort::PriceAsc => a.price.cmp(&b.price),
             MarketplaceSort::PriceDesc => b.price.cmp(&a.price),
-            MarketplaceSort::RatingDesc => {
-                b.average_rating().partial_cmp(&a.average_rating()).unwrap_or(std::cmp::Ordering::Equal)
-            }
+            MarketplaceSort::RatingDesc => b
+                .average_rating()
+                .partial_cmp(&a.average_rating())
+                .unwrap_or(std::cmp::Ordering::Equal),
             MarketplaceSort::PurchasesDesc => b.purchase_count.cmp(&a.purchase_count),
         });
 
@@ -363,7 +359,8 @@ impl Marketplace {
 
     /// Check if a buyer has purchased a listing.
     pub fn has_purchased(&self, buyer_id: &str, listing_id: Uuid) -> bool {
-        self.purchase_index.contains(&(buyer_id.to_string(), listing_id))
+        self.purchase_index
+            .contains(&(buyer_id.to_string(), listing_id))
     }
 
     /// Check if a buyer has rated a listing.
@@ -446,11 +443,15 @@ impl Marketplace {
         status: Option<ListingStatus>,
         tags: Option<Vec<String>>,
     ) -> Result<(), MarketplaceError> {
-        let listing = self.listings.get_mut(&listing_id)
+        let listing = self
+            .listings
+            .get_mut(&listing_id)
             .ok_or_else(|| MarketplaceError::NotFound(listing_id.to_string()))?;
 
         if listing.publisher_id != publisher_id {
-            return Err(MarketplaceError::Unauthorized("only the publisher can update".into()));
+            return Err(MarketplaceError::Unauthorized(
+                "only the publisher can update".into(),
+            ));
         }
 
         if let Some(p) = price {
@@ -475,11 +476,15 @@ impl Marketplace {
         listing_id: Uuid,
         publisher_id: &str,
     ) -> Result<(), MarketplaceError> {
-        let listing = self.listings.get_mut(&listing_id)
+        let listing = self
+            .listings
+            .get_mut(&listing_id)
             .ok_or_else(|| MarketplaceError::NotFound(listing_id.to_string()))?;
 
         if listing.publisher_id != publisher_id {
-            return Err(MarketplaceError::Unauthorized("only the publisher can delist".into()));
+            return Err(MarketplaceError::Unauthorized(
+                "only the publisher can delist".into(),
+            ));
         }
 
         listing.status = ListingStatus::Delisted;
@@ -503,7 +508,9 @@ impl Marketplace {
     ) -> Result<PurchaseRecord, MarketplaceError> {
         // Validate listing and extract needed data
         let (price, currency, publisher_id) = {
-            let listing = self.listings.get(&listing_id)
+            let listing = self
+                .listings
+                .get(&listing_id)
                 .ok_or_else(|| MarketplaceError::NotFound(listing_id.to_string()))?;
             match listing.status {
                 ListingStatus::Active => {}
@@ -513,7 +520,11 @@ impl Marketplace {
             if listing.publisher_id == buyer_id {
                 return Err(MarketplaceError::SelfPurchase);
             }
-            (listing.price, listing.currency, listing.publisher_id.clone())
+            (
+                listing.price,
+                listing.currency,
+                listing.publisher_id.clone(),
+            )
         };
 
         // Check buyer balance
@@ -526,15 +537,11 @@ impl Marketplace {
         }
 
         // Transfer funds
-        self.balances.insert(
-            buyer_id.to_string(),
-            buyer_balance - price,
-        );
+        self.balances
+            .insert(buyer_id.to_string(), buyer_balance - price);
         let seller_balance = self.get_balance(&publisher_id);
-        self.balances.insert(
-            publisher_id.clone(),
-            seller_balance + price,
-        );
+        self.balances
+            .insert(publisher_id.clone(), seller_balance + price);
 
         // Update purchase count
         let listing = self.listings.get_mut(&listing_id).unwrap();
@@ -550,7 +557,8 @@ impl Marketplace {
             currency,
             tick,
         };
-        self.purchase_index.insert((buyer_id.to_string(), listing_id));
+        self.purchase_index
+            .insert((buyer_id.to_string(), listing_id));
         self.purchases.push(record.clone());
 
         self.emit(WorldEvent::KnowledgePurchased {
@@ -611,10 +619,7 @@ impl Marketplace {
         listing.rating_count += 1;
         let avg = listing.average_rating();
 
-        self.ratings
-            .entry(listing_id)
-            .or_default()
-            .push(rating);
+        self.ratings.entry(listing_id).or_default().push(rating);
 
         self.emit(WorldEvent::KnowledgeRated {
             listing_id: listing_id.to_string(),
@@ -643,7 +648,8 @@ impl Marketplace {
                 available: from_balance,
             });
         }
-        self.balances.insert(from.to_string(), from_balance - amount);
+        self.balances
+            .insert(from.to_string(), from_balance - amount);
         let to_balance = self.get_balance(to);
         self.balances.insert(to.to_string(), to_balance + amount);
 
@@ -696,7 +702,8 @@ mod tests {
             "seller".into(),
             vec!["winter".into(), "survival".into()],
             1,
-        ).unwrap()
+        )
+        .unwrap()
     }
 
     // ── Publish ────────────────────────────────────────────
@@ -721,9 +728,15 @@ mod tests {
     fn test_publish_listing_zero_price_fails() {
         let mut mp = make_marketplace();
         let result = mp.publish_listing(
-            "Free Knowledge".into(), "desc".into(),
-            KnowledgeCategory::General, "hash".into(),
-            0, Currency::Token, "seller".into(), vec![], 1,
+            "Free Knowledge".into(),
+            "desc".into(),
+            KnowledgeCategory::General,
+            "hash".into(),
+            0,
+            Currency::Token,
+            "seller".into(),
+            vec![],
+            1,
         );
         assert!(matches!(result, Err(MarketplaceError::InvalidPrice)));
     }
@@ -732,9 +745,15 @@ mod tests {
     fn test_publish_listing_empty_title_fails() {
         let mut mp = make_marketplace();
         let result = mp.publish_listing(
-            "".into(), "desc".into(),
-            KnowledgeCategory::General, "hash".into(),
-            50, Currency::Token, "seller".into(), vec![], 1,
+            "".into(),
+            "desc".into(),
+            KnowledgeCategory::General,
+            "hash".into(),
+            50,
+            Currency::Token,
+            "seller".into(),
+            vec![],
+            1,
         );
         assert!(result.is_err());
     }
@@ -744,9 +763,15 @@ mod tests {
         let mut mp = make_marketplace();
         publish_default_listing(&mut mp);
         let result = mp.publish_listing(
-            "Different Title".into(), "Different desc".into(),
-            KnowledgeCategory::General, "hash_abc123".into(), // same hash
-            200, Currency::Token, "seller".into(), vec![], 2,
+            "Different Title".into(),
+            "Different desc".into(),
+            KnowledgeCategory::General,
+            "hash_abc123".into(), // same hash
+            200,
+            Currency::Token,
+            "seller".into(),
+            vec![],
+            2,
         );
         assert!(matches!(result, Err(MarketplaceError::DuplicateContent)));
     }
@@ -757,9 +782,15 @@ mod tests {
         mp.set_balance("other_seller", 1000);
         publish_default_listing(&mut mp);
         let result = mp.publish_listing(
-            "Other Guide".into(), "desc".into(),
-            KnowledgeCategory::General, "hash_abc123".into(), // same hash
-            50, Currency::Token, "other_seller".into(), vec![], 2,
+            "Other Guide".into(),
+            "desc".into(),
+            KnowledgeCategory::General,
+            "hash_abc123".into(), // same hash
+            50,
+            Currency::Token,
+            "other_seller".into(),
+            vec![],
+            2,
         );
         assert!(result.is_ok());
     }
@@ -802,14 +833,18 @@ mod tests {
         let id = publish_default_listing(&mut mp);
         mp.set_balance("poor_buyer", 50);
         let result = mp.purchase_listing(id, "poor_buyer", 5);
-        assert!(matches!(result, Err(MarketplaceError::InsufficientBalance { .. })));
+        assert!(matches!(
+            result,
+            Err(MarketplaceError::InsufficientBalance { .. })
+        ));
     }
 
     #[test]
     fn test_purchase_inactive_listing() {
         let mut mp = make_marketplace();
         let id = publish_default_listing(&mut mp);
-        mp.update_listing(id, "seller", None, Some(ListingStatus::Inactive), None).unwrap();
+        mp.update_listing(id, "seller", None, Some(ListingStatus::Inactive), None)
+            .unwrap();
         let result = mp.purchase_listing(id, "buyer", 5);
         assert!(matches!(result, Err(MarketplaceError::ListingInactive)));
     }
@@ -851,7 +886,9 @@ mod tests {
         let id = publish_default_listing(&mut mp);
         mp.purchase_listing(id, "buyer", 5).unwrap();
 
-        let _rating_id = mp.rate_listing(id, "buyer", 4, Some("Great guide!".into()), 10).unwrap();
+        let _rating_id = mp
+            .rate_listing(id, "buyer", 4, Some("Great guide!".into()), 10)
+            .unwrap();
         assert!(mp.has_rated("buyer", id));
 
         let listing = mp.get(id).unwrap();
@@ -928,7 +965,8 @@ mod tests {
     fn test_update_listing_price() {
         let mut mp = make_marketplace();
         let id = publish_default_listing(&mut mp);
-        mp.update_listing(id, "seller", Some(200), None, None).unwrap();
+        mp.update_listing(id, "seller", Some(200), None, None)
+            .unwrap();
         assert_eq!(mp.get(id).unwrap().price, 200);
     }
 
@@ -936,7 +974,8 @@ mod tests {
     fn test_update_listing_tags() {
         let mut mp = make_marketplace();
         let id = publish_default_listing(&mut mp);
-        mp.update_listing(id, "seller", None, None, Some(vec!["new_tag".into()])).unwrap();
+        mp.update_listing(id, "seller", None, None, Some(vec!["new_tag".into()]))
+            .unwrap();
         assert_eq!(mp.get(id).unwrap().tags, vec!["new_tag"]);
     }
 
@@ -983,10 +1022,17 @@ mod tests {
         let mut mp = make_marketplace();
         publish_default_listing(&mut mp);
         mp.publish_listing(
-            "Trading Tips".into(), "How to trade.".into(),
-            KnowledgeCategory::Economy, "hash2".into(),
-            200, Currency::Token, "seller".into(), vec!["trading".into()], 2,
-        ).unwrap();
+            "Trading Tips".into(),
+            "How to trade.".into(),
+            KnowledgeCategory::Economy,
+            "hash2".into(),
+            200,
+            Currency::Token,
+            "seller".into(),
+            vec!["trading".into()],
+            2,
+        )
+        .unwrap();
         let results = mp.search(&MarketplaceFilter::default());
         assert_eq!(results.len(), 2);
     }
@@ -996,10 +1042,17 @@ mod tests {
         let mut mp = make_marketplace();
         publish_default_listing(&mut mp);
         mp.publish_listing(
-            "Trading Tips".into(), "How to trade.".into(),
-            KnowledgeCategory::Economy, "hash2".into(),
-            200, Currency::Token, "seller".into(), vec!["trading".into()], 2,
-        ).unwrap();
+            "Trading Tips".into(),
+            "How to trade.".into(),
+            KnowledgeCategory::Economy,
+            "hash2".into(),
+            200,
+            Currency::Token,
+            "seller".into(),
+            vec!["trading".into()],
+            2,
+        )
+        .unwrap();
 
         let filter = MarketplaceFilter {
             category: Some(KnowledgeCategory::Economy),
@@ -1015,10 +1068,17 @@ mod tests {
         let mut mp = make_marketplace();
         publish_default_listing(&mut mp); // price 100
         mp.publish_listing(
-            "Trading Tips".into(), "How to trade.".into(),
-            KnowledgeCategory::Economy, "hash2".into(),
-            200, Currency::Token, "seller".into(), vec!["trading".into()], 2,
-        ).unwrap();
+            "Trading Tips".into(),
+            "How to trade.".into(),
+            KnowledgeCategory::Economy,
+            "hash2".into(),
+            200,
+            Currency::Token,
+            "seller".into(),
+            vec!["trading".into()],
+            2,
+        )
+        .unwrap();
 
         let filter = MarketplaceFilter {
             min_price: Some(150),
@@ -1035,10 +1095,17 @@ mod tests {
         let mut mp = make_marketplace();
         publish_default_listing(&mut mp); // tags: winter, survival
         mp.publish_listing(
-            "Trading Tips".into(), "How to trade.".into(),
-            KnowledgeCategory::Economy, "hash2".into(),
-            200, Currency::Token, "seller".into(), vec!["trading".into()], 2,
-        ).unwrap();
+            "Trading Tips".into(),
+            "How to trade.".into(),
+            KnowledgeCategory::Economy,
+            "hash2".into(),
+            200,
+            Currency::Token,
+            "seller".into(),
+            vec!["trading".into()],
+            2,
+        )
+        .unwrap();
 
         let filter = MarketplaceFilter {
             tag: Some("winter".into()),
@@ -1054,10 +1121,17 @@ mod tests {
         let mut mp = make_marketplace();
         publish_default_listing(&mut mp); // "How to Survive Winter"
         mp.publish_listing(
-            "Trading Tips".into(), "How to trade.".into(),
-            KnowledgeCategory::Economy, "hash2".into(),
-            200, Currency::Token, "seller".into(), vec!["trading".into()], 2,
-        ).unwrap();
+            "Trading Tips".into(),
+            "How to trade.".into(),
+            KnowledgeCategory::Economy,
+            "hash2".into(),
+            200,
+            Currency::Token,
+            "seller".into(),
+            vec!["trading".into()],
+            2,
+        )
+        .unwrap();
 
         let filter = MarketplaceFilter {
             query: Some("winter".into()),
@@ -1073,10 +1147,17 @@ mod tests {
         mp.set_balance("other_seller", 1000);
         publish_default_listing(&mut mp);
         mp.publish_listing(
-            "Other Knowledge".into(), "desc".into(),
-            KnowledgeCategory::General, "hash3".into(),
-            50, Currency::Token, "other_seller".into(), vec![], 3,
-        ).unwrap();
+            "Other Knowledge".into(),
+            "desc".into(),
+            KnowledgeCategory::General,
+            "hash3".into(),
+            50,
+            Currency::Token,
+            "other_seller".into(),
+            vec![],
+            3,
+        )
+        .unwrap();
 
         let filter = MarketplaceFilter {
             publisher_id: Some("seller".into()),
@@ -1091,15 +1172,29 @@ mod tests {
     fn test_search_sort_by_price_asc() {
         let mut mp = make_marketplace();
         mp.publish_listing(
-            "Expensive".into(), "desc".into(),
-            KnowledgeCategory::General, "h1".into(),
-            500, Currency::Token, "seller".into(), vec![], 1,
-        ).unwrap();
+            "Expensive".into(),
+            "desc".into(),
+            KnowledgeCategory::General,
+            "h1".into(),
+            500,
+            Currency::Token,
+            "seller".into(),
+            vec![],
+            1,
+        )
+        .unwrap();
         mp.publish_listing(
-            "Cheap".into(), "desc".into(),
-            KnowledgeCategory::General, "h2".into(),
-            50, Currency::Token, "seller".into(), vec![], 2,
-        ).unwrap();
+            "Cheap".into(),
+            "desc".into(),
+            KnowledgeCategory::General,
+            "h2".into(),
+            50,
+            Currency::Token,
+            "seller".into(),
+            vec![],
+            2,
+        )
+        .unwrap();
 
         let filter = MarketplaceFilter {
             sort: Some(MarketplaceSort::PriceAsc),
@@ -1115,16 +1210,32 @@ mod tests {
         let mut mp = make_marketplace();
         mp.set_balance("buyer2", 5_000);
 
-        let id1 = mp.publish_listing(
-            "Good Knowledge".into(), "desc".into(),
-            KnowledgeCategory::General, "h1".into(),
-            100, Currency::Token, "seller".into(), vec![], 1,
-        ).unwrap();
-        let id2 = mp.publish_listing(
-            "Bad Knowledge".into(), "desc".into(),
-            KnowledgeCategory::General, "h2".into(),
-            100, Currency::Token, "seller".into(), vec![], 2,
-        ).unwrap();
+        let id1 = mp
+            .publish_listing(
+                "Good Knowledge".into(),
+                "desc".into(),
+                KnowledgeCategory::General,
+                "h1".into(),
+                100,
+                Currency::Token,
+                "seller".into(),
+                vec![],
+                1,
+            )
+            .unwrap();
+        let id2 = mp
+            .publish_listing(
+                "Bad Knowledge".into(),
+                "desc".into(),
+                KnowledgeCategory::General,
+                "h2".into(),
+                100,
+                Currency::Token,
+                "seller".into(),
+                vec![],
+                2,
+            )
+            .unwrap();
 
         mp.purchase_listing(id1, "buyer", 5).unwrap();
         mp.rate_listing(id1, "buyer", 5, None, 10).unwrap();
@@ -1144,23 +1255,48 @@ mod tests {
     #[test]
     fn test_search_excludes_inactive_and_delisted() {
         let mut mp = make_marketplace();
-        let _id1 = mp.publish_listing(
-            "Active".into(), "desc".into(),
-            KnowledgeCategory::General, "h1".into(),
-            100, Currency::Token, "seller".into(), vec![], 1,
-        ).unwrap();
-        let id2 = mp.publish_listing(
-            "Inactive".into(), "desc".into(),
-            KnowledgeCategory::General, "h2".into(),
-            100, Currency::Token, "seller".into(), vec![], 2,
-        ).unwrap();
-        let id3 = mp.publish_listing(
-            "Delisted".into(), "desc".into(),
-            KnowledgeCategory::General, "h3".into(),
-            100, Currency::Token, "seller".into(), vec![], 3,
-        ).unwrap();
+        let _id1 = mp
+            .publish_listing(
+                "Active".into(),
+                "desc".into(),
+                KnowledgeCategory::General,
+                "h1".into(),
+                100,
+                Currency::Token,
+                "seller".into(),
+                vec![],
+                1,
+            )
+            .unwrap();
+        let id2 = mp
+            .publish_listing(
+                "Inactive".into(),
+                "desc".into(),
+                KnowledgeCategory::General,
+                "h2".into(),
+                100,
+                Currency::Token,
+                "seller".into(),
+                vec![],
+                2,
+            )
+            .unwrap();
+        let id3 = mp
+            .publish_listing(
+                "Delisted".into(),
+                "desc".into(),
+                KnowledgeCategory::General,
+                "h3".into(),
+                100,
+                Currency::Token,
+                "seller".into(),
+                vec![],
+                3,
+            )
+            .unwrap();
 
-        mp.update_listing(id2, "seller", None, Some(ListingStatus::Inactive), None).unwrap();
+        mp.update_listing(id2, "seller", None, Some(ListingStatus::Inactive), None)
+            .unwrap();
         mp.delist_listing(id3, "seller").unwrap();
 
         let results = mp.search(&MarketplaceFilter::default());
@@ -1173,16 +1309,32 @@ mod tests {
         let mut mp = make_marketplace();
         mp.set_balance("buyer2", 5_000);
 
-        let id1 = mp.publish_listing(
-            "Good".into(), "desc".into(),
-            KnowledgeCategory::General, "h1".into(),
-            100, Currency::Token, "seller".into(), vec![], 1,
-        ).unwrap();
-        let id2 = mp.publish_listing(
-            "Bad".into(), "desc".into(),
-            KnowledgeCategory::General, "h2".into(),
-            100, Currency::Token, "seller".into(), vec![], 2,
-        ).unwrap();
+        let id1 = mp
+            .publish_listing(
+                "Good".into(),
+                "desc".into(),
+                KnowledgeCategory::General,
+                "h1".into(),
+                100,
+                Currency::Token,
+                "seller".into(),
+                vec![],
+                1,
+            )
+            .unwrap();
+        let id2 = mp
+            .publish_listing(
+                "Bad".into(),
+                "desc".into(),
+                KnowledgeCategory::General,
+                "h2".into(),
+                100,
+                Currency::Token,
+                "seller".into(),
+                vec![],
+                2,
+            )
+            .unwrap();
 
         mp.purchase_listing(id1, "buyer", 5).unwrap();
         mp.rate_listing(id1, "buyer", 5, None, 10).unwrap();
@@ -1204,7 +1356,8 @@ mod tests {
     #[test]
     fn test_transfer_tokens() {
         let mut mp = make_marketplace();
-        mp.transfer("seller", "buyer", 500, Currency::Token).unwrap();
+        mp.transfer("seller", "buyer", 500, Currency::Token)
+            .unwrap();
         assert_eq!(mp.get_balance("seller"), 9_500);
         assert_eq!(mp.get_balance("buyer"), 5_500);
     }
@@ -1213,7 +1366,10 @@ mod tests {
     fn test_transfer_insufficient_balance() {
         let mut mp = make_marketplace();
         let result = mp.transfer("buyer", "seller", 10_000, Currency::Token);
-        assert!(matches!(result, Err(MarketplaceError::InsufficientBalance { .. })));
+        assert!(matches!(
+            result,
+            Err(MarketplaceError::InsufficientBalance { .. })
+        ));
     }
 
     // ── Query helpers ──────────────────────────────────────
@@ -1222,12 +1378,21 @@ mod tests {
     fn test_list_active() {
         let mut mp = make_marketplace();
         let id1 = publish_default_listing(&mut mp);
-        let id2 = mp.publish_listing(
-            "Another".into(), "desc".into(),
-            KnowledgeCategory::General, "h2".into(),
-            50, Currency::Token, "seller".into(), vec![], 2,
-        ).unwrap();
-        mp.update_listing(id2, "seller", None, Some(ListingStatus::Inactive), None).unwrap();
+        let id2 = mp
+            .publish_listing(
+                "Another".into(),
+                "desc".into(),
+                KnowledgeCategory::General,
+                "h2".into(),
+                50,
+                Currency::Token,
+                "seller".into(),
+                vec![],
+                2,
+            )
+            .unwrap();
+        mp.update_listing(id2, "seller", None, Some(ListingStatus::Inactive), None)
+            .unwrap();
 
         let active = mp.list_active();
         assert_eq!(active.len(), 1);
@@ -1255,17 +1420,19 @@ mod tests {
         let mut mp = make_marketplace();
 
         // Publish
-        let id = mp.publish_listing(
-            "Advanced Strategy".into(),
-            "Win every time.".into(),
-            KnowledgeCategory::Strategy,
-            "hash_xyz".into(),
-            500,
-            Currency::Token,
-            "seller".into(),
-            vec!["strategy".into(), "advanced".into()],
-            1,
-        ).unwrap();
+        let id = mp
+            .publish_listing(
+                "Advanced Strategy".into(),
+                "Win every time.".into(),
+                KnowledgeCategory::Strategy,
+                "hash_xyz".into(),
+                500,
+                Currency::Token,
+                "seller".into(),
+                vec!["strategy".into(), "advanced".into()],
+                1,
+            )
+            .unwrap();
 
         // Purchase
         let _record = mp.purchase_listing(id, "buyer", 10).unwrap();
@@ -1273,7 +1440,8 @@ mod tests {
         assert_eq!(mp.get_balance("buyer"), 4_500);
 
         // Rate
-        mp.rate_listing(id, "buyer", 5, Some("Excellent!".into()), 15).unwrap();
+        mp.rate_listing(id, "buyer", 5, Some("Excellent!".into()), 15)
+            .unwrap();
         let listing = mp.get(id).unwrap();
         assert_eq!(listing.purchase_count, 1);
         assert_eq!(listing.average_rating(), 5.0);
@@ -1364,7 +1532,11 @@ mod tests {
 
     #[test]
     fn test_listing_status_serialization() {
-        for status in [ListingStatus::Active, ListingStatus::Inactive, ListingStatus::Delisted] {
+        for status in [
+            ListingStatus::Active,
+            ListingStatus::Inactive,
+            ListingStatus::Delisted,
+        ] {
             let json = serde_json::to_string(&status).unwrap();
             let back: ListingStatus = serde_json::from_str(&json).unwrap();
             assert_eq!(status, back);
@@ -1374,9 +1546,12 @@ mod tests {
     #[test]
     fn test_marketplace_sort_serialization() {
         for sort in [
-            MarketplaceSort::Newest, MarketplaceSort::Oldest,
-            MarketplaceSort::PriceAsc, MarketplaceSort::PriceDesc,
-            MarketplaceSort::RatingDesc, MarketplaceSort::PurchasesDesc,
+            MarketplaceSort::Newest,
+            MarketplaceSort::Oldest,
+            MarketplaceSort::PriceAsc,
+            MarketplaceSort::PriceDesc,
+            MarketplaceSort::RatingDesc,
+            MarketplaceSort::PurchasesDesc,
         ] {
             let json = serde_json::to_string(&sort).unwrap();
             let back: MarketplaceSort = serde_json::from_str(&json).unwrap();
@@ -1388,11 +1563,19 @@ mod tests {
 
     #[test]
     fn test_error_display() {
-        assert!(MarketplaceError::NotFound("test".into()).to_string().contains("test"));
+        assert!(MarketplaceError::NotFound("test".into())
+            .to_string()
+            .contains("test"));
         assert!(MarketplaceError::SelfPurchase.to_string().contains("own"));
-        assert!(MarketplaceError::InvalidRating.to_string().contains("1 and 5"));
-        assert!(MarketplaceError::InvalidPrice.to_string().contains("greater than 0"));
-        assert!(MarketplaceError::Unauthorized("not allowed".into()).to_string().contains("unauthorized"));
+        assert!(MarketplaceError::InvalidRating
+            .to_string()
+            .contains("1 and 5"));
+        assert!(MarketplaceError::InvalidPrice
+            .to_string()
+            .contains("greater than 0"));
+        assert!(MarketplaceError::Unauthorized("not allowed".into())
+            .to_string()
+            .contains("unauthorized"));
     }
 
     // ── Event bus integration ──────────────────────────────
@@ -1404,15 +1587,28 @@ mod tests {
         let mut mp = Marketplace::with_event_bus(bus);
         mp.set_balance("seller", 1000);
 
-        let id = mp.publish_listing(
-            "Test".into(), "desc".into(),
-            KnowledgeCategory::General, "h".into(),
-            100, Currency::Token, "seller".into(), vec![], 1,
-        ).unwrap();
+        let id = mp
+            .publish_listing(
+                "Test".into(),
+                "desc".into(),
+                KnowledgeCategory::General,
+                "h".into(),
+                100,
+                Currency::Token,
+                "seller".into(),
+                vec![],
+                1,
+            )
+            .unwrap();
 
         let event = rx.try_recv().unwrap();
         match event {
-            WorldEvent::KnowledgeListed { listing_id, publisher, price, currency } => {
+            WorldEvent::KnowledgeListed {
+                listing_id,
+                publisher,
+                price,
+                currency,
+            } => {
                 assert_eq!(listing_id, id.to_string());
                 assert_eq!(publisher, "seller");
                 assert_eq!(price, 100);
@@ -1430,18 +1626,32 @@ mod tests {
         mp.set_balance("seller", 1000);
         mp.set_balance("buyer", 1000);
 
-        let id = mp.publish_listing(
-            "Test".into(), "desc".into(),
-            KnowledgeCategory::General, "h".into(),
-            100, Currency::Token, "seller".into(), vec![], 1,
-        ).unwrap();
+        let id = mp
+            .publish_listing(
+                "Test".into(),
+                "desc".into(),
+                KnowledgeCategory::General,
+                "h".into(),
+                100,
+                Currency::Token,
+                "seller".into(),
+                vec![],
+                1,
+            )
+            .unwrap();
         let _ = rx.try_recv().unwrap(); // KnowledgeListed
 
         mp.purchase_listing(id, "buyer", 5).unwrap();
 
         let event = rx.try_recv().unwrap();
         match event {
-            WorldEvent::KnowledgePurchased { listing_id, buyer, seller, price, currency } => {
+            WorldEvent::KnowledgePurchased {
+                listing_id,
+                buyer,
+                seller,
+                price,
+                currency,
+            } => {
                 assert_eq!(listing_id, id.to_string());
                 assert_eq!(buyer, "buyer");
                 assert_eq!(seller, "seller");
@@ -1460,11 +1670,19 @@ mod tests {
         mp.set_balance("seller", 1000);
         mp.set_balance("buyer", 1000);
 
-        let id = mp.publish_listing(
-            "Test".into(), "desc".into(),
-            KnowledgeCategory::General, "h".into(),
-            100, Currency::Token, "seller".into(), vec![], 1,
-        ).unwrap();
+        let id = mp
+            .publish_listing(
+                "Test".into(),
+                "desc".into(),
+                KnowledgeCategory::General,
+                "h".into(),
+                100,
+                Currency::Token,
+                "seller".into(),
+                vec![],
+                1,
+            )
+            .unwrap();
         let _ = rx.try_recv().unwrap(); // KnowledgeListed
 
         mp.purchase_listing(id, "buyer", 5).unwrap();
@@ -1473,7 +1691,12 @@ mod tests {
         mp.rate_listing(id, "buyer", 4, None, 10).unwrap();
         let event = rx.try_recv().unwrap();
         match event {
-            WorldEvent::KnowledgeRated { listing_id, rater, score, average_rating } => {
+            WorldEvent::KnowledgeRated {
+                listing_id,
+                rater,
+                score,
+                average_rating,
+            } => {
                 assert_eq!(listing_id, id.to_string());
                 assert_eq!(rater, "buyer");
                 assert_eq!(score, 4);

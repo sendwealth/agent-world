@@ -142,7 +142,12 @@ impl ReputationSystem {
         self.last_change_tick.insert(agent_id.to_string(), tick);
 
         if (old - clamped).abs() > f64::EPSILON {
-            self.emit_change(agent_id, old, clamped, ReputationChangeReason::ManualAdjustment);
+            self.emit_change(
+                agent_id,
+                old,
+                clamped,
+                ReputationChangeReason::ManualAdjustment,
+            );
         }
     }
 
@@ -178,7 +183,12 @@ impl ReputationSystem {
     /// Returns the actual reputation change applied.
     pub fn on_task_completed_on_time(&mut self, agent_id: &str, tick: u64) -> f64 {
         let bonus = self.config.on_time_bonus;
-        self.apply_delta(agent_id, bonus, tick, ReputationChangeReason::TaskCompletedOnTime)
+        self.apply_delta(
+            agent_id,
+            bonus,
+            tick,
+            ReputationChangeReason::TaskCompletedOnTime,
+        )
     }
 
     /// Apply a reputation penalty when a claimed task expires (breach of contract).
@@ -186,13 +196,23 @@ impl ReputationSystem {
     /// Returns the actual reputation change applied (negative).
     pub fn on_task_breach(&mut self, agent_id: &str, tick: u64) -> f64 {
         let penalty = -self.config.breach_penalty;
-        self.apply_delta(agent_id, penalty, tick, ReputationChangeReason::TaskBreachExpired)
+        self.apply_delta(
+            agent_id,
+            penalty,
+            tick,
+            ReputationChangeReason::TaskBreachExpired,
+        )
     }
 
     /// Apply a small reputation penalty when a published task expires (no assignee).
     pub fn on_task_expired_published(&mut self, publisher_id: &str, tick: u64) -> f64 {
         let penalty = -self.config.expiry_penalty;
-        self.apply_delta(publisher_id, penalty, tick, ReputationChangeReason::TaskExpiredPublished)
+        self.apply_delta(
+            publisher_id,
+            penalty,
+            tick,
+            ReputationChangeReason::TaskExpiredPublished,
+        )
     }
 
     /// Apply a reputation change with the standard task completion bonus.
@@ -222,7 +242,12 @@ impl ReputationSystem {
                 if actual_delta.abs() > f64::EPSILON {
                     self.scores.insert(agent_id.clone(), new_rep);
                     self.last_change_tick.insert(agent_id.clone(), current_tick);
-                    self.emit_change(&agent_id, rep, new_rep, ReputationChangeReason::TimeDecayRecovery);
+                    self.emit_change(
+                        &agent_id,
+                        rep,
+                        new_rep,
+                        ReputationChangeReason::TimeDecayRecovery,
+                    );
                     changes.push((agent_id, actual_delta));
                 }
             }
@@ -581,7 +606,12 @@ mod tests {
 
         let event = rx.try_recv().unwrap();
         match event {
-            WorldEvent::ReputationChanged { agent_id, old_reputation, new_reputation, reason } => {
+            WorldEvent::ReputationChanged {
+                agent_id,
+                old_reputation,
+                new_reputation,
+                reason,
+            } => {
                 assert_eq!(agent_id, "worker");
                 assert_eq!(old_reputation, 0.0);
                 assert_eq!(new_reputation, 1.0);

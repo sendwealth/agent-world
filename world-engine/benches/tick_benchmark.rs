@@ -16,12 +16,10 @@
 use std::sync::Arc;
 use std::time::Duration;
 
-use criterion::{
-    black_box, criterion_group, criterion_main, BenchmarkId, Criterion, Throughput,
-};
+use criterion::{black_box, criterion_group, criterion_main, BenchmarkId, Criterion, Throughput};
 
-use agent_world_engine::economy::token_burn::{AgentRecord, ConsumptionConfig, TokenBurnEngine};
 use agent_world_engine::economy::reputation::ReputationConfig;
+use agent_world_engine::economy::token_burn::{AgentRecord, ConsumptionConfig, TokenBurnEngine};
 use agent_world_engine::lifecycle::LifecycleConfig;
 use agent_world_engine::rules::default_registry;
 use agent_world_engine::world::enums::AgentPhase;
@@ -248,8 +246,7 @@ fn bench_event_bus_scaling(c: &mut Criterion) {
             |b, &(subs, evts)| {
                 b.iter(|| {
                     let bus = EventBus::new(evts + 256);
-                    let mut receivers: Vec<_> =
-                        (0..subs).map(|_| bus.subscribe()).collect();
+                    let mut receivers: Vec<_> = (0..subs).map(|_| bus.subscribe()).collect();
                     for i in 0..evts {
                         bus.emit(WorldEvent::TickAdvanced { tick: i as u64 });
                     }
@@ -323,8 +320,7 @@ fn bench_snapshot_scaling(c: &mut Criterion) {
             &agent_count,
             |b, &_agent_count| {
                 b.iter(|| {
-                    let state =
-                        agent_world_engine::world::engine::WorldState::with_defaults();
+                    let state = agent_world_engine::world::engine::WorldState::with_defaults();
                     black_box(&state);
                     // Snapshot is async; just measure agent creation overhead
                     // Actual async benchmarking would need tokio runtime

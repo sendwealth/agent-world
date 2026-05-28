@@ -39,11 +39,7 @@ impl Subsystem for TokenBurnSubsystem {
         "token_burn"
     }
 
-    fn on_tick(
-        &self,
-        tick: u64,
-        agents: &mut [(Uuid, u64, AgentRecord)],
-    ) -> Vec<WorldEvent> {
+    fn on_tick(&self, tick: u64, agents: &mut [(Uuid, u64, AgentRecord)]) -> Vec<WorldEvent> {
         let mut events = Vec::new();
 
         for (_id, _spawn_tick, agent) in agents.iter_mut() {
@@ -96,11 +92,7 @@ impl Subsystem for DeathJudgmentSubsystem {
         "death_judgment"
     }
 
-    fn on_tick(
-        &self,
-        _tick: u64,
-        agents: &mut [(Uuid, u64, AgentRecord)],
-    ) -> Vec<WorldEvent> {
+    fn on_tick(&self, _tick: u64, agents: &mut [(Uuid, u64, AgentRecord)]) -> Vec<WorldEvent> {
         let mut events = Vec::new();
 
         for (_id, _spawn_tick, agent) in agents.iter_mut() {
@@ -157,11 +149,7 @@ impl Subsystem for RuleCheckSubsystem {
         "rule_check"
     }
 
-    fn on_tick(
-        &self,
-        tick: u64,
-        agents: &mut [(Uuid, u64, AgentRecord)],
-    ) -> Vec<WorldEvent> {
+    fn on_tick(&self, tick: u64, agents: &mut [(Uuid, u64, AgentRecord)]) -> Vec<WorldEvent> {
         let all_results = self.registry.evaluate_all(tick, agents);
         let mut events = Vec::new();
         for (_agent_id, results) in all_results {
@@ -189,7 +177,9 @@ pub struct EventBroadcastSubsystem {
 
 impl EventBroadcastSubsystem {
     pub fn new(event_bus: Arc<EventBus>) -> Self {
-        Self { _event_bus: event_bus }
+        Self {
+            _event_bus: event_bus,
+        }
     }
 }
 
@@ -198,11 +188,7 @@ impl Subsystem for EventBroadcastSubsystem {
         "event_broadcast"
     }
 
-    fn on_tick(
-        &self,
-        tick: u64,
-        _agents: &mut [(Uuid, u64, AgentRecord)],
-    ) -> Vec<WorldEvent> {
+    fn on_tick(&self, tick: u64, _agents: &mut [(Uuid, u64, AgentRecord)]) -> Vec<WorldEvent> {
         vec![WorldEvent::TickAdvanced { tick }]
     }
 }
@@ -232,11 +218,7 @@ impl Subsystem for LifecycleAgingSubsystem {
         "lifecycle_aging"
     }
 
-    fn on_tick(
-        &self,
-        tick: u64,
-        agents: &mut [(Uuid, u64, AgentRecord)],
-    ) -> Vec<WorldEvent> {
+    fn on_tick(&self, tick: u64, agents: &mut [(Uuid, u64, AgentRecord)]) -> Vec<WorldEvent> {
         let mut events = Vec::new();
 
         for (_id, spawn_tick, agent) in agents.iter_mut() {
@@ -298,11 +280,7 @@ impl Subsystem for ReputationDecaySubsystem {
         "reputation_decay"
     }
 
-    fn on_tick(
-        &self,
-        tick: u64,
-        _agents: &mut [(Uuid, u64, AgentRecord)],
-    ) -> Vec<WorldEvent> {
+    fn on_tick(&self, tick: u64, _agents: &mut [(Uuid, u64, AgentRecord)]) -> Vec<WorldEvent> {
         let mut system = self.system.lock().unwrap();
         let _changes = system.process_time_decay(tick);
         // Reputation changes are emitted internally by ReputationSystem
@@ -326,8 +304,8 @@ mod tests {
                 tokens,
                 skills: HashMap::new(),
                 personality: String::new(),
-            tasks_completed: 0,
-            tasks_attempted: 0,
+                tasks_completed: 0,
+                tasks_attempted: 0,
             },
         )
     }
@@ -357,7 +335,7 @@ mod tests {
 
         assert_eq!(agents[0].2.tokens, 100); // dead unchanged
         assert_eq!(agents[1].2.tokens, 100); // birth unchanged
-        assert_eq!(agents[2].2.tokens, 90);  // adult burned
+        assert_eq!(agents[2].2.tokens, 90); // adult burned
         assert_eq!(events.len(), 1); // only adult event
     }
 

@@ -8,15 +8,33 @@
 //!
 pub mod a2a;
 pub mod api;
-pub mod auth;
+pub mod api_ab_experiment;
+pub mod api_agents_ext;
 pub mod api_auth;
+pub mod api_auth_handlers;
+pub mod api_bank;
+pub mod api_behavior_log;
+pub mod api_buildings;
+pub mod api_diplomacy;
+pub mod api_dsl;
 pub mod api_experiment;
 pub mod api_export;
-pub mod api_research;
-pub mod api_behavior_log;
+pub mod api_federation;
+pub mod api_governance;
+pub mod api_human;
+pub mod api_investment;
+pub mod api_marketplace;
 pub mod api_network_graph;
-pub mod api_ab_experiment;
+pub mod api_org;
+pub mod api_population;
 pub mod api_report;
+pub mod api_reputation;
+pub mod api_research;
+pub mod api_stocks;
+pub mod api_tasks;
+pub mod api_traces;
+pub mod api_world;
+pub mod auth;
 pub mod config;
 pub mod dsl;
 pub mod economy;
@@ -52,12 +70,11 @@ pub mod agentworld {
 }
 
 pub use rules::{
-    Rule, RuleCategory, RuleConflictPolicy, RuleContext, RuleRegistry, RuleResult,
-    TokenConsumptionRule, DeathJudgmentRule, NewbieProtectionRule,
-    VoluntaryTradingRule, AntiMonopolyRule, DebtCeilingRule,
-    CommunicationHonestyRule, ContractBindingRule,
-    ResourceExhaustionRule, ReproductionRunawayRule,
-    default_registry, custom_registry, custom_registry_full,
+    custom_registry, custom_registry_full, default_registry, AntiMonopolyRule,
+    CommunicationHonestyRule, ContractBindingRule, DeathJudgmentRule, DebtCeilingRule,
+    NewbieProtectionRule, ReproductionRunawayRule, ResourceExhaustionRule, Rule, RuleCategory,
+    RuleConflictPolicy, RuleContext, RuleRegistry, RuleResult, TokenConsumptionRule,
+    VoluntaryTradingRule,
 };
 
 pub use world::discovery::{
@@ -65,34 +82,27 @@ pub use world::discovery::{
 };
 
 pub use world::{
-    EventBus, FilteredReceiver, SharedEventBus, WorldEvent, EventType,
-    WorldState, Subsystem, SubsystemRegistry,
-    Scheduler,
-    GenesisConfig,
-    TokenBurnSubsystem, DeathJudgmentSubsystem,
-    RuleCheckSubsystem, EventBroadcastSubsystem,
-    TickProfiler, TickPhase, TickProfileReport, TickTiming,
+    DeathJudgmentSubsystem, EventBroadcastSubsystem, EventBus, EventType, FilteredReceiver,
+    GenesisConfig, RuleCheckSubsystem, Scheduler, SharedEventBus, Subsystem, SubsystemRegistry,
+    TickPhase, TickProfileReport, TickProfiler, TickTiming, TokenBurnSubsystem, WorldEvent,
+    WorldState,
 };
 
 pub use evolution::EvolutionSubsystem;
 
 pub use dsl::{
-    DslRule, DslCondition, DslAction, RuleScope, TriggerConfig,
-    ParseResult, RuleTemplate,
-    parse_yaml, parse_yaml_multi, parse_json,
-    to_rule_conditions, to_rule_effects, to_rule_type,
-    to_yaml, to_json,
-    builtin_templates, get_template,
+    builtin_templates, get_template, parse_json, parse_yaml, parse_yaml_multi, to_json,
+    to_rule_conditions, to_rule_effects, to_rule_type, to_yaml, DslAction, DslCondition, DslRule,
+    ParseResult, RuleScope, RuleTemplate, TriggerConfig,
 };
 
 pub use persistence::{
-    SerializableAgentEntry, SerializableAgentRecord, SerializableWorldState,
-    SqlitePersistence, StatePersistence,
+    SerializableAgentEntry, SerializableAgentRecord, SerializableWorldState, SqlitePersistence,
+    StatePersistence,
 };
 
 pub use snapshot::{
-    SnapshotEngine, SnapshotEngineHandle, SnapshotRequest,
-    SnapshotStorage, CompressionStats,
-    WorldSnapshot, AgentSnapshot, SnapshotConfig, SnapshotDelta,
-    SnapshotKind, SnapshotRecord,
+    AgentSnapshot, CompressionStats, SnapshotConfig, SnapshotDelta, SnapshotEngine,
+    SnapshotEngineHandle, SnapshotKind, SnapshotRecord, SnapshotRequest, SnapshotStorage,
+    WorldSnapshot,
 };

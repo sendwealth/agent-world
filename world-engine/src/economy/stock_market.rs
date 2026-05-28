@@ -130,7 +130,10 @@ impl Order {
 
     /// Whether the order is still active (can be filled).
     pub fn is_active(&self) -> bool {
-        matches!(self.status, OrderStatus::Open | OrderStatus::PartiallyFilled)
+        matches!(
+            self.status,
+            OrderStatus::Open | OrderStatus::PartiallyFilled
+        )
     }
 }
 
@@ -354,12 +357,16 @@ impl StockMarket {
 
     /// Get a stock listing by org ID.
     pub fn get_stock_by_org(&self, org_id: &str) -> Option<&StockListing> {
-        self.org_to_stock.get(org_id).and_then(|id| self.stocks.get(id))
+        self.org_to_stock
+            .get(org_id)
+            .and_then(|id| self.stocks.get(id))
     }
 
     /// Get a stock listing by ticker.
     pub fn get_stock_by_ticker(&self, ticker: &str) -> Option<&StockListing> {
-        self.ticker_to_stock.get(&ticker.to_uppercase()).and_then(|id| self.stocks.get(id))
+        self.ticker_to_stock
+            .get(&ticker.to_uppercase())
+            .and_then(|id| self.stocks.get(id))
     }
 
     /// List all stocks.
@@ -384,7 +391,9 @@ impl StockMarket {
         org_treasury: u64,
         tick: u64,
     ) -> Result<StockListing, StockMarketError> {
-        let stock = self.stocks.get_mut(stock_id)
+        let stock = self
+            .stocks
+            .get_mut(stock_id)
             .ok_or_else(|| StockMarketError::StockNotFound(stock_id.to_string()))?;
 
         if stock.status == ListingStatus::Listed {
@@ -396,14 +405,16 @@ impl StockMarket {
 
         // Validate IPO conditions
         if org_member_count < IPO_MIN_MEMBERS {
-            return Err(StockMarketError::IpoConditionsNotMet(
-                format!("need at least {} members, have {}", IPO_MIN_MEMBERS, org_member_count)
-            ));
+            return Err(StockMarketError::IpoConditionsNotMet(format!(
+                "need at least {} members, have {}",
+                IPO_MIN_MEMBERS, org_member_count
+            )));
         }
         if org_treasury < IPO_MIN_TREASURY {
-            return Err(StockMarketError::IpoConditionsNotMet(
-                format!("need at least {} treasury, have {}", IPO_MIN_TREASURY, org_treasury)
-            ));
+            return Err(StockMarketError::IpoConditionsNotMet(format!(
+                "need at least {} treasury, have {}",
+                IPO_MIN_TREASURY, org_treasury
+            )));
         }
 
         stock.status = ListingStatus::Listed;
@@ -432,16 +443,23 @@ impl StockMarket {
         to_agent: &str,
         quantity: u64,
     ) -> Result<(), StockMarketError> {
-        let _stock = self.stocks.get(stock_id)
+        let _stock = self
+            .stocks
+            .get(stock_id)
             .ok_or_else(|| StockMarketError::StockNotFound(stock_id.to_string()))?;
 
         // Debit from sender
         let from_key = (stock_id.to_string(), from_agent.to_string());
-        let from_holding = self.holdings.get_mut(&from_key)
+        let from_holding = self
+            .holdings
+            .get_mut(&from_key)
             .ok_or(StockMarketError::NotShareholder)?;
 
         if from_holding.quantity < quantity {
-            return Err(StockMarketError::InsufficientShares(from_holding.quantity, quantity));
+            return Err(StockMarketError::InsufficientShares(
+                from_holding.quantity,
+                quantity,
+            ));
         }
         from_holding.quantity -= quantity;
         if from_holding.quantity == 0 {
@@ -469,17 +487,24 @@ impl StockMarket {
 
     /// Get share holding for an agent in a stock.
     pub fn get_holding(&self, stock_id: &str, agent_id: &str) -> Option<&ShareHolding> {
-        self.holdings.get(&(stock_id.to_string(), agent_id.to_string()))
+        self.holdings
+            .get(&(stock_id.to_string(), agent_id.to_string()))
     }
 
     /// Get all holdings for an agent across all stocks.
     pub fn get_agent_holdings(&self, agent_id: &str) -> Vec<&ShareHolding> {
-        self.holdings.values().filter(|h| h.agent_id == agent_id).collect()
+        self.holdings
+            .values()
+            .filter(|h| h.agent_id == agent_id)
+            .collect()
     }
 
     /// Get all holdings for a stock.
     pub fn get_stock_holdings(&self, stock_id: &str) -> Vec<&ShareHolding> {
-        self.holdings.values().filter(|h| h.stock_id == stock_id).collect()
+        self.holdings
+            .values()
+            .filter(|h| h.stock_id == stock_id)
+            .collect()
     }
 
     /// Credit shares to an agent (used for IPO allocation and integration tests).
@@ -494,13 +519,23 @@ impl StockMarket {
     }
 
     /// Internal: debit shares from an agent. Returns error if insufficient.
-    fn debit_shares(&mut self, stock_id: &str, agent_id: &str, quantity: u64) -> Result<(), StockMarketError> {
+    fn debit_shares(
+        &mut self,
+        stock_id: &str,
+        agent_id: &str,
+        quantity: u64,
+    ) -> Result<(), StockMarketError> {
         let key = (stock_id.to_string(), agent_id.to_string());
-        let holding = self.holdings.get_mut(&key)
+        let holding = self
+            .holdings
+            .get_mut(&key)
             .ok_or(StockMarketError::NotShareholder)?;
 
         if holding.quantity < quantity {
-            return Err(StockMarketError::InsufficientShares(holding.quantity, quantity));
+            return Err(StockMarketError::InsufficientShares(
+                holding.quantity,
+                quantity,
+            ));
         }
         holding.quantity -= quantity;
         if holding.quantity == 0 {
@@ -529,7 +564,9 @@ impl StockMarket {
             return Err(StockMarketError::InvalidQuantity);
         }
 
-        let stock = self.stocks.get(stock_id)
+        let stock = self
+            .stocks
+            .get(stock_id)
             .ok_or_else(|| StockMarketError::StockNotFound(stock_id.to_string()))?;
 
         if stock.status != ListingStatus::Listed {
@@ -590,7 +627,9 @@ impl StockMarket {
             return Err(StockMarketError::InvalidQuantity);
         }
 
-        let stock = self.stocks.get(stock_id)
+        let stock = self
+            .stocks
+            .get(stock_id)
             .ok_or_else(|| StockMarketError::StockNotFound(stock_id.to_string()))?;
 
         if stock.status != ListingStatus::Listed {
@@ -598,7 +637,9 @@ impl StockMarket {
         }
 
         // Check agent holds enough shares
-        let held = self.holdings.get(&(stock_id.to_string(), agent_id.to_string()))
+        let held = self
+            .holdings
+            .get(&(stock_id.to_string(), agent_id.to_string()))
             .map(|h| h.quantity)
             .unwrap_or(0);
         if held < quantity {
@@ -638,8 +679,14 @@ impl StockMarket {
     }
 
     /// Cancel an open order.
-    pub fn cancel_order(&mut self, order_id: &str, requester: &str) -> Result<Order, StockMarketError> {
-        let order = self.orders.get_mut(order_id)
+    pub fn cancel_order(
+        &mut self,
+        order_id: &str,
+        requester: &str,
+    ) -> Result<Order, StockMarketError> {
+        let order = self
+            .orders
+            .get_mut(order_id)
             .ok_or_else(|| StockMarketError::OrderNotFound(order_id.to_string()))?;
 
         if order.agent_id != requester {
@@ -660,7 +707,8 @@ impl StockMarket {
 
     /// List orders, optionally filtered by stock and/or agent.
     pub fn list_orders(&self, stock_id: Option<&str>, agent_id: Option<&str>) -> Vec<&Order> {
-        self.orders.values()
+        self.orders
+            .values()
             .filter(|o| stock_id.is_none_or(|s| o.stock_id == s))
             .filter(|o| agent_id.is_none_or(|a| o.agent_id == a))
             .collect()
@@ -668,7 +716,8 @@ impl StockMarket {
 
     /// List trades, optionally filtered by stock.
     pub fn list_trades(&self, stock_id: Option<&str>) -> Vec<&Trade> {
-        self.trades.iter()
+        self.trades
+            .iter()
             .filter(|t| stock_id.is_none_or(|s| t.stock_id == s))
             .collect()
     }
@@ -677,15 +726,27 @@ impl StockMarket {
     /// Buy orders sorted by price descending (best bid first).
     /// Sell orders sorted by price ascending (best ask first).
     pub fn get_order_book(&self, stock_id: &str) -> (Vec<&Order>, Vec<&Order>) {
-        let mut buys: Vec<&Order> = self.orders.values()
+        let mut buys: Vec<&Order> = self
+            .orders
+            .values()
             .filter(|o| o.stock_id == stock_id && o.order_type == OrderType::Buy && o.is_active())
             .collect();
-        buys.sort_by(|a, b| b.price.cmp(&a.price).then_with(|| a.created_tick.cmp(&b.created_tick)));
+        buys.sort_by(|a, b| {
+            b.price
+                .cmp(&a.price)
+                .then_with(|| a.created_tick.cmp(&b.created_tick))
+        });
 
-        let mut sells: Vec<&Order> = self.orders.values()
+        let mut sells: Vec<&Order> = self
+            .orders
+            .values()
             .filter(|o| o.stock_id == stock_id && o.order_type == OrderType::Sell && o.is_active())
             .collect();
-        sells.sort_by(|a, b| a.price.cmp(&b.price).then_with(|| a.created_tick.cmp(&b.created_tick)));
+        sells.sort_by(|a, b| {
+            a.price
+                .cmp(&b.price)
+                .then_with(|| a.created_tick.cmp(&b.created_tick))
+        });
 
         (buys, sells)
     }
@@ -714,10 +775,14 @@ impl StockMarket {
         let mut sell_remaining: HashMap<String, u64> = HashMap::new();
 
         for buy in &buys {
-            let buy_rem = buy_remaining.entry(buy.id.clone()).or_insert(buy.remaining());
+            let buy_rem = buy_remaining
+                .entry(buy.id.clone())
+                .or_insert(buy.remaining());
 
             for sell in &sells {
-                let sell_rem = sell_remaining.entry(sell.id.clone()).or_insert(sell.remaining());
+                let sell_rem = sell_remaining
+                    .entry(sell.id.clone())
+                    .or_insert(sell.remaining());
 
                 if *buy_rem == 0 || *sell_rem == 0 {
                     continue;
@@ -734,7 +799,10 @@ impl StockMarket {
                 if !prices_match {
                     // Since sells are sorted by price asc, if this sell doesn't match,
                     // neither will later ones with higher prices
-                    if buy.order_kind == OrderKind::Limit && sell.order_kind == OrderKind::Limit && buy.price < sell.price {
+                    if buy.order_kind == OrderKind::Limit
+                        && sell.order_kind == OrderKind::Limit
+                        && buy.price < sell.price
+                    {
                         break;
                     }
                     continue;
@@ -779,11 +847,19 @@ impl StockMarket {
     ) -> Result<Trade, StockMarketError> {
         // Get buyer and seller IDs, and stock_id upfront (clone to release borrow)
         let (buyer_id, seller_id, stock_id) = {
-            let buy = self.orders.get(buy_order_id)
+            let buy = self
+                .orders
+                .get(buy_order_id)
                 .ok_or_else(|| StockMarketError::OrderNotFound(buy_order_id.to_string()))?;
-            let sell = self.orders.get(sell_order_id)
+            let sell = self
+                .orders
+                .get(sell_order_id)
                 .ok_or_else(|| StockMarketError::OrderNotFound(sell_order_id.to_string()))?;
-            (buy.agent_id.clone(), sell.agent_id.clone(), buy.stock_id.clone())
+            (
+                buy.agent_id.clone(),
+                sell.agent_id.clone(),
+                buy.stock_id.clone(),
+            )
         };
 
         // Calculate fee (0.5% of total value)
@@ -849,7 +925,9 @@ impl StockMarket {
         total_profit: u64,
         tick: u64,
     ) -> Result<DividendRecord, StockMarketError> {
-        let stock = self.stocks.get(stock_id)
+        let stock = self
+            .stocks
+            .get(stock_id)
             .ok_or_else(|| StockMarketError::StockNotFound(stock_id.to_string()))?;
 
         if total_profit == 0 {
@@ -902,7 +980,8 @@ impl StockMarket {
 
     /// List dividend history, optionally filtered by stock.
     pub fn list_dividends(&self, stock_id: Option<&str>) -> Vec<&DividendRecord> {
-        self.dividends.iter()
+        self.dividends
+            .iter()
             .filter(|d| stock_id.is_none_or(|s| d.stock_id == s))
             .collect()
     }
@@ -911,7 +990,9 @@ impl StockMarket {
 
     /// Delist a stock (e.g. when org dissolves).
     pub fn delist(&mut self, stock_id: &str) -> Result<(), StockMarketError> {
-        let stock = self.stocks.get_mut(stock_id)
+        let stock = self
+            .stocks
+            .get_mut(stock_id)
             .ok_or_else(|| StockMarketError::StockNotFound(stock_id.to_string()))?;
 
         stock.status = ListingStatus::Delisted;
@@ -938,7 +1019,9 @@ mod tests {
     #[test]
     fn issue_shares_success() {
         let mut sm = make_stock_market();
-        let stock = sm.issue_shares("org-1".into(), "ACME".into(), 1000, 10, 100).unwrap();
+        let stock = sm
+            .issue_shares("org-1".into(), "ACME".into(), 1000, 10, 100)
+            .unwrap();
         assert_eq!(stock.org_id, "org-1");
         assert_eq!(stock.ticker, "ACME");
         assert_eq!(stock.total_shares, 1000);
@@ -970,7 +1053,8 @@ mod tests {
     #[test]
     fn issue_shares_rejects_duplicate_org() {
         let mut sm = make_stock_market();
-        sm.issue_shares("org-1".into(), "ACME".into(), 1000, 10, 100).unwrap();
+        sm.issue_shares("org-1".into(), "ACME".into(), 1000, 10, 100)
+            .unwrap();
         let result = sm.issue_shares("org-1".into(), "ACM2".into(), 1000, 10, 100);
         assert!(result.is_err());
     }
@@ -978,7 +1062,8 @@ mod tests {
     #[test]
     fn issue_shares_rejects_duplicate_ticker() {
         let mut sm = make_stock_market();
-        sm.issue_shares("org-1".into(), "ACME".into(), 1000, 10, 100).unwrap();
+        sm.issue_shares("org-1".into(), "ACME".into(), 1000, 10, 100)
+            .unwrap();
         let result = sm.issue_shares("org-2".into(), "ACME".into(), 1000, 10, 100);
         assert!(result.is_err());
     }
@@ -986,8 +1071,12 @@ mod tests {
     #[test]
     fn ipo_success() {
         let mut sm = make_stock_market();
-        let stock = sm.issue_shares("org-1".into(), "ACME".into(), 1000, 10, 100).unwrap();
-        let updated = sm.ipo(&stock.id, IPO_MIN_MEMBERS, IPO_MIN_TREASURY, 200).unwrap();
+        let stock = sm
+            .issue_shares("org-1".into(), "ACME".into(), 1000, 10, 100)
+            .unwrap();
+        let updated = sm
+            .ipo(&stock.id, IPO_MIN_MEMBERS, IPO_MIN_TREASURY, 200)
+            .unwrap();
         assert_eq!(updated.status, ListingStatus::Listed);
         assert_eq!(updated.listed_tick, 200);
     }
@@ -995,7 +1084,9 @@ mod tests {
     #[test]
     fn ipo_rejects_insufficient_members() {
         let mut sm = make_stock_market();
-        let stock = sm.issue_shares("org-1".into(), "ACME".into(), 1000, 10, 100).unwrap();
+        let stock = sm
+            .issue_shares("org-1".into(), "ACME".into(), 1000, 10, 100)
+            .unwrap();
         let result = sm.ipo(&stock.id, 1, IPO_MIN_TREASURY, 200);
         assert!(result.is_err());
     }
@@ -1003,7 +1094,9 @@ mod tests {
     #[test]
     fn ipo_rejects_insufficient_treasury() {
         let mut sm = make_stock_market();
-        let stock = sm.issue_shares("org-1".into(), "ACME".into(), 1000, 10, 100).unwrap();
+        let stock = sm
+            .issue_shares("org-1".into(), "ACME".into(), 1000, 10, 100)
+            .unwrap();
         let result = sm.ipo(&stock.id, IPO_MIN_MEMBERS, 100, 200);
         assert!(result.is_err());
     }
@@ -1011,12 +1104,15 @@ mod tests {
     #[test]
     fn transfer_shares_success() {
         let mut sm = make_stock_market();
-        let stock = sm.issue_shares("org-1".into(), "ACME".into(), 1000, 10, 100).unwrap();
+        let stock = sm
+            .issue_shares("org-1".into(), "ACME".into(), 1000, 10, 100)
+            .unwrap();
 
         // Credit shares to agent-1
         sm.credit_shares(&stock.id, "agent-1", 100);
 
-        sm.transfer_shares(&stock.id, "agent-1", "agent-2", 50).unwrap();
+        sm.transfer_shares(&stock.id, "agent-1", "agent-2", 50)
+            .unwrap();
 
         assert_eq!(sm.get_holding(&stock.id, "agent-1").unwrap().quantity, 50);
         assert_eq!(sm.get_holding(&stock.id, "agent-2").unwrap().quantity, 50);
@@ -1025,7 +1121,9 @@ mod tests {
     #[test]
     fn transfer_shares_insufficient() {
         let mut sm = make_stock_market();
-        let stock = sm.issue_shares("org-1".into(), "ACME".into(), 1000, 10, 100).unwrap();
+        let stock = sm
+            .issue_shares("org-1".into(), "ACME".into(), 1000, 10, 100)
+            .unwrap();
         sm.credit_shares(&stock.id, "agent-1", 10);
 
         let result = sm.transfer_shares(&stock.id, "agent-1", "agent-2", 50);
@@ -1035,15 +1133,21 @@ mod tests {
     #[test]
     fn buy_order_limit_matched_immediately() {
         let mut sm = make_stock_market();
-        let stock = sm.issue_shares("org-1".into(), "ACME".into(), 1000, 10, 100).unwrap();
-        sm.ipo(&stock.id, IPO_MIN_MEMBERS, IPO_MIN_TREASURY, 200).unwrap();
+        let stock = sm
+            .issue_shares("org-1".into(), "ACME".into(), 1000, 10, 100)
+            .unwrap();
+        sm.ipo(&stock.id, IPO_MIN_MEMBERS, IPO_MIN_TREASURY, 200)
+            .unwrap();
 
         // Agent-1 holds shares and places a sell order
         sm.credit_shares(&stock.id, "agent-1", 100);
-        sm.place_sell_order(&stock.id, "agent-1", OrderKind::Limit, 10, 50, 300).unwrap();
+        sm.place_sell_order(&stock.id, "agent-1", OrderKind::Limit, 10, 50, 300)
+            .unwrap();
 
         // Agent-2 places a buy order at the same price
-        let order = sm.place_buy_order(&stock.id, "agent-2", OrderKind::Limit, 10, 50, 10000, 300).unwrap();
+        let order = sm
+            .place_buy_order(&stock.id, "agent-2", OrderKind::Limit, 10, 50, 10000, 300)
+            .unwrap();
         assert_eq!(order.status, OrderStatus::Filled);
         assert_eq!(order.filled_quantity, 50);
 
@@ -1055,21 +1159,30 @@ mod tests {
     #[test]
     fn buy_order_market() {
         let mut sm = make_stock_market();
-        let stock = sm.issue_shares("org-1".into(), "ACME".into(), 1000, 10, 100).unwrap();
-        sm.ipo(&stock.id, IPO_MIN_MEMBERS, IPO_MIN_TREASURY, 200).unwrap();
+        let stock = sm
+            .issue_shares("org-1".into(), "ACME".into(), 1000, 10, 100)
+            .unwrap();
+        sm.ipo(&stock.id, IPO_MIN_MEMBERS, IPO_MIN_TREASURY, 200)
+            .unwrap();
 
         sm.credit_shares(&stock.id, "agent-1", 100);
-        sm.place_sell_order(&stock.id, "agent-1", OrderKind::Limit, 10, 50, 300).unwrap();
+        sm.place_sell_order(&stock.id, "agent-1", OrderKind::Limit, 10, 50, 300)
+            .unwrap();
 
-        let order = sm.place_buy_order(&stock.id, "agent-2", OrderKind::Market, 0, 50, 10000, 300).unwrap();
+        let order = sm
+            .place_buy_order(&stock.id, "agent-2", OrderKind::Market, 0, 50, 10000, 300)
+            .unwrap();
         assert_eq!(order.status, OrderStatus::Filled);
     }
 
     #[test]
     fn buy_order_insufficient_funds() {
         let mut sm = make_stock_market();
-        let stock = sm.issue_shares("org-1".into(), "ACME".into(), 1000, 10, 100).unwrap();
-        sm.ipo(&stock.id, IPO_MIN_MEMBERS, IPO_MIN_TREASURY, 200).unwrap();
+        let stock = sm
+            .issue_shares("org-1".into(), "ACME".into(), 1000, 10, 100)
+            .unwrap();
+        sm.ipo(&stock.id, IPO_MIN_MEMBERS, IPO_MIN_TREASURY, 200)
+            .unwrap();
 
         let result = sm.place_buy_order(&stock.id, "agent-2", OrderKind::Limit, 10, 50, 100, 300);
         assert!(result.is_err());
@@ -1078,8 +1191,11 @@ mod tests {
     #[test]
     fn sell_order_insufficient_shares() {
         let mut sm = make_stock_market();
-        let stock = sm.issue_shares("org-1".into(), "ACME".into(), 1000, 10, 100).unwrap();
-        sm.ipo(&stock.id, IPO_MIN_MEMBERS, IPO_MIN_TREASURY, 200).unwrap();
+        let stock = sm
+            .issue_shares("org-1".into(), "ACME".into(), 1000, 10, 100)
+            .unwrap();
+        sm.ipo(&stock.id, IPO_MIN_MEMBERS, IPO_MIN_TREASURY, 200)
+            .unwrap();
 
         let result = sm.place_sell_order(&stock.id, "agent-1", OrderKind::Limit, 10, 50, 300);
         assert!(result.is_err());
@@ -1088,10 +1204,15 @@ mod tests {
     #[test]
     fn cancel_order_success() {
         let mut sm = make_stock_market();
-        let stock = sm.issue_shares("org-1".into(), "ACME".into(), 1000, 10, 100).unwrap();
-        sm.ipo(&stock.id, IPO_MIN_MEMBERS, IPO_MIN_TREASURY, 200).unwrap();
+        let stock = sm
+            .issue_shares("org-1".into(), "ACME".into(), 1000, 10, 100)
+            .unwrap();
+        sm.ipo(&stock.id, IPO_MIN_MEMBERS, IPO_MIN_TREASURY, 200)
+            .unwrap();
 
-        let order = sm.place_buy_order(&stock.id, "agent-1", OrderKind::Limit, 10, 50, 10000, 300).unwrap();
+        let order = sm
+            .place_buy_order(&stock.id, "agent-1", OrderKind::Limit, 10, 50, 10000, 300)
+            .unwrap();
         let cancelled = sm.cancel_order(&order.id, "agent-1").unwrap();
         assert_eq!(cancelled.status, OrderStatus::Cancelled);
     }
@@ -1099,10 +1220,15 @@ mod tests {
     #[test]
     fn cancel_order_wrong_agent() {
         let mut sm = make_stock_market();
-        let stock = sm.issue_shares("org-1".into(), "ACME".into(), 1000, 10, 100).unwrap();
-        sm.ipo(&stock.id, IPO_MIN_MEMBERS, IPO_MIN_TREASURY, 200).unwrap();
+        let stock = sm
+            .issue_shares("org-1".into(), "ACME".into(), 1000, 10, 100)
+            .unwrap();
+        sm.ipo(&stock.id, IPO_MIN_MEMBERS, IPO_MIN_TREASURY, 200)
+            .unwrap();
 
-        let order = sm.place_buy_order(&stock.id, "agent-1", OrderKind::Limit, 10, 50, 10000, 300).unwrap();
+        let order = sm
+            .place_buy_order(&stock.id, "agent-1", OrderKind::Limit, 10, 50, 10000, 300)
+            .unwrap();
         let result = sm.cancel_order(&order.id, "agent-2");
         assert!(result.is_err());
     }
@@ -1110,18 +1236,25 @@ mod tests {
     #[test]
     fn partial_fill() {
         let mut sm = make_stock_market();
-        let stock = sm.issue_shares("org-1".into(), "ACME".into(), 1000, 10, 100).unwrap();
-        sm.ipo(&stock.id, IPO_MIN_MEMBERS, IPO_MIN_TREASURY, 200).unwrap();
+        let stock = sm
+            .issue_shares("org-1".into(), "ACME".into(), 1000, 10, 100)
+            .unwrap();
+        sm.ipo(&stock.id, IPO_MIN_MEMBERS, IPO_MIN_TREASURY, 200)
+            .unwrap();
 
         sm.credit_shares(&stock.id, "agent-1", 100);
-        sm.place_sell_order(&stock.id, "agent-1", OrderKind::Limit, 10, 100, 300).unwrap();
+        sm.place_sell_order(&stock.id, "agent-1", OrderKind::Limit, 10, 100, 300)
+            .unwrap();
 
         // Buy only 30 shares
-        let order = sm.place_buy_order(&stock.id, "agent-2", OrderKind::Limit, 10, 30, 10000, 300).unwrap();
+        let order = sm
+            .place_buy_order(&stock.id, "agent-2", OrderKind::Limit, 10, 30, 10000, 300)
+            .unwrap();
         assert_eq!(order.status, OrderStatus::Filled);
 
         // Sell order should be partially filled
-        let sell_orders: Vec<_> = sm.list_orders(Some(&stock.id), None)
+        let sell_orders: Vec<_> = sm
+            .list_orders(Some(&stock.id), None)
             .into_iter()
             .filter(|o| o.order_type == OrderType::Sell)
             .collect();
@@ -1132,12 +1265,17 @@ mod tests {
     #[test]
     fn trading_fee_calculated() {
         let mut sm = make_stock_market();
-        let stock = sm.issue_shares("org-1".into(), "ACME".into(), 1000, 10, 100).unwrap();
-        sm.ipo(&stock.id, IPO_MIN_MEMBERS, IPO_MIN_TREASURY, 200).unwrap();
+        let stock = sm
+            .issue_shares("org-1".into(), "ACME".into(), 1000, 10, 100)
+            .unwrap();
+        sm.ipo(&stock.id, IPO_MIN_MEMBERS, IPO_MIN_TREASURY, 200)
+            .unwrap();
 
         sm.credit_shares(&stock.id, "agent-1", 100);
-        sm.place_sell_order(&stock.id, "agent-1", OrderKind::Limit, 10, 50, 300).unwrap();
-        sm.place_buy_order(&stock.id, "agent-2", OrderKind::Limit, 10, 50, 10000, 300).unwrap();
+        sm.place_sell_order(&stock.id, "agent-1", OrderKind::Limit, 10, 50, 300)
+            .unwrap();
+        sm.place_buy_order(&stock.id, "agent-2", OrderKind::Limit, 10, 50, 10000, 300)
+            .unwrap();
 
         let trades = sm.list_trades(Some(&stock.id));
         assert_eq!(trades.len(), 1);
@@ -1148,7 +1286,9 @@ mod tests {
     #[test]
     fn distribute_dividends_success() {
         let mut sm = make_stock_market();
-        let stock = sm.issue_shares("org-1".into(), "ACME".into(), 1000, 10, 100).unwrap();
+        let stock = sm
+            .issue_shares("org-1".into(), "ACME".into(), 1000, 10, 100)
+            .unwrap();
 
         sm.credit_shares(&stock.id, "agent-1", 600);
         sm.credit_shares(&stock.id, "agent-2", 400);
@@ -1159,15 +1299,33 @@ mod tests {
         assert_eq!(record.recipients.len(), 2);
 
         // agent-1 gets 600 * 1 = 600
-        assert_eq!(record.recipients.iter().find(|r| r.agent_id == "agent-1").unwrap().amount, 600);
+        assert_eq!(
+            record
+                .recipients
+                .iter()
+                .find(|r| r.agent_id == "agent-1")
+                .unwrap()
+                .amount,
+            600
+        );
         // agent-2 gets 400 * 1 = 400
-        assert_eq!(record.recipients.iter().find(|r| r.agent_id == "agent-2").unwrap().amount, 400);
+        assert_eq!(
+            record
+                .recipients
+                .iter()
+                .find(|r| r.agent_id == "agent-2")
+                .unwrap()
+                .amount,
+            400
+        );
     }
 
     #[test]
     fn distribute_dividends_zero_profit() {
         let mut sm = make_stock_market();
-        let stock = sm.issue_shares("org-1".into(), "ACME".into(), 1000, 10, 100).unwrap();
+        let stock = sm
+            .issue_shares("org-1".into(), "ACME".into(), 1000, 10, 100)
+            .unwrap();
         sm.credit_shares(&stock.id, "agent-1", 600);
 
         let result = sm.distribute_dividends(&stock.id, 0, 200);
@@ -1177,16 +1335,21 @@ mod tests {
     #[test]
     fn delist_cancels_orders() {
         let mut sm = make_stock_market();
-        let stock = sm.issue_shares("org-1".into(), "ACME".into(), 1000, 10, 100).unwrap();
-        sm.ipo(&stock.id, IPO_MIN_MEMBERS, IPO_MIN_TREASURY, 200).unwrap();
+        let stock = sm
+            .issue_shares("org-1".into(), "ACME".into(), 1000, 10, 100)
+            .unwrap();
+        sm.ipo(&stock.id, IPO_MIN_MEMBERS, IPO_MIN_TREASURY, 200)
+            .unwrap();
 
-        sm.place_buy_order(&stock.id, "agent-1", OrderKind::Limit, 10, 50, 10000, 300).unwrap();
+        sm.place_buy_order(&stock.id, "agent-1", OrderKind::Limit, 10, 50, 10000, 300)
+            .unwrap();
         sm.delist(&stock.id).unwrap();
 
         let stock = sm.get_stock(&stock.id).unwrap();
         assert_eq!(stock.status, ListingStatus::Delisted);
 
-        let orders: Vec<_> = sm.list_orders(Some(&stock.id), None)
+        let orders: Vec<_> = sm
+            .list_orders(Some(&stock.id), None)
             .into_iter()
             .filter(|o| o.status == OrderStatus::Cancelled)
             .collect();
@@ -1196,7 +1359,8 @@ mod tests {
     #[test]
     fn get_stock_by_ticker_case_insensitive() {
         let mut sm = make_stock_market();
-        sm.issue_shares("org-1".into(), "acme".into(), 1000, 10, 100).unwrap();
+        sm.issue_shares("org-1".into(), "acme".into(), 1000, 10, 100)
+            .unwrap();
 
         assert!(sm.get_stock_by_ticker("ACME").is_some());
         assert!(sm.get_stock_by_ticker("acme").is_some());
@@ -1205,20 +1369,29 @@ mod tests {
     #[test]
     fn order_book_sorted_correctly() {
         let mut sm = make_stock_market();
-        let stock = sm.issue_shares("org-1".into(), "ACME".into(), 10000, 10, 100).unwrap();
-        sm.ipo(&stock.id, IPO_MIN_MEMBERS, IPO_MIN_TREASURY, 200).unwrap();
+        let stock = sm
+            .issue_shares("org-1".into(), "ACME".into(), 10000, 10, 100)
+            .unwrap();
+        sm.ipo(&stock.id, IPO_MIN_MEMBERS, IPO_MIN_TREASURY, 200)
+            .unwrap();
 
         sm.credit_shares(&stock.id, "seller", 1000);
 
         // Multiple sell orders at different prices
-        sm.place_sell_order(&stock.id, "seller", OrderKind::Limit, 12, 10, 300).unwrap();
-        sm.place_sell_order(&stock.id, "seller", OrderKind::Limit, 11, 10, 300).unwrap();
-        sm.place_sell_order(&stock.id, "seller", OrderKind::Limit, 13, 10, 300).unwrap();
+        sm.place_sell_order(&stock.id, "seller", OrderKind::Limit, 12, 10, 300)
+            .unwrap();
+        sm.place_sell_order(&stock.id, "seller", OrderKind::Limit, 11, 10, 300)
+            .unwrap();
+        sm.place_sell_order(&stock.id, "seller", OrderKind::Limit, 13, 10, 300)
+            .unwrap();
 
         // Multiple buy orders at different prices (none high enough to match sells)
-        sm.place_buy_order(&stock.id, "buyer-1", OrderKind::Limit, 9, 10, 10000, 300).unwrap();
-        sm.place_buy_order(&stock.id, "buyer-2", OrderKind::Limit, 8, 10, 10000, 300).unwrap();
-        sm.place_buy_order(&stock.id, "buyer-3", OrderKind::Limit, 7, 10, 10000, 300).unwrap();
+        sm.place_buy_order(&stock.id, "buyer-1", OrderKind::Limit, 9, 10, 10000, 300)
+            .unwrap();
+        sm.place_buy_order(&stock.id, "buyer-2", OrderKind::Limit, 8, 10, 10000, 300)
+            .unwrap();
+        sm.place_buy_order(&stock.id, "buyer-3", OrderKind::Limit, 7, 10, 10000, 300)
+            .unwrap();
 
         let (buys, sells) = sm.get_order_book(&stock.id);
 
@@ -1236,7 +1409,9 @@ mod tests {
     #[test]
     fn cannot_trade_pre_ipo() {
         let mut sm = make_stock_market();
-        let stock = sm.issue_shares("org-1".into(), "ACME".into(), 1000, 10, 100).unwrap();
+        let stock = sm
+            .issue_shares("org-1".into(), "ACME".into(), 1000, 10, 100)
+            .unwrap();
         // Not IPO'd yet
 
         let result = sm.place_buy_order(&stock.id, "agent-1", OrderKind::Limit, 10, 50, 10000, 300);
@@ -1246,8 +1421,12 @@ mod tests {
     #[test]
     fn get_agent_holdings() {
         let mut sm = make_stock_market();
-        let stock1 = sm.issue_shares("org-1".into(), "AAA".into(), 1000, 10, 100).unwrap();
-        let stock2 = sm.issue_shares("org-2".into(), "BBB".into(), 1000, 20, 100).unwrap();
+        let stock1 = sm
+            .issue_shares("org-1".into(), "AAA".into(), 1000, 10, 100)
+            .unwrap();
+        let stock2 = sm
+            .issue_shares("org-2".into(), "BBB".into(), 1000, 20, 100)
+            .unwrap();
 
         sm.credit_shares(&stock1.id, "agent-1", 100);
         sm.credit_shares(&stock2.id, "agent-1", 200);

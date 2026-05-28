@@ -1,7 +1,7 @@
 use serde::{Deserialize, Serialize};
 
-use super::org::{OrgType, Organization};
 use super::members::OrgMember;
+use super::org::{OrgType, Organization};
 use crate::world::state::WorldState;
 
 // ── Constants ─────────────────────────────────────────────
@@ -113,9 +113,7 @@ impl Default for CompetitionEngine {
 impl CompetitionEngine {
     /// Create a new competition engine.
     pub fn new() -> Self {
-        Self {
-            last_scan_tick: 0,
-        }
+        Self { last_scan_tick: 0 }
     }
 
     // ── Resource Conflict ─────────────────────────────────
@@ -199,8 +197,7 @@ impl CompetitionEngine {
                     if record.skills.is_empty() {
                         1.0
                     } else {
-                        let skill_sum: f64 =
-                            record.skills.values().map(|s| s.level as f64).sum();
+                        let skill_sum: f64 = record.skills.values().map(|s| s.level as f64).sum();
                         skill_sum / record.skills.len() as f64
                     }
                 })
@@ -318,7 +315,9 @@ impl CompetitionEngine {
     /// level of the agent's relevant skills (0 if none), normalized by the
     /// maximum skill level (10).
     fn culture_match_score(
-        agent_skills: Option<&std::collections::HashMap<String, crate::economy::token_burn::SkillRecord>>,
+        agent_skills: Option<
+            &std::collections::HashMap<String, crate::economy::token_burn::SkillRecord>,
+        >,
         org_type: &OrgType,
     ) -> f64 {
         use crate::economy::token_burn::SkillRecord;
@@ -381,7 +380,16 @@ impl CompetitionEngine {
                 .iter()
                 .find(|(id, _, _)| id.to_string() == member.agent_id)
                 .map(|(_, spawn_tick, _)| format!("region_{}", spawn_tick / 100))
-                .unwrap_or_else(|| format!("region_{}", member.agent_id.bytes().fold(0u64, |a, b| a.wrapping_add(b as u64)) % 10));
+                .unwrap_or_else(|| {
+                    format!(
+                        "region_{}",
+                        member
+                            .agent_id
+                            .bytes()
+                            .fold(0u64, |a, b| a.wrapping_add(b as u64))
+                            % 10
+                    )
+                });
 
             *region_influence.entry(region).or_insert(0.0) += 0.3;
         }
@@ -484,13 +492,13 @@ impl CompetitionEngine {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::organization::org::{Organization, OrgType, OrgStatus};
+    use crate::economy::token_burn::AgentRecord;
     use crate::organization::charter::{Charter, GovernanceModel, ProfitSharing};
     use crate::organization::members::{MemberRole, OrgMember};
+    use crate::organization::org::{OrgStatus, OrgType, Organization};
+    use crate::world::enums::AgentPhase;
     use crate::world::state::{EventBus, WorldState};
     use crate::world::subsystem::SubsystemRegistry;
-    use crate::economy::token_burn::AgentRecord;
-    use crate::world::enums::AgentPhase;
     use std::collections::HashMap;
     use std::sync::Arc;
     use uuid::Uuid;
@@ -504,13 +512,23 @@ mod tests {
         }
     }
 
-    fn make_org(name: &str, org_type: OrgType, member_count: usize, treasury: u64, tick: u64) -> Organization {
+    fn make_org(
+        name: &str,
+        org_type: OrgType,
+        member_count: usize,
+        treasury: u64,
+        tick: u64,
+    ) -> Organization {
         let id = Uuid::new_v4().to_string();
         let members: Vec<OrgMember> = (0..member_count)
             .map(|i| OrgMember {
                 agent_id: format!("{}-agent-{}", id, i),
                 agent_name: format!("Agent {}", i),
-                role: if i == 0 { MemberRole::Founder } else { MemberRole::Member },
+                role: if i == 0 {
+                    MemberRole::Founder
+                } else {
+                    MemberRole::Member
+                },
                 share: 1.0 / member_count as f64,
                 joined_tick: tick,
             })
@@ -561,12 +579,17 @@ mod tests {
         let org_small = make_org("SmallGuild", OrgType::Guild, 2, 50, 100);
         let world_state = make_world_state();
 
-        let result = engine.evaluate_resource_conflict(&org_big, &org_small, "mine-1", &world_state);
+        let result =
+            engine.evaluate_resource_conflict(&org_big, &org_small, "mine-1", &world_state);
 
         assert_eq!(result.winner_org_id, org_big.id);
         assert_eq!(result.loser_org_id, org_small.id);
         // Large power gap → low intensity (not a close contest)
-        assert!(result.intensity < 0.5, "expected low intensity for a blowout, got {}", result.intensity);
+        assert!(
+            result.intensity < 0.5,
+            "expected low intensity for a blowout, got {}",
+            result.intensity
+        );
     }
 
     // ── Recruitment Tests ─────────────────────────────────
@@ -578,8 +601,14 @@ mod tests {
         let org_small = make_org("SmallOrg", OrgType::Guild, 2, 100, 100);
 
         let invitations = vec![
-            OrgInvitation { org_id: org_large.id.clone(), pitch: "Join us!".to_string() },
-            OrgInvitation { org_id: org_small.id.clone(), pitch: "We're cozy".to_string() },
+            OrgInvitation {
+                org_id: org_large.id.clone(),
+                pitch: "Join us!".to_string(),
+            },
+            OrgInvitation {
+                org_id: org_small.id.clone(),
+                pitch: "We're cozy".to_string(),
+            },
         ];
 
         let world_state = make_world_state();
@@ -605,18 +634,40 @@ mod tests {
         let org_university = make_org("OrgB", OrgType::University, 5, 500, 100);
 
         let invitations = vec![
-            OrgInvitation { org_id: org_company.id.clone(), pitch: "A".to_string() },
-            OrgInvitation { org_id: org_university.id.clone(), pitch: "B".to_string() },
+            OrgInvitation {
+                org_id: org_company.id.clone(),
+                pitch: "A".to_string(),
+            },
+            OrgInvitation {
+                org_id: org_university.id.clone(),
+                pitch: "B".to_string(),
+            },
         ];
 
         // Create an agent with coding/backend skills (should match University better than Company)
         let agent_id = Uuid::new_v4();
         let mut skills: HashMap<String, SkillRecord> = HashMap::new();
-        skills.insert("coding".to_string(), SkillRecord { name: "coding".to_string(), level: 8, experience: 0.0 });
-        skills.insert("frontend".to_string(), SkillRecord { name: "frontend".to_string(), level: 7, experience: 0.0 });
+        skills.insert(
+            "coding".to_string(),
+            SkillRecord {
+                name: "coding".to_string(),
+                level: 8,
+                experience: 0.0,
+            },
+        );
+        skills.insert(
+            "frontend".to_string(),
+            SkillRecord {
+                name: "frontend".to_string(),
+                level: 7,
+                experience: 0.0,
+            },
+        );
 
-        let agents = vec![
-            (agent_id, 0u64, AgentRecord {
+        let agents = vec![(
+            agent_id,
+            0u64,
+            AgentRecord {
                 id: agent_id,
                 name: "test-agent-culture".to_string(),
                 phase: AgentPhase::Adult,
@@ -625,8 +676,8 @@ mod tests {
                 personality: String::new(),
                 tasks_completed: 0,
                 tasks_attempted: 0,
-            }),
-        ];
+            },
+        )];
 
         let bus = Arc::new(EventBus::new(256));
         let registry = SubsystemRegistry::new();
@@ -645,9 +696,22 @@ mod tests {
         assert!(!result.chosen_org_id.is_empty());
         assert_eq!(result.scores.len(), 2);
 
-        let score_company = result.scores.iter().find(|(id, _)| id == &org_company.id).map(|(_, s)| *s).unwrap_or(0.0);
-        let score_university = result.scores.iter().find(|(id, _)| id == &org_university.id).map(|(_, s)| *s).unwrap_or(0.0);
-        assert_ne!(score_company, score_university, "culture match should differentiate orgs with different types");
+        let score_company = result
+            .scores
+            .iter()
+            .find(|(id, _)| id == &org_company.id)
+            .map(|(_, s)| *s)
+            .unwrap_or(0.0);
+        let score_university = result
+            .scores
+            .iter()
+            .find(|(id, _)| id == &org_university.id)
+            .map(|(_, s)| *s)
+            .unwrap_or(0.0);
+        assert_ne!(
+            score_company, score_university,
+            "culture match should differentiate orgs with different types"
+        );
     }
 
     // ── Territory Tests ───────────────────────────────────
@@ -679,7 +743,7 @@ mod tests {
         let agents = vec![
             (
                 Uuid::new_v4(),
-                50u64,  // spawn_tick = 50 → region_0
+                50u64, // spawn_tick = 50 → region_0
                 AgentRecord {
                     id: Uuid::new_v4(),
                     name: "a1".to_string(),
@@ -687,13 +751,13 @@ mod tests {
                     tokens: 100,
                     skills: HashMap::new(),
                     personality: String::new(),
-            tasks_completed: 0,
-            tasks_attempted: 0,
+                    tasks_completed: 0,
+                    tasks_attempted: 0,
                 },
             ),
             (
                 Uuid::new_v4(),
-                80u64,  // spawn_tick = 80 → region_0
+                80u64, // spawn_tick = 80 → region_0
                 AgentRecord {
                     id: Uuid::new_v4(),
                     name: "a2".to_string(),
@@ -701,8 +765,8 @@ mod tests {
                     tokens: 100,
                     skills: HashMap::new(),
                     personality: String::new(),
-            tasks_completed: 0,
-            tasks_attempted: 0,
+                    tasks_completed: 0,
+                    tasks_attempted: 0,
                 },
             ),
         ];
@@ -773,8 +837,8 @@ mod tests {
                         tokens: 100,
                         skills: HashMap::new(),
                         personality: String::new(),
-            tasks_completed: 0,
-            tasks_attempted: 0,
+                        tasks_completed: 0,
+                        tasks_attempted: 0,
                     },
                 )
             })
@@ -809,8 +873,8 @@ mod tests {
                         tokens: 100,
                         skills: HashMap::new(),
                         personality: String::new(),
-            tasks_completed: 0,
-            tasks_attempted: 0,
+                        tasks_completed: 0,
+                        tasks_attempted: 0,
                     },
                 )
             })
@@ -948,30 +1012,80 @@ mod tests {
 
         // org_a members have high-level skills, org_b members have no skills (default 1.0)
         let mut skills_a: HashMap<String, SkillRecord> = HashMap::new();
-        skills_a.insert("coding".to_string(), SkillRecord { name: "coding".to_string(), level: 8, experience: 0.0 });
-        skills_a.insert("backend".to_string(), SkillRecord { name: "backend".to_string(), level: 7, experience: 0.0 });
+        skills_a.insert(
+            "coding".to_string(),
+            SkillRecord {
+                name: "coding".to_string(),
+                level: 8,
+                experience: 0.0,
+            },
+        );
+        skills_a.insert(
+            "backend".to_string(),
+            SkillRecord {
+                name: "backend".to_string(),
+                level: 7,
+                experience: 0.0,
+            },
+        );
 
         let agents = vec![
-            (agent_id_a0, 0u64, AgentRecord {
-                id: agent_id_a0, name: "a0".to_string(), phase: AgentPhase::Adult,
-                tokens: 100, skills: skills_a.clone(), personality: String::new(),
-                tasks_completed: 0, tasks_attempted: 0,
-            }),
-            (agent_id_a1, 0u64, AgentRecord {
-                id: agent_id_a1, name: "a1".to_string(), phase: AgentPhase::Adult,
-                tokens: 100, skills: skills_a, personality: String::new(),
-                tasks_completed: 0, tasks_attempted: 0,
-            }),
-            (agent_id_b0, 0u64, AgentRecord {
-                id: agent_id_b0, name: "b0".to_string(), phase: AgentPhase::Adult,
-                tokens: 100, skills: HashMap::new(), personality: String::new(),
-                tasks_completed: 0, tasks_attempted: 0,
-            }),
-            (agent_id_b1, 0u64, AgentRecord {
-                id: agent_id_b1, name: "b1".to_string(), phase: AgentPhase::Adult,
-                tokens: 100, skills: HashMap::new(), personality: String::new(),
-                tasks_completed: 0, tasks_attempted: 0,
-            }),
+            (
+                agent_id_a0,
+                0u64,
+                AgentRecord {
+                    id: agent_id_a0,
+                    name: "a0".to_string(),
+                    phase: AgentPhase::Adult,
+                    tokens: 100,
+                    skills: skills_a.clone(),
+                    personality: String::new(),
+                    tasks_completed: 0,
+                    tasks_attempted: 0,
+                },
+            ),
+            (
+                agent_id_a1,
+                0u64,
+                AgentRecord {
+                    id: agent_id_a1,
+                    name: "a1".to_string(),
+                    phase: AgentPhase::Adult,
+                    tokens: 100,
+                    skills: skills_a,
+                    personality: String::new(),
+                    tasks_completed: 0,
+                    tasks_attempted: 0,
+                },
+            ),
+            (
+                agent_id_b0,
+                0u64,
+                AgentRecord {
+                    id: agent_id_b0,
+                    name: "b0".to_string(),
+                    phase: AgentPhase::Adult,
+                    tokens: 100,
+                    skills: HashMap::new(),
+                    personality: String::new(),
+                    tasks_completed: 0,
+                    tasks_attempted: 0,
+                },
+            ),
+            (
+                agent_id_b1,
+                0u64,
+                AgentRecord {
+                    id: agent_id_b1,
+                    name: "b1".to_string(),
+                    phase: AgentPhase::Adult,
+                    tokens: 100,
+                    skills: HashMap::new(),
+                    personality: String::new(),
+                    tasks_completed: 0,
+                    tasks_attempted: 0,
+                },
+            ),
         ];
 
         let world_state = WorldState::new(bus, registry, agents);
@@ -988,16 +1102,28 @@ mod tests {
     fn test_formation_suggests_correct_types() {
         // 2 agents → Guild
         let agents_2: Vec<String> = (0..2).map(|i| format!("agent-{}", i)).collect();
-        assert_eq!(CompetitionEngine::suggest_org_type(&agents_2, 100), OrgType::Guild);
+        assert_eq!(
+            CompetitionEngine::suggest_org_type(&agents_2, 100),
+            OrgType::Guild
+        );
         // 4 agents → Company
         let agents_4: Vec<String> = (0..4).map(|i| format!("agent-{}", i)).collect();
-        assert_eq!(CompetitionEngine::suggest_org_type(&agents_4, 100), OrgType::Company);
+        assert_eq!(
+            CompetitionEngine::suggest_org_type(&agents_4, 100),
+            OrgType::Company
+        );
         // 7 agents → Alliance
         let agents_7: Vec<String> = (0..7).map(|i| format!("agent-{}", i)).collect();
-        assert_eq!(CompetitionEngine::suggest_org_type(&agents_7, 100), OrgType::Alliance);
+        assert_eq!(
+            CompetitionEngine::suggest_org_type(&agents_7, 100),
+            OrgType::Alliance
+        );
         // 15 agents → University
         let agents_15: Vec<String> = (0..15).map(|i| format!("agent-{}", i)).collect();
-        assert_eq!(CompetitionEngine::suggest_org_type(&agents_15, 100), OrgType::University);
+        assert_eq!(
+            CompetitionEngine::suggest_org_type(&agents_15, 100),
+            OrgType::University
+        );
     }
 
     #[test]
@@ -1005,19 +1131,35 @@ mod tests {
         use crate::economy::token_burn::SkillRecord;
 
         let mut skills: HashMap<String, SkillRecord> = HashMap::new();
-        skills.insert("coding".to_string(), SkillRecord { name: "coding".to_string(), level: 5, experience: 0.0 });
+        skills.insert(
+            "coding".to_string(),
+            SkillRecord {
+                name: "coding".to_string(),
+                level: 5,
+                experience: 0.0,
+            },
+        );
 
         let score1 = CompetitionEngine::culture_match_score(Some(&skills), &OrgType::University);
         let score2 = CompetitionEngine::culture_match_score(Some(&skills), &OrgType::University);
-        assert_eq!(score1, score2, "culture match should be deterministic for same inputs");
+        assert_eq!(
+            score1, score2,
+            "culture match should be deterministic for same inputs"
+        );
 
         let score3 = CompetitionEngine::culture_match_score(Some(&skills), &OrgType::Guild);
-        assert_ne!(score1, score3, "different org type should give different score");
+        assert_ne!(
+            score1, score3,
+            "different org type should give different score"
+        );
     }
 
     #[test]
     fn test_culture_match_no_skills() {
         let score = CompetitionEngine::culture_match_score(None, &OrgType::Company);
-        assert!((score - 0.0).abs() < f64::EPSILON, "no skills should yield 0.0 culture match");
+        assert!(
+            (score - 0.0).abs() < f64::EPSILON,
+            "no skills should yield 0.0 culture match"
+        );
     }
 }

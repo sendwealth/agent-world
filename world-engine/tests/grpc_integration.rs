@@ -9,14 +9,14 @@ use std::sync::Arc;
 use agent_world_engine::a2a::registry::AgentRegistry;
 use agent_world_engine::a2a::router::MessageRouter;
 use agent_world_engine::a2a::service::A2aServiceImpl;
-use agent_world_engine::agentworld::a2a::v1::a2a_service_server::A2aServiceServer;
 use agent_world_engine::agentworld::a2a::v1::a2a_service_client::A2aServiceClient;
-use agent_world_engine::agentworld::a2a::v1::{DiscoverRequest, A2aMessage, MessageAck};
+use agent_world_engine::agentworld::a2a::v1::a2a_service_server::A2aServiceServer;
+use agent_world_engine::agentworld::a2a::v1::{A2aMessage, DiscoverRequest, MessageAck};
 use agent_world_engine::world::EventBus;
 
 /// Pick a random available port.
 fn find_free_port() -> u16 {
-    use std::net::{TcpListener, Ipv4Addr};
+    use std::net::{Ipv4Addr, TcpListener};
     let listener = TcpListener::bind((Ipv4Addr::LOCALHOST, 0)).unwrap();
     listener.local_addr().unwrap().port()
 }
@@ -186,16 +186,19 @@ async fn grpc_stream_messages_bidirectional() {
 
     // Pre-load Alice's identifying message into the stream BEFORE calling stream_messages
     let (alice_tx, alice_rx) = tokio::sync::mpsc::channel(16);
-    alice_tx.send(A2aMessage {
-        id: "alice-init".into(),
-        from_agent: "agent-alice".into(),
-        to_agent: "agent-bob".into(),
-        r#type: 4,
-        payload: b"Hello Bob".to_vec(),
-        timestamp: 1,
-        signature: String::new(),
-        nonce: "n1".into(),
-    }).await.unwrap();
+    alice_tx
+        .send(A2aMessage {
+            id: "alice-init".into(),
+            from_agent: "agent-alice".into(),
+            to_agent: "agent-bob".into(),
+            r#type: 4,
+            payload: b"Hello Bob".to_vec(),
+            timestamp: 1,
+            signature: String::new(),
+            nonce: "n1".into(),
+        })
+        .await
+        .unwrap();
 
     // Now open the stream - the first message is already in the channel
     let alice_response = alice_client
@@ -206,33 +209,41 @@ async fn grpc_stream_messages_bidirectional() {
 
     // Verify alice's stream is registered
     tokio::time::sleep(tokio::time::Duration::from_millis(200)).await;
-    assert_eq!(router.active_stream_count().await, 1, "Alice stream should be registered");
+    assert_eq!(
+        router.active_stream_count().await,
+        1,
+        "Alice stream should be registered"
+    );
 
     // Use SendMessage RPC to send a message from bob to alice
     let mut sender_client = A2aServiceClient::connect(url)
         .await
         .expect("Sender should connect");
 
-    let send_resp = sender_client.send_message(tonic::Request::new(A2aMessage {
-        id: "msg-from-bob".into(),
-        from_agent: "agent-bob".into(),
-        to_agent: "agent-alice".into(),
-        r#type: 4,
-        payload: b"Hello Alice".to_vec(),
-        timestamp: 2,
-        signature: String::new(),
-        nonce: "n2".into(),
-    })).await.expect("Send should succeed");
+    let send_resp = sender_client
+        .send_message(tonic::Request::new(A2aMessage {
+            id: "msg-from-bob".into(),
+            from_agent: "agent-bob".into(),
+            to_agent: "agent-alice".into(),
+            r#type: 4,
+            payload: b"Hello Alice".to_vec(),
+            timestamp: 2,
+            signature: String::new(),
+            nonce: "n2".into(),
+        }))
+        .await
+        .expect("Send should succeed");
 
-    assert!(send_resp.into_inner().received, "Message should be received");
+    assert!(
+        send_resp.into_inner().received,
+        "Message should be received"
+    );
 
     // Alice should receive the message on her stream
-    let received = tokio::time::timeout(
-        tokio::time::Duration::from_secs(10),
-        alice_stream.message(),
-    )
-    .await
-    .expect("Timed out waiting for alice to receive message");
+    let received =
+        tokio::time::timeout(tokio::time::Duration::from_secs(10), alice_stream.message())
+            .await
+            .expect("Timed out waiting for alice to receive message");
 
     match received {
         Ok(Some(msg)) => {
@@ -301,13 +312,10 @@ async fn grpc_eventbus_integration() {
     assert!(send_resp.into_inner().received);
 
     // Verify that the EventBus received an event from the registry (AgentSpawned)
-    let event = tokio::time::timeout(
-        tokio::time::Duration::from_secs(5),
-        event_rx.recv(),
-    )
-    .await
-    .expect("Should receive event within timeout")
-    .expect("Should get event");
+    let event = tokio::time::timeout(tokio::time::Duration::from_secs(5), event_rx.recv())
+        .await
+        .expect("Should receive event within timeout")
+        .expect("Should get event");
 
     match event {
         agent_world_engine::world::event::WorldEvent::AgentSpawned { agent_id, .. } => {
@@ -316,7 +324,10 @@ async fn grpc_eventbus_integration() {
         agent_world_engine::world::event::WorldEvent::AgentRegistered { agent_id, .. } => {
             assert!(agent_id == "agent-alice" || agent_id == "agent-bob");
         }
-        other => panic!("Expected AgentSpawned or AgentRegistered event, got {:?}", other.event_type()),
+        other => panic!(
+            "Expected AgentSpawned or AgentRegistered event, got {:?}",
+            other.event_type()
+        ),
     }
 
     handle.abort();

@@ -64,8 +64,8 @@ impl TestWorld {
             tokens: initial_tokens,
             skills: HashMap::new(),
             personality: String::new(),
-                tasks_completed: 0,
-                tasks_attempted: 0,
+            tasks_completed: 0,
+            tasks_attempted: 0,
         };
 
         self.agents.push((id_str.clone(), record));
@@ -88,7 +88,9 @@ impl TestWorld {
             self.agents.iter().map(|(_, r)| r.clone()).collect();
 
         // Process token burn
-        let burn_result = self.token_engine.process_tick(self.tick, &mut agent_records);
+        let burn_result = self
+            .token_engine
+            .process_tick(self.tick, &mut agent_records);
 
         // Write back updated token counts
         for (i, (_, ref mut record)) in self.agents.iter_mut().enumerate() {
@@ -99,7 +101,9 @@ impl TestWorld {
         for burn in &burn_result.burns {
             if burn.burn_amount > 0 {
                 // Find the agent ID string from the UUID
-                let agent_id_str = self.agents.iter()
+                let agent_id_str = self
+                    .agents
+                    .iter()
                     .find(|(_, r)| r.id == burn.agent_id)
                     .map(|(id, _)| id.clone())
                     .unwrap();
@@ -143,7 +147,8 @@ impl TestWorld {
             board.process_expiry(self.tick);
         }
 
-        self.event_bus.emit(WorldEvent::TickAdvanced { tick: self.tick });
+        self.event_bus
+            .emit(WorldEvent::TickAdvanced { tick: self.tick });
         dead_agents
     }
 
@@ -470,10 +475,7 @@ async fn test_two_agent_100_ticks_survival_then_death_judgment() {
             assert_eq!(agent_b.phase, AgentPhase::Adult);
         } else if tick_num == 10 {
             // Agent B dies this tick
-            assert!(
-                dead.contains(&agent_b_id),
-                "Agent B should die at tick 10"
-            );
+            assert!(dead.contains(&agent_b_id), "Agent B should die at tick 10");
             let agent_b = world.agent(&agent_b_id);
             assert_eq!(agent_b.phase, AgentPhase::Dead);
             assert_eq!(agent_b.tokens, 0);
@@ -489,16 +491,30 @@ async fn test_two_agent_100_ticks_survival_then_death_judgment() {
         if tick_num < 10 {
             assert_eq!(world.living_count(), 2);
         } else {
-            assert_eq!(world.living_count(), 1, "Only Agent A should be alive after tick 10");
+            assert_eq!(
+                world.living_count(),
+                1,
+                "Only Agent A should be alive after tick 10"
+            );
         }
     }
 
     // ── Verify 100 ticks completed ──────────────────────────────────────
 
     assert_eq!(world.tick, 100);
-    assert_eq!(total_tick_events, 100, "Should have 100 TickAdvanced events");
-    assert!(balance_change_events > 0, "Should have BalanceChanged events");
-    assert_eq!(agent_b_died_at_tick, Some(10), "Agent B should have died at tick 10");
+    assert_eq!(
+        total_tick_events, 100,
+        "Should have 100 TickAdvanced events"
+    );
+    assert!(
+        balance_change_events > 0,
+        "Should have BalanceChanged events"
+    );
+    assert_eq!(
+        agent_b_died_at_tick,
+        Some(10),
+        "Agent B should have died at tick 10"
+    );
 
     // ── Phase 3: Verify Agent A still alive, correct final state ────────
 
@@ -510,7 +526,11 @@ async fn test_two_agent_100_ticks_survival_then_death_judgment() {
     // ── Phase 4: Stop Agent A's heartbeat → death judgment ──────────────
 
     world.stop_heartbeat(&agent_a_id);
-    assert_eq!(world.agent(&agent_a_id).tokens, 0, "Agent A tokens should be 0 after heartbeat stop");
+    assert_eq!(
+        world.agent(&agent_a_id).tokens,
+        0,
+        "Agent A tokens should be 0 after heartbeat stop"
+    );
 
     // Advance one more tick to trigger death judgment
     let dead = world.advance_tick().await;
@@ -528,7 +548,9 @@ async fn test_two_agent_100_ticks_survival_then_death_judgment() {
     let mut found_died = false;
     while let Ok(event) = event_rx.try_recv() {
         match event {
-            WorldEvent::AgentDying { agent_id, reason, .. } => {
+            WorldEvent::AgentDying {
+                agent_id, reason, ..
+            } => {
                 assert_eq!(agent_id, agent_a_id);
                 assert_eq!(reason, DeathReason::TokenDepleted);
                 found_dying = true;
@@ -565,11 +587,11 @@ async fn test_event_broadcasting_during_100_ticks() {
 
     // ── Collect and verify spawn events ─────────────────────────────────
 
-    let events: Vec<WorldEvent> = (0..2)
-        .filter_map(|_| event_rx.try_recv().ok())
-        .collect();
+    let events: Vec<WorldEvent> = (0..2).filter_map(|_| event_rx.try_recv().ok()).collect();
     assert_eq!(events.len(), 2);
-    assert!(events.iter().all(|e| e.event_type() == EventType::AgentSpawned));
+    assert!(events
+        .iter()
+        .all(|e| e.event_type() == EventType::AgentSpawned));
 
     // ── Run 100 ticks and collect all events ────────────────────────────
 
@@ -592,11 +614,7 @@ async fn test_event_broadcasting_during_100_ticks() {
                     new_balance,
                     ..
                 } => {
-                    balance_events.push((
-                        agent_id.clone(),
-                        *old_balance,
-                        *new_balance,
-                    ));
+                    balance_events.push((agent_id.clone(), *old_balance, *new_balance));
                 }
                 WorldEvent::AgentDying { agent_id, .. } => {
                     death_events.push((agent_id.clone(), EventType::AgentDying));
@@ -611,7 +629,11 @@ async fn test_event_broadcasting_during_100_ticks() {
 
     // ── Verify TickAdvanced events: all 100 ticks ───────────────────────
 
-    assert_eq!(tick_events.len(), 100, "Should have exactly 100 TickAdvanced events");
+    assert_eq!(
+        tick_events.len(),
+        100,
+        "Should have exactly 100 TickAdvanced events"
+    );
     // Verify sequential tick numbers
     for (i, tick) in tick_events.iter().enumerate() {
         assert_eq!(*tick, (i as u64) + 1, "Tick events should be sequential");
@@ -662,7 +684,11 @@ async fn test_event_broadcasting_during_100_ticks() {
 
     // ── Verify death events ─────────────────────────────────────────────
 
-    assert_eq!(death_events.len(), 4, "Should have 4 death events (2 dying + 2 died)");
+    assert_eq!(
+        death_events.len(),
+        4,
+        "Should have 4 death events (2 dying + 2 died)"
+    );
 
     let dying_events: Vec<_> = death_events
         .iter()
@@ -757,7 +783,11 @@ async fn test_death_judgment_stop_heartbeat() {
 
     while let Ok(event) = event_rx.try_recv() {
         match &event {
-            WorldEvent::AgentDying { agent_id, reason, grace_ticks } => {
+            WorldEvent::AgentDying {
+                agent_id,
+                reason,
+                grace_ticks,
+            } => {
                 assert_eq!(agent_id, &agent_b_id);
                 assert_eq!(*reason, DeathReason::TokenDepleted);
                 assert_eq!(*grace_ticks, 0);

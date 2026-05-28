@@ -3,9 +3,9 @@ use std::sync::Arc;
 
 use uuid::Uuid;
 
-use crate::economy::token_burn::AgentRecord;
 use super::event::{EventType, WorldEvent};
 use super::subsystem::SubsystemRegistry;
+use crate::economy::token_burn::AgentRecord;
 
 /// Broadcasts world events to all registered subscribers.
 ///
@@ -318,10 +318,8 @@ mod tests {
     #[tokio::test]
     async fn event_bus_filter_by_type() {
         let bus = EventBus::new(64);
-        let mut rx = bus.subscribe_filtered(
-            vec![EventType::AgentDied, EventType::AgentRescued],
-            None,
-        );
+        let mut rx =
+            bus.subscribe_filtered(vec![EventType::AgentDied, EventType::AgentRescued], None);
 
         bus.emit(WorldEvent::TickAdvanced { tick: 1 });
         bus.emit(WorldEvent::AgentDied {
@@ -394,10 +392,8 @@ mod tests {
     #[tokio::test]
     async fn event_bus_filter_by_type_and_agent_id() {
         let bus = EventBus::new(64);
-        let mut rx = bus.subscribe_filtered(
-            vec![EventType::PhaseChanged],
-            Some("agent-001".into()),
-        );
+        let mut rx =
+            bus.subscribe_filtered(vec![EventType::PhaseChanged], Some("agent-001".into()));
 
         bus.emit(WorldEvent::PhaseChanged {
             agent_id: "agent-001".into(),
@@ -551,8 +547,8 @@ mod tests {
                 tokens,
                 skills: HashMap::new(),
                 personality: String::new(),
-            tasks_completed: 0,
-            tasks_attempted: 0,
+                tasks_completed: 0,
+                tasks_attempted: 0,
             },
         )
     }

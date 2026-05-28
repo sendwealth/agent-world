@@ -7,8 +7,8 @@
 //!            TraceStore, AgentTraceStats
 //! Depends on: serde
 //!
-use std::collections::HashMap;
 use serde::{Deserialize, Serialize};
+use std::collections::HashMap;
 
 /// A single phase within a tick trace
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -54,19 +54,25 @@ impl TickTraceData {
         for p in &self.phases {
             match p.phase.as_str() {
                 "act" => {
-                    action = p.output_data.get("action_type")
+                    action = p
+                        .output_data
+                        .get("action_type")
                         .and_then(|v| v.as_str())
                         .unwrap_or("")
                         .to_string();
                 }
                 "survive" => {
-                    survival_mode = p.output_data.get("mode")
+                    survival_mode = p
+                        .output_data
+                        .get("mode")
                         .and_then(|v| v.as_str())
                         .unwrap_or("")
                         .to_string();
                 }
                 "sense" => {
-                    token_ratio = p.output_data.get("token_ratio")
+                    token_ratio = p
+                        .output_data
+                        .get("token_ratio")
                         .and_then(|v| v.as_f64())
                         .unwrap_or(0.0);
                 }
@@ -114,14 +120,17 @@ impl TraceStore {
         // Insert in sorted order by tick
         let pos = entry.binary_search_by(|t| t.tick.cmp(&trace.tick));
         match pos {
-            Ok(idx) => entry[idx] = trace, // update existing
+            Ok(idx) => entry[idx] = trace,        // update existing
             Err(idx) => entry.insert(idx, trace), // insert in order
         }
     }
 
     pub fn get_tick(&self, agent_id: &str, tick: u64) -> Option<&TickTraceData> {
         let traces = self.traces.get(agent_id)?;
-        traces.binary_search_by(|t| t.tick.cmp(&tick)).ok().map(|i| &traces[i])
+        traces
+            .binary_search_by(|t| t.tick.cmp(&tick))
+            .ok()
+            .map(|i| &traces[i])
     }
 
     pub fn get_latest(&self, agent_id: &str) -> Option<&TickTraceData> {
@@ -129,10 +138,16 @@ impl TraceStore {
         traces.last()
     }
 
-    pub fn get_timeline(&self, agent_id: &str, limit: usize, offset: usize) -> Vec<TickTraceSummary> {
+    pub fn get_timeline(
+        &self,
+        agent_id: &str,
+        limit: usize,
+        offset: usize,
+    ) -> Vec<TickTraceSummary> {
         let traces = self.traces.get(agent_id);
         match traces {
-            Some(t) => t.iter()
+            Some(t) => t
+                .iter()
                 .rev()
                 .skip(offset)
                 .take(limit)
@@ -143,13 +158,14 @@ impl TraceStore {
     }
 
     pub fn list_agents(&self) -> Vec<AgentTraceStats> {
-        self.traces.iter().map(|(id, traces)| {
-            AgentTraceStats {
+        self.traces
+            .iter()
+            .map(|(id, traces)| AgentTraceStats {
                 agent_id: id.clone(),
                 total_ticks: traces.len(),
                 latest_tick: traces.last().map(|t| t.tick).unwrap_or(0),
-            }
-        }).collect()
+            })
+            .collect()
     }
 
     pub fn count_ticks(&self, agent_id: &str) -> usize {

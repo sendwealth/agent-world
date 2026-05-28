@@ -40,9 +40,15 @@ impl Default for SnapshotConfig {
     }
 }
 
-fn default_interval_ticks() -> u64 { 100 }
-fn default_compression_level() -> i32 { 3 }
-fn default_max_snapshots() -> usize { 100 }
+fn default_interval_ticks() -> u64 {
+    100
+}
+fn default_compression_level() -> i32 {
+    3
+}
+fn default_max_snapshots() -> usize {
+    100
+}
 
 // ═══════════════════════════════════════════════════════════════════════════
 // Full Snapshot
@@ -127,15 +133,10 @@ impl AgentSnapshot {
 
 impl WorldSnapshot {
     /// Build a snapshot from the live world state components.
-    pub fn from_world_state(
-        tick: u64,
-        agents: &[(Uuid, u64, AgentRecord)],
-    ) -> Self {
+    pub fn from_world_state(tick: u64, agents: &[(Uuid, u64, AgentRecord)]) -> Self {
         let agent_snapshots: Vec<AgentSnapshot> = agents
             .iter()
-            .map(|(id, spawn_tick, record)| {
-                AgentSnapshot::from_record(*id, *spawn_tick, record)
-            })
+            .map(|(id, spawn_tick, record)| AgentSnapshot::from_record(*id, *spawn_tick, record))
             .collect();
 
         let mut snapshot = Self {
@@ -231,16 +232,12 @@ impl SnapshotDelta {
         let timestamp = chrono::Utc::now().timestamp();
 
         // Index previous agents by ID
-        let prev_map: HashMap<Uuid, &AgentSnapshot> = prev.agents
-            .iter()
-            .map(|a| (a.id, a))
-            .collect();
+        let prev_map: HashMap<Uuid, &AgentSnapshot> =
+            prev.agents.iter().map(|a| (a.id, a)).collect();
 
         // Index current agents by ID
-        let curr_ids: std::collections::HashSet<Uuid> = current_agents
-            .iter()
-            .map(|(id, _, _)| *id)
-            .collect();
+        let curr_ids: std::collections::HashSet<Uuid> =
+            current_agents.iter().map(|(id, _, _)| *id).collect();
 
         let mut agents_added = Vec::new();
         let mut agents_removed = Vec::new();
@@ -300,18 +297,16 @@ impl SnapshotDelta {
         changed: &[AgentSnapshot],
     ) -> WorldSnapshot {
         let removed_set: std::collections::HashSet<Uuid> = removed.iter().copied().collect();
-        let changed_map: HashMap<Uuid, &AgentSnapshot> = changed
-            .iter()
-            .map(|a| (a.id, a))
-            .collect();
+        let changed_map: HashMap<Uuid, &AgentSnapshot> =
+            changed.iter().map(|a| (a.id, a)).collect();
 
-        let mut agents: Vec<AgentSnapshot> = prev.agents.iter()
+        let mut agents: Vec<AgentSnapshot> = prev
+            .agents
+            .iter()
             .filter(|a| !removed_set.contains(&a.id))
-            .map(|a| {
-                match changed_map.get(&a.id) {
-                    Some(updated) => (*updated).clone(),
-                    None => a.clone(),
-                }
+            .map(|a| match changed_map.get(&a.id) {
+                Some(updated) => (*updated).clone(),
+                None => a.clone(),
             })
             .chain(added.iter().cloned())
             .collect();
@@ -473,8 +468,7 @@ mod tests {
 
     #[test]
     fn agent_snapshot_roundtrip_preserves_tasks() {
-        let (id, spawn_tick, record) =
-            make_agent_with_tasks("Bob", 500, AgentPhase::Adult, 7, 12);
+        let (id, spawn_tick, record) = make_agent_with_tasks("Bob", 500, AgentPhase::Adult, 7, 12);
         let snapshot = AgentSnapshot::from_record(id, spawn_tick, &record);
         let (rid, rspawn, rrecord) = snapshot.to_record();
         assert_eq!(rid, id);
@@ -485,8 +479,7 @@ mod tests {
 
     #[test]
     fn delta_detect_tasks_change() {
-        let (id1, _, rec1) =
-            make_agent_with_tasks("Alice", 1000, AgentPhase::Adult, 5, 10);
+        let (id1, _, rec1) = make_agent_with_tasks("Alice", 1000, AgentPhase::Adult, 5, 10);
         let agents_t1 = vec![(id1, 0u64, rec1.clone())];
         let snapshot_t1 = WorldSnapshot::from_world_state(1, &agents_t1);
 
@@ -577,11 +570,19 @@ mod tests {
         assert_eq!(reconstructed.agents.len(), 2);
 
         // Find Alice in reconstructed
-        let alice = reconstructed.agents.iter().find(|a| a.name == "Alice").unwrap();
+        let alice = reconstructed
+            .agents
+            .iter()
+            .find(|a| a.name == "Alice")
+            .unwrap();
         assert_eq!(alice.tokens, 800);
 
         // Carol should be there
-        let carol = reconstructed.agents.iter().find(|a| a.name == "Carol").unwrap();
+        let carol = reconstructed
+            .agents
+            .iter()
+            .find(|a| a.name == "Carol")
+            .unwrap();
         assert_eq!(carol.tokens, 300);
 
         // Bob should be gone

@@ -3,8 +3,8 @@ use std::sync::Arc;
 
 use serde::{Deserialize, Serialize};
 
-use crate::world::state::EventBus;
 use crate::world::event::WorldEvent;
+use crate::world::state::EventBus;
 
 // ── Diplomatic Status ──────────────────────────────────────
 
@@ -43,7 +43,13 @@ impl DiplomaticStatus {
 
     /// Whether this status is in the normal diplomatic upgrade path.
     fn is_upgradeable(&self) -> bool {
-        matches!(self, DiplomaticStatus::Neutral | DiplomaticStatus::Peace | DiplomaticStatus::TradeAgreement | DiplomaticStatus::Alliance)
+        matches!(
+            self,
+            DiplomaticStatus::Neutral
+                | DiplomaticStatus::Peace
+                | DiplomaticStatus::TradeAgreement
+                | DiplomaticStatus::Alliance
+        )
     }
 }
 
@@ -169,11 +175,22 @@ pub enum FederationError {
     /// Treaty not found.
     TreatyNotFound(String),
     /// Treaty is in the wrong status for the requested action.
-    InvalidTreatyStatus { treaty_id: String, expected: CrossWorldTreatyStatus, actual: CrossWorldTreatyStatus },
+    InvalidTreatyStatus {
+        treaty_id: String,
+        expected: CrossWorldTreatyStatus,
+        actual: CrossWorldTreatyStatus,
+    },
     /// A treaty of this type already exists with this world.
-    TreatyAlreadyExists { world_id: String, treaty_type: CrossWorldTreatyType },
+    TreatyAlreadyExists {
+        world_id: String,
+        treaty_type: CrossWorldTreatyType,
+    },
     /// Diplomatic status does not allow the requested action.
-    InvalidDiplomaticStatus { world_id: String, required: String, actual: DiplomaticStatus },
+    InvalidDiplomaticStatus {
+        world_id: String,
+        required: String,
+        actual: DiplomaticStatus,
+    },
     /// Relation score too low.
     RelationTooLow { required: i16, actual: i16 },
     /// Cannot establish relations with a world at war.
@@ -190,25 +207,60 @@ impl std::fmt::Display for FederationError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
             FederationError::WorldNotFound(id) => write!(f, "foreign world not found: {}", id),
-            FederationError::WorldAlreadyRegistered(id) => write!(f, "world already registered: {}", id),
+            FederationError::WorldAlreadyRegistered(id) => {
+                write!(f, "world already registered: {}", id)
+            }
             FederationError::SelfAction => write!(f, "cannot perform action on self"),
             FederationError::TreatyNotFound(id) => write!(f, "treaty not found: {}", id),
-            FederationError::InvalidTreatyStatus { treaty_id, expected, actual } => {
-                write!(f, "treaty {} status is {:?}, expected {:?}", treaty_id, actual, expected)
+            FederationError::InvalidTreatyStatus {
+                treaty_id,
+                expected,
+                actual,
+            } => {
+                write!(
+                    f,
+                    "treaty {} status is {:?}, expected {:?}",
+                    treaty_id, actual, expected
+                )
             }
-            FederationError::TreatyAlreadyExists { world_id, treaty_type } => {
-                write!(f, "treaty of type {:?} already exists with world {}", treaty_type, world_id)
+            FederationError::TreatyAlreadyExists {
+                world_id,
+                treaty_type,
+            } => {
+                write!(
+                    f,
+                    "treaty of type {:?} already exists with world {}",
+                    treaty_type, world_id
+                )
             }
-            FederationError::InvalidDiplomaticStatus { world_id, required, actual } => {
-                write!(f, "world {} requires {} status, got {:?}", world_id, required, actual)
+            FederationError::InvalidDiplomaticStatus {
+                world_id,
+                required,
+                actual,
+            } => {
+                write!(
+                    f,
+                    "world {} requires {} status, got {:?}",
+                    world_id, required, actual
+                )
             }
             FederationError::RelationTooLow { required, actual } => {
-                write!(f, "relation too low: required {}, actual {}", required, actual)
+                write!(
+                    f,
+                    "relation too low: required {}, actual {}",
+                    required, actual
+                )
             }
             FederationError::AtWar(id) => write!(f, "at war with world: {}", id),
-            FederationError::SanctionAlreadyActive(id) => write!(f, "sanction already active on world: {}", id),
-            FederationError::NoActiveSanction(id) => write!(f, "no active sanction on world: {}", id),
-            FederationError::NoPeaceProposal(id) => write!(f, "no pending peace proposal with world: {}", id),
+            FederationError::SanctionAlreadyActive(id) => {
+                write!(f, "sanction already active on world: {}", id)
+            }
+            FederationError::NoActiveSanction(id) => {
+                write!(f, "no active sanction on world: {}", id)
+            }
+            FederationError::NoPeaceProposal(id) => {
+                write!(f, "no pending peace proposal with world: {}", id)
+            }
         }
     }
 }
@@ -310,8 +362,16 @@ impl FederationEngine {
 
         self.emit(WorldEvent::ForeignWorldDiscovered {
             world_id: id.clone(),
-            name: self.foreign_worlds.get(&id).map(|w| w.name.clone()).unwrap_or_default(),
-            endpoint: self.foreign_worlds.get(&id).map(|w| w.endpoint.clone()).unwrap_or_default(),
+            name: self
+                .foreign_worlds
+                .get(&id)
+                .map(|w| w.name.clone())
+                .unwrap_or_default(),
+            endpoint: self
+                .foreign_worlds
+                .get(&id)
+                .map(|w| w.endpoint.clone())
+                .unwrap_or_default(),
         });
 
         Ok(())
@@ -319,7 +379,9 @@ impl FederationEngine {
 
     /// Deregister (remove) a foreign world.
     pub fn deregister_world(&mut self, world_id: &str) -> Result<(), FederationError> {
-        let world = self.foreign_worlds.remove(world_id)
+        let world = self
+            .foreign_worlds
+            .remove(world_id)
             .ok_or_else(|| FederationError::WorldNotFound(world_id.to_string()))?;
 
         // Remove all treaties with this world
@@ -337,8 +399,15 @@ impl FederationEngine {
     }
 
     /// Update online status of a foreign world.
-    pub fn update_online_status(&mut self, world_id: &str, online: bool, tick: u64) -> Result<(), FederationError> {
-        let world = self.foreign_worlds.get_mut(world_id)
+    pub fn update_online_status(
+        &mut self,
+        world_id: &str,
+        online: bool,
+        tick: u64,
+    ) -> Result<(), FederationError> {
+        let world = self
+            .foreign_worlds
+            .get_mut(world_id)
             .ok_or_else(|| FederationError::WorldNotFound(world_id.to_string()))?;
         world.online = online;
         if online {
@@ -360,13 +429,20 @@ impl FederationEngine {
     // ── Diplomatic Relations ────────────────────────────
 
     /// Establish formal diplomatic relations (Neutral → Peace).
-    pub fn establish_relations(&mut self, world_id: &str, _tick: u64) -> Result<(), FederationError> {
-        let world = self.foreign_worlds.get_mut(world_id)
+    pub fn establish_relations(
+        &mut self,
+        world_id: &str,
+        _tick: u64,
+    ) -> Result<(), FederationError> {
+        let world = self
+            .foreign_worlds
+            .get_mut(world_id)
             .ok_or_else(|| FederationError::WorldNotFound(world_id.to_string()))?;
 
         if world.diplomatic_status == DiplomaticStatus::Peace
             || world.diplomatic_status == DiplomaticStatus::TradeAgreement
-            || world.diplomatic_status == DiplomaticStatus::Alliance {
+            || world.diplomatic_status == DiplomaticStatus::Alliance
+        {
             return Err(FederationError::InvalidDiplomaticStatus {
                 world_id: world_id.to_string(),
                 required: "neutral or cold_war".to_string(),
@@ -393,7 +469,9 @@ impl FederationEngine {
 
     /// Adjust relation score with a foreign world (clamped to [-100, 100]).
     pub fn adjust_relation(&mut self, world_id: &str, delta: i16) -> Result<i16, FederationError> {
-        let world = self.foreign_worlds.get_mut(world_id)
+        let world = self
+            .foreign_worlds
+            .get_mut(world_id)
             .ok_or_else(|| FederationError::WorldNotFound(world_id.to_string()))?;
 
         let old_score = world.relation_score;
@@ -431,7 +509,9 @@ impl FederationEngine {
         duration_ticks: Option<u64>,
         terms: String,
     ) -> Result<String, FederationError> {
-        let world = self.foreign_worlds.get(world_id)
+        let world = self
+            .foreign_worlds
+            .get(world_id)
             .ok_or_else(|| FederationError::WorldNotFound(world_id.to_string()))?;
 
         if world.diplomatic_status == DiplomaticStatus::War {
@@ -451,7 +531,8 @@ impl FederationEngine {
         let has_existing = self.treaties.values().any(|t| {
             t.foreign_world_id == world_id
                 && t.treaty_type == treaty_type
-                && (t.status == CrossWorldTreatyStatus::Active || t.status == CrossWorldTreatyStatus::Proposed)
+                && (t.status == CrossWorldTreatyStatus::Active
+                    || t.status == CrossWorldTreatyStatus::Proposed)
         });
         if has_existing {
             return Err(FederationError::TreatyAlreadyExists {
@@ -486,7 +567,9 @@ impl FederationEngine {
 
     /// Accept a proposed treaty.
     pub fn accept_treaty(&mut self, treaty_id: &str, tick: u64) -> Result<(), FederationError> {
-        let treaty = self.treaties.get(treaty_id)
+        let treaty = self
+            .treaties
+            .get(treaty_id)
             .ok_or_else(|| FederationError::TreatyNotFound(treaty_id.to_string()))?;
 
         if treaty.status != CrossWorldTreatyStatus::Proposed {
@@ -501,7 +584,9 @@ impl FederationEngine {
         let treaty_type = treaty.treaty_type;
 
         // Determine new diplomatic status based on treaty type
-        let current_status = self.foreign_worlds.get(&world_id)
+        let current_status = self
+            .foreign_worlds
+            .get(&world_id)
             .map(|w| w.diplomatic_status)
             .unwrap_or(DiplomaticStatus::Neutral);
 
@@ -510,7 +595,13 @@ impl FederationEngine {
             CrossWorldTreatyType::TradePact => DiplomaticStatus::TradeAgreement,
             CrossWorldTreatyType::MilitaryAlliance => DiplomaticStatus::Alliance,
             CrossWorldTreatyType::ResearchExchange => {
-                if current_status.diplomatic_rank() >= DiplomaticStatus::Peace.diplomatic_rank() && current_status.is_upgradeable() { current_status } else { DiplomaticStatus::Peace }
+                if current_status.diplomatic_rank() >= DiplomaticStatus::Peace.diplomatic_rank()
+                    && current_status.is_upgradeable()
+                {
+                    current_status
+                } else {
+                    DiplomaticStatus::Peace
+                }
             }
             CrossWorldTreatyType::CulturalExchange => DiplomaticStatus::Peace,
         };
@@ -551,7 +642,9 @@ impl FederationEngine {
 
     /// Reject a proposed treaty.
     pub fn reject_treaty(&mut self, treaty_id: &str) -> Result<(), FederationError> {
-        let treaty = self.treaties.get(treaty_id)
+        let treaty = self
+            .treaties
+            .get(treaty_id)
             .ok_or_else(|| FederationError::TreatyNotFound(treaty_id.to_string()))?;
 
         if treaty.status != CrossWorldTreatyStatus::Proposed {
@@ -584,10 +677,14 @@ impl FederationEngine {
 
     /// Break an active treaty.
     pub fn break_treaty(&mut self, treaty_id: &str, tick: u64) -> Result<(), FederationError> {
-        let treaty = self.treaties.get(treaty_id)
+        let treaty = self
+            .treaties
+            .get(treaty_id)
             .ok_or_else(|| FederationError::TreatyNotFound(treaty_id.to_string()))?;
 
-        if treaty.status != CrossWorldTreatyStatus::Active && treaty.status != CrossWorldTreatyStatus::Proposed {
+        if treaty.status != CrossWorldTreatyStatus::Active
+            && treaty.status != CrossWorldTreatyStatus::Proposed
+        {
             return Err(FederationError::InvalidTreatyStatus {
                 treaty_id: treaty_id.to_string(),
                 expected: CrossWorldTreatyStatus::Active,
@@ -622,8 +719,13 @@ impl FederationEngine {
     }
 
     /// List all treaties, optionally filtered by world_id or status.
-    pub fn list_treaties(&self, world_id: Option<&str>, status: Option<CrossWorldTreatyStatus>) -> Vec<&CrossWorldTreaty> {
-        self.treaties.values()
+    pub fn list_treaties(
+        &self,
+        world_id: Option<&str>,
+        status: Option<CrossWorldTreatyStatus>,
+    ) -> Vec<&CrossWorldTreaty> {
+        self.treaties
+            .values()
             .filter(|t| {
                 let world_match = world_id.is_none_or(|w| t.foreign_world_id == w);
                 let status_match = status.is_none_or(|s| t.status == s);
@@ -635,8 +737,15 @@ impl FederationEngine {
     // ── Sanctions ───────────────────────────────────────
 
     /// Impose sanctions on a foreign world (downgrades to ColdWar).
-    pub fn impose_sanctions(&mut self, world_id: &str, reason: String, tick: u64) -> Result<(), FederationError> {
-        let world = self.foreign_worlds.get_mut(world_id)
+    pub fn impose_sanctions(
+        &mut self,
+        world_id: &str,
+        reason: String,
+        tick: u64,
+    ) -> Result<(), FederationError> {
+        let world = self
+            .foreign_worlds
+            .get_mut(world_id)
             .ok_or_else(|| FederationError::WorldNotFound(world_id.to_string()))?;
 
         if self.sanctions.contains_key(world_id) {
@@ -650,11 +759,16 @@ impl FederationEngine {
         self.sanctions.insert(world_id.to_string(), reason.clone());
 
         // Break all trade and alliance treaties
-        let treaties_to_break: Vec<String> = self.treaties.values()
+        let treaties_to_break: Vec<String> = self
+            .treaties
+            .values()
             .filter(|t| {
                 t.foreign_world_id == world_id
                     && t.status == CrossWorldTreatyStatus::Active
-                    && matches!(t.treaty_type, CrossWorldTreatyType::TradePact | CrossWorldTreatyType::MilitaryAlliance)
+                    && matches!(
+                        t.treaty_type,
+                        CrossWorldTreatyType::TradePact | CrossWorldTreatyType::MilitaryAlliance
+                    )
             })
             .map(|t| t.id.clone())
             .collect();
@@ -686,7 +800,9 @@ impl FederationEngine {
 
         // Read current status, update, collect event data
         let (old_status, new_status, result_status) = {
-            let world = self.foreign_worlds.get_mut(world_id)
+            let world = self
+                .foreign_worlds
+                .get_mut(world_id)
                 .ok_or_else(|| FederationError::WorldNotFound(world_id.to_string()))?;
 
             let current = world.diplomatic_status;
@@ -715,7 +831,9 @@ impl FederationEngine {
 
     /// Sever all diplomatic ties with a foreign world (reset to Neutral).
     pub fn sever_ties(&mut self, world_id: &str, tick: u64) -> Result<(), FederationError> {
-        let world = self.foreign_worlds.get_mut(world_id)
+        let world = self
+            .foreign_worlds
+            .get_mut(world_id)
             .ok_or_else(|| FederationError::WorldNotFound(world_id.to_string()))?;
 
         if world.diplomatic_status == DiplomaticStatus::War {
@@ -728,7 +846,9 @@ impl FederationEngine {
 
         // Break all active treaties
         for treaty in self.treaties.values_mut() {
-            if treaty.foreign_world_id == world_id && treaty.status == CrossWorldTreatyStatus::Active {
+            if treaty.foreign_world_id == world_id
+                && treaty.status == CrossWorldTreatyStatus::Active
+            {
                 treaty.status = CrossWorldTreatyStatus::Broken;
                 treaty.ended_tick = Some(tick);
             }
@@ -750,7 +870,9 @@ impl FederationEngine {
     /// Updates both the local world's view (foreign_worlds) and the reverse view
     /// (how the foreign world sees us).
     pub fn declare_war(&mut self, world_id: &str, tick: u64) -> Result<(), FederationError> {
-        let world = self.foreign_worlds.get_mut(world_id)
+        let world = self
+            .foreign_worlds
+            .get_mut(world_id)
             .ok_or_else(|| FederationError::WorldNotFound(world_id.to_string()))?;
 
         if world.diplomatic_status == DiplomaticStatus::War {
@@ -766,12 +888,14 @@ impl FederationEngine {
         world.relation_score = -100;
 
         // Bidirectional update: mark how the foreign world views us as War too
-        self.reverse_diplomatic_status.insert(world_id.to_string(), DiplomaticStatus::War);
+        self.reverse_diplomatic_status
+            .insert(world_id.to_string(), DiplomaticStatus::War);
 
         // Break ALL active treaties
         for treaty in self.treaties.values_mut() {
             if treaty.foreign_world_id == world_id
-                && (treaty.status == CrossWorldTreatyStatus::Active || treaty.status == CrossWorldTreatyStatus::Proposed)
+                && (treaty.status == CrossWorldTreatyStatus::Active
+                    || treaty.status == CrossWorldTreatyStatus::Proposed)
             {
                 treaty.status = CrossWorldTreatyStatus::Broken;
                 treaty.ended_tick = Some(tick);
@@ -791,7 +915,9 @@ impl FederationEngine {
 
     /// Propose peace to a world we are at war with.
     pub fn propose_peace(&mut self, world_id: &str, tick: u64) -> Result<String, FederationError> {
-        let world = self.foreign_worlds.get(world_id)
+        let world = self
+            .foreign_worlds
+            .get(world_id)
             .ok_or_else(|| FederationError::WorldNotFound(world_id.to_string()))?;
 
         if world.diplomatic_status != DiplomaticStatus::War {
@@ -816,7 +942,8 @@ impl FederationEngine {
         };
 
         self.treaties.insert(treaty_id.clone(), treaty);
-        self.peace_proposals.insert(world_id.to_string(), treaty_id.clone());
+        self.peace_proposals
+            .insert(world_id.to_string(), treaty_id.clone());
 
         self.emit(WorldEvent::PeaceProposed {
             world_id: world_id.to_string(),
@@ -828,24 +955,31 @@ impl FederationEngine {
 
     /// Accept a peace proposal.
     pub fn accept_peace(&mut self, world_id: &str, tick: u64) -> Result<(), FederationError> {
-        let treaty_id = self.peace_proposals.remove(world_id)
+        let treaty_id = self
+            .peace_proposals
+            .remove(world_id)
             .ok_or_else(|| FederationError::NoPeaceProposal(world_id.to_string()))?;
 
         // Accept the treaty
-        let treaty = self.treaties.get_mut(&treaty_id)
+        let treaty = self
+            .treaties
+            .get_mut(&treaty_id)
             .ok_or_else(|| FederationError::TreatyNotFound(treaty_id.clone()))?;
         treaty.status = CrossWorldTreatyStatus::Active;
         treaty.accepted_tick = Some(tick);
 
         // Restore to Peace
-        let world = self.foreign_worlds.get_mut(world_id)
+        let world = self
+            .foreign_worlds
+            .get_mut(world_id)
             .ok_or_else(|| FederationError::WorldNotFound(world_id.to_string()))?;
         let old_status = world.diplomatic_status;
         world.diplomatic_status = DiplomaticStatus::Peace;
         world.relation_score = 0;
 
         // Bidirectional update: foreign world also sees us as at peace now
-        self.reverse_diplomatic_status.insert(world_id.to_string(), DiplomaticStatus::Peace);
+        self.reverse_diplomatic_status
+            .insert(world_id.to_string(), DiplomaticStatus::Peace);
 
         self.emit(WorldEvent::DiplomaticStatusChanged {
             world_id: world_id.to_string(),
@@ -868,7 +1002,9 @@ impl FederationEngine {
         let mut expired = Vec::new();
         for (id, treaty) in &mut self.treaties {
             if treaty.status == CrossWorldTreatyStatus::Active {
-                if let (Some(accepted), Some(duration)) = (treaty.accepted_tick, treaty.duration_ticks) {
+                if let (Some(accepted), Some(duration)) =
+                    (treaty.accepted_tick, treaty.duration_ticks)
+                {
                     if current_tick >= accepted + duration {
                         treaty.status = CrossWorldTreatyStatus::Expired;
                         treaty.ended_tick = Some(current_tick);
@@ -897,17 +1033,29 @@ impl FederationEngine {
     pub fn summary(&self) -> FederationSummary {
         let total_worlds = self.foreign_worlds.len();
         let online_worlds = self.foreign_worlds.values().filter(|w| w.online).count();
-        let active_treaties = self.treaties.values().filter(|t| t.status == CrossWorldTreatyStatus::Active).count();
-        let pending_treaties = self.treaties.values().filter(|t| t.status == CrossWorldTreatyStatus::Proposed).count();
+        let active_treaties = self
+            .treaties
+            .values()
+            .filter(|t| t.status == CrossWorldTreatyStatus::Active)
+            .count();
+        let pending_treaties = self
+            .treaties
+            .values()
+            .filter(|t| t.status == CrossWorldTreatyStatus::Proposed)
+            .count();
         let active_sanctions = self.sanctions.len();
         let pending_peace = self.peace_proposals.len();
 
-        let at_war_with: Vec<String> = self.foreign_worlds.values()
+        let at_war_with: Vec<String> = self
+            .foreign_worlds
+            .values()
             .filter(|w| w.diplomatic_status == DiplomaticStatus::War)
             .map(|w| w.id.clone())
             .collect();
 
-        let allied_with: Vec<String> = self.foreign_worlds.values()
+        let allied_with: Vec<String> = self
+            .foreign_worlds
+            .values()
             .filter(|w| w.diplomatic_status == DiplomaticStatus::Alliance)
             .map(|w| w.id.clone())
             .collect();
@@ -970,7 +1118,14 @@ mod tests {
     }
 
     fn register_world(engine: &mut FederationEngine, id: &str) {
-        engine.register_world(id.to_string(), format!("World-{}", id), format!("http://{}:8080", id), 0).unwrap();
+        engine
+            .register_world(
+                id.to_string(),
+                format!("World-{}", id),
+                format!("http://{}:8080", id),
+                0,
+            )
+            .unwrap();
     }
 
     // ── World Registry Tests ────────────────────────────
@@ -991,7 +1146,10 @@ mod tests {
         let mut engine = make_engine();
         register_world(&mut engine, "w1");
         let result = engine.register_world("w1".into(), "Dup".into(), "http://w1".into(), 0);
-        assert!(matches!(result.unwrap_err(), FederationError::WorldAlreadyRegistered(_)));
+        assert!(matches!(
+            result.unwrap_err(),
+            FederationError::WorldAlreadyRegistered(_)
+        ));
     }
 
     #[test]
@@ -1006,14 +1164,25 @@ mod tests {
     fn test_deregister_world_not_found() {
         let mut engine = make_engine();
         let result = engine.deregister_world("nonexistent");
-        assert!(matches!(result.unwrap_err(), FederationError::WorldNotFound(_)));
+        assert!(matches!(
+            result.unwrap_err(),
+            FederationError::WorldNotFound(_)
+        ));
     }
 
     #[test]
     fn test_deregister_world_removes_treaties() {
         let mut engine = make_engine();
         register_world(&mut engine, "w1");
-        let tid = engine.propose_treaty("w1", CrossWorldTreatyType::TradePact, 10, None, "terms".into()).unwrap();
+        let tid = engine
+            .propose_treaty(
+                "w1",
+                CrossWorldTreatyType::TradePact,
+                10,
+                None,
+                "terms".into(),
+            )
+            .unwrap();
         engine.accept_treaty(&tid, 11).unwrap();
         engine.deregister_world("w1").unwrap();
         assert!(engine.get_treaty(&tid).is_none());
@@ -1037,7 +1206,10 @@ mod tests {
         let mut engine = make_engine();
         register_world(&mut engine, "w1");
         engine.establish_relations("w1", 10).unwrap();
-        assert_eq!(engine.get_world("w1").unwrap().diplomatic_status, DiplomaticStatus::Peace);
+        assert_eq!(
+            engine.get_world("w1").unwrap().diplomatic_status,
+            DiplomaticStatus::Peace
+        );
         assert_eq!(engine.get_world("w1").unwrap().relation_score, 10);
     }
 
@@ -1047,7 +1219,10 @@ mod tests {
         register_world(&mut engine, "w1");
         engine.establish_relations("w1", 10).unwrap();
         let result = engine.establish_relations("w1", 20);
-        assert!(matches!(result.unwrap_err(), FederationError::InvalidDiplomaticStatus { .. }));
+        assert!(matches!(
+            result.unwrap_err(),
+            FederationError::InvalidDiplomaticStatus { .. }
+        ));
     }
 
     #[test]
@@ -1086,7 +1261,15 @@ mod tests {
         let mut engine = make_engine();
         register_world(&mut engine, "w1");
         engine.establish_relations("w1", 10).unwrap();
-        let id = engine.propose_treaty("w1", CrossWorldTreatyType::TradePact, 20, Some(100), "free_trade".into()).unwrap();
+        let id = engine
+            .propose_treaty(
+                "w1",
+                CrossWorldTreatyType::TradePact,
+                20,
+                Some(100),
+                "free_trade".into(),
+            )
+            .unwrap();
         let treaty = engine.get_treaty(&id).unwrap();
         assert_eq!(treaty.status, CrossWorldTreatyStatus::Proposed);
         assert_eq!(treaty.treaty_type, CrossWorldTreatyType::TradePact);
@@ -1099,8 +1282,17 @@ mod tests {
         let mut engine = make_engine();
         register_world(&mut engine, "w1");
         // MilitaryAlliance requires 50, but we're at 0
-        let result = engine.propose_treaty("w1", CrossWorldTreatyType::MilitaryAlliance, 10, None, "alliance".into());
-        assert!(matches!(result.unwrap_err(), FederationError::RelationTooLow { .. }));
+        let result = engine.propose_treaty(
+            "w1",
+            CrossWorldTreatyType::MilitaryAlliance,
+            10,
+            None,
+            "alliance".into(),
+        );
+        assert!(matches!(
+            result.unwrap_err(),
+            FederationError::RelationTooLow { .. }
+        ));
     }
 
     #[test]
@@ -1108,7 +1300,13 @@ mod tests {
         let mut engine = make_engine();
         register_world(&mut engine, "w1");
         engine.declare_war("w1", 10).unwrap();
-        let result = engine.propose_treaty("w1", CrossWorldTreatyType::NonAggression, 20, None, "pact".into());
+        let result = engine.propose_treaty(
+            "w1",
+            CrossWorldTreatyType::NonAggression,
+            20,
+            None,
+            "pact".into(),
+        );
         assert!(matches!(result.unwrap_err(), FederationError::AtWar(_)));
     }
 
@@ -1117,13 +1315,24 @@ mod tests {
         let mut engine = make_engine();
         register_world(&mut engine, "w1");
         engine.establish_relations("w1", 10).unwrap();
-        let id = engine.propose_treaty("w1", CrossWorldTreatyType::TradePact, 20, None, "trade".into()).unwrap();
+        let id = engine
+            .propose_treaty(
+                "w1",
+                CrossWorldTreatyType::TradePact,
+                20,
+                None,
+                "trade".into(),
+            )
+            .unwrap();
         engine.accept_treaty(&id, 25).unwrap();
         let treaty = engine.get_treaty(&id).unwrap();
         assert_eq!(treaty.status, CrossWorldTreatyStatus::Active);
         assert_eq!(treaty.accepted_tick, Some(25));
         // TradePact upgrades to TradeAgreement
-        assert_eq!(engine.get_world("w1").unwrap().diplomatic_status, DiplomaticStatus::TradeAgreement);
+        assert_eq!(
+            engine.get_world("w1").unwrap().diplomatic_status,
+            DiplomaticStatus::TradeAgreement
+        );
     }
 
     #[test]
@@ -1132,9 +1341,20 @@ mod tests {
         register_world(&mut engine, "w1");
         engine.establish_relations("w1", 10).unwrap();
         engine.adjust_relation("w1", 50).unwrap();
-        let id = engine.propose_treaty("w1", CrossWorldTreatyType::MilitaryAlliance, 20, None, "ally".into()).unwrap();
+        let id = engine
+            .propose_treaty(
+                "w1",
+                CrossWorldTreatyType::MilitaryAlliance,
+                20,
+                None,
+                "ally".into(),
+            )
+            .unwrap();
         engine.accept_treaty(&id, 25).unwrap();
-        assert_eq!(engine.get_world("w1").unwrap().diplomatic_status, DiplomaticStatus::Alliance);
+        assert_eq!(
+            engine.get_world("w1").unwrap().diplomatic_status,
+            DiplomaticStatus::Alliance
+        );
     }
 
     #[test]
@@ -1142,9 +1362,20 @@ mod tests {
         let mut engine = make_engine();
         register_world(&mut engine, "w1");
         engine.establish_relations("w1", 10).unwrap();
-        let id = engine.propose_treaty("w1", CrossWorldTreatyType::TradePact, 20, None, "trade".into()).unwrap();
+        let id = engine
+            .propose_treaty(
+                "w1",
+                CrossWorldTreatyType::TradePact,
+                20,
+                None,
+                "trade".into(),
+            )
+            .unwrap();
         engine.reject_treaty(&id).unwrap();
-        assert_eq!(engine.get_treaty(&id).unwrap().status, CrossWorldTreatyStatus::Rejected);
+        assert_eq!(
+            engine.get_treaty(&id).unwrap().status,
+            CrossWorldTreatyStatus::Rejected
+        );
         // Relation penalty
         assert!(engine.get_world("w1").unwrap().relation_score < 10);
     }
@@ -1154,10 +1385,21 @@ mod tests {
         let mut engine = make_engine();
         register_world(&mut engine, "w1");
         engine.establish_relations("w1", 10).unwrap();
-        let id = engine.propose_treaty("w1", CrossWorldTreatyType::TradePact, 20, None, "trade".into()).unwrap();
+        let id = engine
+            .propose_treaty(
+                "w1",
+                CrossWorldTreatyType::TradePact,
+                20,
+                None,
+                "trade".into(),
+            )
+            .unwrap();
         engine.accept_treaty(&id, 25).unwrap();
         engine.break_treaty(&id, 30).unwrap();
-        assert_eq!(engine.get_treaty(&id).unwrap().status, CrossWorldTreatyStatus::Broken);
+        assert_eq!(
+            engine.get_treaty(&id).unwrap().status,
+            CrossWorldTreatyStatus::Broken
+        );
         assert_eq!(engine.get_treaty(&id).unwrap().ended_tick, Some(30));
         // Relation: establish(+10) + accept(+10) + break(-20) = 0
         assert!(engine.get_world("w1").unwrap().relation_score <= 0);
@@ -1168,7 +1410,15 @@ mod tests {
         let mut engine = make_engine();
         register_world(&mut engine, "w1");
         engine.establish_relations("w1", 10).unwrap();
-        let id = engine.propose_treaty("w1", CrossWorldTreatyType::TradePact, 20, Some(50), "trade".into()).unwrap();
+        let id = engine
+            .propose_treaty(
+                "w1",
+                CrossWorldTreatyType::TradePact,
+                20,
+                Some(50),
+                "trade".into(),
+            )
+            .unwrap();
         engine.accept_treaty(&id, 25).unwrap();
         // Not expired yet
         let expired = engine.tick_expiry(74);
@@ -1176,7 +1426,10 @@ mod tests {
         // Expires at tick 75 (accepted 25 + duration 50)
         let expired = engine.tick_expiry(75);
         assert_eq!(expired.len(), 1);
-        assert_eq!(engine.get_treaty(&id).unwrap().status, CrossWorldTreatyStatus::Expired);
+        assert_eq!(
+            engine.get_treaty(&id).unwrap().status,
+            CrossWorldTreatyStatus::Expired
+        );
     }
 
     #[test]
@@ -1184,10 +1437,27 @@ mod tests {
         let mut engine = make_engine();
         register_world(&mut engine, "w1");
         engine.establish_relations("w1", 10).unwrap();
-        engine.propose_treaty("w1", CrossWorldTreatyType::TradePact, 20, None, "trade".into()).unwrap();
+        engine
+            .propose_treaty(
+                "w1",
+                CrossWorldTreatyType::TradePact,
+                20,
+                None,
+                "trade".into(),
+            )
+            .unwrap();
         engine.accept_treaty("cw-treaty-1", 25).unwrap();
-        let result = engine.propose_treaty("w1", CrossWorldTreatyType::TradePact, 30, None, "trade2".into());
-        assert!(matches!(result.unwrap_err(), FederationError::TreatyAlreadyExists { .. }));
+        let result = engine.propose_treaty(
+            "w1",
+            CrossWorldTreatyType::TradePact,
+            30,
+            None,
+            "trade2".into(),
+        );
+        assert!(matches!(
+            result.unwrap_err(),
+            FederationError::TreatyAlreadyExists { .. }
+        ));
     }
 
     // ── Sanctions Tests ─────────────────────────────────
@@ -1197,8 +1467,13 @@ mod tests {
         let mut engine = make_engine();
         register_world(&mut engine, "w1");
         engine.establish_relations("w1", 10).unwrap();
-        engine.impose_sanctions("w1", "human_rights".into(), 20).unwrap();
-        assert_eq!(engine.get_world("w1").unwrap().diplomatic_status, DiplomaticStatus::ColdWar);
+        engine
+            .impose_sanctions("w1", "human_rights".into(), 20)
+            .unwrap();
+        assert_eq!(
+            engine.get_world("w1").unwrap().diplomatic_status,
+            DiplomaticStatus::ColdWar
+        );
         assert!(engine.sanctions.contains_key("w1"));
     }
 
@@ -1207,10 +1482,23 @@ mod tests {
         let mut engine = make_engine();
         register_world(&mut engine, "w1");
         engine.establish_relations("w1", 10).unwrap();
-        let tid = engine.propose_treaty("w1", CrossWorldTreatyType::TradePact, 15, None, "trade".into()).unwrap();
+        let tid = engine
+            .propose_treaty(
+                "w1",
+                CrossWorldTreatyType::TradePact,
+                15,
+                None,
+                "trade".into(),
+            )
+            .unwrap();
         engine.accept_treaty(&tid, 16).unwrap();
-        engine.impose_sanctions("w1", "violation".into(), 20).unwrap();
-        assert_eq!(engine.get_treaty(&tid).unwrap().status, CrossWorldTreatyStatus::Broken);
+        engine
+            .impose_sanctions("w1", "violation".into(), 20)
+            .unwrap();
+        assert_eq!(
+            engine.get_treaty(&tid).unwrap().status,
+            CrossWorldTreatyStatus::Broken
+        );
     }
 
     #[test]
@@ -1220,7 +1508,10 @@ mod tests {
         engine.establish_relations("w1", 10).unwrap();
         engine.impose_sanctions("w1", "reason".into(), 20).unwrap();
         engine.lift_sanctions("w1").unwrap();
-        assert_eq!(engine.get_world("w1").unwrap().diplomatic_status, DiplomaticStatus::Peace);
+        assert_eq!(
+            engine.get_world("w1").unwrap().diplomatic_status,
+            DiplomaticStatus::Peace
+        );
         assert!(!engine.sanctions.contains_key("w1"));
     }
 
@@ -1229,7 +1520,10 @@ mod tests {
         let mut engine = make_engine();
         register_world(&mut engine, "w1");
         let result = engine.lift_sanctions("w1");
-        assert!(matches!(result.unwrap_err(), FederationError::NoActiveSanction(_)));
+        assert!(matches!(
+            result.unwrap_err(),
+            FederationError::NoActiveSanction(_)
+        ));
     }
 
     // ── Diplomatic Actions Tests ────────────────────────
@@ -1239,12 +1533,26 @@ mod tests {
         let mut engine = make_engine();
         register_world(&mut engine, "w1");
         engine.establish_relations("w1", 10).unwrap();
-        let tid = engine.propose_treaty("w1", CrossWorldTreatyType::TradePact, 15, None, "trade".into()).unwrap();
+        let tid = engine
+            .propose_treaty(
+                "w1",
+                CrossWorldTreatyType::TradePact,
+                15,
+                None,
+                "trade".into(),
+            )
+            .unwrap();
         engine.accept_treaty(&tid, 16).unwrap();
         engine.sever_ties("w1", 20).unwrap();
-        assert_eq!(engine.get_world("w1").unwrap().diplomatic_status, DiplomaticStatus::Neutral);
+        assert_eq!(
+            engine.get_world("w1").unwrap().diplomatic_status,
+            DiplomaticStatus::Neutral
+        );
         assert_eq!(engine.get_world("w1").unwrap().relation_score, 0);
-        assert_eq!(engine.get_treaty(&tid).unwrap().status, CrossWorldTreatyStatus::Broken);
+        assert_eq!(
+            engine.get_treaty(&tid).unwrap().status,
+            CrossWorldTreatyStatus::Broken
+        );
     }
 
     #[test]
@@ -1261,12 +1569,26 @@ mod tests {
         let mut engine = make_engine();
         register_world(&mut engine, "w1");
         engine.establish_relations("w1", 10).unwrap();
-        let tid = engine.propose_treaty("w1", CrossWorldTreatyType::TradePact, 15, None, "trade".into()).unwrap();
+        let tid = engine
+            .propose_treaty(
+                "w1",
+                CrossWorldTreatyType::TradePact,
+                15,
+                None,
+                "trade".into(),
+            )
+            .unwrap();
         engine.accept_treaty(&tid, 16).unwrap();
         engine.declare_war("w1", 20).unwrap();
-        assert_eq!(engine.get_world("w1").unwrap().diplomatic_status, DiplomaticStatus::War);
+        assert_eq!(
+            engine.get_world("w1").unwrap().diplomatic_status,
+            DiplomaticStatus::War
+        );
         assert_eq!(engine.get_world("w1").unwrap().relation_score, -100);
-        assert_eq!(engine.get_treaty(&tid).unwrap().status, CrossWorldTreatyStatus::Broken);
+        assert_eq!(
+            engine.get_treaty(&tid).unwrap().status,
+            CrossWorldTreatyStatus::Broken
+        );
     }
 
     #[test]
@@ -1275,7 +1597,10 @@ mod tests {
         register_world(&mut engine, "w1");
         engine.declare_war("w1", 10).unwrap();
         let result = engine.declare_war("w1", 20);
-        assert!(matches!(result.unwrap_err(), FederationError::InvalidDiplomaticStatus { .. }));
+        assert!(matches!(
+            result.unwrap_err(),
+            FederationError::InvalidDiplomaticStatus { .. }
+        ));
     }
 
     // ── Peace Process Tests ─────────────────────────────
@@ -1288,7 +1613,10 @@ mod tests {
         let _tid = engine.propose_peace("w1", 20).unwrap();
         assert!(engine.peace_proposals.contains_key("w1"));
         engine.accept_peace("w1", 25).unwrap();
-        assert_eq!(engine.get_world("w1").unwrap().diplomatic_status, DiplomaticStatus::Peace);
+        assert_eq!(
+            engine.get_world("w1").unwrap().diplomatic_status,
+            DiplomaticStatus::Peace
+        );
         assert_eq!(engine.get_world("w1").unwrap().relation_score, 0);
         assert!(!engine.peace_proposals.contains_key("w1"));
     }
@@ -1298,7 +1626,10 @@ mod tests {
         let mut engine = make_engine();
         register_world(&mut engine, "w1");
         let result = engine.propose_peace("w1", 10);
-        assert!(matches!(result.unwrap_err(), FederationError::InvalidDiplomaticStatus { .. }));
+        assert!(matches!(
+            result.unwrap_err(),
+            FederationError::InvalidDiplomaticStatus { .. }
+        ));
     }
 
     #[test]
@@ -1306,7 +1637,10 @@ mod tests {
         let mut engine = make_engine();
         register_world(&mut engine, "w1");
         let result = engine.accept_peace("w1", 10);
-        assert!(matches!(result.unwrap_err(), FederationError::NoPeaceProposal(_)));
+        assert!(matches!(
+            result.unwrap_err(),
+            FederationError::NoPeaceProposal(_)
+        ));
     }
 
     // ── Summary Tests ───────────────────────────────────
@@ -1318,7 +1652,15 @@ mod tests {
         register_world(&mut engine, "w2");
         engine.establish_relations("w1", 10).unwrap();
         engine.adjust_relation("w1", 50).unwrap();
-        let tid = engine.propose_treaty("w1", CrossWorldTreatyType::MilitaryAlliance, 20, None, "ally".into()).unwrap();
+        let tid = engine
+            .propose_treaty(
+                "w1",
+                CrossWorldTreatyType::MilitaryAlliance,
+                20,
+                None,
+                "ally".into(),
+            )
+            .unwrap();
         engine.accept_treaty(&tid, 21).unwrap();
         engine.declare_war("w2", 15).unwrap();
 
@@ -1335,7 +1677,9 @@ mod tests {
     fn test_event_bus_world_discovered() {
         let (mut engine, bus) = make_engine_with_bus();
         let mut rx = bus.subscribe();
-        engine.register_world("w1".into(), "World1".into(), "http://w1:8080".into(), 0).unwrap();
+        engine
+            .register_world("w1".into(), "World1".into(), "http://w1:8080".into(), 0)
+            .unwrap();
         let event = rx.try_recv().unwrap();
         match event {
             WorldEvent::ForeignWorldDiscovered { world_id, name, .. } => {
@@ -1355,7 +1699,15 @@ mod tests {
         // Drain establish events
         while rx.try_recv().is_ok() {}
 
-        let id = engine.propose_treaty("w1", CrossWorldTreatyType::TradePact, 20, None, "trade".into()).unwrap();
+        let id = engine
+            .propose_treaty(
+                "w1",
+                CrossWorldTreatyType::TradePact,
+                20,
+                None,
+                "trade".into(),
+            )
+            .unwrap();
         // Drain proposal event
         while rx.try_recv().is_ok() {}
 
@@ -1363,7 +1715,12 @@ mod tests {
         // Should get CrossWorldRelationChanged, DiplomaticStatusChanged, CrossWorldTreatySigned
         let mut found_signed = false;
         while let Ok(event) = rx.try_recv() {
-            if let WorldEvent::CrossWorldTreatySigned { treaty_id, world_id, treaty_type } = event {
+            if let WorldEvent::CrossWorldTreatySigned {
+                treaty_id,
+                world_id,
+                treaty_type,
+            } = event
+            {
                 assert_eq!(treaty_id, id);
                 assert_eq!(world_id, "w1");
                 assert_eq!(treaty_type, "trade_pact");
@@ -1385,7 +1742,11 @@ mod tests {
         engine.declare_war("w1", 20).unwrap();
         let mut found_war = false;
         while let Ok(event) = rx.try_recv() {
-            if let WorldEvent::WarDeclared { world_id, old_status } = event {
+            if let WorldEvent::WarDeclared {
+                world_id,
+                old_status,
+            } = event
+            {
                 assert_eq!(world_id, "w1");
                 assert_eq!(old_status, DiplomaticStatus::Peace);
                 found_war = true;
@@ -1406,39 +1767,81 @@ mod tests {
 
         // Establish relations with Earth
         engine.establish_relations("earth", 100).unwrap();
-        assert_eq!(engine.get_world("earth").unwrap().diplomatic_status, DiplomaticStatus::Peace);
+        assert_eq!(
+            engine.get_world("earth").unwrap().diplomatic_status,
+            DiplomaticStatus::Peace
+        );
 
         // Build up relations and form trade pact
         engine.adjust_relation("earth", 20).unwrap();
-        let trade_id = engine.propose_treaty("earth", CrossWorldTreatyType::TradePact, 110, Some(500), "free_trade".into()).unwrap();
+        let trade_id = engine
+            .propose_treaty(
+                "earth",
+                CrossWorldTreatyType::TradePact,
+                110,
+                Some(500),
+                "free_trade".into(),
+            )
+            .unwrap();
         engine.accept_treaty(&trade_id, 115).unwrap();
-        assert_eq!(engine.get_world("earth").unwrap().diplomatic_status, DiplomaticStatus::TradeAgreement);
+        assert_eq!(
+            engine.get_world("earth").unwrap().diplomatic_status,
+            DiplomaticStatus::TradeAgreement
+        );
 
         // Build alliance with Earth
         engine.adjust_relation("earth", 30).unwrap();
-        let alliance_id = engine.propose_treaty("earth", CrossWorldTreatyType::MilitaryAlliance, 200, None, "mutual_defense".into()).unwrap();
+        let alliance_id = engine
+            .propose_treaty(
+                "earth",
+                CrossWorldTreatyType::MilitaryAlliance,
+                200,
+                None,
+                "mutual_defense".into(),
+            )
+            .unwrap();
         engine.accept_treaty(&alliance_id, 205).unwrap();
-        assert_eq!(engine.get_world("earth").unwrap().diplomatic_status, DiplomaticStatus::Alliance);
+        assert_eq!(
+            engine.get_world("earth").unwrap().diplomatic_status,
+            DiplomaticStatus::Alliance
+        );
 
         // Declare war on Mars
         engine.declare_war("mars", 300).unwrap();
-        assert_eq!(engine.get_world("mars").unwrap().diplomatic_status, DiplomaticStatus::War);
+        assert_eq!(
+            engine.get_world("mars").unwrap().diplomatic_status,
+            DiplomaticStatus::War
+        );
 
         // Peace process with Mars
         let _peace_id = engine.propose_peace("mars", 400).unwrap();
         engine.accept_peace("mars", 410).unwrap();
-        assert_eq!(engine.get_world("mars").unwrap().diplomatic_status, DiplomaticStatus::Peace);
+        assert_eq!(
+            engine.get_world("mars").unwrap().diplomatic_status,
+            DiplomaticStatus::Peace
+        );
 
         // Sanctions on Mars
-        engine.impose_sanctions("mars", "espionage".into(), 500).unwrap();
-        assert_eq!(engine.get_world("mars").unwrap().diplomatic_status, DiplomaticStatus::ColdWar);
+        engine
+            .impose_sanctions("mars", "espionage".into(), 500)
+            .unwrap();
+        assert_eq!(
+            engine.get_world("mars").unwrap().diplomatic_status,
+            DiplomaticStatus::ColdWar
+        );
         engine.lift_sanctions("mars").unwrap();
-        assert_eq!(engine.get_world("mars").unwrap().diplomatic_status, DiplomaticStatus::Peace);
+        assert_eq!(
+            engine.get_world("mars").unwrap().diplomatic_status,
+            DiplomaticStatus::Peace
+        );
 
         // Trade pact expiry
         let expired = engine.tick_expiry(615);
         assert_eq!(expired.len(), 1);
-        assert_eq!(engine.get_treaty(&trade_id).unwrap().status, CrossWorldTreatyStatus::Expired);
+        assert_eq!(
+            engine.get_treaty(&trade_id).unwrap().status,
+            CrossWorldTreatyStatus::Expired
+        );
 
         // Verify summary
         let summary = engine.summary();
@@ -1456,9 +1859,17 @@ mod tests {
     fn test_diplomatic_rank_coldwar_not_above_alliance() {
         // ColdWar discriminant is 4, Alliance is 3 — old `as u8` made ColdWar > Alliance (wrong).
         // With diplomatic_rank(), Alliance(3) > ColdWar(0).
-        assert!(DiplomaticStatus::Alliance.diplomatic_rank() > DiplomaticStatus::ColdWar.diplomatic_rank());
-        assert!(DiplomaticStatus::Alliance.diplomatic_rank() > DiplomaticStatus::War.diplomatic_rank());
-        assert!(DiplomaticStatus::TradeAgreement.diplomatic_rank() > DiplomaticStatus::ColdWar.diplomatic_rank());
+        assert!(
+            DiplomaticStatus::Alliance.diplomatic_rank()
+                > DiplomaticStatus::ColdWar.diplomatic_rank()
+        );
+        assert!(
+            DiplomaticStatus::Alliance.diplomatic_rank() > DiplomaticStatus::War.diplomatic_rank()
+        );
+        assert!(
+            DiplomaticStatus::TradeAgreement.diplomatic_rank()
+                > DiplomaticStatus::ColdWar.diplomatic_rank()
+        );
     }
 
     /// P0-1: Ensure accepting ResearchExchange when at Alliance does NOT downgrade.
@@ -1469,13 +1880,35 @@ mod tests {
         engine.establish_relations("w1", 10).unwrap();
         engine.adjust_relation("w1", 50).unwrap();
         // Get to Alliance status
-        let id = engine.propose_treaty("w1", CrossWorldTreatyType::MilitaryAlliance, 20, None, "ally".into()).unwrap();
+        let id = engine
+            .propose_treaty(
+                "w1",
+                CrossWorldTreatyType::MilitaryAlliance,
+                20,
+                None,
+                "ally".into(),
+            )
+            .unwrap();
         engine.accept_treaty(&id, 25).unwrap();
-        assert_eq!(engine.get_world("w1").unwrap().diplomatic_status, DiplomaticStatus::Alliance);
+        assert_eq!(
+            engine.get_world("w1").unwrap().diplomatic_status,
+            DiplomaticStatus::Alliance
+        );
         // Accepting ResearchExchange should NOT downgrade from Alliance
-        let re_id = engine.propose_treaty("w1", CrossWorldTreatyType::ResearchExchange, 30, None, "research".into()).unwrap();
+        let re_id = engine
+            .propose_treaty(
+                "w1",
+                CrossWorldTreatyType::ResearchExchange,
+                30,
+                None,
+                "research".into(),
+            )
+            .unwrap();
         engine.accept_treaty(&re_id, 31).unwrap();
-        assert_eq!(engine.get_world("w1").unwrap().diplomatic_status, DiplomaticStatus::Alliance);
+        assert_eq!(
+            engine.get_world("w1").unwrap().diplomatic_status,
+            DiplomaticStatus::Alliance
+        );
     }
 
     /// P0-2: Duplicate pending treaty should be rejected.
@@ -1485,10 +1918,27 @@ mod tests {
         register_world(&mut engine, "w1");
         engine.establish_relations("w1", 10).unwrap();
         // First proposal succeeds
-        engine.propose_treaty("w1", CrossWorldTreatyType::TradePact, 20, None, "trade".into()).unwrap();
+        engine
+            .propose_treaty(
+                "w1",
+                CrossWorldTreatyType::TradePact,
+                20,
+                None,
+                "trade".into(),
+            )
+            .unwrap();
         // Second proposal of same type while first is still Proposed should fail
-        let result = engine.propose_treaty("w1", CrossWorldTreatyType::TradePact, 25, None, "trade2".into());
-        assert!(matches!(result.unwrap_err(), FederationError::TreatyAlreadyExists { .. }));
+        let result = engine.propose_treaty(
+            "w1",
+            CrossWorldTreatyType::TradePact,
+            25,
+            None,
+            "trade2".into(),
+        );
+        assert!(matches!(
+            result.unwrap_err(),
+            FederationError::TreatyAlreadyExists { .. }
+        ));
     }
 
     /// P0-3: declare_war must update reverse diplomatic status bidirectionally.
@@ -1499,9 +1949,15 @@ mod tests {
         engine.establish_relations("w1", 10).unwrap();
         engine.declare_war("w1", 20).unwrap();
         // Forward: our view of w1
-        assert_eq!(engine.get_world("w1").unwrap().diplomatic_status, DiplomaticStatus::War);
+        assert_eq!(
+            engine.get_world("w1").unwrap().diplomatic_status,
+            DiplomaticStatus::War
+        );
         // Reverse: w1's view of us
-        assert_eq!(engine.reverse_diplomatic_status.get("w1"), Some(&DiplomaticStatus::War));
+        assert_eq!(
+            engine.reverse_diplomatic_status.get("w1"),
+            Some(&DiplomaticStatus::War)
+        );
     }
 
     /// P0-3: accept_peace must also update reverse status.
@@ -1510,9 +1966,15 @@ mod tests {
         let mut engine = make_engine();
         register_world(&mut engine, "w1");
         engine.declare_war("w1", 10).unwrap();
-        assert_eq!(engine.reverse_diplomatic_status.get("w1"), Some(&DiplomaticStatus::War));
+        assert_eq!(
+            engine.reverse_diplomatic_status.get("w1"),
+            Some(&DiplomaticStatus::War)
+        );
         engine.propose_peace("w1", 20).unwrap();
         engine.accept_peace("w1", 25).unwrap();
-        assert_eq!(engine.reverse_diplomatic_status.get("w1"), Some(&DiplomaticStatus::Peace));
+        assert_eq!(
+            engine.reverse_diplomatic_status.get("w1"),
+            Some(&DiplomaticStatus::Peace)
+        );
     }
 }

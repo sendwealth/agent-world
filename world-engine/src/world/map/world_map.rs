@@ -280,9 +280,7 @@ impl WorldMap {
     ///
     /// Converts the seeder's 2D grid (using offset coordinates) to axial hex
     /// positions. Each grid cell becomes a tile.
-    pub fn from_seeder_grid(
-        grid: &[Vec<super::super::seeder::Terrain>],
-    ) -> Self {
+    pub fn from_seeder_grid(grid: &[Vec<super::super::seeder::Terrain>]) -> Self {
         let mut map = Self::new();
         for (row_idx, row) in grid.iter().enumerate() {
             for (col_idx, seeder_terrain) in row.iter().enumerate() {
@@ -410,10 +408,7 @@ mod tests {
 
         // Restore
         assert!(map.restore_snapshot(idx));
-        assert_eq!(
-            map.get(&water_pos).unwrap().terrain,
-            TerrainType::Plains
-        );
+        assert_eq!(map.get(&water_pos).unwrap().terrain, TerrainType::Plains);
     }
 
     #[test]

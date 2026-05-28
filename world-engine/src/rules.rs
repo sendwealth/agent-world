@@ -209,11 +209,7 @@ impl RuleRegistry {
     /// a violation.
     ///
     /// Returns all results produced by all rules.
-    pub fn evaluate_agent(
-        &self,
-        ctx: &RuleContext,
-        agent: &mut AgentRecord,
-    ) -> Vec<RuleResult> {
+    pub fn evaluate_agent(&self, ctx: &RuleContext, agent: &mut AgentRecord) -> Vec<RuleResult> {
         let mut results = Vec::with_capacity(self.rules.len());
         // Track which categories have already seen a violation
         let mut violated_categories = std::collections::HashSet::new();
@@ -1031,7 +1027,9 @@ impl ResourceExhaustionRule {
 
     /// Create with custom critical ratio.
     pub fn with_critical_ratio(ratio: f64) -> Self {
-        Self { critical_ratio: ratio }
+        Self {
+            critical_ratio: ratio,
+        }
     }
 
     /// Check whether an interaction would constitute a resource exhaustion attack.
@@ -1130,18 +1128,12 @@ impl ReproductionRunawayRule {
 
     /// Check whether an agent meets the reproduction requirements.
     /// Returns a violation event if the agent does not have enough tokens.
-    pub fn check_reproduction(
-        &self,
-        agent: &AgentRecord,
-    ) -> Option<WorldEvent> {
+    pub fn check_reproduction(&self, agent: &AgentRecord) -> Option<WorldEvent> {
         if agent.phase == AgentPhase::Dead {
             return Some(WorldEvent::RuleViolated {
                 agent_id: agent.id.to_string(),
                 rule: "R031".to_string(),
-                details: format!(
-                    "Dead agent '{}' cannot reproduce",
-                    agent.name,
-                ),
+                details: format!("Dead agent '{}' cannot reproduce", agent.name,),
             });
         }
         if agent.tokens < self.min_tokens {
@@ -1227,9 +1219,13 @@ pub fn custom_registry(
     protection_ticks: u64,
 ) -> RuleRegistry {
     let mut registry = RuleRegistry::new();
-    registry.register(Box::new(TokenConsumptionRule::with_config(consumption_config)));
+    registry.register(Box::new(TokenConsumptionRule::with_config(
+        consumption_config,
+    )));
     registry.register(Box::new(DeathJudgmentRule::with_grace_ticks(grace_ticks)));
-    registry.register(Box::new(NewbieProtectionRule::with_protection_ticks(protection_ticks)));
+    registry.register(Box::new(NewbieProtectionRule::with_protection_ticks(
+        protection_ticks,
+    )));
     // Economy, society, and security rules with defaults
     registry.register(Box::new(VoluntaryTradingRule::new()));
     registry.register(Box::new(AntiMonopolyRule::new()));
@@ -1254,16 +1250,29 @@ pub fn custom_registry_full(
     reproduction_min_tokens: u64,
 ) -> RuleRegistry {
     let mut registry = RuleRegistry::new();
-    registry.register(Box::new(TokenConsumptionRule::with_config(consumption_config)));
+    registry.register(Box::new(TokenConsumptionRule::with_config(
+        consumption_config,
+    )));
     registry.register(Box::new(DeathJudgmentRule::with_grace_ticks(grace_ticks)));
-    registry.register(Box::new(NewbieProtectionRule::with_protection_ticks(protection_ticks)));
+    registry.register(Box::new(NewbieProtectionRule::with_protection_ticks(
+        protection_ticks,
+    )));
     registry.register(Box::new(VoluntaryTradingRule::new()));
-    registry.register(Box::new(AntiMonopolyRule::with_params(anti_monopoly_threshold, anti_monopoly_interval)));
+    registry.register(Box::new(AntiMonopolyRule::with_params(
+        anti_monopoly_threshold,
+        anti_monopoly_interval,
+    )));
     registry.register(Box::new(DebtCeilingRule::new()));
     registry.register(Box::new(CommunicationHonestyRule::new()));
-    registry.register(Box::new(ContractBindingRule::with_penalty(contract_breach_penalty)));
-    registry.register(Box::new(ResourceExhaustionRule::with_critical_ratio(resource_critical_ratio)));
-    registry.register(Box::new(ReproductionRunawayRule::with_min_tokens(reproduction_min_tokens)));
+    registry.register(Box::new(ContractBindingRule::with_penalty(
+        contract_breach_penalty,
+    )));
+    registry.register(Box::new(ResourceExhaustionRule::with_critical_ratio(
+        resource_critical_ratio,
+    )));
+    registry.register(Box::new(ReproductionRunawayRule::with_min_tokens(
+        reproduction_min_tokens,
+    )));
     registry
 }
 
@@ -1333,7 +1342,10 @@ mod tests {
         let ids = registry.rule_ids();
         // Priority order: R003(50), R001(100), R010(110), R011(120), R012(130),
         // R020(140), R021(150), R030(160), R031(170), R002(200)
-        assert_eq!(ids, vec!["R003", "R001", "R010", "R011", "R012", "R020", "R021", "R030", "R031", "R002"]);
+        assert_eq!(
+            ids,
+            vec!["R003", "R001", "R010", "R011", "R012", "R020", "R021", "R030", "R031", "R002"]
+        );
     }
 
     #[test]
@@ -1359,8 +1371,14 @@ mod tests {
     #[test]
     fn test_custom_registry_full() {
         let registry = custom_registry_full(
-            ConsumptionConfig::default(), 5, 100,
-            0.25, 50, 0.15, 0.2, 5000,
+            ConsumptionConfig::default(),
+            5,
+            100,
+            0.25,
+            50,
+            0.15,
+            0.2,
+            5000,
         );
         assert_eq!(registry.len(), 10);
     }
@@ -1381,7 +1399,12 @@ mod tests {
         assert_eq!(result.events.len(), 1);
 
         match &result.events[0] {
-            WorldEvent::BalanceChanged { agent_id, currency, old_balance, new_balance } => {
+            WorldEvent::BalanceChanged {
+                agent_id,
+                currency,
+                old_balance,
+                new_balance,
+            } => {
                 assert_eq!(*agent_id, agent.id.to_string());
                 assert_eq!(*currency, crate::world::enums::Currency::Token);
                 assert_eq!(*old_balance, 100);
@@ -1478,7 +1501,13 @@ mod tests {
         // Should emit AgentDying and AgentDied
         assert_eq!(result.events.len(), 2);
         assert!(matches!(&result.events[0], WorldEvent::AgentDying { .. }));
-        assert!(matches!(&result.events[1], WorldEvent::AgentDied { reason: DeathReason::TokenDepleted, .. }));
+        assert!(matches!(
+            &result.events[1],
+            WorldEvent::AgentDied {
+                reason: DeathReason::TokenDepleted,
+                ..
+            }
+        ));
     }
 
     #[test]
@@ -1526,7 +1555,13 @@ mod tests {
 
         // Should emit AgentDying but NOT AgentDied (grace period)
         assert_eq!(result.events.len(), 1);
-        assert!(matches!(&result.events[0], WorldEvent::AgentDying { grace_ticks: 10, .. }));
+        assert!(matches!(
+            &result.events[0],
+            WorldEvent::AgentDying {
+                grace_ticks: 10,
+                ..
+            }
+        ));
         assert_ne!(agent.phase, AgentPhase::Dead); // Not yet dead
     }
 
@@ -1538,7 +1573,10 @@ mod tests {
 
         let result = rule.evaluate(&ctx, &mut agent);
 
-        let died_event = result.events.iter().find(|e| matches!(e, WorldEvent::AgentDied { .. }));
+        let died_event = result
+            .events
+            .iter()
+            .find(|e| matches!(e, WorldEvent::AgentDied { .. }));
         assert!(died_event.is_some());
         if let Some(WorldEvent::AgentDied { reason, .. }) = died_event {
             assert_eq!(*reason, DeathReason::TokenDepleted);
@@ -1595,7 +1633,12 @@ mod tests {
         let result = rule.check_attack(&attacker_id, &target, 10, 0, "attack");
         assert!(result.is_some());
 
-        if let Some(WorldEvent::RuleViolated { agent_id, rule: rule_id, details }) = &result {
+        if let Some(WorldEvent::RuleViolated {
+            agent_id,
+            rule: rule_id,
+            details,
+        }) = &result
+        {
             assert_eq!(*agent_id, attacker_id.to_string());
             assert_eq!(rule_id, "R003");
             assert!(details.contains("protected"));
@@ -1627,7 +1670,11 @@ mod tests {
         assert_eq!(result.events.len(), 1);
 
         match &result.events[0] {
-            WorldEvent::PhaseChanged { old_phase, new_phase, .. } => {
+            WorldEvent::PhaseChanged {
+                old_phase,
+                new_phase,
+                ..
+            } => {
                 assert_eq!(*old_phase, AgentPhase::Birth);
                 assert_eq!(*new_phase, AgentPhase::Childhood);
             }
@@ -1819,9 +1866,16 @@ mod tests {
             name: "skilled".to_string(),
             phase: AgentPhase::Adult,
             tokens: 100,
-            skills: vec![
-                ("mining".to_string(), SkillRecord { name: "mining".to_string(), level: 5, experience: 0.0 }),
-            ].into_iter().collect(),
+            skills: vec![(
+                "mining".to_string(),
+                SkillRecord {
+                    name: "mining".to_string(),
+                    level: 5,
+                    experience: 0.0,
+                },
+            )]
+            .into_iter()
+            .collect(),
             personality: String::new(),
             tasks_completed: 0,
             tasks_attempted: 0,
@@ -1844,7 +1898,7 @@ mod tests {
         let results = registry.evaluate_agent(&ctx, &mut agent);
 
         assert_eq!(agent.phase, AgentPhase::Childhood); // R003 transitioned
-        // Childhood burn: base=10 * 0.5 = 5
+                                                        // Childhood burn: base=10 * 0.5 = 5
         assert_eq!(agent.tokens, 495);
         assert_eq!(agent.phase, AgentPhase::Childhood); // Still alive
 
@@ -1873,7 +1927,12 @@ mod tests {
 
         let result = rule.check_trade(&id1, &id2, false, true);
         assert!(result.is_some());
-        if let Some(WorldEvent::RuleViolated { rule: rule_id, details, .. }) = &result {
+        if let Some(WorldEvent::RuleViolated {
+            rule: rule_id,
+            details,
+            ..
+        }) = &result
+        {
             assert_eq!(rule_id, "R010");
             assert!(details.contains("initiator"));
         }
@@ -1887,7 +1946,12 @@ mod tests {
 
         let result = rule.check_trade(&id1, &id2, true, false);
         assert!(result.is_some());
-        if let Some(WorldEvent::RuleViolated { rule: rule_id, details, .. }) = &result {
+        if let Some(WorldEvent::RuleViolated {
+            rule: rule_id,
+            details,
+            ..
+        }) = &result
+        {
             assert_eq!(rule_id, "R010");
             assert!(details.contains("counterpart"));
         }
@@ -2066,7 +2130,12 @@ mod tests {
 
         let result = rule.check_message(&actual, &claimed);
         assert!(result.is_some());
-        if let Some(WorldEvent::RuleViolated { rule: rule_id, details, .. }) = &result {
+        if let Some(WorldEvent::RuleViolated {
+            rule: rule_id,
+            details,
+            ..
+        }) = &result
+        {
             assert_eq!(rule_id, "R020");
             assert!(details.contains("forgery"));
         }
@@ -2154,7 +2223,12 @@ mod tests {
         // 20/100 = 20% > 10% threshold
         let result = rule.check_interaction(&attacker, &target, 20, 100);
         assert!(result.is_some());
-        if let Some(WorldEvent::RuleViolated { rule: rule_id, details, .. }) = &result {
+        if let Some(WorldEvent::RuleViolated {
+            rule: rule_id,
+            details,
+            ..
+        }) = &result
+        {
             assert_eq!(rule_id, "R030");
             assert!(details.contains("exhaustion"));
         }

@@ -142,11 +142,7 @@ fn test_three_orgs_200_ticks_e2e() {
         )
         .expect("alliance creation should succeed");
 
-    let org_ids: Vec<String> = vec![
-        company.id.clone(),
-        guild.id.clone(),
-        alliance.id.clone(),
-    ];
+    let org_ids: Vec<String> = vec![company.id.clone(), guild.id.clone(), alliance.id.clone()];
 
     // Drain org-creation events
     let _ = drain_events(&mut rx, |e| matches!(e, WorldEvent::OrgCreated { .. }));
@@ -196,8 +192,7 @@ fn test_three_orgs_200_ticks_e2e() {
                     let distribute_amount = balance / 2;
                     let treasury = treasuries.get_mut(org_id).unwrap();
                     let org = store.get_mut(org_id).unwrap();
-                    let _ =
-                        treasury.distribute(org, distribute_amount, tick, None, None);
+                    let _ = treasury.distribute(org, distribute_amount, tick, None, None);
                 }
             }
         }
@@ -438,13 +433,7 @@ fn test_treasury_collect_and_distribute_cycle() {
     for tick in 1..=5 {
         for member in &org.members {
             let org = store.get_mut(&org.id).unwrap();
-            let _ = treasury.collect_tax(
-                org,
-                &member.agent_id,
-                TaxKind::IncomeTax,
-                200,
-                tick,
-            );
+            let _ = treasury.collect_tax(org, &member.agent_id, TaxKind::IncomeTax, 200, tick);
         }
     }
 
@@ -499,12 +488,7 @@ fn test_leadership_election_full_flow() {
 
     // Initiate election
     let _election_id = leadership
-        .initiate_election(
-            org_id,
-            candidates.clone(),
-            VotingMethod::SimpleMajority,
-            10,
-        )
+        .initiate_election(org_id, candidates.clone(), VotingMethod::SimpleMajority, 10)
         .unwrap();
 
     let started = drain_events(&mut rx, |e| {
@@ -663,8 +647,7 @@ fn test_leadership_change_triggers_diplomacy_shift() {
 
     // All vote for candidate 0
     for c in &candidates {
-        let _ =
-            leadership.cast_vote(org_a_uuid, c.clone(), vec![candidates[0].clone()]);
+        let _ = leadership.cast_vote(org_a_uuid, c.clone(), vec![candidates[0].clone()]);
     }
     let winner = leadership.resolve_election(org_a_uuid).unwrap();
     assert!(winner.is_some());
@@ -674,13 +657,7 @@ fn test_leadership_change_triggers_diplomacy_shift() {
 
     // Now propose a treaty
     let treaty_id = diplomacy
-        .propose_treaty(
-            &org_a.id,
-            &org_b.id,
-            TreatyType::NonAggression,
-            20,
-            None,
-        )
+        .propose_treaty(&org_a.id, &org_b.id, TreatyType::NonAggression, 20, None)
         .unwrap();
 
     diplomacy.sign_treaty(&treaty_id, &org_b.id, 25).unwrap();

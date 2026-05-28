@@ -144,7 +144,8 @@ impl WorldRegistry {
         status_filters: &[WorldStatus],
     ) -> Vec<WorldEntry> {
         let worlds = self.worlds.read().await;
-        worlds.values()
+        worlds
+            .values()
             .filter(|w| {
                 // Status filter
                 if !status_filters.is_empty() && !status_filters.contains(&w.status) {
@@ -152,7 +153,8 @@ impl WorldRegistry {
                 }
                 // Capability filter — world must have ALL requested capabilities
                 if !capability_filters.is_empty() {
-                    let has_all = capability_filters.iter()
+                    let has_all = capability_filters
+                        .iter()
                         .all(|cap| w.capabilities.contains(cap));
                     if !has_all {
                         return false;
@@ -160,7 +162,8 @@ impl WorldRegistry {
                 }
                 // Label filter — world must have ALL requested labels
                 if !label_filters.is_empty() {
-                    let has_all = label_filters.iter()
+                    let has_all = label_filters
+                        .iter()
                         .all(|label| w.labels.contains_key(label));
                     if !has_all {
                         return false;

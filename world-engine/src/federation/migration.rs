@@ -18,8 +18,8 @@ use serde::{Deserialize, Serialize};
 use tokio::sync::RwLock;
 use uuid::Uuid;
 
-use crate::world::state::EventBus;
 use crate::world::event::WorldEvent;
+use crate::world::state::EventBus;
 
 // serde_json no longer needed here after removing Custom events
 
@@ -79,7 +79,7 @@ pub struct MigrationPolicy {
     pub weekly_quota: u32,
     pub min_reputation: f64,
     pub token_cost: u64,
-    pub resource_tax_rate: f64,           // 0.0 - 1.0
+    pub resource_tax_rate: f64, // 0.0 - 1.0
     pub require_skill_certification: bool,
     pub blocked_skills: Vec<String>,
     pub cooldown_ticks: u32,
@@ -93,7 +93,7 @@ impl Default for MigrationPolicy {
             weekly_quota: 50,
             min_reputation: 0.0,
             token_cost: 10_000,
-            resource_tax_rate: 0.2,        // 20% tax on resources
+            resource_tax_rate: 0.2, // 20% tax on resources
             require_skill_certification: false,
             blocked_skills: Vec::new(),
             cooldown_ticks: 100,
@@ -197,8 +197,8 @@ pub struct MigrationManager {
     policy: Arc<RwLock<MigrationPolicy>>,
     event_bus: Arc<EventBus>,
     /// Track daily/weekly migration counts for quota enforcement
-    daily_count: Arc<RwLock<HashMap<String, u32>>>,     // date -> count
-    weekly_count: Arc<RwLock<HashMap<String, u32>>>,    // week -> count
+    daily_count: Arc<RwLock<HashMap<String, u32>>>, // date -> count
+    weekly_count: Arc<RwLock<HashMap<String, u32>>>, // week -> count
     /// Track agent's last migration tick for cooldown
     agent_last_migration: Arc<RwLock<HashMap<String, u64>>>,
     /// Current tick
@@ -310,11 +310,15 @@ impl MigrationManager {
         drop(weekly);
 
         // Filter blocked skills — record which ones were blocked
-        let blocked: Vec<String> = agent_snapshot.skills.keys()
+        let blocked: Vec<String> = agent_snapshot
+            .skills
+            .keys()
             .filter(|skill| policy.blocked_skills.contains(skill))
             .cloned()
             .collect();
-        let filtered_skills: HashMap<String, u64> = agent_snapshot.skills.iter()
+        let filtered_skills: HashMap<String, u64> = agent_snapshot
+            .skills
+            .iter()
             .filter(|(skill, _)| !policy.blocked_skills.contains(skill))
             .map(|(k, v)| (k.clone(), *v))
             .collect();
@@ -349,13 +353,22 @@ impl MigrationManager {
             metadata: HashMap::from([
                 ("original_tokens".into(), original_tokens.to_string()),
                 ("original_money".into(), original_money.to_string()),
-                ("tax_collected_tokens".into(), (original_tokens - final_tokens).to_string()),
-                ("tax_collected_money".into(), (original_money - taxed_money).to_string()),
+                (
+                    "tax_collected_tokens".into(),
+                    (original_tokens - final_tokens).to_string(),
+                ),
+                (
+                    "tax_collected_money".into(),
+                    (original_money - taxed_money).to_string(),
+                ),
                 ("blocked_skills".into(), blocked.join(",")),
             ]),
         };
 
-        self.applications.write().await.insert(migration_id.clone(), application.clone());
+        self.applications
+            .write()
+            .await
+            .insert(migration_id.clone(), application.clone());
 
         self.event_bus.publish(WorldEvent::MigrationSubmitted {
             migration_id: migration_id.clone(),
@@ -376,7 +389,8 @@ impl MigrationManager {
         rejection_reason: Option<String>,
     ) -> Result<MigrationApplication, String> {
         let mut apps = self.applications.write().await;
-        let app = apps.get_mut(migration_id)
+        let app = apps
+            .get_mut(migration_id)
             .ok_or_else(|| format!("Migration {} not found", migration_id))?;
 
         if app.status != MigrationStatus::Pending {
@@ -438,7 +452,8 @@ impl MigrationManager {
         // Phase 1: Validate and mark as Executing
         {
             let mut apps = self.applications.write().await;
-            let app = apps.get_mut(migration_id)
+            let app = apps
+                .get_mut(migration_id)
                 .ok_or_else(|| format!("Migration {} not found", migration_id))?;
 
             // Idempotent: already completed
@@ -447,7 +462,10 @@ impl MigrationManager {
             }
 
             if app.status != MigrationStatus::Approved {
-                return Err(format!("Migration must be approved before execution, current: {}", app.status));
+                return Err(format!(
+                    "Migration must be approved before execution, current: {}",
+                    app.status
+                ));
             }
 
             app.status = MigrationStatus::Executing;
@@ -506,11 +524,15 @@ impl MigrationManager {
         }
 
         // Phase 6: Create audit record
-        let tax_tokens = snapshot.metadata.get("tax_collected_tokens")
+        let tax_tokens = snapshot
+            .metadata
+            .get("tax_collected_tokens")
             .and_then(|v| v.parse::<u64>().ok())
             .unwrap_or(0);
         let skills_transferred: Vec<String> = snapshot.skills.keys().cloned().collect();
-        let skills_blocked: Vec<String> = snapshot.metadata.get("blocked_skills")
+        let skills_blocked: Vec<String> = snapshot
+            .metadata
+            .get("blocked_skills")
             .map(|s| s.split(',').map(|s| s.to_string()).collect())
             .unwrap_or_default();
 
@@ -520,7 +542,9 @@ impl MigrationManager {
             source_world_id: snapshot.source_world_id.clone(),
             target_world_id: String::new(), // filled from app
             migration_type: MigrationType::Permanent,
-            token_cost: snapshot.metadata.get("tax_collected_tokens")
+            token_cost: snapshot
+                .metadata
+                .get("tax_collected_tokens")
                 .and_then(|v| v.parse::<u64>().ok())
                 .unwrap_or(0),
             resource_tax_collected: tax_tokens,
@@ -589,7 +613,8 @@ impl MigrationManager {
     ) -> Result<MigrationApplication, String> {
         {
             let apps = self.applications.read().await;
-            let app = apps.get(migration_id)
+            let app = apps
+                .get(migration_id)
                 .ok_or_else(|| format!("Migration {} not found", migration_id))?;
 
             // Idempotent: already completed
@@ -598,7 +623,10 @@ impl MigrationManager {
             }
 
             if app.status != MigrationStatus::Approved {
-                return Err(format!("Migration must be approved before execution, current: {}", app.status));
+                return Err(format!(
+                    "Migration must be approved before execution, current: {}",
+                    app.status
+                ));
             }
         }
 
@@ -674,7 +702,8 @@ impl MigrationManager {
         reason: Option<String>,
     ) -> Result<MigrationApplication, String> {
         let mut apps = self.applications.write().await;
-        let app = apps.get_mut(migration_id)
+        let app = apps
+            .get_mut(migration_id)
             .ok_or_else(|| format!("Migration {} not found", migration_id))?;
 
         if app.status != MigrationStatus::Pending && app.status != MigrationStatus::Approved {
@@ -723,19 +752,26 @@ impl MigrationManager {
         offset: u32,
     ) -> Vec<MigrationApplication> {
         let apps = self.applications.read().await;
-        let filtered: Vec<_> = apps.values()
+        let filtered: Vec<_> = apps
+            .values()
             .filter(|app| {
                 // Filter by direction
                 if let Some(wid) = world_id {
                     if inbound {
-                        if app.target_world_id != wid { return false; }
+                        if app.target_world_id != wid {
+                            return false;
+                        }
                     } else {
-                        if app.source_world_id != wid { return false; }
+                        if app.source_world_id != wid {
+                            return false;
+                        }
                     }
                 }
                 // Filter by status
                 if let Some(status) = &status_filter {
-                    if &app.status != status { return false; }
+                    if &app.status != status {
+                        return false;
+                    }
                 }
                 true
             })
@@ -745,7 +781,8 @@ impl MigrationManager {
         let skip = offset as usize;
         let take = if limit == 0 { total } else { limit as usize };
 
-        filtered.into_iter()
+        filtered
+            .into_iter()
             .skip(skip)
             .take(take)
             .cloned()
@@ -852,7 +889,9 @@ mod tests {
         let app = manager.submit(snapshot, "world-b".into()).await.unwrap();
 
         // Approve
-        let reviewed = manager.review(&app.migration_id, true, "world-b", None).await;
+        let reviewed = manager
+            .review(&app.migration_id, true, "world-b", None)
+            .await;
         assert!(reviewed.is_ok());
         assert_eq!(reviewed.unwrap().status, MigrationStatus::Approved);
 
@@ -870,12 +909,15 @@ mod tests {
         let snapshot = test_snapshot("agent-1", "world-a");
         let app = manager.submit(snapshot, "world-b".into()).await.unwrap();
 
-        let reviewed = manager.review(
-            &app.migration_id,
-            false,
-            "world-b",
-            Some("Quota full".into()),
-        ).await.unwrap();
+        let reviewed = manager
+            .review(
+                &app.migration_id,
+                false,
+                "world-b",
+                Some("Quota full".into()),
+            )
+            .await
+            .unwrap();
 
         assert_eq!(reviewed.status, MigrationStatus::Rejected);
         assert_eq!(reviewed.rejection_reason, Some("Quota full".into()));
@@ -921,7 +963,9 @@ mod tests {
         let snapshot = test_snapshot("agent-1", "world-a");
         let app = manager.submit(snapshot, "world-b".into()).await.unwrap();
 
-        let cancelled = manager.cancel(&app.migration_id, "agent-1", Some("Changed mind".into())).await;
+        let cancelled = manager
+            .cancel(&app.migration_id, "agent-1", Some("Changed mind".into()))
+            .await;
         assert!(cancelled.is_ok());
         assert_eq!(cancelled.unwrap().status, MigrationStatus::Cancelled);
     }
@@ -970,7 +1014,10 @@ mod tests {
 
         let snapshot = test_snapshot("agent-1", "world-a");
         let app = manager.submit(snapshot, "world-b".into()).await.unwrap();
-        manager.review(&app.migration_id, true, "world-b", None).await.unwrap();
+        manager
+            .review(&app.migration_id, true, "world-b", None)
+            .await
+            .unwrap();
 
         // Execute twice — second call should return the same result (idempotent)
         let first = manager.execute_standalone(&app.migration_id).await.unwrap();
@@ -1004,7 +1051,9 @@ mod tests {
         let app = manager.submit(snapshot, "world-b".into()).await.unwrap();
 
         // Only target world can review
-        let result = manager.review(&app.migration_id, true, "world-c", None).await;
+        let result = manager
+            .review(&app.migration_id, true, "world-c", None)
+            .await;
         assert!(result.is_err());
         assert!(result.unwrap_err().contains("target world"));
     }
@@ -1020,8 +1069,14 @@ mod tests {
         manager.submit(snap2, "world-b".into()).await.unwrap();
 
         // Approve and execute first
-        manager.review(&app1.migration_id, true, "world-b", None).await.unwrap();
-        manager.execute_standalone(&app1.migration_id).await.unwrap();
+        manager
+            .review(&app1.migration_id, true, "world-b", None)
+            .await
+            .unwrap();
+        manager
+            .execute_standalone(&app1.migration_id)
+            .await
+            .unwrap();
 
         let stats = manager.stats().await;
         assert_eq!(stats.pending_applications, 1);

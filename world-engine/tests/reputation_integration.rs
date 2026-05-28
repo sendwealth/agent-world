@@ -41,11 +41,15 @@ fn build_app_with_reputation() -> (
         event_bus.as_ref().clone(),
     )));
 
-    let state = AppState::for_test_with(board.clone(), wal, TestOverrides {
-        event_bus: Some(event_bus.clone()),
-        reputation_system: Some(reputation_system.clone()),
-        ..TestOverrides::default()
-    });
+    let state = AppState::for_test_with(
+        board.clone(),
+        wal,
+        TestOverrides {
+            event_bus: Some(event_bus.clone()),
+            reputation_system: Some(reputation_system.clone()),
+            ..TestOverrides::default()
+        },
+    );
 
     let app = agent_world_engine::api::build_full_router(state);
     (event_bus, board, reputation_system, app)
@@ -57,15 +61,24 @@ fn build_app_without_reputation() -> axum::Router {
     let board = Arc::new(Mutex::new(TaskBoard::with_event_bus((*event_bus).clone())));
     let wal = Arc::new(Mutex::new(WAL::new(dir.path())));
 
-    let state = AppState::for_test_with(board, wal, TestOverrides {
-        event_bus: Some(event_bus),
-        ..TestOverrides::default()
-    });
+    let state = AppState::for_test_with(
+        board,
+        wal,
+        TestOverrides {
+            event_bus: Some(event_bus),
+            ..TestOverrides::default()
+        },
+    );
 
     agent_world_engine::api::build_full_router(state)
 }
 
-async fn start_server_with_reputation() -> (u16, Arc<EventBus>, Arc<Mutex<TaskBoard>>, Arc<Mutex<ReputationSystem>>) {
+async fn start_server_with_reputation() -> (
+    u16,
+    Arc<EventBus>,
+    Arc<Mutex<TaskBoard>>,
+    Arc<Mutex<ReputationSystem>>,
+) {
     let (event_bus, board, rep, app) = build_app_with_reputation();
     let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
     let port = listener.local_addr().unwrap().port();
@@ -92,7 +105,13 @@ async fn start_server_without_reputation() -> u16 {
 }
 
 /// Create a task via the API and return its ID.
-async fn create_task(port: u16, title: &str, reward: u64, publisher: &str, expires_at: Option<u64>) -> String {
+async fn create_task(
+    port: u16,
+    title: &str,
+    reward: u64,
+    publisher: &str,
+    expires_at: Option<u64>,
+) -> String {
     let mut body = serde_json::json!({
         "title": title,
         "description": format!("Desc for {}", title),
@@ -140,7 +159,10 @@ async fn complete_task_via_api(port: u16, reward: u64, publisher: &str, worker: 
 
     // Submit
     let resp = client
-        .post(format!("http://127.0.0.1:{}/tasks/{}/submit", port, task_id))
+        .post(format!(
+            "http://127.0.0.1:{}/tasks/{}/submit",
+            port, task_id
+        ))
         .json(&serde_json::json!({ "result": "done" }))
         .send()
         .await
@@ -149,7 +171,10 @@ async fn complete_task_via_api(port: u16, reward: u64, publisher: &str, worker: 
 
     // Review
     let resp = client
-        .post(format!("http://127.0.0.1:{}/tasks/{}/review", port, task_id))
+        .post(format!(
+            "http://127.0.0.1:{}/tasks/{}/review",
+            port, task_id
+        ))
         .json(&serde_json::json!({ "approved": true, "reviewer_id": publisher }))
         .send()
         .await
@@ -158,7 +183,10 @@ async fn complete_task_via_api(port: u16, reward: u64, publisher: &str, worker: 
 
     // Complete
     let resp = client
-        .post(format!("http://127.0.0.1:{}/tasks/{}/complete", port, task_id))
+        .post(format!(
+            "http://127.0.0.1:{}/tasks/{}/complete",
+            port, task_id
+        ))
         .send()
         .await
         .unwrap();
@@ -178,7 +206,10 @@ async fn test_reputation_api_returns_200_when_configured() {
 
     // GET /api/v1/reputation/:agent_id
     let resp = client
-        .get(format!("http://127.0.0.1:{}/api/v1/reputation/agent-1", port))
+        .get(format!(
+            "http://127.0.0.1:{}/api/v1/reputation/agent-1",
+            port
+        ))
         .send()
         .await
         .unwrap();
@@ -189,7 +220,10 @@ async fn test_reputation_api_returns_200_when_configured() {
 
     // GET /api/v1/reputation/rankings
     let resp = client
-        .get(format!("http://127.0.0.1:{}/api/v1/reputation/rankings", port))
+        .get(format!(
+            "http://127.0.0.1:{}/api/v1/reputation/rankings",
+            port
+        ))
         .send()
         .await
         .unwrap();
@@ -197,7 +231,10 @@ async fn test_reputation_api_returns_200_when_configured() {
 
     // GET /api/v1/reputation/low-reputation
     let resp = client
-        .get(format!("http://127.0.0.1:{}/api/v1/reputation/low-reputation", port))
+        .get(format!(
+            "http://127.0.0.1:{}/api/v1/reputation/low-reputation",
+            port
+        ))
         .send()
         .await
         .unwrap();
@@ -205,7 +242,10 @@ async fn test_reputation_api_returns_200_when_configured() {
 
     // GET /api/v1/reputation/config
     let resp = client
-        .get(format!("http://127.0.0.1:{}/api/v1/reputation/config", port))
+        .get(format!(
+            "http://127.0.0.1:{}/api/v1/reputation/config",
+            port
+        ))
         .send()
         .await
         .unwrap();
@@ -226,21 +266,30 @@ async fn test_reputation_api_returns_503_when_not_configured() {
     let client = reqwest::Client::new();
 
     let resp = client
-        .get(format!("http://127.0.0.1:{}/api/v1/reputation/agent-1", port))
+        .get(format!(
+            "http://127.0.0.1:{}/api/v1/reputation/agent-1",
+            port
+        ))
         .send()
         .await
         .unwrap();
     assert_eq!(resp.status(), 503);
 
     let resp = client
-        .get(format!("http://127.0.0.1:{}/api/v1/reputation/rankings", port))
+        .get(format!(
+            "http://127.0.0.1:{}/api/v1/reputation/rankings",
+            port
+        ))
         .send()
         .await
         .unwrap();
     assert_eq!(resp.status(), 503);
 
     let resp = client
-        .get(format!("http://127.0.0.1:{}/api/v1/reputation/config", port))
+        .get(format!(
+            "http://127.0.0.1:{}/api/v1/reputation/config",
+            port
+        ))
         .send()
         .await
         .unwrap();
@@ -261,7 +310,10 @@ async fn test_reputation_increases_on_task_completion() {
     // Verify reputation increased
     let rep = rep.lock().await;
     let score = rep.get_reputation("worker-1");
-    assert_eq!(score, 1.0, "reputation should increase by on_time_bonus (1.0) after completing a task");
+    assert_eq!(
+        score, 1.0,
+        "reputation should increase by on_time_bonus (1.0) after completing a task"
+    );
 }
 
 // ══════════════════════════════════════════════════════════════════════════
@@ -288,7 +340,10 @@ async fn test_reputation_decreases_on_task_breach() {
 
     // Expire the claimed task
     let resp = client
-        .post(format!("http://127.0.0.1:{}/tasks/{}/expire", port, task_id))
+        .post(format!(
+            "http://127.0.0.1:{}/tasks/{}/expire",
+            port, task_id
+        ))
         .send()
         .await
         .unwrap();
@@ -297,7 +352,10 @@ async fn test_reputation_decreases_on_task_breach() {
     // Verify breach penalty applied
     let rep = rep.lock().await;
     let score = rep.get_reputation("worker-1");
-    assert_eq!(score, -5.0, "reputation should decrease by breach_penalty (-5.0) when claimed task expires");
+    assert_eq!(
+        score, -5.0,
+        "reputation should decrease by breach_penalty (-5.0) when claimed task expires"
+    );
 }
 
 // ══════════════════════════════════════════════════════════════════════════
@@ -315,7 +373,10 @@ async fn test_reputation_decreases_on_published_task_expiry() {
 
     // Expire the published task (no assignee)
     let resp = client
-        .post(format!("http://127.0.0.1:{}/tasks/{}/expire", port, task_id))
+        .post(format!(
+            "http://127.0.0.1:{}/tasks/{}/expire",
+            port, task_id
+        ))
         .send()
         .await
         .unwrap();
@@ -324,7 +385,10 @@ async fn test_reputation_decreases_on_published_task_expiry() {
     // Verify publisher penalty applied
     let rep = rep.lock().await;
     let score = rep.get_reputation("publisher-1");
-    assert_eq!(score, -2.0, "publisher reputation should decrease by expiry_penalty (-2.0) when published task expires");
+    assert_eq!(
+        score, -2.0,
+        "publisher reputation should decrease by expiry_penalty (-2.0) when published task expires"
+    );
 }
 
 // ══════════════════════════════════════════════════════════════════════════
@@ -347,12 +411,20 @@ async fn test_high_value_claim_blocked_for_low_reputation() {
         .await
         .unwrap();
 
-    assert_eq!(resp.status(), 403, "low-reputation agent should be forbidden from claiming high-value tasks");
+    assert_eq!(
+        resp.status(),
+        403,
+        "low-reputation agent should be forbidden from claiming high-value tasks"
+    );
 
     // Verify the error message
     let json: serde_json::Value = resp.json().await.unwrap();
     let error = json["error"].as_str().unwrap();
-    assert!(error.contains("reputation too low"), "error should mention low reputation, got: {}", error);
+    assert!(
+        error.contains("reputation too low"),
+        "error should mention low reputation, got: {}",
+        error
+    );
 }
 
 // ══════════════════════════════════════════════════════════════════════════
@@ -381,7 +453,11 @@ async fn test_high_value_claim_allowed_for_high_reputation() {
         .await
         .unwrap();
 
-    assert_eq!(resp.status(), 200, "high-reputation agent should be allowed to claim high-value tasks");
+    assert_eq!(
+        resp.status(),
+        200,
+        "high-reputation agent should be allowed to claim high-value tasks"
+    );
 }
 
 // ══════════════════════════════════════════════════════════════════════════
@@ -400,13 +476,19 @@ async fn test_reputation_accumulates_across_tasks() {
     // Verify accumulated reputation
     let rep = rep.lock().await;
     let score = rep.get_reputation("worker-1");
-    assert_eq!(score, 3.0, "reputation should accumulate 1.0 per task completion");
+    assert_eq!(
+        score, 3.0,
+        "reputation should accumulate 1.0 per task completion"
+    );
     drop(rep);
 
     // Verify via API
     let client = reqwest::Client::new();
     let resp = client
-        .get(format!("http://127.0.0.1:{}/api/v1/reputation/worker-1", port))
+        .get(format!(
+            "http://127.0.0.1:{}/api/v1/reputation/worker-1",
+            port
+        ))
         .send()
         .await
         .unwrap();
@@ -429,7 +511,10 @@ async fn test_reputation_rankings_reflect_completed_tasks() {
 
     let client = reqwest::Client::new();
     let resp = client
-        .get(format!("http://127.0.0.1:{}/api/v1/reputation/rankings", port))
+        .get(format!(
+            "http://127.0.0.1:{}/api/v1/reputation/rankings",
+            port
+        ))
         .send()
         .await
         .unwrap();
@@ -470,7 +555,10 @@ async fn test_low_reputation_endpoint_filters_correctly() {
 
     // Get agents below 0.0 (default threshold is -10.0, so use custom)
     let resp = client
-        .get(format!("http://127.0.0.1:{}/api/v1/reputation/low-reputation?threshold=0.0", port))
+        .get(format!(
+            "http://127.0.0.1:{}/api/v1/reputation/low-reputation?threshold=0.0",
+            port
+        ))
         .send()
         .await
         .unwrap();
@@ -503,5 +591,9 @@ async fn test_low_value_task_claim_always_allowed() {
         .await
         .unwrap();
 
-    assert_eq!(resp.status(), 200, "low-value task should be claimable regardless of reputation");
+    assert_eq!(
+        resp.status(),
+        200,
+        "low-value task should be claimable regardless of reputation"
+    );
 }

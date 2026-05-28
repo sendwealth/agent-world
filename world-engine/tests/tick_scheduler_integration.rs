@@ -18,14 +18,14 @@ use agent_world_engine::economy::token_burn::{AgentRecord, SkillRecord, TokenBur
 use agent_world_engine::rules::default_registry;
 use agent_world_engine::world::enums::AgentPhase;
 use agent_world_engine::world::event::WorldEvent;
+use agent_world_engine::world::genesis::GenesisConfig;
+use agent_world_engine::world::scheduler::Scheduler;
 use agent_world_engine::world::state::EventBus;
+use agent_world_engine::world::state::WorldState;
 use agent_world_engine::world::subsystem::SubsystemRegistry;
 use agent_world_engine::world::subsystems::{
     DeathJudgmentSubsystem, EventBroadcastSubsystem, RuleCheckSubsystem, TokenBurnSubsystem,
 };
-use agent_world_engine::world::scheduler::Scheduler;
-use agent_world_engine::world::state::WorldState;
-use agent_world_engine::world::genesis::GenesisConfig;
 
 // ══════════════════════════════════════════════════════════════════════════
 // HELPERS
@@ -37,7 +37,9 @@ fn make_world_with_individual_subsystems() -> WorldState {
     let bus = Arc::new(EventBus::new(4096));
     let mut registry = SubsystemRegistry::new();
 
-    registry.register(Box::new(TokenBurnSubsystem::new(TokenBurnEngine::with_defaults())));
+    registry.register(Box::new(TokenBurnSubsystem::new(
+        TokenBurnEngine::with_defaults(),
+    )));
     registry.register(Box::new(DeathJudgmentSubsystem::new(0)));
     registry.register(Box::new(EventBroadcastSubsystem::new(bus.clone())));
 
@@ -69,8 +71,8 @@ fn make_agent(phase: AgentPhase, tokens: u64) -> (uuid::Uuid, u64, AgentRecord) 
             tokens,
             skills: HashMap::new(),
             personality: String::new(),
-                tasks_completed: 0,
-                tasks_attempted: 0,
+            tasks_completed: 0,
+            tasks_attempted: 0,
         },
     )
 }
@@ -87,8 +89,8 @@ fn make_agent_named(name: &str, phase: AgentPhase, tokens: u64) -> (uuid::Uuid, 
             tokens,
             skills: HashMap::new(),
             personality: String::new(),
-                tasks_completed: 0,
-                tasks_attempted: 0,
+            tasks_completed: 0,
+            tasks_attempted: 0,
         },
     )
 }
@@ -172,28 +174,55 @@ fn test_tick_pipeline_order_burn_then_death_then_broadcast() {
     let events = world.tick();
 
     // Verify agent is dead
-    let agent = world.agents.iter().find(|(id, _, _)| *id == agent_id).unwrap();
+    let agent = world
+        .agents
+        .iter()
+        .find(|(id, _, _)| *id == agent_id)
+        .unwrap();
     assert_eq!(agent.2.tokens, 0);
     assert_eq!(agent.2.phase, AgentPhase::Dead);
 
     // Verify event types are present
-    let has_balance_changed = events.iter().any(|e| matches!(e, WorldEvent::BalanceChanged { .. }));
-    let has_dying = events.iter().any(|e| matches!(e, WorldEvent::AgentDying { .. }));
-    let has_died = events.iter().any(|e| matches!(e, WorldEvent::AgentDied { .. }));
-    let has_tick = events.iter().any(|e| matches!(e, WorldEvent::TickAdvanced { .. }));
+    let has_balance_changed = events
+        .iter()
+        .any(|e| matches!(e, WorldEvent::BalanceChanged { .. }));
+    let has_dying = events
+        .iter()
+        .any(|e| matches!(e, WorldEvent::AgentDying { .. }));
+    let has_died = events
+        .iter()
+        .any(|e| matches!(e, WorldEvent::AgentDied { .. }));
+    let has_tick = events
+        .iter()
+        .any(|e| matches!(e, WorldEvent::TickAdvanced { .. }));
 
-    assert!(has_balance_changed, "Should have BalanceChanged from token burn");
+    assert!(
+        has_balance_changed,
+        "Should have BalanceChanged from token burn"
+    );
     assert!(has_dying, "Should have AgentDying from death judgment");
     assert!(has_died, "Should have AgentDied from death judgment");
     assert!(has_tick, "Should have TickAdvanced from event broadcast");
 
     // Events should be in order: burn, death, tick
-    let burn_idx = events.iter().position(|e| matches!(e, WorldEvent::BalanceChanged { .. })).unwrap();
-    let died_idx = events.iter().position(|e| matches!(e, WorldEvent::AgentDied { .. })).unwrap();
-    let tick_idx = events.iter().position(|e| matches!(e, WorldEvent::TickAdvanced { .. })).unwrap();
+    let burn_idx = events
+        .iter()
+        .position(|e| matches!(e, WorldEvent::BalanceChanged { .. }))
+        .unwrap();
+    let died_idx = events
+        .iter()
+        .position(|e| matches!(e, WorldEvent::AgentDied { .. }))
+        .unwrap();
+    let tick_idx = events
+        .iter()
+        .position(|e| matches!(e, WorldEvent::TickAdvanced { .. }))
+        .unwrap();
 
     assert!(burn_idx < died_idx, "Burn should come before death");
-    assert!(died_idx < tick_idx, "Death should come before tick broadcast");
+    assert!(
+        died_idx < tick_idx,
+        "Death should come before tick broadcast"
+    );
 }
 
 // ══════════════════════════════════════════════════════════════════════════
@@ -204,7 +233,9 @@ fn test_tick_pipeline_order_burn_then_death_then_broadcast() {
 async fn test_scheduler_run_n_ticks_100() {
     let bus = Arc::new(EventBus::new(4096));
     let mut registry = SubsystemRegistry::new();
-    registry.register(Box::new(TokenBurnSubsystem::new(TokenBurnEngine::with_defaults())));
+    registry.register(Box::new(TokenBurnSubsystem::new(
+        TokenBurnEngine::with_defaults(),
+    )));
     registry.register(Box::new(DeathJudgmentSubsystem::new(0)));
     registry.register(Box::new(EventBroadcastSubsystem::new(bus.clone())));
 
@@ -231,7 +262,9 @@ async fn test_scheduler_run_n_ticks_100() {
 async fn test_scheduler_realtime_with_cancel() {
     let bus = Arc::new(EventBus::new(4096));
     let mut registry = SubsystemRegistry::new();
-    registry.register(Box::new(TokenBurnSubsystem::new(TokenBurnEngine::with_defaults())));
+    registry.register(Box::new(TokenBurnSubsystem::new(
+        TokenBurnEngine::with_defaults(),
+    )));
     registry.register(Box::new(DeathJudgmentSubsystem::new(0)));
     registry.register(Box::new(EventBroadcastSubsystem::new(bus.clone())));
 
@@ -329,12 +362,19 @@ fn test_100_ticks_with_death_and_mixed_profiles() {
     let skilled = world.spawn_agent("Skilled", 300_000, 0);
     // Add skills to skilled agent
     {
-        let skilled_agent = world.agents.iter_mut().find(|(id, _, _)| *id == skilled).unwrap();
-        skilled_agent.2.skills.insert("mining".to_string(), SkillRecord {
-            name: "mining".to_string(),
-            level: 5,
-            experience: 0.0,
-        });
+        let skilled_agent = world
+            .agents
+            .iter_mut()
+            .find(|(id, _, _)| *id == skilled)
+            .unwrap();
+        skilled_agent.2.skills.insert(
+            "mining".to_string(),
+            SkillRecord {
+                name: "mining".to_string(),
+                level: 5,
+                experience: 0.0,
+            },
+        );
     }
 
     // Drain spawn events
@@ -368,7 +408,11 @@ fn test_100_ticks_with_death_and_mixed_profiles() {
     assert_eq!(rich_agent.2.tokens, 500_000 - 10 * 100);
 
     // Skilled: 300_000 - (10 + 5*0.5)*100 = 300_000 - 12*100 = 298_800
-    let skilled_agent = world.agents.iter().find(|(id, _, _)| *id == skilled).unwrap();
+    let skilled_agent = world
+        .agents
+        .iter()
+        .find(|(id, _, _)| *id == skilled)
+        .unwrap();
     assert_eq!(skilled_agent.2.tokens, 300_000 - 12 * 100);
 }
 
@@ -382,7 +426,9 @@ async fn test_scheduler_with_genesis_config_interval() {
 
     let bus = Arc::new(EventBus::new(4096));
     let mut registry = SubsystemRegistry::new();
-    registry.register(Box::new(TokenBurnSubsystem::new(TokenBurnEngine::with_defaults())));
+    registry.register(Box::new(TokenBurnSubsystem::new(
+        TokenBurnEngine::with_defaults(),
+    )));
     registry.register(Box::new(DeathJudgmentSubsystem::new(0)));
     registry.register(Box::new(EventBroadcastSubsystem::new(bus.clone())));
 
@@ -417,7 +463,9 @@ async fn test_events_broadcast_to_bus_per_tick() {
     let mut rx = bus.subscribe();
 
     let mut registry = SubsystemRegistry::new();
-    registry.register(Box::new(TokenBurnSubsystem::new(TokenBurnEngine::with_defaults())));
+    registry.register(Box::new(TokenBurnSubsystem::new(
+        TokenBurnEngine::with_defaults(),
+    )));
     registry.register(Box::new(DeathJudgmentSubsystem::new(0)));
     registry.register(Box::new(EventBroadcastSubsystem::new(bus.clone())));
 
@@ -454,7 +502,11 @@ fn test_100_ticks_empty_world_no_panic() {
     for tick in 1..=100u64 {
         let events = world.tick();
         // Should still get TickAdvanced even with no agents
-        assert!(!events.is_empty(), "Tick {} should produce TickAdvanced", tick);
+        assert!(
+            !events.is_empty(),
+            "Tick {} should produce TickAdvanced",
+            tick
+        );
     }
 
     assert_eq!(world.current_tick(), 100);

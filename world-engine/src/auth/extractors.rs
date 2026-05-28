@@ -90,16 +90,12 @@ impl IntoResponse for AuthError {
                 Json(json!({ "error": "Authentication required" })),
             )
                 .into_response(),
-            AuthError::InvalidToken(msg) => (
-                StatusCode::UNAUTHORIZED,
-                Json(json!({ "error": msg })),
-            )
-                .into_response(),
-            AuthError::Forbidden(msg) => (
-                StatusCode::FORBIDDEN,
-                Json(json!({ "error": msg })),
-            )
-                .into_response(),
+            AuthError::InvalidToken(msg) => {
+                (StatusCode::UNAUTHORIZED, Json(json!({ "error": msg }))).into_response()
+            }
+            AuthError::Forbidden(msg) => {
+                (StatusCode::FORBIDDEN, Json(json!({ "error": msg }))).into_response()
+            }
         }
     }
 }
@@ -123,9 +119,7 @@ async fn extract_auth_from_parts(
         ))?;
 
     let store = auth_store.lock().await;
-    let claims = store
-        .verify_token(token)
-        .map_err(AuthError::InvalidToken)?;
+    let claims = store.verify_token(token).map_err(AuthError::InvalidToken)?;
 
     Ok(AuthUser {
         user_id: claims.sub,

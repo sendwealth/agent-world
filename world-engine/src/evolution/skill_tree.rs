@@ -70,7 +70,9 @@ impl SkillNode {
         self.experience += xp;
 
         let mut leveled_up = false;
-        while self.level < self.max_level && self.experience >= Self::xp_threshold_for_level(self.level) {
+        while self.level < self.max_level
+            && self.experience >= Self::xp_threshold_for_level(self.level)
+        {
             self.experience -= Self::xp_threshold_for_level(self.level);
             self.level += 1;
             leveled_up = true;
@@ -96,32 +98,19 @@ impl SkillTree {
             branches: vec![
                 SkillBranch {
                     root: "coding".into(),
-                    sub_branches: vec![
-                        "frontend".into(),
-                        "backend".into(),
-                        "systems".into(),
-                    ],
+                    sub_branches: vec!["frontend".into(), "backend".into(), "systems".into()],
                 },
                 SkillBranch {
                     root: "communication".into(),
-                    sub_branches: vec![
-                        "negotiation".into(),
-                        "teaching".into(),
-                    ],
+                    sub_branches: vec!["negotiation".into(), "teaching".into()],
                 },
                 SkillBranch {
                     root: "survival".into(),
-                    sub_branches: vec![
-                        "resource_gathering".into(),
-                        "risk_assessment".into(),
-                    ],
+                    sub_branches: vec!["resource_gathering".into(), "risk_assessment".into()],
                 },
                 SkillBranch {
                     root: "social".into(),
-                    sub_branches: vec![
-                        "networking".into(),
-                        "leadership".into(),
-                    ],
+                    sub_branches: vec!["networking".into(), "leadership".into()],
                 },
             ],
             max_level,
@@ -195,10 +184,7 @@ impl SkillTree {
                     },
                 );
             } else {
-                nodes.insert(
-                    name.clone(),
-                    SkillNode::new(name, parent, self.max_level),
-                );
+                nodes.insert(name.clone(), SkillNode::new(name, parent, self.max_level));
             }
         }
         nodes
@@ -263,7 +249,10 @@ mod tests {
         let tree = SkillTree::default();
         assert_eq!(tree.branches.len(), 4);
         assert_eq!(tree.branches[0].root, "coding");
-        assert_eq!(tree.branches[0].sub_branches, vec!["frontend", "backend", "systems"]);
+        assert_eq!(
+            tree.branches[0].sub_branches,
+            vec!["frontend", "backend", "systems"]
+        );
     }
 
     #[test]

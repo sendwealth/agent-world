@@ -98,10 +98,7 @@ impl ApiKeyStore {
     /// Returns `Ok(RateLimitHeaders)` on success, `Err(StatusCode)` on failure
     /// (401 for invalid key, 429 for rate limit exceeded).
     pub async fn check(&self, api_key: &str) -> Result<RateLimitHeaders, StatusCode> {
-        let limiter = self
-            .keys
-            .get(api_key)
-            .ok_or(StatusCode::UNAUTHORIZED)?;
+        let limiter = self.keys.get(api_key).ok_or(StatusCode::UNAUTHORIZED)?;
 
         limiter.consume().await
     }

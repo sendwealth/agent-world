@@ -30,6 +30,7 @@ pub fn export_routes() -> Router<AppState> {
         .route("/api/v2/export/world", get(export_world))
         .route("/api/v2/export/agents/graph", get(export_agents_graph))
         .route("/api/v2/export/metrics/timeseries", get(export_metrics_timeseries))
+        .route("/api/v2/export/bundle", get(export_bundle))
 }
 
 // ── Helpers ───────────────────────────────────────────────
@@ -178,8 +179,14 @@ async fn export_agents_graph(
 ) -> impl IntoResponse {
     let fmt = resolve_format(&query, &headers, "json");
 
+    // Acquire agents lock first (consistent order to avoid deadlocks),
+    // then drop it before acquiring messages lock.
+    let node_ids: Vec<String> = {
+        let agents = state.agents.lock().await;
+        agents.iter().map(|a| a.id.clone()).collect()
+    };
+
     let messages = state.messages.lock().await;
-    let agents = state.agents.lock().await;
 
     // Build adjacency from message history.
     let mut edge_map: std::collections::HashMap<(String, String), u64> =
@@ -188,6 +195,7 @@ async fn export_agents_graph(
         let key = (msg.from_agent.clone(), msg.to_agent.clone());
         *edge_map.entry(key).or_insert(0) += 1;
     }
+    drop(messages);
 
     let edges: Vec<AgentGraphEdge> = edge_map
         .into_iter()
@@ -197,10 +205,6 @@ async fn export_agents_graph(
             weight,
         })
         .collect();
-
-    let node_ids: Vec<String> = agents.iter().map(|a| a.id.clone()).collect();
-    drop(agents);
-    drop(messages);
 
     match fmt.as_str() {
         "graphml" => {
@@ -255,8 +259,8 @@ async fn export_metrics_timeseries(
                         tick: s.tick,
                         agent_count: s.total_population as usize,
                         alive_count: s.active_agents as usize,
-                        total_money: s.gdp,
-                        total_tokens: s.gdp, // GDP is token sum
+                        total_money: s.gdp, // GDP is total_tokens; money is not tracked separately in snapshots
+                        total_tokens: s.gdp, // GDP represents total token supply
                         org_count,
                     })
                     .collect()
@@ -314,7 +318,7 @@ async fn export_metrics_timeseries(
 fn build_graphml(nodes: &[String], edges: &[AgentGraphEdge]) -> String {
     let mut xml = String::from(
         "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n\
-         <graphml xmlns=\"http://graphml.graphstruct.org/graphml\">\n\
+         <graphml xmlns=\"http://graphml.graphstruct.org/xmlns\">\n\
          <graph id=\"G\" edgedefault=\"directed\">\n",
     );
 
@@ -337,7 +341,7 @@ fn build_graphml(nodes: &[String], edges: &[AgentGraphEdge]) -> String {
 }
 
 /// Minimal XML escaping for node/edge IDs.
-fn xml_escape(s: &str) -> String {
+pub fn xml_escape(s: &str) -> String {
     s.replace('&', "&amp;")
         .replace('<', "&lt;")
         .replace('>', "&gt;")
@@ -350,7 +354,7 @@ fn xml_escape(s: &str) -> String {
 /// If the field contains a comma, double-quote, newline, or starts with a
 /// dangerous character (`=`, `+`, `-`, `@`), wrap it in double-quotes and
 /// escape any internal double-quotes by doubling them.
-fn csv_escape(field: &str) -> String {
+pub fn csv_escape(field: &str) -> String {
     let needs_quoting = field.contains(',')
         || field.contains('"')
         || field.contains('\n')
@@ -365,6 +369,242 @@ fn csv_escape(field: &str) -> String {
         format!("\"{}\"", escaped)
     } else {
         field.to_string()
+    }
+}
+
+/// Query parameters for the bundle export endpoint.
+#[derive(Debug, Deserialize)]
+pub struct BundleQuery {
+    /// Output format: "json" or "csv". Defaults to "json".
+    pub format: Option<String>,
+    /// Include behavior logs (A2A messages as events).
+    #[serde(default = "default_true")]
+    pub include_behavior: bool,
+    /// Include interaction network graph (nodes + edges).
+    #[serde(default = "default_true")]
+    pub include_network: bool,
+    /// Include current world/agent state.
+    #[serde(default = "default_true")]
+    pub include_world: bool,
+    /// Include snapshot time series.
+    #[serde(default = "default_true")]
+    pub include_timeseries: bool,
+}
+
+fn default_true() -> bool {
+    true
+}
+
+/// `GET /api/v2/export/bundle` — unified data export aggregating all data sources.
+async fn export_bundle(
+    State(state): State<AppState>,
+    Query(query): Query<BundleQuery>,
+) -> impl IntoResponse {
+    let fmt = query.format.as_deref().unwrap_or("json").to_lowercase();
+
+    match fmt.as_str() {
+        "json" => {
+            let mut bundle = serde_json::Map::new();
+
+            if query.include_world {
+                let agents = state.agents.lock().await;
+                let tick = *state.tick_rx.borrow();
+                let summaries: Vec<AgentSummary> = agents
+                    .iter()
+                    .map(|a| AgentSummary {
+                        id: a.id.clone(),
+                        name: a.name.clone(),
+                        phase: a.phase.clone(),
+                        tokens: a.tokens,
+                        money: a.money,
+                        alive: a.alive,
+                        ticks_survived: a.ticks_survived,
+                    })
+                    .collect();
+                let total_money: u64 = agents.iter().map(|a| a.money).sum();
+                let total_tokens: u64 = agents.iter().map(|a| a.tokens).sum();
+                drop(agents);
+
+                bundle.insert(
+                    "world".into(),
+                    serde_json::json!({
+                        "tick": tick,
+                        "agents": summaries,
+                        "total_money": total_money,
+                        "total_tokens": total_tokens,
+                    }),
+                );
+            }
+
+            if query.include_behavior {
+                let messages = state.messages.lock().await;
+                let events: Vec<serde_json::Value> = messages
+                    .iter()
+                    .take(1000)
+                    .map(|m| {
+                        serde_json::json!({
+                            "from": m.from_agent,
+                            "to": m.to_agent,
+                            "type": m.message_type,
+                            "tick": m.tick,
+                            "payload_preview": &m.payload[..m.payload.len().min(200)],
+                        })
+                    })
+                    .collect();
+                drop(messages);
+                bundle.insert("behavior_logs".into(), serde_json::json!(events));
+            }
+
+            if query.include_network {
+                // Acquire agents first, then messages (consistent order)
+                let node_ids: Vec<String> = {
+                    let agents = state.agents.lock().await;
+                    agents.iter().map(|a| a.id.clone()).collect()
+                };
+                let messages = state.messages.lock().await;
+                let mut edge_map: std::collections::HashMap<(String, String), u64> =
+                    std::collections::HashMap::new();
+                for msg in messages.iter() {
+                    let key = (msg.from_agent.clone(), msg.to_agent.clone());
+                    *edge_map.entry(key).or_insert(0) += 1;
+                }
+                drop(messages);
+
+                let edges: Vec<AgentGraphEdge> = edge_map
+                    .into_iter()
+                    .map(|((source, target), weight)| AgentGraphEdge {
+                        source,
+                        target,
+                        weight,
+                    })
+                    .collect();
+
+                bundle.insert(
+                    "network".into(),
+                    serde_json::json!({ "nodes": node_ids, "edges": edges }),
+                );
+            }
+
+            if query.include_timeseries {
+                let rows = if let Some(ref store) = state.snapshot_store {
+                    let store = store.lock().await;
+                    match store.list(None, None, None) {
+                        Ok(snapshots) => snapshots
+                            .iter()
+                            .map(|s| {
+                                serde_json::json!({
+                                    "tick": s.tick,
+                                    "population": s.active_agents,
+                                    "gdp": s.gdp,
+                                    "gini": s.gini_coefficient,
+                                })
+                            })
+                            .collect(),
+                        Err(_) => Vec::new(),
+                    }
+                } else {
+                    Vec::new()
+                };
+                bundle.insert("timeseries".into(), serde_json::json!(rows));
+            }
+
+            (
+                StatusCode::OK,
+                [(header::CONTENT_TYPE, "application/json")],
+                axum::Json(serde_json::Value::Object(bundle)),
+            )
+                .into_response()
+        }
+        "csv" => {
+            // Multi-section CSV with headers
+            let mut csv = String::new();
+
+            if query.include_world {
+                let agents = state.agents.lock().await;
+                let tick = *state.tick_rx.borrow();
+                csv.push_str(&format!("# World State (tick {})\n", tick));
+                csv.push_str("id,name,phase,tokens,money,alive,ticks_survived\n");
+                for a in agents.iter() {
+                    csv.push_str(&format!(
+                        "{},{},{},{},{},{},{}\n",
+                        csv_escape(&a.id),
+                        csv_escape(&a.name),
+                        csv_escape(&a.phase),
+                        a.tokens,
+                        a.money,
+                        a.alive,
+                        a.ticks_survived
+                    ));
+                }
+                csv.push('\n');
+                drop(agents);
+            }
+
+            if query.include_timeseries {
+                if let Some(ref store) = state.snapshot_store {
+                    let store = store.lock().await;
+                    if let Ok(snapshots) = store.list(None, None, None) {
+                        csv.push_str("# Time Series\n");
+                        csv.push_str("tick,population,gdp,gini\n");
+                        for s in &snapshots {
+                            csv.push_str(&format!(
+                                "{},{},{},{:.4}\n",
+                                s.tick, s.active_agents, s.gdp, s.gini_coefficient
+                            ));
+                        }
+                        csv.push('\n');
+                    }
+                }
+            }
+
+            if query.include_network {
+                let node_ids: Vec<String> = {
+                    let agents = state.agents.lock().await;
+                    agents.iter().map(|a| a.id.clone()).collect()
+                };
+                let messages = state.messages.lock().await;
+                let mut edge_map: std::collections::HashMap<(String, String), u64> =
+                    std::collections::HashMap::new();
+                for msg in messages.iter() {
+                    let key = (msg.from_agent.clone(), msg.to_agent.clone());
+                    *edge_map.entry(key).or_insert(0) += 1;
+                }
+                drop(messages);
+
+                csv.push_str("# Network Nodes\n");
+                csv.push_str("node_id\n");
+                for nid in &node_ids {
+                    csv.push_str(&format!("{}\n", csv_escape(nid)));
+                }
+                csv.push('\n');
+
+                csv.push_str("# Network Edges\n");
+                csv.push_str("source,target,weight\n");
+                for ((source, target), weight) in &edge_map {
+                    csv.push_str(&format!(
+                        "{},{},{}\n",
+                        csv_escape(source),
+                        csv_escape(target),
+                        weight
+                    ));
+                }
+            }
+
+            (
+                StatusCode::OK,
+                [(header::CONTENT_TYPE, "text/csv; charset=utf-8")],
+                csv,
+            )
+                .into_response()
+        }
+        _ => (
+            StatusCode::BAD_REQUEST,
+            [(header::CONTENT_TYPE, "application/json")],
+            axum::Json(serde_json::json!({
+                "error": format!("Unsupported bundle format: {}. Use 'json' or 'csv'.", fmt)
+            })),
+        )
+            .into_response(),
     }
 }
 

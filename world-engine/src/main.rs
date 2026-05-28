@@ -555,6 +555,7 @@ async fn main() {
             &std::env::var("JWT_SECRET").unwrap_or_else(|_| "change-me-in-production".to_string())
         )))),
         api_key_store,
+        ab_experiment_store: None,
     });
     let app = api::build_full_router(app_state);
 

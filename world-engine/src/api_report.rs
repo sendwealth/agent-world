@@ -164,6 +164,7 @@ fn build_html_report(
     } else {
         "#F44336"
     };
+    let gini_display = format!("{:.4}", current_gini);
 
     // Events table
     let events_rows = key_events
@@ -296,7 +297,7 @@ fn build_html_report(
         gdp_trend = gdp_trend,
         gdp_sparkline = sparkline(&gdp_series, 180, 40, "#3fb950"),
         gini_color = gini_color,
-        gini_display = format!("{:.4}", current_gini),
+        gini_display = gini_display,
         gini_interpretation = if current_gini < 0.3 { "Low inequality" } else if current_gini < 0.5 { "Moderate inequality" } else { "High inequality" },
         gini_sparkline = sparkline(&gini_series, 180, 40, gini_color),
         money_display = format_number(total_money),
@@ -321,10 +322,7 @@ async fn generate_report(
     // Collect snapshot data
     let snapshots = if let Some(ref store) = state.snapshot_store {
         let store = store.lock().await;
-        match store.list(query.from_tick, query.to_tick, None) {
-            Ok(s) => s,
-            Err(_) => Vec::new(),
-        }
+        store.list(query.from_tick, query.to_tick, None).unwrap_or_default()
     } else {
         Vec::new()
     };

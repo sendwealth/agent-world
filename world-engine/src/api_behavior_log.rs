@@ -4,18 +4,16 @@
 //! Behavior logs are derived from the EventBus event history, filtered by
 //! agent_id and time range.
 
-use std::collections::HashMap;
-
 use axum::{
     Router,
     extract::{Path, Query, State},
-    http::{HeaderMap, StatusCode, header},
+    http::{StatusCode, header},
     response::IntoResponse,
     routing::get,
 };
 use serde::{Deserialize, Serialize};
 
-use crate::api::{AppState, ErrorResponse};
+use crate::api::AppState;
 
 // ── Query Types ───────────────────────────────────────────
 

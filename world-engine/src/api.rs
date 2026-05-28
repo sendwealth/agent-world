@@ -114,6 +114,24 @@ pub struct AgentRecord {
     pub skills: HashMap<String, u32>,
 }
 
+impl From<crate::world::AgentRecord> for AgentRecord {
+    fn from(rec: crate::world::AgentRecord) -> Self {
+        Self {
+            id: rec.id.to_string(),
+            name: rec.name,
+            phase: format!("{:?}", rec.phase).to_lowercase(),
+            tokens: rec.tokens,
+            money: 0,
+            alive: rec.phase != crate::world::enums::AgentPhase::Dead,
+            ticks_survived: 0,
+            personality: rec.personality,
+            parent_ids: Vec::new(),
+            generation: 0,
+            skills: rec.skills.values().map(|s| (s.name.clone(), s.level)).collect(),
+        }
+    }
+}
+
 /// A2A message record.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct A2AMessage {

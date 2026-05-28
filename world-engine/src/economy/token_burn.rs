@@ -1,51 +1,11 @@
 use serde::{Deserialize, Serialize};
-use std::collections::HashMap;
 use uuid::Uuid;
 
 use crate::world::enums::AgentPhase;
 
-// ── Skill Record ─────────────────────────────────────────
-
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
-pub struct SkillRecord {
-    pub name: String,
-    pub level: u32,
-    pub experience: f64,
-}
-
-// ── Agent Record ─────────────────────────────────────────
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct AgentRecord {
-    pub id: Uuid,
-    pub name: String,
-    pub phase: AgentPhase,
-    pub tokens: u64,
-    pub skills: HashMap<String, SkillRecord>,
-    /// Personality vector serialized as JSON. Stored as a string to avoid
-    /// tight coupling with the Python-side model; the agent runtime owns the
-    /// schema.  Empty string means "not yet initialized" (will use defaults).
-    #[serde(default)]
-    pub personality: String,
-    /// Number of tasks this agent has completed successfully.
-    #[serde(default)]
-    pub tasks_completed: u32,
-    /// Number of tasks this agent has attempted (claimed or started).
-    #[serde(default)]
-    pub tasks_attempted: u32,
-}
-
-impl AgentRecord {
-    /// Record that this agent has attempted a new task (claimed or started).
-    pub fn record_task_attempt(&mut self) {
-        self.tasks_attempted = self.tasks_attempted.saturating_add(1);
-    }
-
-    /// Record that this agent has completed a task successfully.
-    pub fn record_task_completed(&mut self) {
-        self.tasks_completed = self.tasks_completed.saturating_add(1);
-    }
-}
+// Re-export the canonical AgentRecord and SkillRecord from world::agent
+// for backward compatibility with existing `use crate::economy::token_burn::AgentRecord`.
+pub use crate::world::agent::{AgentRecord, SkillRecord};
 
 // ── Consumption Config ───────────────────────────────────
 
@@ -250,6 +210,7 @@ impl TokenBurnEngine {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::collections::HashMap;
 
     fn make_agent(phase: AgentPhase, tokens: u64) -> AgentRecord {
         AgentRecord {

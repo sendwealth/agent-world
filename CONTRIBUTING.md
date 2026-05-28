@@ -127,24 +127,102 @@ When making significant technical decisions:
 
 ADRs are immutable once merged -- update via new ADR that supersedes.
 
-## Testing
+## Testing Conventions
 
-### Unit Tests
+### Test Locations & Naming
+
+Tests are organized by language convention. Each subsystem follows a consistent pattern:
+
+| Subsystem | Location | File Pattern | Example |
+|-----------|----------|--------------|---------|
+| Rust unit tests | Inline in source files `#[cfg(test)] mod tests` | — | `world-engine/src/agent/mod.rs` |
+| Rust integration tests | `world-engine/tests/` | `<domain>_<type>.rs` | `governance_api.rs`, `stress_100_agents.rs` |
+| Python unit tests | `agent-runtime/tests/` | `test_<module>.py` | `test_action_executor.py`, `test_llm.py` |
+| E2E tests | `tests/e2e/` | `test_<scenario>.py` | `test_full_chain.py`, `test_smoke.py` |
+| Dashboard tests | `dashboard/src/__tests__/` | `<component>.test.tsx` | `human-participation.test.tsx`, `stat-card.test.tsx` |
+
+#### Rust Tests
+
+**Unit tests** live inside each source file using `#[cfg(test)] mod tests` — this is Rust convention. No separate test files needed.
+
+```rust
+// world-engine/src/economy/token.rs
+#[cfg(test)]
+mod tests {
+    use super::*;
+    #[test]
+    fn test_burn_reduces_supply() { ... }
+}
+```
+
+**Integration tests** go in `world-engine/tests/`. Use the `<domain>_<type>` naming pattern:
+- API tests: `<domain>_api.rs` (e.g., `governance_api.rs`, `population_api.rs`)
+- Integration tests: `<domain>_integration.rs` (e.g., `grpc_integration.rs`)
+- Stress/benchmark: `stress_<N>_<scenario>.rs` or `benchmark_<N>_<scenario>.rs`
+- E2E tests: `e2e_<scenario>.rs` (e.g., `e2e_full_flow.rs`)
+- Phase-specific: `phase_<N>_<description>.rs` (e.g., `phase_442_e2e_integration.rs`)
+
+#### Python Tests
+
+All Python tests live in `agent-runtime/tests/` with the `test_<module>.py` naming convention. Integration tests may append `_integration`:
+- Unit: `test_decide.py`, `test_memory_aware_decide.py`
+- Integration: `test_pool_integration.py`, `test_social_engine_integration.py`
+
+E2E tests are in `tests/e2e/` with the same `test_<scenario>.py` pattern but separate from unit tests.
+
+#### Dashboard Tests
+
+Dashboard tests use **Vitest** + **React Testing Library** with jsdom environment.
+
+- Test files go in `dashboard/src/__tests__/`
+- Naming: `<component-or-feature>.test.tsx`
+- Setup: `dashboard/src/__tests__/setup.ts` (imports `@testing-library/jest-dom/vitest`)
+- Config: `dashboard/vitest.config.ts`
+
+```tsx
+// dashboard/src/__tests__/stat-card.test.tsx
+import { describe, it, expect } from "vitest";
+import { render, screen } from "@testing-library/react";
+import { StatCard } from "@/components/StatCard";
+
+describe("StatCard", () => {
+  it("renders title and value", () => {
+    render(<StatCard title="Agent 总数" value={42} icon={<span>📊</span>} color="blue" />);
+    expect(screen.getByText("Agent 总数")).toBeInTheDocument();
+    expect(screen.getByText("42")).toBeInTheDocument();
+  });
+});
+```
+
+### Running Tests
+
 ```bash
-# Rust (world-engine)
+# All tests (Rust + Python)
+make test
+
+# Rust only (unit + integration)
 cd world-engine && cargo test
 
-# Python (agent-runtime)
+# Python only
 cd agent-runtime && pytest
 
-# Dashboard
-cd dashboard && npm run build
+# Dashboard only
+cd dashboard && npm test          # vitest run
+cd dashboard && npm run test:watch # vitest watch mode
+
+# E2E only
+cd tests/e2e && pytest
 ```
 
-### All Tests
-```bash
-make test        # Runs both Rust and Python tests
-```
+### Writing New Tests
+
+When adding a new test, follow these rules:
+
+1. **Place it in the correct location** — see the table above
+2. **Follow the naming pattern** — `<domain>_<type>.rs` for Rust, `test_<module>.py` for Python, `<component>.test.tsx` for Dashboard
+3. **Mirror the source structure** — Python test file names should mirror the module they test
+4. **One test file per module/component** — keep related tests together
+5. **Mock external dependencies** — Dashboard tests should mock `next/navigation`, fetch, and SSE providers
 
 ## Commit Messages
 

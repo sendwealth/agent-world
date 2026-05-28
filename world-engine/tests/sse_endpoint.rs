@@ -17,11 +17,7 @@ use agent_world_engine::wal::WAL;
 use agent_world_engine::world::event::WorldEvent;
 use agent_world_engine::world::state::EventBus;
 
-fn build_app() -> (
-    Arc<EventBus>,
-    Arc<Mutex<TaskBoard>>,
-    axum::Router,
-) {
+fn build_app() -> (Arc<EventBus>, Arc<Mutex<TaskBoard>>, axum::Router) {
     let dir = tempfile::TempDir::new().unwrap();
     let event_bus = Arc::new(EventBus::new(256));
     let board = Arc::new(Mutex::new(TaskBoard::with_event_bus((*event_bus).clone())));
@@ -55,7 +51,12 @@ async fn start_server() -> (u16, Arc<EventBus>) {
 
 /// Connect to SSE and collect data events for a bounded duration.
 /// Returns parsed JSON strings from `data: ` lines.
-async fn collect_sse_events(port: u16, query: &str, event_bus: Arc<EventBus>, events_to_emit: Vec<WorldEvent>) -> Vec<String> {
+async fn collect_sse_events(
+    port: u16,
+    query: &str,
+    event_bus: Arc<EventBus>,
+    events_to_emit: Vec<WorldEvent>,
+) -> Vec<String> {
     let url = if query.is_empty() {
         format!("http://127.0.0.1:{}/api/v1/world/events", port)
     } else {
@@ -124,7 +125,11 @@ async fn sse_connection_receives_events() {
     )
     .await;
 
-    assert!(events.len() >= 2, "Expected at least 2 events, got {}", events.len());
+    assert!(
+        events.len() >= 2,
+        "Expected at least 2 events, got {}",
+        events.len()
+    );
 
     let tick: serde_json::Value = serde_json::from_str(&events[0]).unwrap();
     assert_eq!(tick["type"], "tick_advanced");
@@ -154,7 +159,12 @@ async fn sse_filter_by_type() {
     )
     .await;
 
-    assert_eq!(events.len(), 2, "Expected exactly 2 filtered events, got {}", events.len());
+    assert_eq!(
+        events.len(),
+        2,
+        "Expected exactly 2 filtered events, got {}",
+        events.len()
+    );
 
     let evt1: serde_json::Value = serde_json::from_str(&events[0]).unwrap();
     assert_eq!(evt1["type"], "agent_died");
@@ -192,7 +202,12 @@ async fn sse_filter_by_agent_id() {
     )
     .await;
 
-    assert_eq!(events.len(), 2, "Expected exactly 2 agent-filtered events, got {}", events.len());
+    assert_eq!(
+        events.len(),
+        2,
+        "Expected exactly 2 agent-filtered events, got {}",
+        events.len()
+    );
 
     let evt1: serde_json::Value = serde_json::from_str(&events[0]).unwrap();
     assert_eq!(evt1["type"], "agent_spawned");
@@ -271,7 +286,10 @@ async fn sse_invalid_event_type_returns_400() {
     assert_eq!(resp.status(), reqwest::StatusCode::BAD_REQUEST);
 
     let body: serde_json::Value = resp.json().await.unwrap();
-    assert!(body["error"].as_str().unwrap().contains("unknown event type"));
+    assert!(body["error"]
+        .as_str()
+        .unwrap()
+        .contains("unknown event type"));
 }
 
 #[tokio::test]

@@ -315,11 +315,8 @@ impl MutationEngine {
         parent_a_id: &str,
         parent_b_id: &str,
     ) -> OffspringMutationResult {
-        let effective_rate = Self::effective_offspring_rate(
-            config.base_offspring_mutation_rate,
-            config,
-            env,
-        );
+        let effective_rate =
+            Self::effective_offspring_rate(config.base_offspring_mutation_rate, config, env);
 
         let mut mutations = Vec::new();
 
@@ -354,7 +351,8 @@ impl MutationEngine {
                 continue;
             }
 
-            let strengthened = roll < config.heritable_strengthen_chance + config.heritable_disappear_chance;
+            let strengthened =
+                roll < config.heritable_strengthen_chance + config.heritable_disappear_chance;
             if strengthened {
                 // Mutation strengthens: re-apply with increased magnitude
                 let mut m = OffspringMutation {
@@ -368,7 +366,10 @@ impl MutationEngine {
                         parent_mutation.strength * 1.5,
                     ),
                 };
-                if matches!(parent_mutation.mutation_type, OffspringMutationType::PersonalityShift) {
+                if matches!(
+                    parent_mutation.mutation_type,
+                    OffspringMutationType::PersonalityShift
+                ) {
                     let dim = rng.gen_range(0..config.personality_dimensions);
                     m.personality_dimension = Some(dim);
                 }
@@ -399,10 +400,7 @@ impl MutationEngine {
             skill_name: None,
             personality_dimension: Some(dim),
             magnitude: shift,
-            description: format!(
-                "Personality dimension {} shifted by {:.3}",
-                dim, shift,
-            ),
+            description: format!("Personality dimension {} shifted by {:.3}", dim, shift,),
         })
     }
 
@@ -497,8 +495,8 @@ impl MutationEngine {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use rand::SeedableRng;
     use rand::rngs::StdRng;
+    use rand::SeedableRng;
 
     fn seeded_rng() -> StdRng {
         StdRng::seed_from_u64(42)
@@ -654,8 +652,14 @@ mod tests {
         let skills = HashMap::new();
 
         let result = engine.apply_offspring_mutations(
-            &mut rng, &config, &env, &skills, &[],
-            "offspring-1", "parent-a", "parent-b",
+            &mut rng,
+            &config,
+            &env,
+            &skills,
+            &[],
+            "offspring-1",
+            "parent-a",
+            "parent-b",
         );
 
         assert!(result.mutations.is_empty());
@@ -679,8 +683,14 @@ mod tests {
         skills.insert("coding".to_string(), (3, 100.0));
 
         let result = engine.apply_offspring_mutations(
-            &mut rng, &config, &env, &skills, &[],
-            "offspring-1", "parent-a", "parent-b",
+            &mut rng,
+            &config,
+            &env,
+            &skills,
+            &[],
+            "offspring-1",
+            "parent-a",
+            "parent-b",
         );
 
         // With rate 1.0, should produce up to max_offspring_mutations mutations
@@ -740,7 +750,10 @@ mod tests {
         let result = engine.offspring_skill_jump(&mut rng, &config, &skills);
         assert!(result.is_some());
         let m = result.unwrap();
-        assert!(matches!(m.mutation_type, OffspringMutationType::SkillLevelJump));
+        assert!(matches!(
+            m.mutation_type,
+            OffspringMutationType::SkillLevelJump
+        ));
         assert_eq!(m.skill_name.as_deref(), Some("coding"));
         assert!(m.magnitude >= 1.0 && m.magnitude <= 2.0);
     }
@@ -759,7 +772,10 @@ mod tests {
         let result = engine.offspring_skill_drop(&mut rng, &config, &skills);
         assert!(result.is_some());
         let m = result.unwrap();
-        assert!(matches!(m.mutation_type, OffspringMutationType::SkillLevelDrop));
+        assert!(matches!(
+            m.mutation_type,
+            OffspringMutationType::SkillLevelDrop
+        ));
         assert!((m.magnitude - (-1.0)).abs() < f64::EPSILON);
     }
 
@@ -815,8 +831,14 @@ mod tests {
         }];
 
         let result = engine.apply_offspring_mutations(
-            &mut rng, &config, &env, &skills, &heritable,
-            "offspring-1", "parent-a", "parent-b",
+            &mut rng,
+            &config,
+            &env,
+            &skills,
+            &heritable,
+            "offspring-1",
+            "parent-a",
+            "parent-b",
         );
 
         assert_eq!(result.mutations.len(), 1);
@@ -847,8 +869,14 @@ mod tests {
         }];
 
         let result = engine.apply_offspring_mutations(
-            &mut rng, &config, &env, &skills, &heritable,
-            "offspring-1", "parent-a", "parent-b",
+            &mut rng,
+            &config,
+            &env,
+            &skills,
+            &heritable,
+            "offspring-1",
+            "parent-a",
+            "parent-b",
         );
 
         assert!(result.mutations.is_empty());
@@ -870,8 +898,14 @@ mod tests {
         let skills = HashMap::new();
 
         let result = engine.apply_offspring_mutations(
-            &mut rng, &config, &env, &skills, &[],
-            "offspring-x", "mom", "dad",
+            &mut rng,
+            &config,
+            &env,
+            &skills,
+            &[],
+            "offspring-x",
+            "mom",
+            "dad",
         );
 
         assert_eq!(result.offspring_id, "offspring-x");

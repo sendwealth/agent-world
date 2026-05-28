@@ -91,7 +91,9 @@ impl ExchangeRate {
     /// Convert Money → Token. 1 Money = `tokens_per_money` Tokens.
     /// Returns `None` if `money_amount` overflows.
     pub fn money_to_tokens(&self, money_amount: u64) -> Option<u64> {
-        (money_amount as u128 * self.tokens_per_money as u128).try_into().ok()
+        (money_amount as u128 * self.tokens_per_money as u128)
+            .try_into()
+            .ok()
     }
 
     /// Convert Token → Money. Rounds down (truncates).
@@ -148,7 +150,9 @@ pub struct AuditRecord {
 pub enum LedgerError {
     #[error("account not found: {0}")]
     AccountNotFound(String),
-    #[error("insufficient balance: account {account} has {available} {currency:?}, needs {required}")]
+    #[error(
+        "insufficient balance: account {account} has {available} {currency:?}, needs {required}"
+    )]
     InsufficientBalance {
         account: String,
         available: u64,
@@ -210,7 +214,10 @@ impl MoneyLedger {
     }
 
     /// Create a new ledger with WAL persistence.
-    pub fn with_wal<P: AsRef<Path>>(exchange_rate: ExchangeRate, data_dir: P) -> Result<Self, LedgerError> {
+    pub fn with_wal<P: AsRef<Path>>(
+        exchange_rate: ExchangeRate,
+        data_dir: P,
+    ) -> Result<Self, LedgerError> {
         let mut ledger = Self::new(exchange_rate);
         let mut wal = WAL::new(data_dir);
         wal.open().map_err(|e| LedgerError::Wal(e.to_string()))?;
@@ -239,7 +246,10 @@ impl MoneyLedger {
 
     /// Get the balance of an account in a specific currency.
     pub fn get_balance(&self, account_id: &str, currency: Currency) -> u64 {
-        self.balances.get(&(account_id.to_string(), currency)).copied().unwrap_or(0)
+        self.balances
+            .get(&(account_id.to_string(), currency))
+            .copied()
+            .unwrap_or(0)
     }
 
     /// Get the full balance sheet for an account.
@@ -261,13 +271,26 @@ impl MoneyLedger {
     ///
     /// This bypasses double-entry recording and should only be used for
     /// initial minting or crash recovery. An audit record is always created.
-    pub(crate) fn set_balance(&mut self, account_id: &str, currency: Currency, amount: u64, tick: u64) {
-        self.balances.insert((account_id.to_string(), currency), amount);
-        self.record_audit("set_balance", account_id, serde_json::json!({
-            "currency": format!("{:?}", currency).to_lowercase(),
-            "amount": amount,
-            "note": "genesis/restore — bypasses double-entry",
-        }), &[], tick);
+    pub(crate) fn set_balance(
+        &mut self,
+        account_id: &str,
+        currency: Currency,
+        amount: u64,
+        tick: u64,
+    ) {
+        self.balances
+            .insert((account_id.to_string(), currency), amount);
+        self.record_audit(
+            "set_balance",
+            account_id,
+            serde_json::json!({
+                "currency": format!("{:?}", currency).to_lowercase(),
+                "amount": amount,
+                "note": "genesis/restore — bypasses double-entry",
+            }),
+            &[],
+            tick,
+        );
     }
 
     /// Public convenience for setting balance at tick 0 (genesis).
@@ -284,7 +307,12 @@ impl MoneyLedger {
 
     /// Debit (decrease) an account balance. Returns error if insufficient.
     /// The central bank is exempt from balance checks — it is the currency issuer.
-    fn debit(&mut self, account_id: &str, currency: Currency, amount: u64) -> Result<(), LedgerError> {
+    fn debit(
+        &mut self,
+        account_id: &str,
+        currency: Currency,
+        amount: u64,
+    ) -> Result<(), LedgerError> {
         let key = (account_id.to_string(), currency);
         if account_id == "central_bank" {
             // Central bank can issue unlimited currency; balance goes negative tracked as u64 wrap
@@ -395,7 +423,9 @@ impl MoneyLedger {
     ) -> Result<ExchangeResult, LedgerError> {
         self.require_account(agent_id)?;
 
-        let token_amount = self.exchange_rate.money_to_tokens(money_amount)
+        let token_amount = self
+            .exchange_rate
+            .money_to_tokens(money_amount)
             .ok_or_else(|| LedgerError::InvalidExchange("overflow in conversion".into()))?;
 
         if token_amount == 0 {
@@ -431,7 +461,10 @@ impl MoneyLedger {
             amount: money_amount,
             currency: Currency::Money,
             tx_type: TransactionType::Exchange,
-            description: format!("Central bank receives {} Money for Token exchange", money_amount),
+            description: format!(
+                "Central bank receives {} Money for Token exchange",
+                money_amount
+            ),
             tick,
             reference_id: None,
         });
@@ -447,7 +480,10 @@ impl MoneyLedger {
             amount: token_amount,
             currency: Currency::Token,
             tx_type: TransactionType::Exchange,
-            description: format!("Central bank issues {} Tokens for Money exchange", token_amount),
+            description: format!(
+                "Central bank issues {} Tokens for Money exchange",
+                token_amount
+            ),
             tick,
             reference_id: None,
         });
@@ -461,17 +497,26 @@ impl MoneyLedger {
             amount: token_amount,
             currency: Currency::Token,
             tx_type: TransactionType::Exchange,
-            description: format!("Received {} Tokens for {} Money", token_amount, money_amount),
+            description: format!(
+                "Received {} Tokens for {} Money",
+                token_amount, money_amount
+            ),
             tick,
             reference_id: None,
         });
 
         self.persist_entries();
-        self.record_audit("exchange_money_to_tokens", agent_id, serde_json::json!({
-            "money_amount": money_amount,
-            "token_amount": token_amount,
-            "rate": self.exchange_rate.tokens_per_money,
-        }), &[d1, c1, d2, c2], tick);
+        self.record_audit(
+            "exchange_money_to_tokens",
+            agent_id,
+            serde_json::json!({
+                "money_amount": money_amount,
+                "token_amount": token_amount,
+                "rate": self.exchange_rate.tokens_per_money,
+            }),
+            &[d1, c1, d2, c2],
+            tick,
+        );
 
         debug_assert!(self.verify_pair(pair1_id, Currency::Money));
         debug_assert!(self.verify_pair(pair2_id, Currency::Token));
@@ -500,10 +545,15 @@ impl MoneyLedger {
     ) -> Result<ExchangeResult, LedgerError> {
         self.require_account(agent_id)?;
 
-        let money_amount = self.exchange_rate.tokens_to_money(token_amount)
-            .ok_or_else(|| LedgerError::InvalidExchange(
-                format!("insufficient tokens: {} < minimum {}", token_amount, self.exchange_rate.tokens_per_money)
-            ))?;
+        let money_amount = self
+            .exchange_rate
+            .tokens_to_money(token_amount)
+            .ok_or_else(|| {
+                LedgerError::InvalidExchange(format!(
+                    "insufficient tokens: {} < minimum {}",
+                    token_amount, self.exchange_rate.tokens_per_money
+                ))
+            })?;
 
         // Tokens actually consumed (may be less than token_amount due to rounding)
         let tokens_consumed = money_amount * self.exchange_rate.tokens_per_money;
@@ -524,7 +574,10 @@ impl MoneyLedger {
             amount: tokens_consumed,
             currency: Currency::Token,
             tx_type: TransactionType::Exchange,
-            description: format!("Exchange {} Tokens → {} Money", tokens_consumed, money_amount),
+            description: format!(
+                "Exchange {} Tokens → {} Money",
+                tokens_consumed, money_amount
+            ),
             tick,
             reference_id: None,
         });
@@ -538,7 +591,10 @@ impl MoneyLedger {
             amount: tokens_consumed,
             currency: Currency::Token,
             tx_type: TransactionType::Exchange,
-            description: format!("Central bank receives {} Tokens for Money exchange", tokens_consumed),
+            description: format!(
+                "Central bank receives {} Tokens for Money exchange",
+                tokens_consumed
+            ),
             tick,
             reference_id: None,
         });
@@ -554,7 +610,10 @@ impl MoneyLedger {
             amount: money_amount,
             currency: Currency::Money,
             tx_type: TransactionType::Exchange,
-            description: format!("Central bank issues {} Money for Token exchange", money_amount),
+            description: format!(
+                "Central bank issues {} Money for Token exchange",
+                money_amount
+            ),
             tick,
             reference_id: None,
         });
@@ -568,19 +627,28 @@ impl MoneyLedger {
             amount: money_amount,
             currency: Currency::Money,
             tx_type: TransactionType::Exchange,
-            description: format!("Received {} Money for {} Tokens", money_amount, tokens_consumed),
+            description: format!(
+                "Received {} Money for {} Tokens",
+                money_amount, tokens_consumed
+            ),
             tick,
             reference_id: None,
         });
 
         self.persist_entries();
-        self.record_audit("exchange_tokens_to_money", agent_id, serde_json::json!({
-            "token_amount": token_amount,
-            "tokens_consumed": tokens_consumed,
-            "tokens_returned": tokens_returned,
-            "money_amount": money_amount,
-            "rate": self.exchange_rate.tokens_per_money,
-        }), &[d1, c1, d2, c2], tick);
+        self.record_audit(
+            "exchange_tokens_to_money",
+            agent_id,
+            serde_json::json!({
+                "token_amount": token_amount,
+                "tokens_consumed": tokens_consumed,
+                "tokens_returned": tokens_returned,
+                "money_amount": money_amount,
+                "rate": self.exchange_rate.tokens_per_money,
+            }),
+            &[d1, c1, d2, c2],
+            tick,
+        );
 
         debug_assert!(self.verify_pair(pair1_id, Currency::Token));
         debug_assert!(self.verify_pair(pair2_id, Currency::Money));
@@ -632,7 +700,10 @@ impl MoneyLedger {
             amount: interest,
             currency: Currency::Money,
             tx_type: TransactionType::Interest,
-            description: format!("Central bank pays {} interest on {} Money balance", interest, balance),
+            description: format!(
+                "Central bank pays {} interest on {} Money balance",
+                interest, balance
+            ),
             tick,
             reference_id: None,
         });
@@ -654,11 +725,17 @@ impl MoneyLedger {
         });
 
         self.persist_entries();
-        self.record_audit("pay_interest", agent_id, serde_json::json!({
-            "principal": balance,
-            "rate": rate,
-            "interest": interest,
-        }), &[d1, c1], tick);
+        self.record_audit(
+            "pay_interest",
+            agent_id,
+            serde_json::json!({
+                "principal": balance,
+                "rate": rate,
+                "interest": interest,
+            }),
+            &[d1, c1],
+            tick,
+        );
 
         debug_assert!(self.verify_pair(pair_id, Currency::Money));
 
@@ -679,28 +756,32 @@ impl MoneyLedger {
 
     /// Get entries for a specific account.
     pub fn entries_by_account(&self, account_id: &str) -> Vec<&Entry> {
-        self.entries.iter()
+        self.entries
+            .iter()
             .filter(|e| e.account_id == account_id)
             .collect()
     }
 
     /// Get entries for a specific pair.
     pub fn entries_by_pair(&self, pair_id: Uuid) -> Vec<&Entry> {
-        self.entries.iter()
+        self.entries
+            .iter()
             .filter(|e| e.pair_id == pair_id)
             .collect()
     }
 
     /// Get entries by transaction type.
     pub fn entries_by_type(&self, tx_type: TransactionType) -> Vec<&Entry> {
-        self.entries.iter()
+        self.entries
+            .iter()
             .filter(|e| e.tx_type == tx_type)
             .collect()
     }
 
     /// Get entries by reference ID.
     pub fn entries_by_reference(&self, reference_id: &str) -> Vec<&Entry> {
-        self.entries.iter()
+        self.entries
+            .iter()
             .filter(|e| e.reference_id.as_deref() == Some(reference_id))
             .collect()
     }
@@ -712,9 +793,7 @@ impl MoneyLedger {
 
     /// Get audit records for a specific actor.
     pub fn audit_by_actor(&self, actor: &str) -> Vec<&AuditRecord> {
-        self.audit_log.iter()
-            .filter(|a| a.actor == actor)
-            .collect()
+        self.audit_log.iter().filter(|a| a.actor == actor).collect()
     }
 
     /// Get the exchange rate configuration.
@@ -754,7 +833,8 @@ impl MoneyLedger {
 
     /// Compute total money supply (sum of all Money balances).
     pub fn total_money_supply(&self) -> u64 {
-        self.balances.iter()
+        self.balances
+            .iter()
             .filter(|((_, curr), _)| *curr == Currency::Money)
             .map(|(_, &v)| v)
             .sum()
@@ -762,7 +842,8 @@ impl MoneyLedger {
 
     /// Compute total token supply (sum of all Token balances).
     pub fn total_token_supply(&self) -> u64 {
-        self.balances.iter()
+        self.balances
+            .iter()
             .filter(|((_, curr), _)| *curr == Currency::Token)
             .map(|(_, &v)| v)
             .sum()
@@ -801,19 +882,22 @@ impl MoneyLedger {
         }
         // Collect snapshot data first to avoid borrow conflicts.
         let start = self.last_persisted_idx;
-        let events: Vec<WorldEvent> = self.entries[start..].iter().map(|entry| {
-            let new_balance = self.get_balance(&entry.account_id, entry.currency);
-            let old_balance = match entry.side {
-                EntrySide::Credit => new_balance.saturating_sub(entry.amount),
-                EntrySide::Debit => new_balance.saturating_add(entry.amount),
-            };
-            WorldEvent::BalanceChanged {
-                agent_id: entry.account_id.clone(),
-                currency: entry.currency,
-                old_balance,
-                new_balance,
-            }
-        }).collect();
+        let events: Vec<WorldEvent> = self.entries[start..]
+            .iter()
+            .map(|entry| {
+                let new_balance = self.get_balance(&entry.account_id, entry.currency);
+                let old_balance = match entry.side {
+                    EntrySide::Credit => new_balance.saturating_sub(entry.amount),
+                    EntrySide::Debit => new_balance.saturating_add(entry.amount),
+                };
+                WorldEvent::BalanceChanged {
+                    agent_id: entry.account_id.clone(),
+                    currency: entry.currency,
+                    old_balance,
+                    new_balance,
+                }
+            })
+            .collect();
         if let Some(ref mut wal) = self.wal {
             for event in events {
                 if let Err(e) = wal.append_event(&event) {
@@ -874,8 +958,14 @@ mod tests {
         let ledger = MoneyLedger::new(ExchangeRate::default());
         assert!(ledger.account_exists("central_bank"));
         assert!(ledger.account_exists("fee_pool"));
-        assert_eq!(ledger.get_account("central_bank").unwrap().account_type, AccountType::CentralBank);
-        assert_eq!(ledger.get_account("fee_pool").unwrap().account_type, AccountType::FeePool);
+        assert_eq!(
+            ledger.get_account("central_bank").unwrap().account_type,
+            AccountType::CentralBank
+        );
+        assert_eq!(
+            ledger.get_account("fee_pool").unwrap().account_type,
+            AccountType::FeePool
+        );
     }
 
     // ── Balance Queries ──────────────────────────────────
@@ -914,11 +1004,18 @@ mod tests {
     fn test_transfer_basic() {
         let mut ledger = make_ledger();
         ledger.set_balance_genesis("alice", Currency::Money, 1000);
-        let (debit_id, credit_id) = ledger.transfer(
-            "alice", "bob", 200, Currency::Money,
-            TransactionType::TaskReward,
-            "Task payment".into(), 1, Some("task-1".into()),
-        ).unwrap();
+        let (debit_id, credit_id) = ledger
+            .transfer(
+                "alice",
+                "bob",
+                200,
+                Currency::Money,
+                TransactionType::TaskReward,
+                "Task payment".into(),
+                1,
+                Some("task-1".into()),
+            )
+            .unwrap();
 
         assert_eq!(ledger.get_balance("alice", Currency::Money), 800);
         assert_eq!(ledger.get_balance("bob", Currency::Money), 200);
@@ -938,13 +1035,24 @@ mod tests {
         let mut ledger = make_ledger();
         ledger.set_balance_genesis("alice", Currency::Money, 50);
         let result = ledger.transfer(
-            "alice", "bob", 100, Currency::Money,
-            TransactionType::TaskReward, "fail".into(), 1, None,
+            "alice",
+            "bob",
+            100,
+            Currency::Money,
+            TransactionType::TaskReward,
+            "fail".into(),
+            1,
+            None,
         );
         assert!(result.is_err());
         let err = result.unwrap_err();
         match err {
-            LedgerError::InsufficientBalance { account, available, required, .. } => {
+            LedgerError::InsufficientBalance {
+                account,
+                available,
+                required,
+                ..
+            } => {
                 assert_eq!(account, "alice");
                 assert_eq!(available, 50);
                 assert_eq!(required, 100);
@@ -960,10 +1068,18 @@ mod tests {
     fn test_transfer_zero_is_noop() {
         let mut ledger = make_ledger();
         ledger.set_balance_genesis("alice", Currency::Money, 100);
-        ledger.transfer(
-            "alice", "bob", 0, Currency::Money,
-            TransactionType::TaskReward, "zero".into(), 1, None,
-        ).unwrap();
+        ledger
+            .transfer(
+                "alice",
+                "bob",
+                0,
+                Currency::Money,
+                TransactionType::TaskReward,
+                "zero".into(),
+                1,
+                None,
+            )
+            .unwrap();
         assert_eq!(ledger.get_balance("alice", Currency::Money), 100);
         assert_eq!(ledger.get_balance("bob", Currency::Money), 0);
     }
@@ -973,15 +1089,27 @@ mod tests {
         let mut ledger = make_ledger();
         // Unknown sender
         let result = ledger.transfer(
-            "unknown", "bob", 100, Currency::Money,
-            TransactionType::TaskReward, "fail".into(), 1, None,
+            "unknown",
+            "bob",
+            100,
+            Currency::Money,
+            TransactionType::TaskReward,
+            "fail".into(),
+            1,
+            None,
         );
         assert!(result.is_err());
         // Unknown receiver — should also fail
         ledger.set_balance_genesis("alice", Currency::Money, 1000);
         let result = ledger.transfer(
-            "alice", "ghost", 100, Currency::Money,
-            TransactionType::TaskReward, "fail".into(), 1, None,
+            "alice",
+            "ghost",
+            100,
+            Currency::Money,
+            TransactionType::TaskReward,
+            "fail".into(),
+            1,
+            None,
         );
         assert!(result.is_err());
         assert_eq!(ledger.get_balance("ghost", Currency::Money), 0); // no ghost balance created
@@ -993,8 +1121,30 @@ mod tests {
         ledger.set_balance_genesis("alice", Currency::Money, 1000);
         ledger.set_balance_genesis("bob", Currency::Money, 500);
 
-        ledger.transfer("alice", "bob", 100, Currency::Money, TransactionType::TaskReward, "t1".into(), 1, None).unwrap();
-        ledger.transfer("bob", "alice", 50, Currency::Money, TransactionType::TaskReward, "t2".into(), 2, None).unwrap();
+        ledger
+            .transfer(
+                "alice",
+                "bob",
+                100,
+                Currency::Money,
+                TransactionType::TaskReward,
+                "t1".into(),
+                1,
+                None,
+            )
+            .unwrap();
+        ledger
+            .transfer(
+                "bob",
+                "alice",
+                50,
+                Currency::Money,
+                TransactionType::TaskReward,
+                "t2".into(),
+                2,
+                None,
+            )
+            .unwrap();
 
         assert_eq!(ledger.get_balance("alice", Currency::Money), 950);
         assert_eq!(ledger.get_balance("bob", Currency::Money), 550);
@@ -1007,10 +1157,18 @@ mod tests {
     fn test_verify_pair_balances() {
         let mut ledger = make_ledger();
         ledger.set_balance_genesis("alice", Currency::Money, 1000);
-        let (_debit_id, _credit_id) = ledger.transfer(
-            "alice", "bob", 300, Currency::Money,
-            TransactionType::TaskReward, "verify".into(), 1, None,
-        ).unwrap();
+        let (_debit_id, _credit_id) = ledger
+            .transfer(
+                "alice",
+                "bob",
+                300,
+                Currency::Money,
+                TransactionType::TaskReward,
+                "verify".into(),
+                1,
+                None,
+            )
+            .unwrap();
 
         let entries = ledger.list_entries();
         let pair_id = entries[0].pair_id;
@@ -1023,8 +1181,30 @@ mod tests {
         ledger.set_balance_genesis("alice", Currency::Money, 1000);
         ledger.set_balance_genesis("alice", Currency::Token, 5000);
 
-        ledger.transfer("alice", "bob", 100, Currency::Money, TransactionType::TaskReward, "t1".into(), 1, None).unwrap();
-        ledger.transfer("alice", "bob", 1000, Currency::Token, TransactionType::Teach, "t2".into(), 2, None).unwrap();
+        ledger
+            .transfer(
+                "alice",
+                "bob",
+                100,
+                Currency::Money,
+                TransactionType::TaskReward,
+                "t1".into(),
+                1,
+                None,
+            )
+            .unwrap();
+        ledger
+            .transfer(
+                "alice",
+                "bob",
+                1000,
+                Currency::Token,
+                TransactionType::Teach,
+                "t2".into(),
+                2,
+                None,
+            )
+            .unwrap();
 
         assert!(ledger.verify_all());
     }
@@ -1055,7 +1235,18 @@ mod tests {
         ledger.set_balance_genesis("alice", Currency::Money, 1000);
         ledger.set_balance_genesis("bob", Currency::Token, 10000);
 
-        ledger.transfer("alice", "bob", 100, Currency::Money, TransactionType::TaskReward, "t1".into(), 1, None).unwrap();
+        ledger
+            .transfer(
+                "alice",
+                "bob",
+                100,
+                Currency::Money,
+                TransactionType::TaskReward,
+                "t1".into(),
+                1,
+                None,
+            )
+            .unwrap();
         ledger.exchange_money_to_tokens("alice", 5, 2).unwrap();
         ledger.exchange_tokens_to_money("bob", 500, 3).unwrap();
         ledger.pay_interest("alice", 0.001, 4).unwrap();
@@ -1168,8 +1359,14 @@ mod tests {
         let entries = ledger.entries_by_type(TransactionType::Exchange);
         assert_eq!(entries.len(), 4);
 
-        let debit: Vec<_> = entries.iter().filter(|e| e.side == EntrySide::Debit).collect();
-        let credit: Vec<_> = entries.iter().filter(|e| e.side == EntrySide::Credit).collect();
+        let debit: Vec<_> = entries
+            .iter()
+            .filter(|e| e.side == EntrySide::Debit)
+            .collect();
+        let credit: Vec<_> = entries
+            .iter()
+            .filter(|e| e.side == EntrySide::Credit)
+            .collect();
         assert_eq!(debit.len(), 2);
         assert_eq!(credit.len(), 2);
 
@@ -1231,7 +1428,9 @@ mod tests {
         ledger.exchange_money_to_tokens("alice", 5, 1).unwrap();
 
         // First audit record is from set_balance_genesis, second from exchange
-        let exchange_audits: Vec<_> = ledger.audit_log().iter()
+        let exchange_audits: Vec<_> = ledger
+            .audit_log()
+            .iter()
             .filter(|a| a.operation == "exchange_money_to_tokens")
             .collect();
         assert_eq!(exchange_audits.len(), 1);
@@ -1245,7 +1444,9 @@ mod tests {
         ledger.set_balance_genesis("alice", Currency::Token, 500);
         ledger.exchange_tokens_to_money("alice", 500, 1).unwrap();
 
-        let exchange_audits: Vec<_> = ledger.audit_log().iter()
+        let exchange_audits: Vec<_> = ledger
+            .audit_log()
+            .iter()
             .filter(|a| a.operation == "exchange_tokens_to_money")
             .collect();
         assert_eq!(exchange_audits.len(), 1);
@@ -1258,7 +1459,9 @@ mod tests {
         ledger.set_balance_genesis("alice", Currency::Money, 10000);
         ledger.pay_interest("alice", 0.001, 1).unwrap();
 
-        let interest_audits: Vec<_> = ledger.audit_log().iter()
+        let interest_audits: Vec<_> = ledger
+            .audit_log()
+            .iter()
             .filter(|a| a.operation == "pay_interest")
             .collect();
         assert_eq!(interest_audits.len(), 1);
@@ -1298,7 +1501,18 @@ mod tests {
     fn test_entries_by_account() {
         let mut ledger = make_ledger();
         ledger.set_balance_genesis("alice", Currency::Money, 1000);
-        ledger.transfer("alice", "bob", 100, Currency::Money, TransactionType::TaskReward, "t1".into(), 1, None).unwrap();
+        ledger
+            .transfer(
+                "alice",
+                "bob",
+                100,
+                Currency::Money,
+                TransactionType::TaskReward,
+                "t1".into(),
+                1,
+                None,
+            )
+            .unwrap();
 
         let alice_entries = ledger.entries_by_account("alice");
         let bob_entries = ledger.entries_by_account("bob");
@@ -1311,7 +1525,18 @@ mod tests {
         let mut ledger = make_ledger();
         ledger.set_balance_genesis("alice", Currency::Money, 1000);
         ledger.set_balance_genesis("alice", Currency::Token, 5000);
-        ledger.transfer("alice", "bob", 100, Currency::Money, TransactionType::TaskReward, "t1".into(), 1, None).unwrap();
+        ledger
+            .transfer(
+                "alice",
+                "bob",
+                100,
+                Currency::Money,
+                TransactionType::TaskReward,
+                "t1".into(),
+                1,
+                None,
+            )
+            .unwrap();
         ledger.exchange_money_to_tokens("alice", 5, 2).unwrap();
 
         assert_eq!(ledger.entries_by_type(TransactionType::TaskReward).len(), 2);
@@ -1323,7 +1548,18 @@ mod tests {
     fn test_entries_by_reference() {
         let mut ledger = make_ledger();
         ledger.set_balance_genesis("alice", Currency::Money, 1000);
-        ledger.transfer("alice", "bob", 100, Currency::Money, TransactionType::TaskReward, "t1".into(), 1, Some("task-1".into())).unwrap();
+        ledger
+            .transfer(
+                "alice",
+                "bob",
+                100,
+                Currency::Money,
+                TransactionType::TaskReward,
+                "t1".into(),
+                1,
+                Some("task-1".into()),
+            )
+            .unwrap();
 
         assert_eq!(ledger.entries_by_reference("task-1").len(), 2);
         assert_eq!(ledger.entries_by_reference("task-2").len(), 0);
@@ -1400,7 +1636,18 @@ mod tests {
     fn test_transfer_with_tokens() {
         let mut ledger = make_ledger();
         ledger.set_balance_genesis("alice", Currency::Token, 5000);
-        ledger.transfer("alice", "bob", 1000, Currency::Token, TransactionType::Teach, "lesson".into(), 1, None).unwrap();
+        ledger
+            .transfer(
+                "alice",
+                "bob",
+                1000,
+                Currency::Token,
+                TransactionType::Teach,
+                "lesson".into(),
+                1,
+                None,
+            )
+            .unwrap();
 
         assert_eq!(ledger.get_balance("alice", Currency::Token), 4000);
         assert_eq!(ledger.get_balance("bob", Currency::Token), 1000);
@@ -1412,7 +1659,18 @@ mod tests {
         ledger.set_balance_genesis("alice", Currency::Money, 1000);
         ledger.set_balance_genesis("alice", Currency::Token, 5000);
 
-        ledger.transfer("alice", "bob", 100, Currency::Money, TransactionType::TaskReward, "t1".into(), 1, None).unwrap();
+        ledger
+            .transfer(
+                "alice",
+                "bob",
+                100,
+                Currency::Money,
+                TransactionType::TaskReward,
+                "t1".into(),
+                1,
+                None,
+            )
+            .unwrap();
 
         // Only Money affected
         assert_eq!(ledger.get_balance("alice", Currency::Money), 900);

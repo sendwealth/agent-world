@@ -1,14 +1,14 @@
 use std::collections::HashMap;
-use std::sync::Arc;
 use std::sync::atomic::{AtomicU64, Ordering};
+use std::sync::Arc;
 
-use dashmap::DashMap;
 use dashmap::mapref::entry::Entry;
+use dashmap::DashMap;
 use uuid::Uuid;
 
-use crate::economy::token_burn::AgentRecord;
 use crate::economy::reward::{Ledger, LedgerEntry};
 use crate::economy::task::{Task, TaskStatus};
+use crate::economy::token_burn::AgentRecord;
 use crate::world::enums::{AgentPhase, DeathReason};
 use crate::world::event::WorldEvent;
 use crate::world::state::EventBus;
@@ -22,10 +22,22 @@ pub enum StateError {
     AgentNotFound(String),
     AgentAlreadyExists(String),
     AgentAlreadyDead(String),
-    InvalidPhaseTransition { agent_id: String, from: AgentPhase, to: AgentPhase },
+    InvalidPhaseTransition {
+        agent_id: String,
+        from: AgentPhase,
+        to: AgentPhase,
+    },
     TaskNotFound(String),
-    InvalidTaskTransition { task_id: String, from: TaskStatus, to: TaskStatus },
-    InsufficientTokens { agent_id: String, required: u64, available: u64 },
+    InvalidTaskTransition {
+        task_id: String,
+        from: TaskStatus,
+        to: TaskStatus,
+    },
+    InsufficientTokens {
+        agent_id: String,
+        required: u64,
+        available: u64,
+    },
 }
 
 impl std::fmt::Display for StateError {
@@ -35,14 +47,30 @@ impl std::fmt::Display for StateError {
             StateError::AgentAlreadyExists(id) => write!(f, "agent already exists: {}", id),
             StateError::AgentAlreadyDead(id) => write!(f, "agent is already dead: {}", id),
             StateError::InvalidPhaseTransition { agent_id, from, to } => {
-                write!(f, "invalid phase transition for {}: {:?} -> {:?}", agent_id, from, to)
+                write!(
+                    f,
+                    "invalid phase transition for {}: {:?} -> {:?}",
+                    agent_id, from, to
+                )
             }
             StateError::TaskNotFound(id) => write!(f, "task not found: {}", id),
             StateError::InvalidTaskTransition { task_id, from, to } => {
-                write!(f, "invalid task status transition for {}: {:?} -> {:?}", task_id, from, to)
+                write!(
+                    f,
+                    "invalid task status transition for {}: {:?} -> {:?}",
+                    task_id, from, to
+                )
             }
-            StateError::InsufficientTokens { agent_id, required, available } => {
-                write!(f, "insufficient tokens for {}: required {}, available {}", agent_id, required, available)
+            StateError::InsufficientTokens {
+                agent_id,
+                required,
+                available,
+            } => {
+                write!(
+                    f,
+                    "insufficient tokens for {}: required {}, available {}",
+                    agent_id, required, available
+                )
             }
         }
     }
@@ -187,7 +215,8 @@ impl WorldState {
     /// Returns the agent record if found.
     /// Dead agents can be deregistered to clean up state.
     pub fn deregister_agent(&self, id: &str) -> Result<AgentRecord, StateError> {
-        self.agents.remove(id)
+        self.agents
+            .remove(id)
             .map(|(_, agent)| agent)
             .ok_or_else(|| StateError::AgentNotFound(id.to_string()))
     }
@@ -209,24 +238,32 @@ impl WorldState {
 
     /// Get the number of living agents (not Dead phase).
     pub fn living_agent_count(&self) -> usize {
-        self.agents.iter()
+        self.agents
+            .iter()
             .filter(|entry| entry.value().phase != AgentPhase::Dead)
             .count()
     }
 
     /// List all agent IDs.
     pub fn agent_ids(&self) -> Vec<String> {
-        self.agents.iter().map(|entry| entry.key().clone()).collect()
+        self.agents
+            .iter()
+            .map(|entry| entry.key().clone())
+            .collect()
     }
 
     /// List all agent records.
     pub fn list_agents(&self) -> Vec<AgentRecord> {
-        self.agents.iter().map(|entry| entry.value().clone()).collect()
+        self.agents
+            .iter()
+            .map(|entry| entry.value().clone())
+            .collect()
     }
 
     /// List agents filtered by phase.
     pub fn agents_by_phase(&self, phase: AgentPhase) -> Vec<AgentRecord> {
-        self.agents.iter()
+        self.agents
+            .iter()
             .filter(|entry| entry.value().phase == phase)
             .map(|entry| entry.value().clone())
             .collect()
@@ -242,7 +279,9 @@ impl WorldState {
     ///
     /// Emits a `PhaseChanged` event on success.
     pub fn set_agent_phase(&self, agent_id: &str, new_phase: AgentPhase) -> Result<(), StateError> {
-        let mut agent = self.agents.get_mut(agent_id)
+        let mut agent = self
+            .agents
+            .get_mut(agent_id)
             .ok_or_else(|| StateError::AgentNotFound(agent_id.to_string()))?;
 
         let old_phase = agent.phase;
@@ -268,8 +307,14 @@ impl WorldState {
     }
 
     /// Transition an agent to the Dead phase with the given reason.
-    pub fn kill_agent(&self, agent_id: &str, reason: DeathReason) -> Result<AgentPhase, StateError> {
-        let mut agent = self.agents.get_mut(agent_id)
+    pub fn kill_agent(
+        &self,
+        agent_id: &str,
+        reason: DeathReason,
+    ) -> Result<AgentPhase, StateError> {
+        let mut agent = self
+            .agents
+            .get_mut(agent_id)
             .ok_or_else(|| StateError::AgentNotFound(agent_id.to_string()))?;
 
         if agent.phase == AgentPhase::Dead {
@@ -295,16 +340,16 @@ impl WorldState {
     ///
     /// Returns 0 if the agent is not found.
     pub fn token_balance(&self, agent_id: &str) -> u64 {
-        self.agents.get(agent_id)
-            .map(|r| r.tokens)
-            .unwrap_or(0)
+        self.agents.get(agent_id).map(|r| r.tokens).unwrap_or(0)
     }
 
     /// Set the token balance for an agent.
     ///
     /// Updates the balance directly in the AgentRecord.
     pub fn set_token_balance(&self, agent_id: &str, amount: u64) -> Result<(), StateError> {
-        let mut agent = self.agents.get_mut(agent_id)
+        let mut agent = self
+            .agents
+            .get_mut(agent_id)
             .ok_or_else(|| StateError::AgentNotFound(agent_id.to_string()))?;
 
         let old_balance = agent.tokens;
@@ -325,7 +370,9 @@ impl WorldState {
     /// Uses saturating addition to prevent overflow.
     /// The read-modify-write is atomic via DashMap's entry lock.
     pub fn add_tokens(&self, agent_id: &str, amount: u64) -> Result<u64, StateError> {
-        let mut agent = self.agents.get_mut(agent_id)
+        let mut agent = self
+            .agents
+            .get_mut(agent_id)
             .ok_or_else(|| StateError::AgentNotFound(agent_id.to_string()))?;
 
         let old_balance = agent.tokens;
@@ -347,7 +394,9 @@ impl WorldState {
     /// Returns an error if the agent doesn't have enough tokens.
     /// The read-modify-write is atomic via DashMap's entry lock.
     pub fn deduct_tokens(&self, agent_id: &str, amount: u64) -> Result<u64, StateError> {
-        let mut agent = self.agents.get_mut(agent_id)
+        let mut agent = self
+            .agents
+            .get_mut(agent_id)
             .ok_or_else(|| StateError::AgentNotFound(agent_id.to_string()))?;
 
         let old_balance = agent.tokens;
@@ -378,7 +427,9 @@ impl WorldState {
     /// Returns the actual amount deducted.
     /// The read-modify-write is atomic via DashMap's entry lock.
     pub fn deduct_tokens_clamped(&self, agent_id: &str, amount: u64) -> Result<u64, StateError> {
-        let mut agent = self.agents.get_mut(agent_id)
+        let mut agent = self
+            .agents
+            .get_mut(agent_id)
             .ok_or_else(|| StateError::AgentNotFound(agent_id.to_string()))?;
 
         let old_balance = agent.tokens;
@@ -398,7 +449,8 @@ impl WorldState {
 
     /// Get the total token supply across all agents.
     pub fn total_token_supply(&self) -> u64 {
-        self.agents.iter()
+        self.agents
+            .iter()
             .map(|entry| entry.value().tokens)
             .fold(0u64, |acc, v| acc.saturating_add(v))
     }
@@ -452,12 +504,16 @@ impl WorldState {
 
     /// List all tasks.
     pub fn list_tasks(&self) -> Vec<Task> {
-        self.tasks.iter().map(|entry| entry.value().clone()).collect()
+        self.tasks
+            .iter()
+            .map(|entry| entry.value().clone())
+            .collect()
     }
 
     /// List tasks by status.
     pub fn tasks_by_status(&self, status: TaskStatus) -> Vec<Task> {
-        self.tasks.iter()
+        self.tasks
+            .iter()
             .filter(|entry| entry.value().status == status)
             .map(|entry| entry.value().clone())
             .collect()
@@ -467,8 +523,14 @@ impl WorldState {
     ///
     /// Returns `InvalidTaskTransition` if the transition is not valid per the
     /// task lifecycle state machine.
-    pub fn update_task_status(&self, task_id: &str, new_status: TaskStatus) -> Result<(), StateError> {
-        let mut task = self.tasks.get_mut(task_id)
+    pub fn update_task_status(
+        &self,
+        task_id: &str,
+        new_status: TaskStatus,
+    ) -> Result<(), StateError> {
+        let mut task = self
+            .tasks
+            .get_mut(task_id)
             .ok_or_else(|| StateError::TaskNotFound(task_id.to_string()))?;
 
         let old_status = task.status;
@@ -486,7 +548,8 @@ impl WorldState {
 
     /// Remove a task from the world state.
     pub fn remove_task(&self, task_id: &str) -> Result<Task, StateError> {
-        self.tasks.remove(task_id)
+        self.tasks
+            .remove(task_id)
             .map(|(_, task)| task)
             .ok_or_else(|| StateError::TaskNotFound(task_id.to_string()))
     }
@@ -515,7 +578,16 @@ impl WorldState {
     ) -> Uuid {
         let tick = self.tick();
         let mut ledger = self.ledger.write().unwrap_or_else(|e| e.into_inner());
-        ledger.record(from_agent, to_agent, amount, currency, tx_type, description, tick, reference_id)
+        ledger.record(
+            from_agent,
+            to_agent,
+            amount,
+            currency,
+            tx_type,
+            description,
+            tick,
+            reference_id,
+        )
     }
 
     /// Get all ledger entries (cloned).
@@ -606,7 +678,9 @@ mod tests {
     #[test]
     fn test_register_agent_basic() {
         let state = make_state();
-        state.register_agent("a1".to_string(), "Alice".to_string(), 1000).unwrap();
+        state
+            .register_agent("a1".to_string(), "Alice".to_string(), 1000)
+            .unwrap();
 
         assert!(state.agent_exists("a1"));
         assert_eq!(state.agent_count(), 1);
@@ -621,7 +695,9 @@ mod tests {
     #[test]
     fn test_register_agent_duplicate_fails() {
         let state = make_state();
-        state.register_agent("a1".to_string(), "Alice".to_string(), 1000).unwrap();
+        state
+            .register_agent("a1".to_string(), "Alice".to_string(), 1000)
+            .unwrap();
         let result = state.register_agent("a1".to_string(), "Bob".to_string(), 500);
         assert!(matches!(result, Err(StateError::AgentAlreadyExists(_))));
     }
@@ -629,9 +705,14 @@ mod tests {
     #[test]
     fn test_register_agent_with_phase() {
         let state = make_state();
-        state.register_agent_with_phase(
-            "a1".to_string(), "Alice".to_string(), 1000, AgentPhase::Adult
-        ).unwrap();
+        state
+            .register_agent_with_phase(
+                "a1".to_string(),
+                "Alice".to_string(),
+                1000,
+                AgentPhase::Adult,
+            )
+            .unwrap();
 
         let agent = state.get_agent("a1").unwrap();
         assert_eq!(agent.phase, AgentPhase::Adult);
@@ -640,9 +721,15 @@ mod tests {
     #[test]
     fn test_register_multiple_agents() {
         let state = make_state();
-        state.register_agent("a1".to_string(), "Alice".to_string(), 1000).unwrap();
-        state.register_agent("a2".to_string(), "Bob".to_string(), 2000).unwrap();
-        state.register_agent("a3".to_string(), "Charlie".to_string(), 3000).unwrap();
+        state
+            .register_agent("a1".to_string(), "Alice".to_string(), 1000)
+            .unwrap();
+        state
+            .register_agent("a2".to_string(), "Bob".to_string(), 2000)
+            .unwrap();
+        state
+            .register_agent("a3".to_string(), "Charlie".to_string(), 3000)
+            .unwrap();
 
         assert_eq!(state.agent_count(), 3);
         assert_eq!(state.living_agent_count(), 3);
@@ -653,7 +740,9 @@ mod tests {
     #[test]
     fn test_deregister_agent() {
         let state = make_state();
-        state.register_agent("a1".to_string(), "Alice".to_string(), 1000).unwrap();
+        state
+            .register_agent("a1".to_string(), "Alice".to_string(), 1000)
+            .unwrap();
 
         let agent = state.deregister_agent("a1").unwrap();
         assert_eq!(agent.name, "Alice");
@@ -672,7 +761,9 @@ mod tests {
     #[test]
     fn test_deregister_cleans_up_balance() {
         let state = make_state();
-        state.register_agent("a1".to_string(), "Alice".to_string(), 5000).unwrap();
+        state
+            .register_agent("a1".to_string(), "Alice".to_string(), 5000)
+            .unwrap();
         assert_eq!(state.token_balance("a1"), 5000);
 
         state.deregister_agent("a1").unwrap();
@@ -684,8 +775,12 @@ mod tests {
     #[test]
     fn test_agent_ids() {
         let state = make_state();
-        state.register_agent("a1".to_string(), "Alice".to_string(), 0).unwrap();
-        state.register_agent("a2".to_string(), "Bob".to_string(), 0).unwrap();
+        state
+            .register_agent("a1".to_string(), "Alice".to_string(), 0)
+            .unwrap();
+        state
+            .register_agent("a2".to_string(), "Bob".to_string(), 0)
+            .unwrap();
 
         let mut ids = state.agent_ids();
         ids.sort();
@@ -695,8 +790,12 @@ mod tests {
     #[test]
     fn test_list_agents() {
         let state = make_state();
-        state.register_agent("a1".to_string(), "Alice".to_string(), 100).unwrap();
-        state.register_agent("a2".to_string(), "Bob".to_string(), 200).unwrap();
+        state
+            .register_agent("a1".to_string(), "Alice".to_string(), 100)
+            .unwrap();
+        state
+            .register_agent("a2".to_string(), "Bob".to_string(), 200)
+            .unwrap();
 
         let agents = state.list_agents();
         assert_eq!(agents.len(), 2);
@@ -705,13 +804,20 @@ mod tests {
     #[test]
     fn test_agents_by_phase() {
         let state = make_state();
-        state.register_agent("a1".to_string(), "Alice".to_string(), 0).unwrap();
-        state.register_agent_with_phase(
-            "a2".to_string(), "Bob".to_string(), 0, AgentPhase::Adult
-        ).unwrap();
-        state.register_agent_with_phase(
-            "a3".to_string(), "Charlie".to_string(), 0, AgentPhase::Adult
-        ).unwrap();
+        state
+            .register_agent("a1".to_string(), "Alice".to_string(), 0)
+            .unwrap();
+        state
+            .register_agent_with_phase("a2".to_string(), "Bob".to_string(), 0, AgentPhase::Adult)
+            .unwrap();
+        state
+            .register_agent_with_phase(
+                "a3".to_string(),
+                "Charlie".to_string(),
+                0,
+                AgentPhase::Adult,
+            )
+            .unwrap();
 
         assert_eq!(state.agents_by_phase(AgentPhase::Birth).len(), 1);
         assert_eq!(state.agents_by_phase(AgentPhase::Adult).len(), 2);
@@ -727,11 +833,15 @@ mod tests {
     #[test]
     fn test_living_agent_count_excludes_dead() {
         let state = make_state();
-        state.register_agent("a1".to_string(), "Alice".to_string(), 100).unwrap();
-        state.register_agent("a2".to_string(), "Bob".to_string(), 100).unwrap();
-        state.register_agent_with_phase(
-            "a3".to_string(), "Charlie".to_string(), 0, AgentPhase::Dead
-        ).unwrap();
+        state
+            .register_agent("a1".to_string(), "Alice".to_string(), 100)
+            .unwrap();
+        state
+            .register_agent("a2".to_string(), "Bob".to_string(), 100)
+            .unwrap();
+        state
+            .register_agent_with_phase("a3".to_string(), "Charlie".to_string(), 0, AgentPhase::Dead)
+            .unwrap();
 
         assert_eq!(state.agent_count(), 3);
         assert_eq!(state.living_agent_count(), 2);
@@ -742,7 +852,9 @@ mod tests {
     #[test]
     fn test_set_agent_phase_valid_transitions() {
         let state = make_state();
-        state.register_agent("a1".to_string(), "Alice".to_string(), 1000).unwrap();
+        state
+            .register_agent("a1".to_string(), "Alice".to_string(), 1000)
+            .unwrap();
 
         state.set_agent_phase("a1", AgentPhase::Childhood).unwrap();
         assert_eq!(state.get_agent("a1").unwrap().phase, AgentPhase::Childhood);
@@ -770,10 +882,15 @@ mod tests {
     #[test]
     fn test_invalid_phase_transition_birth_to_adult() {
         let state = make_state();
-        state.register_agent("a1".to_string(), "Alice".to_string(), 1000).unwrap();
+        state
+            .register_agent("a1".to_string(), "Alice".to_string(), 1000)
+            .unwrap();
 
         let result = state.set_agent_phase("a1", AgentPhase::Adult);
-        assert!(matches!(result, Err(StateError::InvalidPhaseTransition { .. })));
+        assert!(matches!(
+            result,
+            Err(StateError::InvalidPhaseTransition { .. })
+        ));
         // Phase should remain unchanged
         assert_eq!(state.get_agent("a1").unwrap().phase, AgentPhase::Birth);
     }
@@ -781,18 +898,25 @@ mod tests {
     #[test]
     fn test_invalid_phase_transition_dead_to_birth() {
         let state = make_state();
-        state.register_agent("a1".to_string(), "Alice".to_string(), 1000).unwrap();
+        state
+            .register_agent("a1".to_string(), "Alice".to_string(), 1000)
+            .unwrap();
         state.kill_agent("a1", DeathReason::TokenDepleted).unwrap();
 
         let result = state.set_agent_phase("a1", AgentPhase::Birth);
-        assert!(matches!(result, Err(StateError::InvalidPhaseTransition { .. })));
+        assert!(matches!(
+            result,
+            Err(StateError::InvalidPhaseTransition { .. })
+        ));
         assert_eq!(state.get_agent("a1").unwrap().phase, AgentPhase::Dead);
     }
 
     #[test]
     fn test_valid_skip_to_dead() {
         let state = make_state();
-        state.register_agent("a1".to_string(), "Alice".to_string(), 1000).unwrap();
+        state
+            .register_agent("a1".to_string(), "Alice".to_string(), 1000)
+            .unwrap();
 
         // Any living phase can transition directly to Dead
         state.set_agent_phase("a1", AgentPhase::Dead).unwrap();
@@ -802,7 +926,9 @@ mod tests {
     #[test]
     fn test_kill_agent() {
         let state = make_state();
-        state.register_agent("a1".to_string(), "Alice".to_string(), 1000).unwrap();
+        state
+            .register_agent("a1".to_string(), "Alice".to_string(), 1000)
+            .unwrap();
 
         let old_phase = state.kill_agent("a1", DeathReason::TokenDepleted).unwrap();
         assert_eq!(old_phase, AgentPhase::Birth);
@@ -813,7 +939,9 @@ mod tests {
     #[test]
     fn test_kill_already_dead_fails() {
         let state = make_state();
-        state.register_agent("a1".to_string(), "Alice".to_string(), 1000).unwrap();
+        state
+            .register_agent("a1".to_string(), "Alice".to_string(), 1000)
+            .unwrap();
         state.kill_agent("a1", DeathReason::TokenDepleted).unwrap();
 
         let result = state.kill_agent("a1", DeathReason::TokenDepleted);
@@ -823,9 +951,13 @@ mod tests {
     #[test]
     fn test_kill_agent_with_reason() {
         let state = make_state();
-        state.register_agent("a1".to_string(), "Alice".to_string(), 1000).unwrap();
+        state
+            .register_agent("a1".to_string(), "Alice".to_string(), 1000)
+            .unwrap();
 
-        let old_phase = state.kill_agent("a1", DeathReason::HumanTerminated).unwrap();
+        let old_phase = state
+            .kill_agent("a1", DeathReason::HumanTerminated)
+            .unwrap();
         assert_eq!(old_phase, AgentPhase::Birth);
         assert_eq!(state.get_agent("a1").unwrap().phase, AgentPhase::Dead);
     }
@@ -835,7 +967,9 @@ mod tests {
     #[test]
     fn test_token_balance_initial() {
         let state = make_state();
-        state.register_agent("a1".to_string(), "Alice".to_string(), 5000).unwrap();
+        state
+            .register_agent("a1".to_string(), "Alice".to_string(), 5000)
+            .unwrap();
         assert_eq!(state.token_balance("a1"), 5000);
     }
 
@@ -848,7 +982,9 @@ mod tests {
     #[test]
     fn test_set_token_balance() {
         let state = make_state();
-        state.register_agent("a1".to_string(), "Alice".to_string(), 1000).unwrap();
+        state
+            .register_agent("a1".to_string(), "Alice".to_string(), 1000)
+            .unwrap();
 
         state.set_token_balance("a1", 500).unwrap();
         assert_eq!(state.token_balance("a1"), 500);
@@ -867,7 +1003,9 @@ mod tests {
     #[test]
     fn test_add_tokens() {
         let state = make_state();
-        state.register_agent("a1".to_string(), "Alice".to_string(), 1000).unwrap();
+        state
+            .register_agent("a1".to_string(), "Alice".to_string(), 1000)
+            .unwrap();
 
         let new_balance = state.add_tokens("a1", 500).unwrap();
         assert_eq!(new_balance, 1500);
@@ -884,7 +1022,9 @@ mod tests {
     #[test]
     fn test_add_tokens_saturates() {
         let state = make_state();
-        state.register_agent("a1".to_string(), "Alice".to_string(), u64::MAX).unwrap();
+        state
+            .register_agent("a1".to_string(), "Alice".to_string(), u64::MAX)
+            .unwrap();
 
         let new_balance = state.add_tokens("a1", 1).unwrap();
         assert_eq!(new_balance, u64::MAX);
@@ -893,7 +1033,9 @@ mod tests {
     #[test]
     fn test_deduct_tokens() {
         let state = make_state();
-        state.register_agent("a1".to_string(), "Alice".to_string(), 1000).unwrap();
+        state
+            .register_agent("a1".to_string(), "Alice".to_string(), 1000)
+            .unwrap();
 
         let new_balance = state.deduct_tokens("a1", 300).unwrap();
         assert_eq!(new_balance, 700);
@@ -903,7 +1045,9 @@ mod tests {
     #[test]
     fn test_deduct_tokens_insufficient_fails() {
         let state = make_state();
-        state.register_agent("a1".to_string(), "Alice".to_string(), 100).unwrap();
+        state
+            .register_agent("a1".to_string(), "Alice".to_string(), 100)
+            .unwrap();
 
         let result = state.deduct_tokens("a1", 200);
         assert!(matches!(result, Err(StateError::InsufficientTokens { .. })));
@@ -914,7 +1058,9 @@ mod tests {
     #[test]
     fn test_deduct_tokens_exact() {
         let state = make_state();
-        state.register_agent("a1".to_string(), "Alice".to_string(), 1000).unwrap();
+        state
+            .register_agent("a1".to_string(), "Alice".to_string(), 1000)
+            .unwrap();
 
         let new_balance = state.deduct_tokens("a1", 1000).unwrap();
         assert_eq!(new_balance, 0);
@@ -930,7 +1076,9 @@ mod tests {
     #[test]
     fn test_deduct_tokens_clamped() {
         let state = make_state();
-        state.register_agent("a1".to_string(), "Alice".to_string(), 50).unwrap();
+        state
+            .register_agent("a1".to_string(), "Alice".to_string(), 50)
+            .unwrap();
 
         let actual = state.deduct_tokens_clamped("a1", 100).unwrap();
         assert_eq!(actual, 50);
@@ -940,7 +1088,9 @@ mod tests {
     #[test]
     fn test_deduct_tokens_clamped_exact() {
         let state = make_state();
-        state.register_agent("a1".to_string(), "Alice".to_string(), 100).unwrap();
+        state
+            .register_agent("a1".to_string(), "Alice".to_string(), 100)
+            .unwrap();
 
         let actual = state.deduct_tokens_clamped("a1", 100).unwrap();
         assert_eq!(actual, 100);
@@ -957,9 +1107,15 @@ mod tests {
     #[test]
     fn test_total_token_supply() {
         let state = make_state();
-        state.register_agent("a1".to_string(), "Alice".to_string(), 1000).unwrap();
-        state.register_agent("a2".to_string(), "Bob".to_string(), 2000).unwrap();
-        state.register_agent("a3".to_string(), "Charlie".to_string(), 3000).unwrap();
+        state
+            .register_agent("a1".to_string(), "Alice".to_string(), 1000)
+            .unwrap();
+        state
+            .register_agent("a2".to_string(), "Bob".to_string(), 2000)
+            .unwrap();
+        state
+            .register_agent("a3".to_string(), "Charlie".to_string(), 3000)
+            .unwrap();
 
         assert_eq!(state.total_token_supply(), 6000);
     }
@@ -967,8 +1123,12 @@ mod tests {
     #[test]
     fn test_total_token_supply_after_deduction() {
         let state = make_state();
-        state.register_agent("a1".to_string(), "Alice".to_string(), 1000).unwrap();
-        state.register_agent("a2".to_string(), "Bob".to_string(), 2000).unwrap();
+        state
+            .register_agent("a1".to_string(), "Alice".to_string(), 1000)
+            .unwrap();
+        state
+            .register_agent("a2".to_string(), "Bob".to_string(), 2000)
+            .unwrap();
 
         state.deduct_tokens("a1", 500).unwrap();
         assert_eq!(state.total_token_supply(), 2500);
@@ -1046,24 +1206,42 @@ mod tests {
     #[test]
     fn test_update_task_status_valid_transition() {
         let state = make_state();
-        let task_id = state.create_task("T1".to_string(), "".to_string(), 0, "p1".to_string(), None);
+        let task_id =
+            state.create_task("T1".to_string(), "".to_string(), 0, "p1".to_string(), None);
 
-        state.update_task_status(&task_id, TaskStatus::Claimed).unwrap();
-        assert_eq!(state.get_task(&task_id).unwrap().status, TaskStatus::Claimed);
+        state
+            .update_task_status(&task_id, TaskStatus::Claimed)
+            .unwrap();
+        assert_eq!(
+            state.get_task(&task_id).unwrap().status,
+            TaskStatus::Claimed
+        );
 
-        state.update_task_status(&task_id, TaskStatus::InProgress).unwrap();
-        assert_eq!(state.get_task(&task_id).unwrap().status, TaskStatus::InProgress);
+        state
+            .update_task_status(&task_id, TaskStatus::InProgress)
+            .unwrap();
+        assert_eq!(
+            state.get_task(&task_id).unwrap().status,
+            TaskStatus::InProgress
+        );
     }
 
     #[test]
     fn test_update_task_status_invalid_transition() {
         let state = make_state();
-        let task_id = state.create_task("T1".to_string(), "".to_string(), 0, "p1".to_string(), None);
+        let task_id =
+            state.create_task("T1".to_string(), "".to_string(), 0, "p1".to_string(), None);
 
         let result = state.update_task_status(&task_id, TaskStatus::Completed);
-        assert!(matches!(result, Err(StateError::InvalidTaskTransition { .. })));
+        assert!(matches!(
+            result,
+            Err(StateError::InvalidTaskTransition { .. })
+        ));
         // Status should remain unchanged
-        assert_eq!(state.get_task(&task_id).unwrap().status, TaskStatus::Published);
+        assert_eq!(
+            state.get_task(&task_id).unwrap().status,
+            TaskStatus::Published
+        );
     }
 
     #[test]
@@ -1076,7 +1254,8 @@ mod tests {
     #[test]
     fn test_remove_task() {
         let state = make_state();
-        let task_id = state.create_task("T1".to_string(), "".to_string(), 0, "p1".to_string(), None);
+        let task_id =
+            state.create_task("T1".to_string(), "".to_string(), 0, "p1".to_string(), None);
 
         let task = state.remove_task(&task_id).unwrap();
         assert_eq!(task.title, "T1");
@@ -1135,16 +1314,22 @@ mod tests {
         let state = make_state();
 
         state.record_transaction(
-            Some("a1".to_string()), Some("a2".to_string()), 100,
+            Some("a1".to_string()),
+            Some("a2".to_string()),
+            100,
             crate::world::enums::Currency::Token,
             crate::economy::reward::TransactionType::TaskReward,
-            "tx1".to_string(), None,
+            "tx1".to_string(),
+            None,
         );
         state.record_transaction(
-            Some("a2".to_string()), None, 2,
+            Some("a2".to_string()),
+            None,
+            2,
             crate::world::enums::Currency::Token,
             crate::economy::reward::TransactionType::PlatformFee,
-            "tx2".to_string(), None,
+            "tx2".to_string(),
+            None,
         );
 
         assert_eq!(state.ledger_entry_count(), 2);
@@ -1169,7 +1354,9 @@ mod tests {
         let mut rx = bus.subscribe();
         let state = WorldState::with_event_bus(bus);
 
-        state.register_agent("a1".to_string(), "Alice".to_string(), 1000).unwrap();
+        state
+            .register_agent("a1".to_string(), "Alice".to_string(), 1000)
+            .unwrap();
 
         let event = rx.try_recv().unwrap();
         assert!(matches!(event, WorldEvent::AgentSpawned { .. }));
@@ -1185,7 +1372,9 @@ mod tests {
         let mut rx = bus.subscribe();
         let state = WorldState::with_event_bus(bus);
 
-        state.register_agent("a1".to_string(), "Alice".to_string(), 1000).unwrap();
+        state
+            .register_agent("a1".to_string(), "Alice".to_string(), 1000)
+            .unwrap();
         let _ = rx.try_recv(); // consume AgentSpawned
 
         state.set_agent_phase("a1", AgentPhase::Childhood).unwrap();
@@ -1206,7 +1395,9 @@ mod tests {
         let mut rx = bus.subscribe();
         let state = WorldState::with_event_bus(bus);
 
-        state.register_agent("a1".to_string(), "Alice".to_string(), 1000).unwrap();
+        state
+            .register_agent("a1".to_string(), "Alice".to_string(), 1000)
+            .unwrap();
         let _ = rx.try_recv(); // consume AgentSpawned
 
         state.set_token_balance("a1", 500).unwrap();
@@ -1228,7 +1419,9 @@ mod tests {
         let mut rx = bus.subscribe();
         let state = WorldState::with_event_bus(bus);
 
-        state.register_agent("a1".to_string(), "Alice".to_string(), 1000).unwrap();
+        state
+            .register_agent("a1".to_string(), "Alice".to_string(), 1000)
+            .unwrap();
         let _ = rx.try_recv(); // consume AgentSpawned
 
         state.kill_agent("a1", DeathReason::TokenDepleted).unwrap();
@@ -1247,13 +1440,21 @@ mod tests {
         let state = WorldState::with_event_bus(bus);
 
         state.create_task(
-            "Test Task".to_string(), "desc".to_string(), 100,
-            "publisher-1".to_string(), None,
+            "Test Task".to_string(),
+            "desc".to_string(),
+            100,
+            "publisher-1".to_string(),
+            None,
         );
 
         let event = rx.try_recv().unwrap();
         assert!(matches!(event, WorldEvent::TaskCreated { .. }));
-        if let WorldEvent::TaskCreated { task_id, publisher, reward } = event {
+        if let WorldEvent::TaskCreated {
+            task_id,
+            publisher,
+            reward,
+        } = event
+        {
             assert_eq!(publisher, "publisher-1");
             assert_eq!(reward, 100);
             assert!(!task_id.is_empty());
@@ -1265,7 +1466,9 @@ mod tests {
         let state = make_state();
         // These should not panic even without an event bus
         state.advance_tick();
-        state.register_agent("a1".to_string(), "Alice".to_string(), 1000).unwrap();
+        state
+            .register_agent("a1".to_string(), "Alice".to_string(), 1000)
+            .unwrap();
         state.set_agent_phase("a1", AgentPhase::Childhood).unwrap();
         state.set_token_balance("a1", 500).unwrap();
         state.kill_agent("a1", DeathReason::TokenDepleted).unwrap();
@@ -1285,7 +1488,9 @@ mod tests {
             let state = state.clone();
             handles.push(thread::spawn(move || {
                 let id = format!("agent-{}", i);
-                state.register_agent(id, format!("Agent {}", i), 1000).unwrap();
+                state
+                    .register_agent(id, format!("Agent {}", i), 1000)
+                    .unwrap();
             }));
         }
 
@@ -1326,7 +1531,9 @@ mod tests {
         use std::thread;
 
         let state = Arc::new(make_state());
-        state.register_agent("a1".to_string(), "Alice".to_string(), 10000).unwrap();
+        state
+            .register_agent("a1".to_string(), "Alice".to_string(), 10000)
+            .unwrap();
 
         let mut handles = vec![];
 
@@ -1374,25 +1581,39 @@ mod tests {
 
     #[test]
     fn test_error_display() {
-        assert!(StateError::AgentNotFound("a1".to_string()).to_string().contains("a1"));
-        assert!(StateError::AgentAlreadyExists("a1".to_string()).to_string().contains("a1"));
-        assert!(StateError::AgentAlreadyDead("a1".to_string()).to_string().contains("dead"));
-        assert!(StateError::TaskNotFound("t1".to_string()).to_string().contains("t1"));
+        assert!(StateError::AgentNotFound("a1".to_string())
+            .to_string()
+            .contains("a1"));
+        assert!(StateError::AgentAlreadyExists("a1".to_string())
+            .to_string()
+            .contains("a1"));
+        assert!(StateError::AgentAlreadyDead("a1".to_string())
+            .to_string()
+            .contains("dead"));
+        assert!(StateError::TaskNotFound("t1".to_string())
+            .to_string()
+            .contains("t1"));
         assert!(StateError::InsufficientTokens {
             agent_id: "a1".to_string(),
             required: 100,
             available: 50,
-        }.to_string().contains("50"));
+        }
+        .to_string()
+        .contains("50"));
         assert!(StateError::InvalidTaskTransition {
             task_id: "t1".to_string(),
             from: TaskStatus::Published,
             to: TaskStatus::Completed,
-        }.to_string().contains("t1"));
+        }
+        .to_string()
+        .contains("t1"));
         assert!(StateError::InvalidPhaseTransition {
             agent_id: "a1".to_string(),
             from: AgentPhase::Dead,
             to: AgentPhase::Birth,
-        }.to_string().contains("invalid"));
+        }
+        .to_string()
+        .contains("invalid"));
     }
 
     // ── Default ───────────────────────────────────────────

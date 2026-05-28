@@ -228,7 +228,11 @@ impl Treasury {
     }
 
     /// Create a treasury with custom tax configuration.
-    pub fn with_config(org_id: String, tax_config: TaxConfig, strategy: DistributionStrategy) -> Self {
+    pub fn with_config(
+        org_id: String,
+        tax_config: TaxConfig,
+        strategy: DistributionStrategy,
+    ) -> Self {
         Self {
             org_id,
             tax_config,
@@ -354,17 +358,13 @@ impl Treasury {
         }
 
         let allocations = match self.distribution_strategy {
-            DistributionStrategy::EqualDistribution => {
-                Self::distribute_equal(&org.members, amount)
-            }
+            DistributionStrategy::EqualDistribution => Self::distribute_equal(&org.members, amount),
             DistributionStrategy::PerformanceBased => {
-                let scores = performance_scores
-                    .ok_or(TreasuryError::PerformanceScoresRequired)?;
+                let scores = performance_scores.ok_or(TreasuryError::PerformanceScoresRequired)?;
                 Self::distribute_performance(&org.members, scores, amount)
             }
             DistributionStrategy::NeedBased => {
-                let wealth = wealth_data
-                    .ok_or(TreasuryError::WealthDataRequired)?;
+                let wealth = wealth_data.ok_or(TreasuryError::WealthDataRequired)?;
                 Self::distribute_need(&org.members, wealth, amount)
             }
         };
@@ -427,7 +427,10 @@ impl Treasury {
 
     /// Get total amount distributed.
     pub fn total_distributed(&self) -> u64 {
-        self.distribution_history.iter().map(|r| r.total_amount).sum()
+        self.distribution_history
+            .iter()
+            .map(|r| r.total_amount)
+            .sum()
     }
 
     // ── Distribution Helpers ──────────────────────────────
@@ -545,9 +548,9 @@ impl std::fmt::Display for DistributionStrategy {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::organization::org::{OrgStatus, OrgType};
     use crate::organization::charter::{Charter, GovernanceModel, ProfitSharing};
     use crate::organization::members::{MemberRole, OrgMember};
+    use crate::organization::org::{OrgStatus, OrgType};
     use uuid::Uuid;
 
     fn test_charter() -> Charter {
@@ -687,9 +690,7 @@ mod tests {
         let mut treasury = Treasury::new("org-1".to_string());
         let mut org = make_org_with_treasury(300);
 
-        let record = treasury
-            .distribute(&mut org, 300, 200, None, None)
-            .unwrap();
+        let record = treasury.distribute(&mut org, 300, 200, None, None).unwrap();
 
         assert_eq!(record.total_amount, 300);
         assert_eq!(record.strategy, DistributionStrategy::EqualDistribution);
@@ -707,9 +708,7 @@ mod tests {
         let mut treasury = Treasury::new("org-1".to_string());
         let mut org = make_org_with_treasury(100);
 
-        let record = treasury
-            .distribute(&mut org, 100, 200, None, None)
-            .unwrap();
+        let record = treasury.distribute(&mut org, 100, 200, None, None).unwrap();
 
         // 100 / 3 = 33 each, remainder 1 → first member gets 34
         let total: u64 = record.allocations.iter().map(|(_, a)| *a).sum();
@@ -753,9 +752,9 @@ mod tests {
         let mut org = make_org_with_treasury(300);
 
         let wealth = HashMap::from([
-            ("agent-0".to_string(), 1000),  // rich → gets less
-            ("agent-1".to_string(), 100),   // moderate
-            ("agent-2".to_string(), 0),     // poor → gets more
+            ("agent-0".to_string(), 1000), // rich → gets less
+            ("agent-1".to_string(), 100),  // moderate
+            ("agent-2".to_string(), 0),    // poor → gets more
         ]);
 
         let record = treasury
@@ -777,7 +776,10 @@ mod tests {
         let mut org = make_org_with_treasury(50);
 
         let result = treasury.distribute(&mut org, 100, 200, None, None);
-        assert!(matches!(result.unwrap_err(), TreasuryError::InsufficientBalance(50, 100)));
+        assert!(matches!(
+            result.unwrap_err(),
+            TreasuryError::InsufficientBalance(50, 100)
+        ));
     }
 
     #[test]
@@ -804,8 +806,12 @@ mod tests {
         let mut treasury = Treasury::new("org-1".to_string());
         let mut org = make_org_with_treasury(500);
 
-        treasury.collect_tax(&mut org, "agent-0", TaxKind::IncomeTax, 1000, 200).unwrap();
-        treasury.collect_tax(&mut org, "agent-1", TaxKind::TradeTax, 500, 210).unwrap();
+        treasury
+            .collect_tax(&mut org, "agent-0", TaxKind::IncomeTax, 1000, 200)
+            .unwrap();
+        treasury
+            .collect_tax(&mut org, "agent-1", TaxKind::TradeTax, 500, 210)
+            .unwrap();
 
         assert_eq!(treasury.get_tax_history().len(), 2);
         assert_eq!(treasury.get_tax_history_for_agent("agent-0").len(), 1);
@@ -863,9 +869,15 @@ mod tests {
         let mut org = make_org_with_treasury(100);
 
         // Collect taxes
-        treasury.collect_tax(&mut org, "agent-0", TaxKind::IncomeTax, 1000, 200).unwrap();
-        treasury.collect_tax(&mut org, "agent-1", TaxKind::IncomeTax, 1000, 200).unwrap();
-        treasury.collect_tax(&mut org, "agent-2", TaxKind::TradeTax, 500, 200).unwrap();
+        treasury
+            .collect_tax(&mut org, "agent-0", TaxKind::IncomeTax, 1000, 200)
+            .unwrap();
+        treasury
+            .collect_tax(&mut org, "agent-1", TaxKind::IncomeTax, 1000, 200)
+            .unwrap();
+        treasury
+            .collect_tax(&mut org, "agent-2", TaxKind::TradeTax, 500, 200)
+            .unwrap();
 
         // 100 + 100 + 100 + 25 = 325
         assert_eq!(org.treasury, 325);

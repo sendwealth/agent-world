@@ -303,21 +303,14 @@ async fn collect_loop(
         match rx.recv().await {
             Ok(event) => process_event(&data, event),
             Err(broadcast::error::RecvError::Lagged(n)) => {
-                tracing::warn!(
-                    n,
-                    "GovernanceMetricsCollector lagged, dropped {} events",
-                    n
-                );
+                tracing::warn!(n, "GovernanceMetricsCollector lagged, dropped {} events", n);
             }
             Err(broadcast::error::RecvError::Closed) => break,
         }
     }
 }
 
-fn process_event(
-    data: &Arc<std::sync::Mutex<HashMap<Uuid, OrgAccumulator>>>,
-    event: WorldEvent,
-) {
+fn process_event(data: &Arc<std::sync::Mutex<HashMap<Uuid, OrgAccumulator>>>, event: WorldEvent) {
     match &event {
         WorldEvent::TaxCollected {
             org_id,
@@ -361,9 +354,7 @@ fn process_event(
         }
 
         WorldEvent::LeadershipElectionStarted {
-            org_id,
-            candidates,
-            ..
+            org_id, candidates, ..
         } => {
             let org_uuid = *org_id;
             let count = candidates.len();
@@ -515,7 +506,9 @@ fn process_event(
             });
         }
 
-        WorldEvent::OrganizationMemberJoined { org_id, agent_id, .. } => {
+        WorldEvent::OrganizationMemberJoined {
+            org_id, agent_id, ..
+        } => {
             let org_uuid = *org_id;
             let aid = agent_id.clone();
             let mut data = data.lock().unwrap();
@@ -703,8 +696,7 @@ fn build_org_metrics(org_id: Uuid, acc: &OrgAccumulator) -> OrgMetrics {
         0.0
     };
 
-    let treasury_balance =
-        acc.total_tax_collected as i64 - acc.total_distributed as i64;
+    let treasury_balance = acc.total_tax_collected as i64 - acc.total_distributed as i64;
 
     let tax_per_member = if acc.member_count > 0 {
         acc.total_tax_collected as f64 / acc.member_count as f64
@@ -715,8 +707,7 @@ fn build_org_metrics(org_id: Uuid, acc: &OrgAccumulator) -> OrgMetrics {
     // Governance stability score (0.0-1.0):
     // High stability = low treaty breaks relative to signings + steady membership
     let diplomacy_health = if acc.treaties_signed + acc.treaties_broken > 0 {
-        acc.treaties_signed as f64
-            / (acc.treaties_signed + acc.treaties_broken) as f64
+        acc.treaties_signed as f64 / (acc.treaties_signed + acc.treaties_broken) as f64
     } else {
         0.5 // neutral when no diplomacy data
     };

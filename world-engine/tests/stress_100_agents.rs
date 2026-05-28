@@ -20,7 +20,9 @@ use std::time::Instant;
 use tokio::sync::RwLock;
 use uuid::Uuid;
 
-use agent_world_engine::economy::token_burn::{AgentRecord, ConsumptionConfig, SkillRecord, TokenBurnEngine};
+use agent_world_engine::economy::token_burn::{
+    AgentRecord, ConsumptionConfig, SkillRecord, TokenBurnEngine,
+};
 use agent_world_engine::economy::{TaskBoard, TaskStatus};
 use agent_world_engine::world::enums::AgentPhase;
 use agent_world_engine::world::event::WorldEvent;
@@ -100,7 +102,12 @@ async fn test_100_agents_100_ticks_token_burn() {
     // Run 100 ticks
     for tick in 1..=TICKS {
         let result = engine.process_tick(tick, &mut agents);
-        assert_eq!(result.burns.len(), NUM_AGENTS, "All agents should burn at tick {}", tick);
+        assert_eq!(
+            result.burns.len(),
+            NUM_AGENTS,
+            "All agents should burn at tick {}",
+            tick
+        );
     }
 
     let final_total: u64 = agents.iter().map(|a| a.tokens).sum();
@@ -157,7 +164,8 @@ async fn test_100_agents_concurrent_tasks() {
                 agent_id,
                 0,
                 None,
-            ).unwrap()
+            )
+            .unwrap()
         }));
     }
 
@@ -216,7 +224,10 @@ async fn test_100_agents_concurrent_tasks() {
     {
         let b = board.read().await;
         let tasks = b.list();
-        let completed = tasks.iter().filter(|t| t.status == TaskStatus::Completed).count();
+        let completed = tasks
+            .iter()
+            .filter(|t| t.status == TaskStatus::Completed)
+            .count();
         // Some may collide on the same task, but most should complete
         assert!(
             completed > NUM_AGENTS / 2,
@@ -252,7 +263,8 @@ async fn test_100_agents_read_heavy_workload() {
                 "publisher".to_string(),
                 i as u64,
                 None,
-            ).unwrap();
+            )
+            .unwrap();
         }
     }
 
@@ -294,13 +306,21 @@ async fn test_100_agents_read_heavy_workload() {
     );
 
     // Should complete in reasonable time (< 5 seconds even on slow machines)
-    assert!(elapsed.as_secs() < 10, "Should complete within 10s, took {:?}", elapsed);
+    assert!(
+        elapsed.as_secs() < 10,
+        "Should complete within 10s, took {:?}",
+        elapsed
+    );
 
     // Verify board has tasks (100 initial + ~200 created)
     {
         let b = board.read().await;
         let task_count = b.list().len();
-        assert!(task_count >= 100, "Should have at least 100 tasks, got {}", task_count);
+        assert!(
+            task_count >= 100,
+            "Should have at least 100 tasks, got {}",
+            task_count
+        );
     }
 }
 
@@ -354,7 +374,10 @@ async fn test_100_agents_eventbus_throughput() {
         received += 1;
     }
     // Should have received events (may have lagged some due to capacity)
-    assert!(received > 0, "Subscriber should have received events, got 0");
+    assert!(
+        received > 0,
+        "Subscriber should have received events, got 0"
+    );
 }
 
 // ══════════════════════════════════════════════════════════════════════════
@@ -370,9 +393,7 @@ async fn test_full_100_agent_simulation() {
     let engine = TokenBurnEngine::new(ConsumptionConfig::default());
 
     // Initialize 100 agents
-    let mut stress_agents: Vec<StressAgent> = (0..NUM_AGENTS)
-        .map(StressAgent::new)
-        .collect();
+    let mut stress_agents: Vec<StressAgent> = (0..NUM_AGENTS).map(StressAgent::new).collect();
 
     let mut agent_records: Vec<AgentRecord> = stress_agents
         .iter()
@@ -383,8 +404,8 @@ async fn test_full_100_agent_simulation() {
             tokens: a.tokens,
             skills: HashMap::new(),
             personality: String::new(),
-                tasks_completed: 0,
-                tasks_attempted: 0,
+            tasks_completed: 0,
+            tasks_attempted: 0,
         })
         .collect();
 
@@ -423,14 +444,22 @@ async fn test_full_100_agent_simulation() {
 
         // Verify all agents alive
         let alive = stress_agents.iter().filter(|a| a.is_alive).count();
-        assert_eq!(alive, NUM_AGENTS, "All agents should be alive at tick {}", tick);
+        assert_eq!(
+            alive, NUM_AGENTS,
+            "All agents should be alive at tick {}",
+            tick
+        );
 
         // 2. Every 10 ticks, each agent creates a task (10 agents at a time to avoid overload)
         if tick % 10 == 0 {
             let batch_size = 10;
             for batch_start in (0..NUM_AGENTS).step_by(batch_size) {
                 let mut handles = Vec::new();
-                for agent in stress_agents.iter().take(std::cmp::min(batch_start + batch_size, NUM_AGENTS)).skip(batch_start) {
+                for agent in stress_agents
+                    .iter()
+                    .take(std::cmp::min(batch_start + batch_size, NUM_AGENTS))
+                    .skip(batch_start)
+                {
                     let board = task_board.clone();
                     let agent_id = agent.id.clone();
                     handles.push(tokio::spawn(async move {
@@ -467,14 +496,22 @@ async fn test_full_100_agent_simulation() {
 
             for (task_id, publisher_id) in &published {
                 // Pick a random different agent as worker
-                let worker_idx = (publisher_id.split('-').next_back().unwrap().parse::<usize>().unwrap() + 1) % NUM_AGENTS;
+                let worker_idx = (publisher_id
+                    .split('-')
+                    .next_back()
+                    .unwrap()
+                    .parse::<usize>()
+                    .unwrap()
+                    + 1)
+                    % NUM_AGENTS;
                 let worker_id = stress_agents[worker_idx].id.clone();
                 let publisher_id = publisher_id.clone();
 
                 let mut b = task_board.write().await;
                 if b.claim_task(*task_id, worker_id).is_ok()
                     && b.start_task(*task_id).is_ok()
-                    && b.submit_result(*task_id, format!("Done at tick {}", tick)).is_ok()
+                    && b.submit_result(*task_id, format!("Done at tick {}", tick))
+                        .is_ok()
                     && b.review_task(*task_id, &publisher_id, true).is_ok()
                     && b.complete_task(*task_id, tick).is_ok()
                 {
@@ -503,14 +540,21 @@ async fn test_full_100_agent_simulation() {
 
     // All agents should have burned tokens
     for agent in &stress_agents {
-        assert!(agent.tokens < 500_000, "{} should have burned tokens", agent.name);
+        assert!(
+            agent.tokens < 500_000,
+            "{} should have burned tokens",
+            agent.name
+        );
         assert!(agent.tokens > 0, "{} should still have tokens", agent.name);
     }
 
     // Token conservation
     let total_agent_tokens: u64 = stress_agents.iter().map(|a| a.tokens).sum();
     let expected_total = 500_000 * NUM_AGENTS as u64 - 10 * TICKS * NUM_AGENTS as u64;
-    assert_eq!(total_agent_tokens, expected_total, "Token conservation violated");
+    assert_eq!(
+        total_agent_tokens, expected_total,
+        "Token conservation violated"
+    );
 
     // Tasks were created and completed
     assert!(total_tasks_created > 0, "Should have created tasks");
@@ -521,9 +565,13 @@ async fn test_full_100_agent_simulation() {
         let b = task_board.read().await;
         for task in b.list() {
             assert!(
-                matches!(task.status, TaskStatus::Completed | TaskStatus::Expired | TaskStatus::Published),
+                matches!(
+                    task.status,
+                    TaskStatus::Completed | TaskStatus::Expired | TaskStatus::Published
+                ),
                 "Task {} should be in terminal/published state, not {:?}",
-                task.id, task.status
+                task.id,
+                task.status
             );
         }
     }
@@ -534,9 +582,16 @@ async fn test_full_100_agent_simulation() {
     println!("  Ticks: {}", TICKS);
     println!("  Tasks created: {}", total_tasks_created);
     println!("  Tasks completed: {}", total_tasks_completed);
-    println!("  Total tokens burned: {}", 500_000 * NUM_AGENTS as u64 - total_agent_tokens);
-    println!("  Throughput: {:.0} ops/s",
-        (NUM_AGENTS * TICKS as usize + total_tasks_created as usize + total_tasks_completed as usize) as f64 / elapsed.as_secs_f64()
+    println!(
+        "  Total tokens burned: {}",
+        500_000 * NUM_AGENTS as u64 - total_agent_tokens
+    );
+    println!(
+        "  Throughput: {:.0} ops/s",
+        (NUM_AGENTS * TICKS as usize
+            + total_tasks_created as usize
+            + total_tasks_completed as usize) as f64
+            / elapsed.as_secs_f64()
     );
 }
 

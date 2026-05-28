@@ -1,18 +1,20 @@
 use axum::{
-    Json,
     extract::{Path, State},
     http::StatusCode,
     response::IntoResponse,
     routing::*,
+    Json,
 };
 use serde::{Deserialize, Serialize};
 
 use crate::api::{AppState, ErrorResponse};
 
-pub fn default_dsl_format() -> String { "yaml".to_string() }
+pub fn default_dsl_format() -> String {
+    "yaml".to_string()
+}
 
 #[derive(Debug, Deserialize)]
-struct DslParseRequest {
+pub struct DslParseRequest {
     /// Rule document in YAML or JSON format.
     document: String,
     /// Format hint: "yaml" (default) or "json".
@@ -29,7 +31,7 @@ struct DslParseResponse {
 }
 
 #[derive(Debug, Deserialize)]
-struct DslSubmitRequest {
+pub struct DslSubmitRequest {
     /// Agent proposing the rule.
     proposer_id: String,
     /// Organization ID (required for organization-scoped rules).
@@ -72,7 +74,7 @@ struct DslTemplateDetailResponse {
 }
 
 #[derive(Debug, Serialize)]
-struct DslRuleResponse {
+pub struct DslRuleResponse {
     id: String,
     proposer_id: String,
     org_id: String,
@@ -89,7 +91,7 @@ struct DslRuleResponse {
 }
 
 #[derive(Debug, Deserialize)]
-struct DslVoteRequest {
+pub struct DslVoteRequest {
     voter_id: String,
     support: bool,
 }
@@ -112,7 +114,9 @@ pub fn dsl_rule_to_response(rule: &crate::organization::rule_engine::SoftRule) -
     }
 }
 
-pub fn rule_engine_error_status(e: &crate::organization::rule_engine::RuleEngineError) -> StatusCode {
+pub fn rule_engine_error_status(
+    e: &crate::organization::rule_engine::RuleEngineError,
+) -> StatusCode {
     use crate::organization::rule_engine::RuleEngineError;
     match e {
         RuleEngineError::NotFound(_) => StatusCode::NOT_FOUND,
@@ -137,7 +141,11 @@ pub async fn dsl_parse_rule(
         crate::dsl::parse_yaml(&body.document)
     };
 
-    let status = if result.valid { StatusCode::OK } else { StatusCode::UNPROCESSABLE_ENTITY };
+    let status = if result.valid {
+        StatusCode::OK
+    } else {
+        StatusCode::UNPROCESSABLE_ENTITY
+    };
     let response = DslParseResponse {
         valid: result.valid,
         rule: result.rule,
@@ -157,10 +165,15 @@ pub async fn dsl_submit_rule(
 ) -> impl IntoResponse {
     let rule_engine = match &state.rule_engine {
         Some(re) => re.clone(),
-        None => return (
-            StatusCode::SERVICE_UNAVAILABLE,
-            Json(ErrorResponse { error: "rule engine not configured".to_string() }),
-        ).into_response(),
+        None => {
+            return (
+                StatusCode::SERVICE_UNAVAILABLE,
+                Json(ErrorResponse {
+                    error: "rule engine not configured".to_string(),
+                }),
+            )
+                .into_response()
+        }
     };
 
     // 1. Parse the DSL document
@@ -176,15 +189,21 @@ pub async fn dsl_submit_rule(
             Json(ErrorResponse {
                 error: format!("DSL validation failed: {}", parse_result.errors.join("; ")),
             }),
-        ).into_response();
+        )
+            .into_response();
     }
 
     let dsl_rule = match parse_result.rule {
         Some(r) => r,
-        None => return (
-            StatusCode::UNPROCESSABLE_ENTITY,
-            Json(ErrorResponse { error: "DSL parse returned no rule".to_string() }),
-        ).into_response(),
+        None => {
+            return (
+                StatusCode::UNPROCESSABLE_ENTITY,
+                Json(ErrorResponse {
+                    error: "DSL parse returned no rule".to_string(),
+                }),
+            )
+                .into_response()
+        }
     };
 
     // 2. Determine org_id
@@ -209,7 +228,10 @@ pub async fn dsl_submit_rule(
         body.proposer_id.clone(),
         org_id.clone(),
         dsl_rule.name.clone(),
-        format!("DSL rule {} (scope: {}, trigger: {})", dsl_rule.id, dsl_rule.scope, dsl_rule.trigger.event),
+        format!(
+            "DSL rule {} (scope: {}, trigger: {})",
+            dsl_rule.id, dsl_rule.scope, dsl_rule.trigger.event
+        ),
         rule_type,
         conditions,
         effects,
@@ -221,7 +243,8 @@ pub async fn dsl_submit_rule(
         rule_id: rule_id.clone(),
         status: "proposed".to_string(),
         title: dsl_rule.name,
-        message: "Rule submitted to legislation flow. Use vote and activate endpoints to advance.".to_string(),
+        message: "Rule submitted to legislation flow. Use vote and activate endpoints to advance."
+            .to_string(),
     };
 
     (StatusCode::CREATED, Json(response)).into_response()
@@ -241,9 +264,7 @@ pub async fn dsl_list_templates() -> impl IntoResponse {
 }
 
 /// GET /api/v1/rules/dsl/templates/:name — Get a specific template with its parsed rule.
-pub async fn dsl_get_template(
-    Path(name): Path<String>,
-) -> impl IntoResponse {
+pub async fn dsl_get_template(Path(name): Path<String>) -> impl IntoResponse {
     match crate::dsl::get_template(&name) {
         Some(t) => {
             let parsed = crate::dsl::parse_yaml(&t.yaml).rule;
@@ -253,29 +274,37 @@ pub async fn dsl_get_template(
                 category: t.category,
                 yaml: t.yaml,
                 parsed,
-            }).into_response()
+            })
+            .into_response()
         }
         None => (
             StatusCode::NOT_FOUND,
-            Json(ErrorResponse { error: format!("template '{}' not found", name) }),
-        ).into_response(),
+            Json(ErrorResponse {
+                error: format!("template '{}' not found", name),
+            }),
+        )
+            .into_response(),
     }
 }
 
 /// GET /api/v1/rules/dsl/rules — List all rules in the engine.
-pub async fn dsl_list_rules(
-    State(state): State<AppState>,
-) -> impl IntoResponse {
+pub async fn dsl_list_rules(State(state): State<AppState>) -> impl IntoResponse {
     let rule_engine = match &state.rule_engine {
         Some(re) => re.clone(),
-        None => return (
-            StatusCode::SERVICE_UNAVAILABLE,
-            Json(ErrorResponse { error: "rule engine not configured".to_string() }),
-        ).into_response(),
+        None => {
+            return (
+                StatusCode::SERVICE_UNAVAILABLE,
+                Json(ErrorResponse {
+                    error: "rule engine not configured".to_string(),
+                }),
+            )
+                .into_response()
+        }
     };
 
     let engine = rule_engine.lock().await;
-    let rules: Vec<DslRuleResponse> = engine.list_rules()
+    let rules: Vec<DslRuleResponse> = engine
+        .list_rules()
         .into_iter()
         .map(dsl_rule_to_response)
         .collect();
@@ -289,10 +318,15 @@ pub async fn dsl_get_rule(
 ) -> impl IntoResponse {
     let rule_engine = match &state.rule_engine {
         Some(re) => re.clone(),
-        None => return (
-            StatusCode::SERVICE_UNAVAILABLE,
-            Json(ErrorResponse { error: "rule engine not configured".to_string() }),
-        ).into_response(),
+        None => {
+            return (
+                StatusCode::SERVICE_UNAVAILABLE,
+                Json(ErrorResponse {
+                    error: "rule engine not configured".to_string(),
+                }),
+            )
+                .into_response()
+        }
     };
 
     let engine = rule_engine.lock().await;
@@ -300,8 +334,11 @@ pub async fn dsl_get_rule(
         Some(rule) => Json(dsl_rule_to_response(rule)).into_response(),
         None => (
             StatusCode::NOT_FOUND,
-            Json(ErrorResponse { error: format!("rule '{}' not found", id) }),
-        ).into_response(),
+            Json(ErrorResponse {
+                error: format!("rule '{}' not found", id),
+            }),
+        )
+            .into_response(),
     }
 }
 
@@ -313,10 +350,15 @@ pub async fn dsl_vote_rule(
 ) -> impl IntoResponse {
     let rule_engine = match &state.rule_engine {
         Some(re) => re.clone(),
-        None => return (
-            StatusCode::SERVICE_UNAVAILABLE,
-            Json(ErrorResponse { error: "rule engine not configured".to_string() }),
-        ).into_response(),
+        None => {
+            return (
+                StatusCode::SERVICE_UNAVAILABLE,
+                Json(ErrorResponse {
+                    error: "rule engine not configured".to_string(),
+                }),
+            )
+                .into_response()
+        }
     };
 
     let mut engine = rule_engine.lock().await;
@@ -325,7 +367,13 @@ pub async fn dsl_vote_rule(
             let rule = engine.get_rule(&id).unwrap();
             (StatusCode::OK, Json(dsl_rule_to_response(rule))).into_response()
         }
-        Err(e) => (rule_engine_error_status(&e), Json(ErrorResponse { error: e.to_string() })).into_response(),
+        Err(e) => (
+            rule_engine_error_status(&e),
+            Json(ErrorResponse {
+                error: e.to_string(),
+            }),
+        )
+            .into_response(),
     }
 }
 
@@ -336,10 +384,15 @@ pub async fn dsl_activate_rule(
 ) -> impl IntoResponse {
     let rule_engine = match &state.rule_engine {
         Some(re) => re.clone(),
-        None => return (
-            StatusCode::SERVICE_UNAVAILABLE,
-            Json(ErrorResponse { error: "rule engine not configured".to_string() }),
-        ).into_response(),
+        None => {
+            return (
+                StatusCode::SERVICE_UNAVAILABLE,
+                Json(ErrorResponse {
+                    error: "rule engine not configured".to_string(),
+                }),
+            )
+                .into_response()
+        }
     };
 
     let mut engine = rule_engine.lock().await;
@@ -348,7 +401,13 @@ pub async fn dsl_activate_rule(
             let rule = engine.get_rule(&id).unwrap();
             (StatusCode::OK, Json(dsl_rule_to_response(rule))).into_response()
         }
-        Err(e) => (rule_engine_error_status(&e), Json(ErrorResponse { error: e.to_string() })).into_response(),
+        Err(e) => (
+            rule_engine_error_status(&e),
+            Json(ErrorResponse {
+                error: e.to_string(),
+            }),
+        )
+            .into_response(),
     }
 }
 
@@ -359,10 +418,15 @@ pub async fn dsl_suspend_rule(
 ) -> impl IntoResponse {
     let rule_engine = match &state.rule_engine {
         Some(re) => re.clone(),
-        None => return (
-            StatusCode::SERVICE_UNAVAILABLE,
-            Json(ErrorResponse { error: "rule engine not configured".to_string() }),
-        ).into_response(),
+        None => {
+            return (
+                StatusCode::SERVICE_UNAVAILABLE,
+                Json(ErrorResponse {
+                    error: "rule engine not configured".to_string(),
+                }),
+            )
+                .into_response()
+        }
     };
 
     let mut engine = rule_engine.lock().await;
@@ -371,7 +435,13 @@ pub async fn dsl_suspend_rule(
             let rule = engine.get_rule(&id).unwrap();
             (StatusCode::OK, Json(dsl_rule_to_response(rule))).into_response()
         }
-        Err(e) => (rule_engine_error_status(&e), Json(ErrorResponse { error: e.to_string() })).into_response(),
+        Err(e) => (
+            rule_engine_error_status(&e),
+            Json(ErrorResponse {
+                error: e.to_string(),
+            }),
+        )
+            .into_response(),
     }
 }
 
@@ -382,10 +452,15 @@ pub async fn dsl_repeal_rule(
 ) -> impl IntoResponse {
     let rule_engine = match &state.rule_engine {
         Some(re) => re.clone(),
-        None => return (
-            StatusCode::SERVICE_UNAVAILABLE,
-            Json(ErrorResponse { error: "rule engine not configured".to_string() }),
-        ).into_response(),
+        None => {
+            return (
+                StatusCode::SERVICE_UNAVAILABLE,
+                Json(ErrorResponse {
+                    error: "rule engine not configured".to_string(),
+                }),
+            )
+                .into_response()
+        }
     };
 
     let mut engine = rule_engine.lock().await;
@@ -395,7 +470,13 @@ pub async fn dsl_repeal_rule(
             let rule = engine.get_rule(&id).unwrap();
             (StatusCode::OK, Json(dsl_rule_to_response(rule))).into_response()
         }
-        Err(e) => (rule_engine_error_status(&e), Json(ErrorResponse { error: e.to_string() })).into_response(),
+        Err(e) => (
+            rule_engine_error_status(&e),
+            Json(ErrorResponse {
+                error: e.to_string(),
+            }),
+        )
+            .into_response(),
     }
 }
 
@@ -409,7 +490,13 @@ pub fn dsl_routes() -> axum::Router<AppState> {
         .route("/api/v1/rules/dsl/rules", get(dsl_list_rules))
         .route("/api/v1/rules/dsl/rules/:id", get(dsl_get_rule))
         .route("/api/v1/rules/dsl/rules/:id/vote", post(dsl_vote_rule))
-        .route("/api/v1/rules/dsl/rules/:id/activate", post(dsl_activate_rule))
-        .route("/api/v1/rules/dsl/rules/:id/suspend", post(dsl_suspend_rule))
+        .route(
+            "/api/v1/rules/dsl/rules/:id/activate",
+            post(dsl_activate_rule),
+        )
+        .route(
+            "/api/v1/rules/dsl/rules/:id/suspend",
+            post(dsl_suspend_rule),
+        )
         .route("/api/v1/rules/dsl/rules/:id/repeal", post(dsl_repeal_rule))
 }

@@ -1,24 +1,24 @@
 use axum::{
-    Json,
     extract::{Path, State},
     http::StatusCode,
     response::IntoResponse,
     routing::*,
+    Json,
 };
 use serde::{Deserialize, Serialize};
 
 use crate::api::{AppState, ErrorResponse};
-use crate::auth::{AuthStore, HumanRole, HumanUser, RequireAuth, extractors::require_capability, Capability};
+use crate::auth::{extractors::require_capability, Capability, HumanRole, HumanUser, RequireAuth};
 
 #[derive(Debug, Deserialize)]
-struct RegisterRequest {
+pub struct RegisterRequest {
     username: String,
     password: String,
     role: HumanRole,
 }
 
 #[derive(Debug, Deserialize)]
-struct LoginRequest {
+pub struct LoginRequest {
     username: String,
     password: String,
 }
@@ -58,7 +58,13 @@ pub async fn auth_me(
     let store = state.auth_store.lock().await;
     match store.get_user(&auth.user_id) {
         Some(user) => Json(user).into_response(),
-        None => (StatusCode::NOT_FOUND, Json(ErrorResponse { error: "User not found".into() })).into_response(),
+        None => (
+            StatusCode::NOT_FOUND,
+            Json(ErrorResponse {
+                error: "User not found".into(),
+            }),
+        )
+            .into_response(),
     }
 }
 
@@ -90,7 +96,7 @@ pub async fn auth_update_role(
 }
 
 #[derive(Debug, Deserialize)]
-struct UpdateRoleRequest {
+pub struct UpdateRoleRequest {
     role: HumanRole,
 }
 

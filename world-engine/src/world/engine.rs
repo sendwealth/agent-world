@@ -5,16 +5,16 @@
 //! the world by one step.
 
 use std::collections::HashMap;
-use std::sync::Arc;
 use std::sync::atomic::{AtomicU64, Ordering};
+use std::sync::Arc;
 
 use serde::{Deserialize, Serialize};
 use tokio::sync::Mutex;
 use uuid::Uuid;
 
-use crate::economy::token_burn::{AgentRecord, ConsumptionConfig, SkillRecord, TokenBurnEngine};
 use crate::economy::task::TaskBoard;
-use crate::lifecycle::{Subsystem, SubsystemResult, run_subsystem_isolated};
+use crate::economy::token_burn::{AgentRecord, ConsumptionConfig, SkillRecord, TokenBurnEngine};
+use crate::lifecycle::{run_subsystem_isolated, Subsystem, SubsystemResult};
 use crate::organization::rule_engine::RuleEngine;
 use crate::rules::RuleRegistry;
 use crate::world::enums::AgentPhase;
@@ -157,7 +157,12 @@ impl WorldState {
     }
 
     /// Spawn a new agent with a specific phase.
-    pub async fn spawn_agent_with_phase(&self, name: &str, tokens: u64, phase: AgentPhase) -> String {
+    pub async fn spawn_agent_with_phase(
+        &self,
+        name: &str,
+        tokens: u64,
+        phase: AgentPhase,
+    ) -> String {
         let id = Uuid::new_v4();
         let id_str = id.to_string();
         let spawn_tick = self.tick.load(Ordering::Relaxed);
@@ -194,7 +199,8 @@ impl WorldState {
     /// Count living agents.
     pub async fn living_agent_count(&self) -> usize {
         let agents = self.agents.lock().await;
-        agents.iter()
+        agents
+            .iter()
             .filter(|(_, _, a)| a.phase != AgentPhase::Dead)
             .count()
     }
@@ -203,7 +209,8 @@ impl WorldState {
     pub async fn get_agent(&self, id: &str) -> Option<AgentRecord> {
         let agents = self.agents.lock().await;
         let uid = Uuid::parse_str(id).ok()?;
-        agents.iter()
+        agents
+            .iter()
             .find(|(uuid, _, _)| *uuid == uid)
             .map(|(_, _, a)| a.clone())
     }
@@ -213,16 +220,20 @@ impl WorldState {
         let agents = self.agents.lock().await;
         let tick = self.tick.load(Ordering::Relaxed);
 
-        let agent_snapshots: HashMap<String, AgentSnapshot> = agents.iter()
+        let agent_snapshots: HashMap<String, AgentSnapshot> = agents
+            .iter()
             .map(|(id, spawn_tick, record)| {
-                (id.to_string(), AgentSnapshot {
-                    id: record.id.to_string(),
-                    name: record.name.clone(),
-                    phase: record.phase,
-                    tokens: record.tokens,
-                    skills: record.skills.clone(),
-                    spawn_tick: *spawn_tick,
-                })
+                (
+                    id.to_string(),
+                    AgentSnapshot {
+                        id: record.id.to_string(),
+                        name: record.name.clone(),
+                        phase: record.phase,
+                        tokens: record.tokens,
+                        skills: record.skills.clone(),
+                        spawn_tick: *spawn_tick,
+                    },
+                )
             })
             .collect();
 
@@ -280,7 +291,10 @@ impl WorldState {
                 for rule_result in results {
                     for event in rule_result.events {
                         // Track death events
-                        if let WorldEvent::AgentDied { agent_id: dead_id, .. } = &event {
+                        if let WorldEvent::AgentDied {
+                            agent_id: dead_id, ..
+                        } = &event
+                        {
                             dead_agents.push(dead_id.clone());
                         }
                         all_events.push(event);
@@ -307,7 +321,8 @@ impl WorldState {
         }
 
         // Step 5: Emit TickAdvanced
-        self.event_bus.emit(WorldEvent::TickAdvanced { tick: new_tick });
+        self.event_bus
+            .emit(WorldEvent::TickAdvanced { tick: new_tick });
 
         TickResult {
             tick: new_tick,
@@ -404,7 +419,9 @@ mod tests {
     #[tokio::test]
     async fn test_world_state_token_consumption_on_tick() {
         let ws = WorldState::with_defaults();
-        let id = ws.spawn_agent_with_phase("Alice", 100, AgentPhase::Adult).await;
+        let id = ws
+            .spawn_agent_with_phase("Alice", 100, AgentPhase::Adult)
+            .await;
 
         let result = ws.tick().await;
         assert_eq!(result.tick, 1);
@@ -417,7 +434,9 @@ mod tests {
     #[tokio::test]
     async fn test_world_state_agent_death() {
         let ws = WorldState::with_defaults();
-        let id = ws.spawn_agent_with_phase("ShortLived", 10, AgentPhase::Adult).await;
+        let id = ws
+            .spawn_agent_with_phase("ShortLived", 10, AgentPhase::Adult)
+            .await;
 
         // Tick 1: 10 -> 0, then death judgment kills agent
         let result = ws.tick().await;
@@ -456,10 +475,20 @@ economy:
     async fn test_world_state_register_subsystem() {
         struct DummySubsystem;
         impl Subsystem for DummySubsystem {
-            fn id(&self) -> &str { "dummy" }
-            fn name(&self) -> &str { "Dummy" }
-            fn priority(&self) -> u32 { 50 }
-            fn execute(&self, _tick: u64, _agents: &mut [(Uuid, u64, AgentRecord)]) -> Vec<WorldEvent> {
+            fn id(&self) -> &str {
+                "dummy"
+            }
+            fn name(&self) -> &str {
+                "Dummy"
+            }
+            fn priority(&self) -> u32 {
+                50
+            }
+            fn execute(
+                &self,
+                _tick: u64,
+                _agents: &mut [(Uuid, u64, AgentRecord)],
+            ) -> Vec<WorldEvent> {
                 Vec::new()
             }
         }
@@ -473,7 +502,9 @@ economy:
     #[tokio::test]
     async fn test_world_state_multiple_ticks() {
         let ws = WorldState::with_defaults();
-        let id = ws.spawn_agent_with_phase("Alice", 100, AgentPhase::Adult).await;
+        let id = ws
+            .spawn_agent_with_phase("Alice", 100, AgentPhase::Adult)
+            .await;
 
         for _ in 0..10 {
             ws.tick().await;

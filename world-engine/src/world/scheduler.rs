@@ -87,13 +87,13 @@ impl Scheduler {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::world::subsystem::SubsystemRegistry;
     use crate::world::state::EventBus;
+    use crate::world::subsystem::SubsystemRegistry;
 
-    use uuid::Uuid;
-    use std::collections::HashMap;
     use crate::economy::token_burn::AgentRecord;
     use crate::world::enums::AgentPhase;
+    use std::collections::HashMap;
+    use uuid::Uuid;
 
     fn make_agent(phase: AgentPhase, tokens: u64) -> (Uuid, u64, AgentRecord) {
         (
@@ -106,8 +106,8 @@ mod tests {
                 tokens,
                 skills: HashMap::new(),
                 personality: String::new(),
-            tasks_completed: 0,
-            tasks_attempted: 0,
+                tasks_completed: 0,
+                tasks_attempted: 0,
             },
         )
     }
@@ -118,9 +118,7 @@ mod tests {
         let registry = SubsystemRegistry::new();
         let agents = vec![make_agent(AgentPhase::Adult, 1000)];
 
-        let state = Arc::new(Mutex::new(
-            WorldState::new(event_bus, registry, agents)
-        ));
+        let state = Arc::new(Mutex::new(WorldState::new(event_bus, registry, agents)));
 
         Scheduler::run_n_ticks(&state, 10).await;
 
@@ -134,9 +132,7 @@ mod tests {
         let registry = SubsystemRegistry::new();
         let agents = vec![make_agent(AgentPhase::Adult, 1000)];
 
-        let state = Arc::new(Mutex::new(
-            WorldState::new(event_bus, registry, agents)
-        ));
+        let state = Arc::new(Mutex::new(WorldState::new(event_bus, registry, agents)));
 
         let scheduler = Scheduler::new(Duration::from_millis(10), state.clone());
         let cancel = scheduler.cancel_token();

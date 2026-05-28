@@ -265,7 +265,8 @@ fn bench_concurrent_read_heavy(c: &mut Criterion) {
                             "publisher".to_string(),
                             i as u64,
                             None,
-                        ).unwrap();
+                        )
+                        .unwrap();
                     }
                 }
 

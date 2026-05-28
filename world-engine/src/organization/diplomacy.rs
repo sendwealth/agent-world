@@ -3,8 +3,8 @@ use std::sync::Arc;
 
 use serde::{Deserialize, Serialize};
 
-use crate::world::state::EventBus;
 use crate::world::event::WorldEvent;
+use crate::world::state::EventBus;
 
 // ── Relation Levels ─────────────────────────────────────────
 
@@ -119,9 +119,17 @@ pub enum DiplomacyError {
     /// Treaty not found.
     TreatyNotFound(String),
     /// Treaty is not in a state that allows the requested action.
-    InvalidTreatyStatus { treaty_id: String, expected: TreatyStatus, actual: TreatyStatus },
+    InvalidTreatyStatus {
+        treaty_id: String,
+        expected: TreatyStatus,
+        actual: TreatyStatus,
+    },
     /// A treaty of this type already exists between these orgs.
-    TreatyAlreadyExists { org_a: String, org_b: String, treaty_type: TreatyType },
+    TreatyAlreadyExists {
+        org_a: String,
+        org_b: String,
+        treaty_type: TreatyType,
+    },
     /// Relation level too low for the requested treaty type.
     RelationTooLow { required: i8, actual: i8 },
     /// Only the proposing org's counterparty can sign.
@@ -136,17 +144,41 @@ impl std::fmt::Display for DiplomacyError {
             DiplomacyError::OrgNotFound(id) => write!(f, "organization not found: {}", id),
             DiplomacyError::SelfNegotiation => write!(f, "cannot negotiate with self"),
             DiplomacyError::TreatyNotFound(id) => write!(f, "treaty not found: {}", id),
-            DiplomacyError::InvalidTreatyStatus { treaty_id, expected, actual } => {
-                write!(f, "treaty {} status is {:?}, expected {:?}", treaty_id, actual, expected)
+            DiplomacyError::InvalidTreatyStatus {
+                treaty_id,
+                expected,
+                actual,
+            } => {
+                write!(
+                    f,
+                    "treaty {} status is {:?}, expected {:?}",
+                    treaty_id, actual, expected
+                )
             }
-            DiplomacyError::TreatyAlreadyExists { org_a, org_b, treaty_type } => {
-                write!(f, "treaty of type {:?} already exists between {} and {}", treaty_type, org_a, org_b)
+            DiplomacyError::TreatyAlreadyExists {
+                org_a,
+                org_b,
+                treaty_type,
+            } => {
+                write!(
+                    f,
+                    "treaty of type {:?} already exists between {} and {}",
+                    treaty_type, org_a, org_b
+                )
             }
             DiplomacyError::RelationTooLow { required, actual } => {
-                write!(f, "relation too low: required {}, actual {}", required, actual)
+                write!(
+                    f,
+                    "relation too low: required {}, actual {}",
+                    required, actual
+                )
             }
             DiplomacyError::NotCounterparty { treaty_id, org_id } => {
-                write!(f, "org {} is not a counterparty to treaty {}", org_id, treaty_id)
+                write!(
+                    f,
+                    "org {} is not a counterparty to treaty {}",
+                    org_id, treaty_id
+                )
             }
             DiplomacyError::OrgDissolved(id) => write!(f, "organization dissolved: {}", id),
         }
@@ -227,13 +259,20 @@ impl DiplomacyEngine {
     /// Returns NEUTRAL if no explicit relation exists.
     pub fn get_relation(&self, org_a: &str, org_b: &str) -> RelationLevel {
         let key = Self::relation_key(org_a, org_b);
-        self.relations.get(&key).copied().unwrap_or(RelationLevel(RelationLevel::NEUTRAL))
+        self.relations
+            .get(&key)
+            .copied()
+            .unwrap_or(RelationLevel(RelationLevel::NEUTRAL))
     }
 
     /// Manually set the relation level between two organizations.
     pub fn set_relation(&mut self, org_a: &str, org_b: &str, level: i8) {
         let key = Self::relation_key(org_a, org_b);
-        let old = self.relations.get(&key).map(|r| r.0).unwrap_or(RelationLevel::NEUTRAL);
+        let old = self
+            .relations
+            .get(&key)
+            .map(|r| r.0)
+            .unwrap_or(RelationLevel::NEUTRAL);
         self.relations.insert(key, RelationLevel(level));
 
         self.emit(WorldEvent::RelationChanged {
@@ -326,8 +365,15 @@ impl DiplomacyEngine {
     /// Sign (ratify) a proposed treaty.
     ///
     /// Only the counterparty (org_b if org_a proposed, or vice versa) can sign.
-    pub fn sign_treaty(&mut self, treaty_id: &str, signer_org: &str, tick: u64) -> Result<(), DiplomacyError> {
-        let treaty = self.treaties.get(treaty_id)
+    pub fn sign_treaty(
+        &mut self,
+        treaty_id: &str,
+        signer_org: &str,
+        tick: u64,
+    ) -> Result<(), DiplomacyError> {
+        let treaty = self
+            .treaties
+            .get(treaty_id)
             .ok_or_else(|| DiplomacyError::TreatyNotFound(treaty_id.to_string()))?;
 
         if treaty.status != TreatyStatus::Proposed {
@@ -367,8 +413,16 @@ impl DiplomacyEngine {
     }
 
     /// Break an active or proposed treaty.
-    pub fn break_treaty(&mut self, treaty_id: &str, breaker: &str, reason: &str, tick: u64) -> Result<(), DiplomacyError> {
-        let treaty = self.treaties.get(treaty_id)
+    pub fn break_treaty(
+        &mut self,
+        treaty_id: &str,
+        breaker: &str,
+        reason: &str,
+        tick: u64,
+    ) -> Result<(), DiplomacyError> {
+        let treaty = self
+            .treaties
+            .get(treaty_id)
             .ok_or_else(|| DiplomacyError::TreatyNotFound(treaty_id.to_string()))?;
 
         if treaty.status != TreatyStatus::Active && treaty.status != TreatyStatus::Proposed {
@@ -410,7 +464,8 @@ impl DiplomacyEngine {
         let mut expired = Vec::new();
         for (id, treaty) in &mut self.treaties {
             if treaty.status == TreatyStatus::Active {
-                if let (Some(signed), Some(duration)) = (treaty.signed_tick, treaty.duration_ticks) {
+                if let (Some(signed), Some(duration)) = (treaty.signed_tick, treaty.duration_ticks)
+                {
                     if current_tick >= signed + duration {
                         treaty.status = TreatyStatus::Expired;
                         treaty.ended_tick = Some(current_tick);
@@ -431,21 +486,26 @@ impl DiplomacyEngine {
 
     /// Get all active treaties for an organization.
     pub fn get_active_treaties(&self, org_id: &str) -> Vec<&Treaty> {
-        self.treaties.values()
-            .filter(|t| t.status == TreatyStatus::Active && (t.org_a == org_id || t.org_b == org_id))
+        self.treaties
+            .values()
+            .filter(|t| {
+                t.status == TreatyStatus::Active && (t.org_a == org_id || t.org_b == org_id)
+            })
             .collect()
     }
 
     /// Get all treaties (any status) involving an organization.
     pub fn get_treaties_for_org(&self, org_id: &str) -> Vec<&Treaty> {
-        self.treaties.values()
+        self.treaties
+            .values()
             .filter(|t| t.org_a == org_id || t.org_b == org_id)
             .collect()
     }
 
     /// Get all organizations that have positive relations with the given org.
     pub fn get_allies(&self, org_id: &str) -> Vec<(String, RelationLevel)> {
-        self.relations.iter()
+        self.relations
+            .iter()
             .filter_map(|((a, b), level)| {
                 if level.is_positive() {
                     if a == org_id {
@@ -492,16 +552,25 @@ mod tests {
     #[test]
     fn test_default_relation_is_neutral() {
         let engine = make_engine();
-        assert_eq!(engine.get_relation("org-a", "org-b").0, RelationLevel::NEUTRAL);
+        assert_eq!(
+            engine.get_relation("org-a", "org-b").0,
+            RelationLevel::NEUTRAL
+        );
     }
 
     #[test]
     fn test_set_relation() {
         let mut engine = make_engine();
         engine.set_relation("org-a", "org-b", RelationLevel::FRIENDLY);
-        assert_eq!(engine.get_relation("org-a", "org-b").0, RelationLevel::FRIENDLY);
+        assert_eq!(
+            engine.get_relation("org-a", "org-b").0,
+            RelationLevel::FRIENDLY
+        );
         // Symmetric
-        assert_eq!(engine.get_relation("org-b", "org-a").0, RelationLevel::FRIENDLY);
+        assert_eq!(
+            engine.get_relation("org-b", "org-a").0,
+            RelationLevel::FRIENDLY
+        );
     }
 
     #[test]
@@ -527,7 +596,9 @@ mod tests {
         let mut engine = make_engine();
         engine.set_relation("org-a", "org-b", RelationLevel::WARM);
 
-        let id = engine.propose_treaty("org-a", "org-b", TreatyType::TradeAgreement, 100, None).unwrap();
+        let id = engine
+            .propose_treaty("org-a", "org-b", TreatyType::TradeAgreement, 100, None)
+            .unwrap();
         let treaty = engine.get_treaty(&id).unwrap();
         assert_eq!(treaty.org_a, "org-a");
         assert_eq!(treaty.org_b, "org-b");
@@ -547,18 +618,26 @@ mod tests {
         let mut engine = make_engine();
         // NEUTRAL is too low for FullAlliance (requires ALLIED=3)
         let result = engine.propose_treaty("org-a", "org-b", TreatyType::FullAlliance, 100, None);
-        assert!(matches!(result.unwrap_err(), DiplomacyError::RelationTooLow { .. }));
+        assert!(matches!(
+            result.unwrap_err(),
+            DiplomacyError::RelationTooLow { .. }
+        ));
     }
 
     #[test]
     fn test_propose_treaty_duplicate_fails() {
         let mut engine = make_engine();
         engine.set_relation("org-a", "org-b", RelationLevel::WARM);
-        engine.propose_treaty("org-a", "org-b", TreatyType::TradeAgreement, 100, None).unwrap();
+        engine
+            .propose_treaty("org-a", "org-b", TreatyType::TradeAgreement, 100, None)
+            .unwrap();
         engine.sign_treaty("treaty-1", "org-b", 101).unwrap();
 
         let result = engine.propose_treaty("org-a", "org-b", TreatyType::TradeAgreement, 110, None);
-        assert!(matches!(result.unwrap_err(), DiplomacyError::TreatyAlreadyExists { .. }));
+        assert!(matches!(
+            result.unwrap_err(),
+            DiplomacyError::TreatyAlreadyExists { .. }
+        ));
     }
 
     // ── Treaty Signing Tests ─────────────────────────────
@@ -567,7 +646,9 @@ mod tests {
     fn test_sign_treaty_success() {
         let mut engine = make_engine();
         engine.set_relation("org-a", "org-b", RelationLevel::WARM);
-        let id = engine.propose_treaty("org-a", "org-b", TreatyType::TradeAgreement, 100, None).unwrap();
+        let id = engine
+            .propose_treaty("org-a", "org-b", TreatyType::TradeAgreement, 100, None)
+            .unwrap();
 
         engine.sign_treaty(&id, "org-b", 105).unwrap();
 
@@ -583,21 +664,31 @@ mod tests {
     fn test_sign_treaty_non_counterparty_fails() {
         let mut engine = make_engine();
         engine.set_relation("org-a", "org-b", RelationLevel::WARM);
-        let id = engine.propose_treaty("org-a", "org-b", TreatyType::TradeAgreement, 100, None).unwrap();
+        let id = engine
+            .propose_treaty("org-a", "org-b", TreatyType::TradeAgreement, 100, None)
+            .unwrap();
 
         let result = engine.sign_treaty(&id, "org-c", 105);
-        assert!(matches!(result.unwrap_err(), DiplomacyError::NotCounterparty { .. }));
+        assert!(matches!(
+            result.unwrap_err(),
+            DiplomacyError::NotCounterparty { .. }
+        ));
     }
 
     #[test]
     fn test_sign_treaty_already_signed_fails() {
         let mut engine = make_engine();
         engine.set_relation("org-a", "org-b", RelationLevel::WARM);
-        let id = engine.propose_treaty("org-a", "org-b", TreatyType::TradeAgreement, 100, None).unwrap();
+        let id = engine
+            .propose_treaty("org-a", "org-b", TreatyType::TradeAgreement, 100, None)
+            .unwrap();
         engine.sign_treaty(&id, "org-b", 105).unwrap();
 
         let result = engine.sign_treaty(&id, "org-a", 106);
-        assert!(matches!(result.unwrap_err(), DiplomacyError::InvalidTreatyStatus { .. }));
+        assert!(matches!(
+            result.unwrap_err(),
+            DiplomacyError::InvalidTreatyStatus { .. }
+        ));
     }
 
     // ── Treaty Breaking Tests ────────────────────────────
@@ -606,7 +697,9 @@ mod tests {
     fn test_break_treaty_success() {
         let mut engine = make_engine();
         engine.set_relation("org-a", "org-b", RelationLevel::FRIENDLY);
-        let id = engine.propose_treaty("org-a", "org-b", TreatyType::NonAggression, 100, None).unwrap();
+        let id = engine
+            .propose_treaty("org-a", "org-b", TreatyType::NonAggression, 100, None)
+            .unwrap();
         engine.sign_treaty(&id, "org-b", 105).unwrap();
 
         engine.break_treaty(&id, "org-a", "betrayal", 120).unwrap();
@@ -624,9 +717,13 @@ mod tests {
     fn test_break_proposed_treaty() {
         let mut engine = make_engine();
         engine.set_relation("org-a", "org-b", RelationLevel::WARM);
-        let id = engine.propose_treaty("org-a", "org-b", TreatyType::TradeAgreement, 100, None).unwrap();
+        let id = engine
+            .propose_treaty("org-a", "org-b", TreatyType::TradeAgreement, 100, None)
+            .unwrap();
 
-        engine.break_treaty(&id, "org-b", "changed mind", 105).unwrap();
+        engine
+            .break_treaty(&id, "org-b", "changed mind", 105)
+            .unwrap();
         assert_eq!(engine.get_treaty(&id).unwrap().status, TreatyStatus::Broken);
     }
 
@@ -634,11 +731,16 @@ mod tests {
     fn test_break_treaty_non_member_fails() {
         let mut engine = make_engine();
         engine.set_relation("org-a", "org-b", RelationLevel::WARM);
-        let id = engine.propose_treaty("org-a", "org-b", TreatyType::TradeAgreement, 100, None).unwrap();
+        let id = engine
+            .propose_treaty("org-a", "org-b", TreatyType::TradeAgreement, 100, None)
+            .unwrap();
         engine.sign_treaty(&id, "org-b", 105).unwrap();
 
         let result = engine.break_treaty(&id, "org-c", "interference", 120);
-        assert!(matches!(result.unwrap_err(), DiplomacyError::NotCounterparty { .. }));
+        assert!(matches!(
+            result.unwrap_err(),
+            DiplomacyError::NotCounterparty { .. }
+        ));
     }
 
     // ── Treaty Expiry Tests ──────────────────────────────
@@ -647,7 +749,9 @@ mod tests {
     fn test_treaty_expiry() {
         let mut engine = make_engine();
         engine.set_relation("org-a", "org-b", RelationLevel::WARM);
-        let id = engine.propose_treaty("org-a", "org-b", TreatyType::TradeAgreement, 100, Some(50)).unwrap();
+        let id = engine
+            .propose_treaty("org-a", "org-b", TreatyType::TradeAgreement, 100, Some(50))
+            .unwrap();
         engine.sign_treaty(&id, "org-b", 110).unwrap();
 
         // Not expired yet
@@ -657,14 +761,19 @@ mod tests {
         // Expires at tick 160 (signed 110 + duration 50)
         let expired = engine.tick_expiry(160);
         assert_eq!(expired.len(), 1);
-        assert_eq!(engine.get_treaty(&id).unwrap().status, TreatyStatus::Expired);
+        assert_eq!(
+            engine.get_treaty(&id).unwrap().status,
+            TreatyStatus::Expired
+        );
     }
 
     #[test]
     fn test_indefinite_treaty_never_expires() {
         let mut engine = make_engine();
         engine.set_relation("org-a", "org-b", RelationLevel::WARM);
-        let id = engine.propose_treaty("org-a", "org-b", TreatyType::TradeAgreement, 100, None).unwrap();
+        let id = engine
+            .propose_treaty("org-a", "org-b", TreatyType::TradeAgreement, 100, None)
+            .unwrap();
         engine.sign_treaty(&id, "org-b", 110).unwrap();
 
         let expired = engine.tick_expiry(10000);
@@ -679,8 +788,12 @@ mod tests {
         engine.set_relation("org-a", "org-b", RelationLevel::FRIENDLY);
         engine.set_relation("org-a", "org-c", RelationLevel::FRIENDLY);
 
-        engine.propose_treaty("org-a", "org-b", TreatyType::TradeAgreement, 100, None).unwrap();
-        engine.propose_treaty("org-a", "org-c", TreatyType::NonAggression, 100, None).unwrap();
+        engine
+            .propose_treaty("org-a", "org-b", TreatyType::TradeAgreement, 100, None)
+            .unwrap();
+        engine
+            .propose_treaty("org-a", "org-c", TreatyType::NonAggression, 100, None)
+            .unwrap();
 
         // No active yet
         assert!(engine.get_active_treaties("org-a").is_empty());
@@ -710,13 +823,20 @@ mod tests {
         let mut engine = DiplomacyEngine::with_event_bus(bus);
         engine.set_relation("org-a", "org-b", RelationLevel::WARM);
 
-        engine.propose_treaty("org-a", "org-b", TreatyType::TradeAgreement, 100, None).unwrap();
+        engine
+            .propose_treaty("org-a", "org-b", TreatyType::TradeAgreement, 100, None)
+            .unwrap();
 
         // First event is RelationChanged from set_relation, second is TreatyProposed
         let _ = rx.try_recv(); // drain RelationChanged
         let event = rx.try_recv().unwrap();
         match event {
-            WorldEvent::TreatyProposed { treaty_id, org_a, org_b, treaty_type } => {
+            WorldEvent::TreatyProposed {
+                treaty_id,
+                org_a,
+                org_b,
+                treaty_type,
+            } => {
                 assert_eq!(treaty_id, "treaty-1");
                 assert_eq!(org_a, "org-a");
                 assert_eq!(org_b, "org-b");
@@ -733,7 +853,9 @@ mod tests {
         let mut engine = DiplomacyEngine::with_event_bus(bus);
         engine.set_relation("org-a", "org-b", RelationLevel::WARM);
 
-        let id = engine.propose_treaty("org-a", "org-b", TreatyType::TradeAgreement, 100, None).unwrap();
+        let id = engine
+            .propose_treaty("org-a", "org-b", TreatyType::TradeAgreement, 100, None)
+            .unwrap();
         // Drain events from proposal
         let _ = rx.try_recv(); // RelationChanged from set_relation
         let _ = rx.try_recv(); // TreatyProposed
@@ -744,7 +866,11 @@ mod tests {
 
         let event = rx.try_recv().unwrap();
         match event {
-            WorldEvent::TreatySigned { treaty_id, org_a, org_b } => {
+            WorldEvent::TreatySigned {
+                treaty_id,
+                org_a,
+                org_b,
+            } => {
                 assert_eq!(treaty_id, id);
                 assert_eq!(org_a, "org-a");
                 assert_eq!(org_b, "org-b");
@@ -760,7 +886,9 @@ mod tests {
         let mut engine = DiplomacyEngine::with_event_bus(bus);
         engine.set_relation("org-a", "org-b", RelationLevel::FRIENDLY);
 
-        let id = engine.propose_treaty("org-a", "org-b", TreatyType::NonAggression, 100, None).unwrap();
+        let id = engine
+            .propose_treaty("org-a", "org-b", TreatyType::NonAggression, 100, None)
+            .unwrap();
         engine.sign_treaty(&id, "org-b", 105).unwrap();
 
         // Drain all prior events
@@ -772,7 +900,11 @@ mod tests {
         let _ = rx.try_recv(); // RelationChanged
         let event = rx.try_recv().unwrap();
         match event {
-            WorldEvent::TreatyBroken { treaty_id, breaker, reason } => {
+            WorldEvent::TreatyBroken {
+                treaty_id,
+                breaker,
+                reason,
+            } => {
                 assert_eq!(treaty_id, id);
                 assert_eq!(breaker, "org-a");
                 assert_eq!(reason, "betrayal");
@@ -789,16 +921,29 @@ mod tests {
 
         // Build relations
         engine.set_relation("guild", "company", RelationLevel::WARM);
-        assert_eq!(engine.get_relation("guild", "company").0, RelationLevel::WARM);
+        assert_eq!(
+            engine.get_relation("guild", "company").0,
+            RelationLevel::WARM
+        );
 
         // Propose and sign trade agreement
-        let id1 = engine.propose_treaty("guild", "company", TreatyType::TradeAgreement, 10, None).unwrap();
+        let id1 = engine
+            .propose_treaty("guild", "company", TreatyType::TradeAgreement, 10, None)
+            .unwrap();
         engine.sign_treaty(&id1, "company", 15).unwrap();
         assert_eq!(engine.get_active_treaties("guild").len(), 1);
 
         // Improve relations, propose non-aggression with a third org
         engine.set_relation("guild", "alliance", RelationLevel::FRIENDLY);
-        let id2 = engine.propose_treaty("guild", "alliance", TreatyType::ResearchSharing, 20, Some(100)).unwrap();
+        let id2 = engine
+            .propose_treaty(
+                "guild",
+                "alliance",
+                TreatyType::ResearchSharing,
+                20,
+                Some(100),
+            )
+            .unwrap();
         engine.sign_treaty(&id2, "alliance", 25).unwrap();
 
         // Check allies

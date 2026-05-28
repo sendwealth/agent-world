@@ -124,7 +124,9 @@ pub struct SoftRule {
 impl SoftRule {
     /// Check whether all conditions match the given context.
     pub fn matches(&self, context: &Value) -> bool {
-        self.conditions.iter().all(|c| evaluate_condition(c, context))
+        self.conditions
+            .iter()
+            .all(|c| evaluate_condition(c, context))
     }
 }
 
@@ -240,7 +242,9 @@ impl RuleEngine {
         voter_id: String,
         support: bool,
     ) -> Result<(), RuleEngineError> {
-        let rule = self.rules.get(rule_id)
+        let rule = self
+            .rules
+            .get(rule_id)
             .ok_or_else(|| RuleEngineError::NotFound(rule_id.to_string()))?;
 
         if rule.status != RuleStatus::Proposed {
@@ -275,7 +279,9 @@ impl RuleEngine {
 
     /// Activate a proposed rule (called after governance vote passes).
     pub fn activate_rule(&mut self, rule_id: &str) -> Result<(), RuleEngineError> {
-        let rule = self.rules.get_mut(rule_id)
+        let rule = self
+            .rules
+            .get_mut(rule_id)
             .ok_or_else(|| RuleEngineError::NotFound(rule_id.to_string()))?;
 
         if rule.status == RuleStatus::Active {
@@ -327,7 +333,8 @@ impl RuleEngine {
 
     /// Get all active rules for an organization.
     pub fn active_rules_for_org(&self, org_id: &str) -> Vec<&SoftRule> {
-        self.rules.values()
+        self.rules
+            .values()
             .filter(|r| r.status == RuleStatus::Active && r.org_id == org_id)
             .collect()
     }
@@ -336,7 +343,9 @@ impl RuleEngine {
 
     /// Repeal a rule permanently.
     pub fn repeal_rule(&mut self, rule_id: &str, _repeal_tick: u64) -> Result<(), RuleEngineError> {
-        let rule = self.rules.get_mut(rule_id)
+        let rule = self
+            .rules
+            .get_mut(rule_id)
             .ok_or_else(|| RuleEngineError::NotFound(rule_id.to_string()))?;
         rule.status = RuleStatus::Repealed;
         Ok(())
@@ -344,7 +353,9 @@ impl RuleEngine {
 
     /// Suspend a rule temporarily.
     pub fn suspend_rule(&mut self, rule_id: &str) -> Result<(), RuleEngineError> {
-        let rule = self.rules.get_mut(rule_id)
+        let rule = self
+            .rules
+            .get_mut(rule_id)
             .ok_or_else(|| RuleEngineError::NotFound(rule_id.to_string()))?;
         if rule.status == RuleStatus::Active {
             rule.status = RuleStatus::Suspended;
@@ -354,7 +365,9 @@ impl RuleEngine {
 
     /// Resume a suspended rule.
     pub fn resume_rule(&mut self, rule_id: &str) -> Result<(), RuleEngineError> {
-        let rule = self.rules.get_mut(rule_id)
+        let rule = self
+            .rules
+            .get_mut(rule_id)
             .ok_or_else(|| RuleEngineError::NotFound(rule_id.to_string()))?;
         if rule.status == RuleStatus::Suspended {
             rule.status = RuleStatus::Active;
@@ -466,7 +479,10 @@ impl RuleEngine {
     }
 
     pub fn active_rule_count(&self) -> usize {
-        self.rules.values().filter(|r| r.status == RuleStatus::Active).count()
+        self.rules
+            .values()
+            .filter(|r| r.status == RuleStatus::Active)
+            .count()
     }
 
     // ── Helpers ────────────────────────────────────────────
@@ -514,13 +530,11 @@ fn evaluate_condition(condition: &RuleCondition, context: &Value) -> bool {
         "==" => actual == &condition.value,
         ">=" => compare_ordered(actual, &condition.value, |a, b| a >= b),
         "<=" => compare_ordered(actual, &condition.value, |a, b| a <= b),
-        "contains" => {
-            match (actual, &condition.value) {
-                (Value::String(s), Value::String(needle)) => s.contains(needle.as_str()),
-                (Value::Array(arr), _) => arr.contains(&condition.value),
-                _ => false,
-            }
-        }
+        "contains" => match (actual, &condition.value) {
+            (Value::String(s), Value::String(needle)) => s.contains(needle.as_str()),
+            (Value::Array(arr), _) => arr.contains(&condition.value),
+            _ => false,
+        },
         _ => false,
     }
 }
@@ -690,11 +704,9 @@ fn multiply_values(a: &Value, b: &Value) -> Value {
     let af = value_to_f64(a);
     let bf = value_to_f64(b);
     match (af, bf) {
-        (Some(av), Some(bv)) => {
-            serde_json::Number::from_f64(av * bv)
-                .map(Value::Number)
-                .unwrap_or(Value::Null)
-        }
+        (Some(av), Some(bv)) => serde_json::Number::from_f64(av * bv)
+            .map(Value::Number)
+            .unwrap_or(Value::Null),
         _ => Value::Null,
     }
 }
@@ -841,8 +853,12 @@ mod tests {
         assert_eq!(rule.votes_for, 0);
 
         // Vote
-        engine.vote_on_rule(&rule_id, "agent-2".to_string(), true).unwrap();
-        engine.vote_on_rule(&rule_id, "agent-3".to_string(), false).unwrap();
+        engine
+            .vote_on_rule(&rule_id, "agent-2".to_string(), true)
+            .unwrap();
+        engine
+            .vote_on_rule(&rule_id, "agent-3".to_string(), false)
+            .unwrap();
 
         let rule = engine.get_rule(&rule_id).unwrap();
         assert_eq!(rule.votes_for, 1);
@@ -961,13 +977,19 @@ mod tests {
         // Before expiration
         let expired = engine.expire_rules(499);
         assert!(expired.is_empty());
-        assert_eq!(engine.get_rule(&rule_id).unwrap().status, RuleStatus::Active);
+        assert_eq!(
+            engine.get_rule(&rule_id).unwrap().status,
+            RuleStatus::Active
+        );
 
         // At expiration tick
         let expired = engine.expire_rules(500);
         assert_eq!(expired.len(), 1);
         assert_eq!(expired[0], rule_id);
-        assert_eq!(engine.get_rule(&rule_id).unwrap().status, RuleStatus::Repealed);
+        assert_eq!(
+            engine.get_rule(&rule_id).unwrap().status,
+            RuleStatus::Repealed
+        );
     }
 
     // ── Repeal ─────────────────────────────────────────────
@@ -989,7 +1011,10 @@ mod tests {
         engine.activate_rule(&rule_id).unwrap();
 
         engine.repeal_rule(&rule_id, 200).unwrap();
-        assert_eq!(engine.get_rule(&rule_id).unwrap().status, RuleStatus::Repealed);
+        assert_eq!(
+            engine.get_rule(&rule_id).unwrap().status,
+            RuleStatus::Repealed
+        );
 
         // Repealed rule should not evaluate
         let ctx = json!({});

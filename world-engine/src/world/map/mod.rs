@@ -27,9 +27,8 @@ pub mod terrain;
 pub mod world_map;
 
 pub use building::{
-    Building, BuildingType, BuildingStatus, BuildingCost, OwnerType,
-    BuildingManager, BuildingId,
+    Building, BuildingCost, BuildingId, BuildingManager, BuildingStatus, BuildingType, OwnerType,
 };
 pub use hex::HexPos;
-pub use terrain::{TerrainType, Tile, ResourceNode};
-pub use world_map::{WorldMap, MapSnapshot};
+pub use terrain::{ResourceNode, TerrainType, Tile};
+pub use world_map::{MapSnapshot, WorldMap};

@@ -44,7 +44,10 @@ impl SqlitePersistence {
 
 impl StatePersistence for SqlitePersistence {
     fn save_snapshot(&self, state: &SerializableWorldState) -> anyhow::Result<()> {
-        let conn = self.conn.lock().map_err(|e| anyhow::anyhow!("lock poisoned: {}", e))?;
+        let conn = self
+            .conn
+            .lock()
+            .map_err(|e| anyhow::anyhow!("lock poisoned: {}", e))?;
         let tx = conn.unchecked_transaction()?;
 
         // Insert or update snapshot row, returning the id
@@ -90,12 +93,7 @@ impl StatePersistence for SqlitePersistence {
         tx.execute(
             "INSERT INTO economy_ledger (snapshot_id, total_tokens, total_agents, living_agents) \
              VALUES (?1, ?2, ?3, ?4)",
-            params![
-                snapshot_id,
-                total_tokens,
-                state.agents.len() as i64,
-                living,
-            ],
+            params![snapshot_id, total_tokens, state.agents.len() as i64, living,],
         )?;
 
         tx.commit()?;
@@ -103,15 +101,14 @@ impl StatePersistence for SqlitePersistence {
     }
 
     fn load_latest_snapshot(&self) -> anyhow::Result<Option<SerializableWorldState>> {
-        let conn = self.conn.lock().map_err(|e| anyhow::anyhow!("lock poisoned: {}", e))?;
+        let conn = self
+            .conn
+            .lock()
+            .map_err(|e| anyhow::anyhow!("lock poisoned: {}", e))?;
 
-        let mut stmt = conn.prepare(
-            "SELECT id, tick FROM snapshots ORDER BY tick DESC LIMIT 1",
-        )?;
+        let mut stmt = conn.prepare("SELECT id, tick FROM snapshots ORDER BY tick DESC LIMIT 1")?;
 
-        let result = stmt.query_row([], |row| {
-            Ok((row.get::<_, i64>(0)?, row.get::<_, i64>(1)?))
-        });
+        let result = stmt.query_row([], |row| Ok((row.get::<_, i64>(0)?, row.get::<_, i64>(1)?)));
 
         let (snapshot_id, tick) = match result {
             Ok(r) => r,
@@ -150,8 +147,8 @@ impl StatePersistence for SqlitePersistence {
                     tokens: tokens as u64,
                     skills,
                     personality: String::new(),
-            tasks_completed: 0,
-            tasks_attempted: 0,
+                    tasks_completed: 0,
+                    tasks_attempted: 0,
                 },
             });
         }
@@ -164,7 +161,10 @@ impl StatePersistence for SqlitePersistence {
     }
 
     fn prune_snapshots(&self, keep: usize) -> anyhow::Result<()> {
-        let conn = self.conn.lock().map_err(|e| anyhow::anyhow!("lock poisoned: {}", e))?;
+        let conn = self
+            .conn
+            .lock()
+            .map_err(|e| anyhow::anyhow!("lock poisoned: {}", e))?;
         conn.execute(
             "DELETE FROM snapshots WHERE id NOT IN \
              (SELECT id FROM snapshots ORDER BY tick DESC LIMIT ?1)",
@@ -195,8 +195,8 @@ mod tests {
                 tokens,
                 skills: HashMap::new(),
                 personality: String::new(),
-            tasks_completed: 0,
-            tasks_attempted: 0,
+                tasks_completed: 0,
+                tasks_attempted: 0,
             },
         )
     }
@@ -216,7 +216,11 @@ mod tests {
         assert_eq!(loaded.tick, 100);
         assert_eq!(loaded.agents.len(), 2);
 
-        let names: Vec<&str> = loaded.agents.iter().map(|a| a.record.name.as_str()).collect();
+        let names: Vec<&str> = loaded
+            .agents
+            .iter()
+            .map(|a| a.record.name.as_str())
+            .collect();
         assert!(names.contains(&"Alice"));
         assert!(names.contains(&"Bob"));
     }
@@ -289,8 +293,8 @@ mod tests {
                 tokens: 3000,
                 skills,
                 personality: String::new(),
-            tasks_completed: 0,
-            tasks_attempted: 0,
+                tasks_completed: 0,
+                tasks_attempted: 0,
             },
         )];
         let state = SerializableWorldState::from_world_state(99, &agents);
@@ -335,7 +339,11 @@ mod tests {
 
         let loaded = db.load_latest_snapshot().unwrap().unwrap();
         assert_eq!(loaded.agents.len(), 2);
-        let dead = loaded.agents.iter().find(|a| a.record.name == "Dead").unwrap();
+        let dead = loaded
+            .agents
+            .iter()
+            .find(|a| a.record.name == "Dead")
+            .unwrap();
         assert_eq!(dead.record.phase, AgentPhase::Dead);
     }
 
@@ -403,8 +411,8 @@ mod tests {
                 tokens: 100,
                 skills: HashMap::new(),
                 personality: String::new(),
-            tasks_completed: 0,
-            tasks_attempted: 0,
+                tasks_completed: 0,
+                tasks_attempted: 0,
             },
         );
         let s1 = SerializableWorldState::from_world_state(10, &[agent_v1]);
@@ -421,8 +429,8 @@ mod tests {
                 tokens: 500,
                 skills: HashMap::new(),
                 personality: String::new(),
-            tasks_completed: 0,
-            tasks_attempted: 0,
+                tasks_completed: 0,
+                tasks_attempted: 0,
             },
         );
         let s2 = SerializableWorldState::from_world_state(20, &[agent_v2]);
@@ -460,7 +468,9 @@ mod tests {
         db.save_snapshot(&s1).unwrap();
         let conn = db.conn.lock().unwrap();
         let id_v1: i64 = conn
-            .query_row("SELECT id FROM snapshots WHERE tick = 42", [], |row| row.get(0))
+            .query_row("SELECT id FROM snapshots WHERE tick = 42", [], |row| {
+                row.get(0)
+            })
             .unwrap();
         drop(conn);
 
@@ -469,10 +479,16 @@ mod tests {
         db.save_snapshot(&s2).unwrap();
         let conn = db.conn.lock().unwrap();
         let id_v2: i64 = conn
-            .query_row("SELECT id FROM snapshots WHERE tick = 42", [], |row| row.get(0))
+            .query_row("SELECT id FROM snapshots WHERE tick = 42", [], |row| {
+                row.get(0)
+            })
             .unwrap();
         let count: i64 = conn
-            .query_row("SELECT COUNT(*) FROM snapshots WHERE tick = 42", [], |row| row.get(0))
+            .query_row(
+                "SELECT COUNT(*) FROM snapshots WHERE tick = 42",
+                [],
+                |row| row.get(0),
+            )
             .unwrap();
         drop(conn);
 

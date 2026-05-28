@@ -1,15 +1,15 @@
 use std::collections::HashMap;
 
 use axum::{
-    Json,
     extract::{Path, Query, State},
     http::StatusCode,
     response::IntoResponse,
     routing::*,
+    Json,
 };
 use serde::{Deserialize, Serialize};
 
-use crate::api::{AppState, ErrorResponse, AgentRecord};
+use crate::api::{AgentRecord, AppState, ErrorResponse};
 
 // ── Population Evolution Handlers ────────────────────────────────
 
@@ -92,12 +92,18 @@ pub fn compute_skill_distribution(agents: &[AgentRecord]) -> Vec<SkillDistributi
     }
     let mut result: Vec<SkillDistribution> = skill_map
         .into_iter()
-        .map(|(name, (count, total_level, max_level))| SkillDistribution {
-            name,
-            count,
-            avg_level: if count > 0 { total_level / count as f64 } else { 0.0 },
-            max_level,
-        })
+        .map(
+            |(name, (count, total_level, max_level))| SkillDistribution {
+                name,
+                count,
+                avg_level: if count > 0 {
+                    total_level / count as f64
+                } else {
+                    0.0
+                },
+                max_level,
+            },
+        )
         .collect();
     result.sort_by_key(|a| std::cmp::Reverse(a.count));
     result
@@ -145,7 +151,8 @@ pub fn compute_simpson_index(skills: &[SkillDistribution]) -> f64 {
         return 0.0;
     }
     let n = total as f64;
-    let numerator: f64 = skills.iter()
+    let numerator: f64 = skills
+        .iter()
         .map(|s| {
             let ni = s.count as f64;
             ni * (ni - 1.0)
@@ -164,9 +171,7 @@ pub fn csv_escape(field: &str) -> String {
 }
 
 /// GET /api/v1/population/stats — Population evolution statistics.
-pub async fn population_stats(
-    State(state): State<AppState>,
-) -> impl IntoResponse {
+pub async fn population_stats(State(state): State<AppState>) -> impl IntoResponse {
     let agents = state.agents.lock().await;
     let tick = *state.tick_rx.borrow();
 
@@ -184,15 +189,27 @@ pub async fn population_stats(
     let simpson_index = compute_simpson_index(&skill_distribution);
 
     let avg_fitness = if alive_count > 0 {
-        alive_agents.iter().map(|a| a.ticks_survived as f64).sum::<f64>() / alive_count as f64
+        alive_agents
+            .iter()
+            .map(|a| a.ticks_survived as f64)
+            .sum::<f64>()
+            / alive_count as f64
     } else {
         0.0
     };
 
     let max_generation = agents.iter().map(|a| a.generation).max().unwrap_or(0);
 
-    let birth_rate = if tick > 0 { (agents.len() as f64 / tick as f64) * 1000.0 } else { 0.0 };
-    let death_rate = if tick > 0 { (dead_count as f64 / tick as f64) * 1000.0 } else { 0.0 };
+    let birth_rate = if tick > 0 {
+        (agents.len() as f64 / tick as f64) * 1000.0
+    } else {
+        0.0
+    };
+    let death_rate = if tick > 0 {
+        (dead_count as f64 / tick as f64) * 1000.0
+    } else {
+        0.0
+    };
 
     let response = PopulationStatsResponse {
         tick,
@@ -223,7 +240,6 @@ pub struct PopulationTimelineQuery {
     pub interval: Option<u64>,
 }
 
-
 /// GET /api/v1/population/timeline — Population evolution over time.
 pub async fn population_timeline(
     State(state): State<AppState>,
@@ -248,7 +264,8 @@ pub async fn population_timeline(
                     timeline.push(PopulationTimelinePoint {
                         tick: snap.tick,
                         alive_count: snap.active_agents as usize,
-                        dead_count: snap.total_population.saturating_sub(snap.active_agents) as usize,
+                        dead_count: snap.total_population.saturating_sub(snap.active_agents)
+                            as usize,
                         total_tokens: snap.gdp,
                         total_money: 0,
                         skill_types: snap.skill_distribution_top5.len(),
@@ -266,8 +283,15 @@ pub async fn population_timeline(
                     total_money: agents.iter().filter(|a| a.alive).map(|a| a.money).sum(),
                     skill_types: compute_skill_distribution(&agents).len(),
                     avg_fitness: if alive_count > 0 {
-                        agents.iter().filter(|a| a.alive).map(|a| a.ticks_survived as f64).sum::<f64>() / alive_count as f64
-                    } else { 0.0 },
+                        agents
+                            .iter()
+                            .filter(|a| a.alive)
+                            .map(|a| a.ticks_survived as f64)
+                            .sum::<f64>()
+                            / alive_count as f64
+                    } else {
+                        0.0
+                    },
                 });
                 return Json(timeline).into_response();
             }
@@ -285,16 +309,21 @@ pub async fn population_timeline(
         total_money: agents.iter().filter(|a| a.alive).map(|a| a.money).sum(),
         skill_types: compute_skill_distribution(&agents).len(),
         avg_fitness: if alive_count > 0 {
-            agents.iter().filter(|a| a.alive).map(|a| a.ticks_survived as f64).sum::<f64>() / alive_count as f64
-        } else { 0.0 },
+            agents
+                .iter()
+                .filter(|a| a.alive)
+                .map(|a| a.ticks_survived as f64)
+                .sum::<f64>()
+                / alive_count as f64
+        } else {
+            0.0
+        },
     }];
     Json(timeline).into_response()
 }
 
 /// GET /api/v1/population/species — Species (skill-signature) classification.
-pub async fn population_species(
-    State(state): State<AppState>,
-) -> impl IntoResponse {
+pub async fn population_species(State(state): State<AppState>) -> impl IntoResponse {
     let agents = state.agents.lock().await;
 
     // Group agents by their sorted skill signature
@@ -302,14 +331,22 @@ pub async fn population_species(
     for agent in agents.iter().filter(|a| a.alive) {
         let mut skills: Vec<&String> = agent.skills.keys().collect();
         skills.sort();
-        let sig = skills.iter().map(|s| s.as_str()).collect::<Vec<_>>().join(",");
+        let sig = skills
+            .iter()
+            .map(|s| s.as_str())
+            .collect::<Vec<_>>()
+            .join(",");
         species_map.entry(sig).or_default().push(agent);
     }
 
     let species: Vec<SpeciesEntry> = species_map
         .into_iter()
         .map(|(sig, agents)| SpeciesEntry {
-            skill_signature: if sig.is_empty() { "(no skills)".to_string() } else { sig },
+            skill_signature: if sig.is_empty() {
+                "(no skills)".to_string()
+            } else {
+                sig
+            },
             count: agents.len(),
             generations: agents.iter().map(|a| a.generation).collect(),
             alive: agents.len(), // all alive since we filtered
@@ -320,9 +357,7 @@ pub async fn population_species(
 }
 
 /// GET /api/v1/population/diversity — Gene diversity metrics.
-pub async fn population_diversity(
-    State(state): State<AppState>,
-) -> impl IntoResponse {
+pub async fn population_diversity(State(state): State<AppState>) -> impl IntoResponse {
     let agents = state.agents.lock().await;
     let skill_distribution = compute_skill_distribution(&agents);
     let shannon = compute_shannon_index(&skill_distribution);
@@ -343,7 +378,12 @@ pub async fn population_diversity(
     // Generation diversity
     let max_gen = agents.iter().map(|a| a.generation).max().unwrap_or(0);
     let avg_gen = if alive_count > 0 {
-        agents.iter().filter(|a| a.alive).map(|a| a.generation as f64).sum::<f64>() / alive_count as f64
+        agents
+            .iter()
+            .filter(|a| a.alive)
+            .map(|a| a.generation as f64)
+            .sum::<f64>()
+            / alive_count as f64
     } else {
         0.0
     };
@@ -367,15 +407,14 @@ pub async fn population_diversity(
         max_generation: max_gen,
         avg_generation: avg_gen,
         alive_count,
-    }).into_response()
+    })
+    .into_response()
 }
 
 /// GET /api/v1/population/events — Evolution event types supported.
 /// Returns the list of evolution event types that the system tracks.
 /// For real-time event streaming, use the SSE endpoint at /api/v1/world/events.
-pub async fn population_events(
-    State(_state): State<AppState>,
-) -> impl IntoResponse {
+pub async fn population_events(State(_state): State<AppState>) -> impl IntoResponse {
     #[derive(Serialize)]
     struct EventInfo {
         event_type: &'static str,
@@ -383,12 +422,30 @@ pub async fn population_events(
     }
 
     let events = vec![
-        EventInfo { event_type: "offspring_mutated", description: "An offspring was produced with mutations from two parents" },
-        EventInfo { event_type: "skill_level_up", description: "An agent's skill increased in level" },
-        EventInfo { event_type: "skill_mutated", description: "An agent's skill was mutated" },
-        EventInfo { event_type: "fitness_evaluated", description: "An agent's fitness was evaluated" },
-        EventInfo { event_type: "agent_spawned", description: "A new agent was spawned" },
-        EventInfo { event_type: "agent_died", description: "An agent died" },
+        EventInfo {
+            event_type: "offspring_mutated",
+            description: "An offspring was produced with mutations from two parents",
+        },
+        EventInfo {
+            event_type: "skill_level_up",
+            description: "An agent's skill increased in level",
+        },
+        EventInfo {
+            event_type: "skill_mutated",
+            description: "An agent's skill was mutated",
+        },
+        EventInfo {
+            event_type: "fitness_evaluated",
+            description: "An agent's fitness was evaluated",
+        },
+        EventInfo {
+            event_type: "agent_spawned",
+            description: "A new agent was spawned",
+        },
+        EventInfo {
+            event_type: "agent_died",
+            description: "An agent died",
+        },
     ];
 
     Json(events).into_response()
@@ -404,13 +461,22 @@ pub async fn population_genealogy(
     // Find the target agent
     let target = match agents.iter().find(|a| a.id == id) {
         Some(a) => a.clone(),
-        None => return (StatusCode::NOT_FOUND, Json(ErrorResponse { error: "agent not found".into() })).into_response(),
+        None => {
+            return (
+                StatusCode::NOT_FOUND,
+                Json(ErrorResponse {
+                    error: "agent not found".into(),
+                }),
+            )
+                .into_response()
+        }
     };
 
     // Build genealogy by recursively finding parents (max depth 10)
     fn build_tree(agents: &[AgentRecord], agent: &AgentRecord, depth: usize) -> GenealogyNode {
         let children: Vec<GenealogyNode> = if depth < 10 {
-            agents.iter()
+            agents
+                .iter()
                 .filter(|a| a.parent_ids.contains(&agent.id))
                 .map(|child| build_tree(agents, child, depth + 1))
                 .collect()
@@ -428,7 +494,9 @@ pub async fn population_genealogy(
     let mut queue: Vec<String> = target.parent_ids.clone();
     let mut visited: std::collections::HashSet<String> = std::collections::HashSet::new();
     while let Some(pid) = queue.pop() {
-        if visited.contains(&pid) { continue; }
+        if visited.contains(&pid) {
+            continue;
+        }
         visited.insert(pid.clone());
         if let Some(parent) = agents.iter().find(|a| a.id == pid) {
             queue.extend(parent.parent_ids.iter().cloned());
@@ -448,13 +516,12 @@ pub async fn population_genealogy(
     Json(GenealogyResponse {
         target: tree,
         ancestors: all_ancestors,
-    }).into_response()
+    })
+    .into_response()
 }
 
 /// GET /api/v1/population/export/csv — Export population data as CSV.
-pub async fn population_export_csv(
-    State(state): State<AppState>,
-) -> impl IntoResponse {
+pub async fn population_export_csv(State(state): State<AppState>) -> impl IntoResponse {
     let agents = state.agents.lock().await;
     let tick = *state.tick_rx.borrow();
 
@@ -464,10 +531,14 @@ pub async fn population_export_csv(
 
     for agent in agents.iter() {
         let parent_ids = csv_escape(&agent.parent_ids.join(";"));
-        let skills = csv_escape(&agent.skills.iter()
-            .map(|(k, v)| format!("{}:{}", k, v))
-            .collect::<Vec<_>>()
-            .join(","));
+        let skills = csv_escape(
+            &agent
+                .skills
+                .iter()
+                .map(|(k, v)| format!("{}:{}", k, v))
+                .collect::<Vec<_>>()
+                .join(","),
+        );
         let personality = csv_escape(&agent.personality);
         let name = csv_escape(&agent.name);
         csv.push_str(&format!(
@@ -489,7 +560,8 @@ pub async fn population_export_csv(
     let body = axum::body::Body::from(csv);
     let mut resp = axum::response::Response::new(body);
     *resp.status_mut() = StatusCode::OK;
-    resp.headers_mut().insert("content-type", "text/csv".parse().unwrap());
+    resp.headers_mut()
+        .insert("content-type", "text/csv".parse().unwrap());
     resp.headers_mut().insert(
         "content-disposition",
         format!("attachment; filename=\"population_tick_{}.csv\"", tick)
@@ -506,7 +578,10 @@ pub fn population_routes() -> axum::Router<AppState> {
         .route("/api/v1/population/species", get(population_species))
         .route("/api/v1/population/diversity", get(population_diversity))
         .route("/api/v1/population/events", get(population_events))
-        .route("/api/v1/population/genealogy/:id", get(population_genealogy))
+        .route(
+            "/api/v1/population/genealogy/:id",
+            get(population_genealogy),
+        )
         .route("/api/v1/population/timeline", get(population_timeline))
         .route("/api/v1/population/export/csv", get(population_export_csv))
 }

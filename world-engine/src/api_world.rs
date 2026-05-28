@@ -1,27 +1,22 @@
 use std::collections::HashMap;
 use std::convert::Infallible;
-use std::sync::Arc;
-use std::time::Duration;
 
 use axum::{
-    Json,
     extract::{Path, Query, State},
     http::StatusCode,
     response::{
         sse::{Event as SseEvent, Sse},
         IntoResponse,
     },
-    routing::{get, post},
+    Json,
 };
 use futures::stream::Stream;
 use serde::{Deserialize, Serialize};
-use tokio::sync::watch;
 use tokio_stream::wrappers::BroadcastStream;
 use tokio_stream::StreamExt;
 use uuid::Uuid;
 
-use crate::api::{AppState, ErrorResponse, AgentRecord, A2AMessage};
-use crate::time_capsule::SnapshotStore;
+use crate::api::{A2AMessage, AgentRecord, AppState, ErrorResponse};
 use crate::world::event::WorldEvent;
 
 #[derive(Debug, Deserialize)]
@@ -104,20 +99,21 @@ pub fn parse_event_types(raw: &str) -> Result<Vec<crate::world::event::EventType
 pub async fn world_events_sse(
     State(state): State<AppState>,
     Query(query): Query<SseQuery>,
-) -> Result<Sse<impl Stream<Item = Result<SseEvent, Infallible>>>, (StatusCode, Json<ErrorResponse>)> {
+) -> Result<Sse<impl Stream<Item = Result<SseEvent, Infallible>>>, (StatusCode, Json<ErrorResponse>)>
+{
     // Parse type filter if provided
-    let type_filter: Option<std::collections::HashSet<crate::world::event::EventType>> = if let Some(ref types_str) = query.types {
-        let parsed = parse_event_types(types_str).map_err(|e| {
-            (StatusCode::BAD_REQUEST, Json(ErrorResponse { error: e }))
-        })?;
-        if parsed.is_empty() {
-            None
+    let type_filter: Option<std::collections::HashSet<crate::world::event::EventType>> =
+        if let Some(ref types_str) = query.types {
+            let parsed = parse_event_types(types_str)
+                .map_err(|e| (StatusCode::BAD_REQUEST, Json(ErrorResponse { error: e })))?;
+            if parsed.is_empty() {
+                None
+            } else {
+                Some(parsed.into_iter().collect())
+            }
         } else {
-            Some(parsed.into_iter().collect())
-        }
-    } else {
-        None
-    };
+            None
+        };
 
     let agent_filter: Option<String> = query.agent_id.filter(|s| !s.is_empty());
 
@@ -156,7 +152,9 @@ pub async fn world_events_sse(
 
 // ── Request/Response Types ──────────────────────────────────
 
-fn default_tokens() -> u64 { 100_000 }
+fn default_tokens() -> u64 {
+    100_000
+}
 
 #[derive(Debug, Deserialize)]
 pub struct SpawnAgentRequest {
@@ -188,9 +186,7 @@ pub struct WorldStatsResponse {
 
 // ── World Stats Handler ───────────────────────────────────
 
-pub async fn world_stats(
-    State(state): State<AppState>,
-) -> impl IntoResponse {
+pub async fn world_stats(State(state): State<AppState>) -> impl IntoResponse {
     let agents = state.agents.lock().await;
     let board = state.board.lock().await;
     let tick = *state.tick_rx.borrow();
@@ -243,21 +239,22 @@ pub async fn spawn_agent(
     (StatusCode::CREATED, Json(agent)).into_response()
 }
 
-pub async fn list_agents(
-    State(state): State<AppState>,
-) -> impl IntoResponse {
+pub async fn list_agents(State(state): State<AppState>) -> impl IntoResponse {
     let agents = state.agents.lock().await;
     Json(&*agents).into_response()
 }
 
-pub async fn get_agent(
-    State(state): State<AppState>,
-    Path(id): Path<String>,
-) -> impl IntoResponse {
+pub async fn get_agent(State(state): State<AppState>, Path(id): Path<String>) -> impl IntoResponse {
     let agents = state.agents.lock().await;
     match agents.iter().find(|a| a.id == id) {
         Some(agent) => Json(agent.clone()).into_response(),
-        None => (StatusCode::NOT_FOUND, Json(ErrorResponse { error: "agent not found".into() })).into_response(),
+        None => (
+            StatusCode::NOT_FOUND,
+            Json(ErrorResponse {
+                error: "agent not found".into(),
+            }),
+        )
+            .into_response(),
     }
 }
 
@@ -291,9 +288,7 @@ pub async fn send_message(
     (StatusCode::CREATED, Json(msg)).into_response()
 }
 
-pub async fn list_messages(
-    State(state): State<AppState>,
-) -> impl IntoResponse {
+pub async fn list_messages(State(state): State<AppState>) -> impl IntoResponse {
     let messages = state.messages.lock().await;
     Json(&*messages).into_response()
 }
@@ -330,9 +325,7 @@ pub async fn advance_tick(
     }))
 }
 
-pub async fn get_tick(
-    State(state): State<AppState>,
-) -> impl IntoResponse {
+pub async fn get_tick(State(state): State<AppState>) -> impl IntoResponse {
     let tick = *state.tick_rx.borrow();
     Json(serde_json::json!({ "tick": tick }))
 }
@@ -357,29 +350,61 @@ pub async fn list_snapshots(
 ) -> impl IntoResponse {
     let store = match &state.snapshot_store {
         Some(s) => s.clone(),
-        None => return (StatusCode::SERVICE_UNAVAILABLE, Json(ErrorResponse { error: "snapshot store not configured".into() })).into_response(),
+        None => {
+            return (
+                StatusCode::SERVICE_UNAVAILABLE,
+                Json(ErrorResponse {
+                    error: "snapshot store not configured".into(),
+                }),
+            )
+                .into_response()
+        }
     };
 
     let store = store.lock().await;
     match store.list(query.from_tick, query.to_tick, query.limit) {
         Ok(snapshots) => Json(&snapshots).into_response(),
-        Err(e) => (StatusCode::INTERNAL_SERVER_ERROR, Json(ErrorResponse { error: e.to_string() })).into_response(),
+        Err(e) => (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            Json(ErrorResponse {
+                error: e.to_string(),
+            }),
+        )
+            .into_response(),
     }
 }
 
-pub async fn get_latest_snapshot(
-    State(state): State<AppState>,
-) -> impl IntoResponse {
+pub async fn get_latest_snapshot(State(state): State<AppState>) -> impl IntoResponse {
     let store = match &state.snapshot_store {
         Some(s) => s.clone(),
-        None => return (StatusCode::SERVICE_UNAVAILABLE, Json(ErrorResponse { error: "snapshot store not configured".into() })).into_response(),
+        None => {
+            return (
+                StatusCode::SERVICE_UNAVAILABLE,
+                Json(ErrorResponse {
+                    error: "snapshot store not configured".into(),
+                }),
+            )
+                .into_response()
+        }
     };
 
     let store = store.lock().await;
     match store.latest() {
         Ok(Some(snapshot)) => Json(&snapshot).into_response(),
-        Ok(None) => (StatusCode::NOT_FOUND, Json(ErrorResponse { error: "no snapshots available".into() })).into_response(),
-        Err(e) => (StatusCode::INTERNAL_SERVER_ERROR, Json(ErrorResponse { error: e.to_string() })).into_response(),
+        Ok(None) => (
+            StatusCode::NOT_FOUND,
+            Json(ErrorResponse {
+                error: "no snapshots available".into(),
+            }),
+        )
+            .into_response(),
+        Err(e) => (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            Json(ErrorResponse {
+                error: e.to_string(),
+            }),
+        )
+            .into_response(),
     }
 }
 
@@ -389,42 +414,79 @@ pub async fn get_snapshot_by_tick(
 ) -> impl IntoResponse {
     let store = match &state.snapshot_store {
         Some(s) => s.clone(),
-        None => return (StatusCode::SERVICE_UNAVAILABLE, Json(ErrorResponse { error: "snapshot store not configured".into() })).into_response(),
+        None => {
+            return (
+                StatusCode::SERVICE_UNAVAILABLE,
+                Json(ErrorResponse {
+                    error: "snapshot store not configured".into(),
+                }),
+            )
+                .into_response()
+        }
     };
 
     let store = store.lock().await;
     match store.get_by_tick(tick) {
         Ok(Some(snapshot)) => Json(&snapshot).into_response(),
-        Ok(None) => (StatusCode::NOT_FOUND, Json(ErrorResponse { error: format!("no snapshot at tick {}", tick) })).into_response(),
-        Err(e) => (StatusCode::INTERNAL_SERVER_ERROR, Json(ErrorResponse { error: e.to_string() })).into_response(),
+        Ok(None) => (
+            StatusCode::NOT_FOUND,
+            Json(ErrorResponse {
+                error: format!("no snapshot at tick {}", tick),
+            }),
+        )
+            .into_response(),
+        Err(e) => (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            Json(ErrorResponse {
+                error: e.to_string(),
+            }),
+        )
+            .into_response(),
     }
 }
 
-pub async fn create_snapshot(
-    State(state): State<AppState>,
-) -> impl IntoResponse {
+pub async fn create_snapshot(State(state): State<AppState>) -> impl IntoResponse {
     let store = match &state.snapshot_store {
         Some(s) => s.clone(),
-        None => return (StatusCode::SERVICE_UNAVAILABLE, Json(ErrorResponse { error: "snapshot store not configured".into() })).into_response(),
+        None => {
+            return (
+                StatusCode::SERVICE_UNAVAILABLE,
+                Json(ErrorResponse {
+                    error: "snapshot store not configured".into(),
+                }),
+            )
+                .into_response()
+        }
     };
 
     let tick = *state.tick_rx.borrow();
     let agents = state.agents.lock().await;
 
-    let snapshot = crate::time_capsule::build_snapshot(tick, &agents.iter().map(|a| {
-        let id = Uuid::parse_str(&a.id).unwrap_or_else(|_| Uuid::new_v4());
-        let record = crate::economy::token_burn::AgentRecord {
-            id,
-            name: a.name.clone(),
-            phase: if a.alive { crate::world::enums::AgentPhase::Adult } else { crate::world::enums::AgentPhase::Dead },
-            tokens: a.tokens,
-            skills: std::collections::HashMap::new(),
-            personality: String::new(),
-            tasks_completed: 0,
-            tasks_attempted: 0,
-        };
-        (id, a.ticks_survived, record)
-    }).collect::<Vec<_>>(), &[]);
+    let snapshot = crate::time_capsule::build_snapshot(
+        tick,
+        &agents
+            .iter()
+            .map(|a| {
+                let id = Uuid::parse_str(&a.id).unwrap_or_else(|_| Uuid::new_v4());
+                let record = crate::economy::token_burn::AgentRecord {
+                    id,
+                    name: a.name.clone(),
+                    phase: if a.alive {
+                        crate::world::enums::AgentPhase::Adult
+                    } else {
+                        crate::world::enums::AgentPhase::Dead
+                    },
+                    tokens: a.tokens,
+                    skills: std::collections::HashMap::new(),
+                    personality: String::new(),
+                    tasks_completed: 0,
+                    tasks_attempted: 0,
+                };
+                (id, a.ticks_survived, record)
+            })
+            .collect::<Vec<_>>(),
+        &[],
+    );
 
     let store = store.lock().await;
     match store.save(&snapshot) {
@@ -435,16 +497,28 @@ pub async fn create_snapshot(
             });
             (StatusCode::CREATED, Json(&snapshot)).into_response()
         }
-        Err(e) => (StatusCode::INTERNAL_SERVER_ERROR, Json(ErrorResponse { error: e.to_string() })).into_response(),
+        Err(e) => (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            Json(ErrorResponse {
+                error: e.to_string(),
+            }),
+        )
+            .into_response(),
     }
 }
 
-pub async fn export_snapshots_json(
-    State(state): State<AppState>,
-) -> impl IntoResponse {
+pub async fn export_snapshots_json(State(state): State<AppState>) -> impl IntoResponse {
     let store = match &state.snapshot_store {
         Some(s) => s.clone(),
-        None => return (StatusCode::SERVICE_UNAVAILABLE, Json(ErrorResponse { error: "snapshot store not configured".into() })).into_response(),
+        None => {
+            return (
+                StatusCode::SERVICE_UNAVAILABLE,
+                Json(ErrorResponse {
+                    error: "snapshot store not configured".into(),
+                }),
+            )
+                .into_response()
+        }
     };
 
     let store = store.lock().await;
@@ -453,20 +527,38 @@ pub async fn export_snapshots_json(
             let body = axum::body::Body::from(json);
             let mut resp = axum::response::Response::new(body);
             *resp.status_mut() = StatusCode::OK;
-            resp.headers_mut().insert("content-type", "application/json".parse().unwrap());
-            resp.headers_mut().insert("content-disposition", "attachment; filename=\"world_snapshots.json\"".parse().unwrap());
+            resp.headers_mut()
+                .insert("content-type", "application/json".parse().unwrap());
+            resp.headers_mut().insert(
+                "content-disposition",
+                "attachment; filename=\"world_snapshots.json\""
+                    .parse()
+                    .unwrap(),
+            );
             resp
         }
-        Err(e) => (StatusCode::INTERNAL_SERVER_ERROR, Json(ErrorResponse { error: e.to_string() })).into_response(),
+        Err(e) => (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            Json(ErrorResponse {
+                error: e.to_string(),
+            }),
+        )
+            .into_response(),
     }
 }
 
-pub async fn export_snapshots_csv(
-    State(state): State<AppState>,
-) -> impl IntoResponse {
+pub async fn export_snapshots_csv(State(state): State<AppState>) -> impl IntoResponse {
     let store = match &state.snapshot_store {
         Some(s) => s.clone(),
-        None => return (StatusCode::SERVICE_UNAVAILABLE, Json(ErrorResponse { error: "snapshot store not configured".into() })).into_response(),
+        None => {
+            return (
+                StatusCode::SERVICE_UNAVAILABLE,
+                Json(ErrorResponse {
+                    error: "snapshot store not configured".into(),
+                }),
+            )
+                .into_response()
+        }
     };
 
     let store = store.lock().await;
@@ -475,11 +567,23 @@ pub async fn export_snapshots_csv(
             let body = axum::body::Body::from(csv);
             let mut resp = axum::response::Response::new(body);
             *resp.status_mut() = StatusCode::OK;
-            resp.headers_mut().insert("content-type", "text/csv".parse().unwrap());
-            resp.headers_mut().insert("content-disposition", "attachment; filename=\"world_snapshots.csv\"".parse().unwrap());
+            resp.headers_mut()
+                .insert("content-type", "text/csv".parse().unwrap());
+            resp.headers_mut().insert(
+                "content-disposition",
+                "attachment; filename=\"world_snapshots.csv\""
+                    .parse()
+                    .unwrap(),
+            );
             resp
         }
-        Err(e) => (StatusCode::INTERNAL_SERVER_ERROR, Json(ErrorResponse { error: e.to_string() })).into_response(),
+        Err(e) => (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            Json(ErrorResponse {
+                error: e.to_string(),
+            }),
+        )
+            .into_response(),
     }
 }
 

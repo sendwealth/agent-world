@@ -4,7 +4,7 @@
 
 use std::sync::Arc;
 
-use tokio::sync::{Mutex, watch};
+use tokio::sync::{watch, Mutex};
 
 use agent_world_engine::api::{self, AgentRecord};
 use agent_world_engine::economy::TaskBoard;
@@ -18,7 +18,9 @@ use reqwest::Client;
 
 async fn start_server() -> String {
     let event_bus = Arc::new(EventBus::new(4096));
-    let board = Arc::new(Mutex::new(TaskBoard::with_shared_event_bus(event_bus.clone())));
+    let board = Arc::new(Mutex::new(TaskBoard::with_shared_event_bus(
+        event_bus.clone(),
+    )));
 
     let tmp = tempfile::tempdir().unwrap();
     let tmp_path = tmp.path().to_path_buf();
@@ -29,13 +31,7 @@ async fn start_server() -> String {
 
     let (tick_tx, tick_rx) = watch::channel(0u64);
 
-    let app = api::create_router_for_test(
-        board,
-        shared_wal,
-        event_bus,
-        tick_tx,
-        tick_rx,
-    );
+    let app = api::create_router_for_test(board, shared_wal, event_bus, tick_tx, tick_rx);
 
     let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
     let port = listener.local_addr().unwrap().port();
@@ -47,16 +43,22 @@ async fn seed_agents(base: &str) -> Vec<AgentRecord> {
     let client = Client::new();
     let mut agents = Vec::new();
 
-    let resp = client.post(format!("{}/api/v1/agents", base))
+    let resp = client
+        .post(format!("{}/api/v1/agents", base))
         .json(&serde_json::json!({"name": "Alice", "tokens": 1000, "money": 500}))
-        .send().await.unwrap();
+        .send()
+        .await
+        .unwrap();
     assert_eq!(resp.status(), StatusCode::CREATED);
     let alice: AgentRecord = resp.json().await.unwrap();
     agents.push(alice);
 
-    let resp = client.post(format!("{}/api/v1/agents", base))
+    let resp = client
+        .post(format!("{}/api/v1/agents", base))
         .json(&serde_json::json!({"name": "Bob", "tokens": 800, "money": 300}))
-        .send().await.unwrap();
+        .send()
+        .await
+        .unwrap();
     assert_eq!(resp.status(), StatusCode::CREATED);
     let bob: AgentRecord = resp.json().await.unwrap();
     agents.push(bob);
@@ -72,8 +74,11 @@ async fn test_export_snapshot_json() {
     let client = Client::new();
     let _ = seed_agents(&base).await;
 
-    let resp = client.get(format!("{}/api/v1/export/snapshot?format=json", base))
-        .send().await.unwrap();
+    let resp = client
+        .get(format!("{}/api/v1/export/snapshot?format=json", base))
+        .send()
+        .await
+        .unwrap();
     assert_eq!(resp.status(), StatusCode::OK);
 
     let body: serde_json::Value = resp.json().await.unwrap();
@@ -82,8 +87,10 @@ async fn test_export_snapshot_json() {
     assert_eq!(body["task_count"], 0);
     assert!(!body["exported_at"].as_str().unwrap().is_empty());
 
-
-    let agent_names: Vec<&str> = body["agents"].as_array().unwrap().iter()
+    let agent_names: Vec<&str> = body["agents"]
+        .as_array()
+        .unwrap()
+        .iter()
         .map(|a| a["name"].as_str().unwrap())
         .collect();
     assert!(agent_names.contains(&"Alice"));
@@ -96,11 +103,19 @@ async fn test_export_snapshot_csv() {
     let client = Client::new();
     let _ = seed_agents(&base).await;
 
-    let resp = client.get(format!("{}/api/v1/export/snapshot?format=csv", base))
-        .send().await.unwrap();
+    let resp = client
+        .get(format!("{}/api/v1/export/snapshot?format=csv", base))
+        .send()
+        .await
+        .unwrap();
     assert_eq!(resp.status(), StatusCode::OK);
 
-    let content_type = resp.headers().get("content-type").unwrap().to_str().unwrap();
+    let content_type = resp
+        .headers()
+        .get("content-type")
+        .unwrap()
+        .to_str()
+        .unwrap();
     assert!(content_type.contains("text/csv"));
 
     let body = resp.text().await.unwrap();
@@ -114,11 +129,19 @@ async fn test_export_snapshot_default_format_is_json() {
     let base = start_server().await;
     let client = Client::new();
 
-    let resp = client.get(format!("{}/api/v1/export/snapshot", base))
-        .send().await.unwrap();
+    let resp = client
+        .get(format!("{}/api/v1/export/snapshot", base))
+        .send()
+        .await
+        .unwrap();
     assert_eq!(resp.status(), StatusCode::OK);
 
-    let content_type = resp.headers().get("content-type").unwrap().to_str().unwrap();
+    let content_type = resp
+        .headers()
+        .get("content-type")
+        .unwrap()
+        .to_str()
+        .unwrap();
     assert!(content_type.contains("application/json"));
 }
 
@@ -128,8 +151,11 @@ async fn test_export_snapshot_by_tick() {
     let client = Client::new();
     let _ = seed_agents(&base).await;
 
-    let resp = client.get(format!("{}/api/v1/export/snapshot/5?format=json", base))
-        .send().await.unwrap();
+    let resp = client
+        .get(format!("{}/api/v1/export/snapshot/5?format=json", base))
+        .send()
+        .await
+        .unwrap();
     assert_eq!(resp.status(), StatusCode::OK);
 
     let body: serde_json::Value = resp.json().await.unwrap();
@@ -142,11 +168,19 @@ async fn test_export_snapshot_by_tick_csv() {
     let client = Client::new();
     let _ = seed_agents(&base).await;
 
-    let resp = client.get(format!("{}/api/v1/export/snapshot/10?format=csv", base))
-        .send().await.unwrap();
+    let resp = client
+        .get(format!("{}/api/v1/export/snapshot/10?format=csv", base))
+        .send()
+        .await
+        .unwrap();
     assert_eq!(resp.status(), StatusCode::OK);
 
-    let content_type = resp.headers().get("content-type").unwrap().to_str().unwrap();
+    let content_type = resp
+        .headers()
+        .get("content-type")
+        .unwrap()
+        .to_str()
+        .unwrap();
     assert!(content_type.contains("text/csv"));
 }
 
@@ -158,8 +192,11 @@ async fn test_export_economy_json() {
     let client = Client::new();
     let _ = seed_agents(&base).await;
 
-    let resp = client.get(format!("{}/api/v1/export/economy?format=json", base))
-        .send().await.unwrap();
+    let resp = client
+        .get(format!("{}/api/v1/export/economy?format=json", base))
+        .send()
+        .await
+        .unwrap();
     assert_eq!(resp.status(), StatusCode::OK);
 
     let body: serde_json::Value = resp.json().await.unwrap();
@@ -172,11 +209,19 @@ async fn test_export_economy_csv() {
     let client = Client::new();
     let _ = seed_agents(&base).await;
 
-    let resp = client.get(format!("{}/api/v1/export/economy?format=csv", base))
-        .send().await.unwrap();
+    let resp = client
+        .get(format!("{}/api/v1/export/economy?format=csv", base))
+        .send()
+        .await
+        .unwrap();
     assert_eq!(resp.status(), StatusCode::OK);
 
-    let content_type = resp.headers().get("content-type").unwrap().to_str().unwrap();
+    let content_type = resp
+        .headers()
+        .get("content-type")
+        .unwrap()
+        .to_str()
+        .unwrap();
     assert!(content_type.contains("text/csv"));
 }
 
@@ -186,8 +231,14 @@ async fn test_export_economy_with_tick_range() {
     let client = Client::new();
     let _ = seed_agents(&base).await;
 
-    let resp = client.get(format!("{}/api/v1/export/economy?from_tick=0&to_tick=100&format=json", base))
-        .send().await.unwrap();
+    let resp = client
+        .get(format!(
+            "{}/api/v1/export/economy?from_tick=0&to_tick=100&format=json",
+            base
+        ))
+        .send()
+        .await
+        .unwrap();
     assert_eq!(resp.status(), StatusCode::OK);
 }
 
@@ -199,7 +250,8 @@ async fn test_export_query_basic() {
     let client = Client::new();
     let agents = seed_agents(&base).await;
 
-    let resp = client.post(format!("{}/api/v1/export/query", base))
+    let resp = client
+        .post(format!("{}/api/v1/export/query", base))
         .json(&serde_json::json!({
             "filters": {
                 "agent_ids": [agents[0].id],
@@ -207,7 +259,9 @@ async fn test_export_query_basic() {
                 "format": "json"
             }
         }))
-        .send().await.unwrap();
+        .send()
+        .await
+        .unwrap();
     assert_eq!(resp.status(), StatusCode::OK);
 
     let body: serde_json::Value = resp.json().await.unwrap();
@@ -219,13 +273,16 @@ async fn test_export_query_missing_tick_range() {
     let base = start_server().await;
     let client = Client::new();
 
-    let resp = client.post(format!("{}/api/v1/export/query", base))
+    let resp = client
+        .post(format!("{}/api/v1/export/query", base))
         .json(&serde_json::json!({
             "filters": {
                 "format": "json"
             }
         }))
-        .send().await.unwrap();
+        .send()
+        .await
+        .unwrap();
     assert_eq!(resp.status(), StatusCode::BAD_REQUEST);
 }
 
@@ -235,7 +292,8 @@ async fn test_export_query_with_event_types() {
     let client = Client::new();
     let agents = seed_agents(&base).await;
 
-    let resp = client.post(format!("{}/api/v1/export/query", base))
+    let resp = client
+        .post(format!("{}/api/v1/export/query", base))
         .json(&serde_json::json!({
             "filters": {
                 "agent_ids": [agents[0].id, agents[1].id],
@@ -244,7 +302,9 @@ async fn test_export_query_with_event_types() {
                 "format": "json"
             }
         }))
-        .send().await.unwrap();
+        .send()
+        .await
+        .unwrap();
     assert_eq!(resp.status(), StatusCode::OK);
 }
 
@@ -254,7 +314,8 @@ async fn test_export_query_csv_format() {
     let client = Client::new();
     let agents = seed_agents(&base).await;
 
-    let resp = client.post(format!("{}/api/v1/export/query", base))
+    let resp = client
+        .post(format!("{}/api/v1/export/query", base))
         .json(&serde_json::json!({
             "filters": {
                 "agent_ids": [agents[0].id],
@@ -262,7 +323,9 @@ async fn test_export_query_csv_format() {
                 "format": "csv"
             }
         }))
-        .send().await.unwrap();
+        .send()
+        .await
+        .unwrap();
     assert_eq!(resp.status(), StatusCode::OK);
 }
 
@@ -272,13 +335,16 @@ async fn test_export_query_all_agents_no_filter() {
     let client = Client::new();
     let _ = seed_agents(&base).await;
 
-    let resp = client.post(format!("{}/api/v1/export/query", base))
+    let resp = client
+        .post(format!("{}/api/v1/export/query", base))
         .json(&serde_json::json!({
             "filters": {
                 "tick_range": [0, 10],
                 "format": "json"
             }
         }))
-        .send().await.unwrap();
+        .send()
+        .await
+        .unwrap();
     assert_eq!(resp.status(), StatusCode::OK);
 }

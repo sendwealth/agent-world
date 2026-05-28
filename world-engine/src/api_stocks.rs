@@ -1,16 +1,15 @@
 use axum::{
-    Json,
     extract::{Path, Query, State},
     http::StatusCode,
     response::IntoResponse,
     routing::*,
+    Json,
 };
 use serde::{Deserialize, Serialize};
 
 use crate::api::{AppState, ErrorResponse};
 use crate::economy::stock_market::{
-    StockMarket, StockListing, Order as StockOrder,
-    OrderType, OrderKind, ListingStatus,
+    ListingStatus, Order as StockOrder, OrderKind, OrderType, StockListing,
 };
 
 #[derive(Debug, Deserialize)]
@@ -124,7 +123,9 @@ impl From<&StockOrder> for OrderResponse {
             filled_quantity: o.filled_quantity,
             status: match o.status {
                 crate::economy::stock_market::OrderStatus::Open => "open".to_string(),
-                crate::economy::stock_market::OrderStatus::PartiallyFilled => "partially_filled".to_string(),
+                crate::economy::stock_market::OrderStatus::PartiallyFilled => {
+                    "partially_filled".to_string()
+                }
                 crate::economy::stock_market::OrderStatus::Filled => "filled".to_string(),
                 crate::economy::stock_market::OrderStatus::Cancelled => "cancelled".to_string(),
             },
@@ -158,16 +159,26 @@ pub fn stock_error_status(e: &crate::economy::stock_market::StockMarketError) ->
     }
 }
 
-pub async fn list_stocks(
-    State(state): State<AppState>,
-) -> impl IntoResponse {
+pub async fn list_stocks(State(state): State<AppState>) -> impl IntoResponse {
     let sm = match &state.stock_market {
         Some(s) => s.clone(),
-        None => return (StatusCode::SERVICE_UNAVAILABLE, Json(ErrorResponse { error: "stock market not configured".into() })).into_response(),
+        None => {
+            return (
+                StatusCode::SERVICE_UNAVAILABLE,
+                Json(ErrorResponse {
+                    error: "stock market not configured".into(),
+                }),
+            )
+                .into_response()
+        }
     };
 
     let sm = sm.lock().await;
-    let stocks: Vec<StockResponse> = sm.list_stocks().into_iter().map(StockResponse::from).collect();
+    let stocks: Vec<StockResponse> = sm
+        .list_stocks()
+        .into_iter()
+        .map(StockResponse::from)
+        .collect();
     Json(stocks).into_response()
 }
 
@@ -177,30 +188,61 @@ pub async fn issue_shares(
 ) -> impl IntoResponse {
     let sm = match &state.stock_market {
         Some(s) => s.clone(),
-        None => return (StatusCode::SERVICE_UNAVAILABLE, Json(ErrorResponse { error: "stock market not configured".into() })).into_response(),
+        None => {
+            return (
+                StatusCode::SERVICE_UNAVAILABLE,
+                Json(ErrorResponse {
+                    error: "stock market not configured".into(),
+                }),
+            )
+                .into_response()
+        }
     };
 
     let tick = *state.tick_rx.borrow();
     let mut sm = sm.lock().await;
-    match sm.issue_shares(body.org_id, body.ticker, body.total_shares, body.price, tick) {
+    match sm.issue_shares(
+        body.org_id,
+        body.ticker,
+        body.total_shares,
+        body.price,
+        tick,
+    ) {
         Ok(stock) => (StatusCode::CREATED, Json(StockResponse::from(&stock))).into_response(),
-        Err(e) => (stock_error_status(&e), Json(ErrorResponse { error: e.to_string() })).into_response(),
+        Err(e) => (
+            stock_error_status(&e),
+            Json(ErrorResponse {
+                error: e.to_string(),
+            }),
+        )
+            .into_response(),
     }
 }
 
-pub async fn get_stock(
-    State(state): State<AppState>,
-    Path(id): Path<String>,
-) -> impl IntoResponse {
+pub async fn get_stock(State(state): State<AppState>, Path(id): Path<String>) -> impl IntoResponse {
     let sm = match &state.stock_market {
         Some(s) => s.clone(),
-        None => return (StatusCode::SERVICE_UNAVAILABLE, Json(ErrorResponse { error: "stock market not configured".into() })).into_response(),
+        None => {
+            return (
+                StatusCode::SERVICE_UNAVAILABLE,
+                Json(ErrorResponse {
+                    error: "stock market not configured".into(),
+                }),
+            )
+                .into_response()
+        }
     };
 
     let sm = sm.lock().await;
     match sm.get_stock(&id) {
         Some(stock) => Json(StockResponse::from(stock)).into_response(),
-        None => (StatusCode::NOT_FOUND, Json(ErrorResponse { error: "stock not found".into() })).into_response(),
+        None => (
+            StatusCode::NOT_FOUND,
+            Json(ErrorResponse {
+                error: "stock not found".into(),
+            }),
+        )
+            .into_response(),
     }
 }
 
@@ -211,14 +253,28 @@ pub async fn ipo_stock(
 ) -> impl IntoResponse {
     let sm = match &state.stock_market {
         Some(s) => s.clone(),
-        None => return (StatusCode::SERVICE_UNAVAILABLE, Json(ErrorResponse { error: "stock market not configured".into() })).into_response(),
+        None => {
+            return (
+                StatusCode::SERVICE_UNAVAILABLE,
+                Json(ErrorResponse {
+                    error: "stock market not configured".into(),
+                }),
+            )
+                .into_response()
+        }
     };
 
     let tick = *state.tick_rx.borrow();
     let mut sm = sm.lock().await;
     match sm.ipo(&id, body.org_member_count, body.org_treasury, tick) {
         Ok(stock) => Json(StockResponse::from(&stock)).into_response(),
-        Err(e) => (stock_error_status(&e), Json(ErrorResponse { error: e.to_string() })).into_response(),
+        Err(e) => (
+            stock_error_status(&e),
+            Json(ErrorResponse {
+                error: e.to_string(),
+            }),
+        )
+            .into_response(),
     }
 }
 
@@ -228,20 +284,50 @@ pub async fn place_buy_order(
 ) -> impl IntoResponse {
     let sm = match &state.stock_market {
         Some(s) => s.clone(),
-        None => return (StatusCode::SERVICE_UNAVAILABLE, Json(ErrorResponse { error: "stock market not configured".into() })).into_response(),
+        None => {
+            return (
+                StatusCode::SERVICE_UNAVAILABLE,
+                Json(ErrorResponse {
+                    error: "stock market not configured".into(),
+                }),
+            )
+                .into_response()
+        }
     };
 
     let order_kind = match body.order_kind.as_str() {
         "limit" => OrderKind::Limit,
         "market" => OrderKind::Market,
-        other => return (StatusCode::BAD_REQUEST, Json(ErrorResponse { error: format!("unknown order kind: {}", other) })).into_response(),
+        other => {
+            return (
+                StatusCode::BAD_REQUEST,
+                Json(ErrorResponse {
+                    error: format!("unknown order kind: {}", other),
+                }),
+            )
+                .into_response()
+        }
     };
 
     let tick = *state.tick_rx.borrow();
     let mut sm = sm.lock().await;
-    match sm.place_buy_order(&body.stock_id, &body.agent_id, order_kind, body.price, body.quantity, body.agent_funds, tick) {
+    match sm.place_buy_order(
+        &body.stock_id,
+        &body.agent_id,
+        order_kind,
+        body.price,
+        body.quantity,
+        body.agent_funds,
+        tick,
+    ) {
         Ok(order) => (StatusCode::CREATED, Json(OrderResponse::from(&order))).into_response(),
-        Err(e) => (stock_error_status(&e), Json(ErrorResponse { error: e.to_string() })).into_response(),
+        Err(e) => (
+            stock_error_status(&e),
+            Json(ErrorResponse {
+                error: e.to_string(),
+            }),
+        )
+            .into_response(),
     }
 }
 
@@ -251,20 +337,49 @@ pub async fn place_sell_order(
 ) -> impl IntoResponse {
     let sm = match &state.stock_market {
         Some(s) => s.clone(),
-        None => return (StatusCode::SERVICE_UNAVAILABLE, Json(ErrorResponse { error: "stock market not configured".into() })).into_response(),
+        None => {
+            return (
+                StatusCode::SERVICE_UNAVAILABLE,
+                Json(ErrorResponse {
+                    error: "stock market not configured".into(),
+                }),
+            )
+                .into_response()
+        }
     };
 
     let order_kind = match body.order_kind.as_str() {
         "limit" => OrderKind::Limit,
         "market" => OrderKind::Market,
-        other => return (StatusCode::BAD_REQUEST, Json(ErrorResponse { error: format!("unknown order kind: {}", other) })).into_response(),
+        other => {
+            return (
+                StatusCode::BAD_REQUEST,
+                Json(ErrorResponse {
+                    error: format!("unknown order kind: {}", other),
+                }),
+            )
+                .into_response()
+        }
     };
 
     let tick = *state.tick_rx.borrow();
     let mut sm = sm.lock().await;
-    match sm.place_sell_order(&body.stock_id, &body.agent_id, order_kind, body.price, body.quantity, tick) {
+    match sm.place_sell_order(
+        &body.stock_id,
+        &body.agent_id,
+        order_kind,
+        body.price,
+        body.quantity,
+        tick,
+    ) {
         Ok(order) => (StatusCode::CREATED, Json(OrderResponse::from(&order))).into_response(),
-        Err(e) => (stock_error_status(&e), Json(ErrorResponse { error: e.to_string() })).into_response(),
+        Err(e) => (
+            stock_error_status(&e),
+            Json(ErrorResponse {
+                error: e.to_string(),
+            }),
+        )
+            .into_response(),
     }
 }
 
@@ -274,30 +389,50 @@ pub async fn list_stock_orders(
 ) -> impl IntoResponse {
     let sm = match &state.stock_market {
         Some(s) => s.clone(),
-        None => return (StatusCode::SERVICE_UNAVAILABLE, Json(ErrorResponse { error: "stock market not configured".into() })).into_response(),
+        None => {
+            return (
+                StatusCode::SERVICE_UNAVAILABLE,
+                Json(ErrorResponse {
+                    error: "stock market not configured".into(),
+                }),
+            )
+                .into_response()
+        }
     };
 
     let sm = sm.lock().await;
-    let orders: Vec<OrderResponse> = sm.list_orders(query.stock_id.as_deref(), query.agent_id.as_deref())
+    let orders: Vec<OrderResponse> = sm
+        .list_orders(query.stock_id.as_deref(), query.agent_id.as_deref())
         .into_iter()
         .map(OrderResponse::from)
         .collect();
     Json(orders).into_response()
 }
 
-pub async fn get_order(
-    State(state): State<AppState>,
-    Path(id): Path<String>,
-) -> impl IntoResponse {
+pub async fn get_order(State(state): State<AppState>, Path(id): Path<String>) -> impl IntoResponse {
     let sm = match &state.stock_market {
         Some(s) => s.clone(),
-        None => return (StatusCode::SERVICE_UNAVAILABLE, Json(ErrorResponse { error: "stock market not configured".into() })).into_response(),
+        None => {
+            return (
+                StatusCode::SERVICE_UNAVAILABLE,
+                Json(ErrorResponse {
+                    error: "stock market not configured".into(),
+                }),
+            )
+                .into_response()
+        }
     };
 
     let sm = sm.lock().await;
     match sm.get_order(&id) {
         Some(order) => Json(OrderResponse::from(order)).into_response(),
-        None => (StatusCode::NOT_FOUND, Json(ErrorResponse { error: "order not found".into() })).into_response(),
+        None => (
+            StatusCode::NOT_FOUND,
+            Json(ErrorResponse {
+                error: "order not found".into(),
+            }),
+        )
+            .into_response(),
     }
 }
 
@@ -308,13 +443,27 @@ pub async fn cancel_order(
 ) -> impl IntoResponse {
     let sm = match &state.stock_market {
         Some(s) => s.clone(),
-        None => return (StatusCode::SERVICE_UNAVAILABLE, Json(ErrorResponse { error: "stock market not configured".into() })).into_response(),
+        None => {
+            return (
+                StatusCode::SERVICE_UNAVAILABLE,
+                Json(ErrorResponse {
+                    error: "stock market not configured".into(),
+                }),
+            )
+                .into_response()
+        }
     };
 
     let mut sm = sm.lock().await;
     match sm.cancel_order(&id, &body.agent_id) {
         Ok(order) => Json(OrderResponse::from(&order)).into_response(),
-        Err(e) => (stock_error_status(&e), Json(ErrorResponse { error: e.to_string() })).into_response(),
+        Err(e) => (
+            stock_error_status(&e),
+            Json(ErrorResponse {
+                error: e.to_string(),
+            }),
+        )
+            .into_response(),
     }
 }
 
@@ -325,14 +474,28 @@ pub async fn distribute_dividend(
 ) -> impl IntoResponse {
     let sm = match &state.stock_market {
         Some(s) => s.clone(),
-        None => return (StatusCode::SERVICE_UNAVAILABLE, Json(ErrorResponse { error: "stock market not configured".into() })).into_response(),
+        None => {
+            return (
+                StatusCode::SERVICE_UNAVAILABLE,
+                Json(ErrorResponse {
+                    error: "stock market not configured".into(),
+                }),
+            )
+                .into_response()
+        }
     };
 
     let tick = *state.tick_rx.borrow();
     let mut sm = sm.lock().await;
     match sm.distribute_dividends(&id, body.total_profit, tick) {
         Ok(record) => (StatusCode::CREATED, Json(&record)).into_response(),
-        Err(e) => (stock_error_status(&e), Json(ErrorResponse { error: e.to_string() })).into_response(),
+        Err(e) => (
+            stock_error_status(&e),
+            Json(ErrorResponse {
+                error: e.to_string(),
+            }),
+        )
+            .into_response(),
     }
 }
 

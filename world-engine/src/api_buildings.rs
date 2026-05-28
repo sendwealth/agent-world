@@ -1,24 +1,26 @@
 use std::collections::HashMap;
-use std::sync::Arc;
 
 use axum::{
-    Json,
     extract::{Path, Query, State},
     http::StatusCode,
     response::IntoResponse,
     routing::*,
+    Json,
 };
-use serde::{Deserialize, Serialize};
+use serde::Deserialize;
 
 use crate::api::{AppState, ErrorResponse};
 use crate::world::event::WorldEvent;
-use crate::world::map::building::BuildingManager;
 
-pub fn default_owner_type() -> String { "personal".to_string() }
-pub fn default_health_restore() -> u32 { 50 }
+pub fn default_owner_type() -> String {
+    "personal".to_string()
+}
+pub fn default_health_restore() -> u32 {
+    50
+}
 
 #[derive(Debug, Deserialize)]
-struct BuildRequest {
+pub struct BuildRequest {
     building_type: String,
     #[serde(default)]
     x: i32,
@@ -39,7 +41,15 @@ pub async fn build_building(
         "workshop" => crate::world::map::building::BuildingType::Workshop,
         "defense_tower" => crate::world::map::building::BuildingType::DefenseTower,
         "housing" => crate::world::map::building::BuildingType::Housing,
-        _ => return (StatusCode::BAD_REQUEST, Json(ErrorResponse { error: format!("unknown building_type '{}'", body.building_type) })).into_response(),
+        _ => {
+            return (
+                StatusCode::BAD_REQUEST,
+                Json(ErrorResponse {
+                    error: format!("unknown building_type '{}'", body.building_type),
+                }),
+            )
+                .into_response()
+        }
     };
 
     let owner_type = match body.owner_type.as_str() {
@@ -53,21 +63,48 @@ pub async fn build_building(
         let mut external = state.external_agents.lock().await;
         if let Some(agent) = external.get_mut(&agent_id) {
             if !agent.alive {
-                return (StatusCode::GONE, Json(ErrorResponse { error: "agent is dead".into() })).into_response();
+                return (
+                    StatusCode::GONE,
+                    Json(ErrorResponse {
+                        error: "agent is dead".into(),
+                    }),
+                )
+                    .into_response();
             }
             let cost = crate::world::map::building::BuildingCost::for_type(building_type);
             if agent.tokens < cost.tokens {
-                return (StatusCode::PAYMENT_REQUIRED, Json(ErrorResponse { error: format!("insufficient tokens: need {}, have {}", cost.tokens, agent.tokens) })).into_response();
+                return (
+                    StatusCode::PAYMENT_REQUIRED,
+                    Json(ErrorResponse {
+                        error: format!(
+                            "insufficient tokens: need {}, have {}",
+                            cost.tokens, agent.tokens
+                        ),
+                    }),
+                )
+                    .into_response();
             }
             agent.tokens -= cost.tokens;
         } else {
-            return (StatusCode::NOT_FOUND, Json(ErrorResponse { error: "agent not found".into() })).into_response();
+            return (
+                StatusCode::NOT_FOUND,
+                Json(ErrorResponse {
+                    error: "agent not found".into(),
+                }),
+            )
+                .into_response();
         }
     }
 
     let tick = *state.tick_rx.borrow();
     let mut mgr = state.building_manager.lock().await;
-    match mgr.construct(building_type, (body.x, body.y), owner_type, agent_id.clone(), tick) {
+    match mgr.construct(
+        building_type,
+        (body.x, body.y),
+        owner_type,
+        agent_id.clone(),
+        tick,
+    ) {
         Ok(building) => {
             state.event_bus.emit(WorldEvent::BuildingConstructed {
                 building_id: building.id.clone(),
@@ -75,7 +112,11 @@ pub async fn build_building(
                 owner_id: agent_id,
                 position: (body.x, body.y),
             });
-            (StatusCode::CREATED, Json(serde_json::to_value(&building).unwrap())).into_response()
+            (
+                StatusCode::CREATED,
+                Json(serde_json::to_value(&building).unwrap()),
+            )
+                .into_response()
         }
         Err(e) => (StatusCode::CONFLICT, Json(ErrorResponse { error: e })).into_response(),
     }
@@ -110,12 +151,18 @@ pub async fn get_building(
     let mgr = state.building_manager.lock().await;
     match mgr.get(&id) {
         Some(b) => (StatusCode::OK, Json(serde_json::to_value(b).unwrap())).into_response(),
-        None => (StatusCode::NOT_FOUND, Json(ErrorResponse { error: "building not found".into() })).into_response(),
+        None => (
+            StatusCode::NOT_FOUND,
+            Json(ErrorResponse {
+                error: "building not found".into(),
+            }),
+        )
+            .into_response(),
     }
 }
 
 #[derive(Debug, Deserialize)]
-struct MaintainRequest {
+pub struct MaintainRequest {
     #[serde(default = "default_health_restore")]
     health_restore: u32,
 }
@@ -133,7 +180,11 @@ pub async fn maintain_building(
                 health_restored: body.health_restore,
                 new_health: building.health,
             });
-            (StatusCode::OK, Json(serde_json::to_value(&building).unwrap())).into_response()
+            (
+                StatusCode::OK,
+                Json(serde_json::to_value(&building).unwrap()),
+            )
+                .into_response()
         }
         Err(e) => (StatusCode::BAD_REQUEST, Json(ErrorResponse { error: e })).into_response(),
     }
@@ -151,7 +202,11 @@ pub async fn demolish_building(
                 building_id: id,
                 owner_id,
             });
-            (StatusCode::OK, Json(serde_json::to_value(&building).unwrap())).into_response()
+            (
+                StatusCode::OK,
+                Json(serde_json::to_value(&building).unwrap()),
+            )
+                .into_response()
         }
         Err(e) => (StatusCode::BAD_REQUEST, Json(ErrorResponse { error: e })).into_response(),
     }

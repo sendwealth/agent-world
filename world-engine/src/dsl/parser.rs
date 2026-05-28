@@ -27,18 +27,15 @@
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 
-use crate::organization::rule_engine::{
-    RuleCondition, RuleEffect, RuleType,
-};
+use crate::organization::rule_engine::{RuleCondition, RuleEffect, RuleType};
 
 // ── Constants ──────────────────────────────────────────────
 
 /// Built-in rule IDs that DSL rules may not override.
 const RESERVED_IDS: &[&str] = &[
-    "R001", "R002", "R003", "R004", "R005", "R006", "R007", "R008", "R009",
-    "R010", "R011", "R012", "R013", "R014", "R015", "R016", "R017", "R018", "R019",
-    "R020", "R021", "R022", "R023", "R024", "R025", "R026", "R027", "R028", "R029",
-    "R030", "R031",
+    "R001", "R002", "R003", "R004", "R005", "R006", "R007", "R008", "R009", "R010", "R011", "R012",
+    "R013", "R014", "R015", "R016", "R017", "R018", "R019", "R020", "R021", "R022", "R023", "R024",
+    "R025", "R026", "R027", "R028", "R029", "R030", "R031",
 ];
 
 const VALID_TRIGGER_EVENTS: &[&str] = &[
@@ -67,23 +64,37 @@ const VALID_TRIGGER_EVENTS: &[&str] = &[
 ];
 
 const VALID_OPERATORS: &[&str] = &[
-    "==", "!=", ">", "<", ">=", "<=",
-    "contains", "not_contains", "in", "not_in",
+    "==",
+    "!=",
+    ">",
+    "<",
+    ">=",
+    "<=",
+    "contains",
+    "not_contains",
+    "in",
+    "not_in",
 ];
 
 const VALID_ACTION_TYPES: &[&str] = &[
-    "tax", "penalty", "reward", "block",
-    "modify_resource", "set_field", "send_message", "log_event",
-    "transfer", "notify", "restrict", "set", "custom",
+    "tax",
+    "penalty",
+    "reward",
+    "block",
+    "modify_resource",
+    "set_field",
+    "send_message",
+    "log_event",
+    "transfer",
+    "notify",
+    "restrict",
+    "set",
+    "custom",
 ];
 
-const VALID_SCOPES: &[&str] = &[
-    "global", "organization", "region", "agent",
-];
+const VALID_SCOPES: &[&str] = &["global", "organization", "region", "agent"];
 
-const VALID_CATEGORIES: &[&str] = &[
-    "tax", "behavior", "trade", "diplomacy", "custom",
-];
+const VALID_CATEGORIES: &[&str] = &["tax", "behavior", "trade", "diplomacy", "custom"];
 
 // ── DSL Types ──────────────────────────────────────────────
 
@@ -158,9 +169,15 @@ pub struct DslRule {
     pub cooldown_ticks: Option<u64>,
 }
 
-fn default_scope() -> RuleScope { RuleScope::Global }
-fn default_priority() -> u32 { 50 }
-fn default_category() -> String { "custom".to_string() }
+fn default_scope() -> RuleScope {
+    RuleScope::Global
+}
+fn default_priority() -> u32 {
+    50
+}
+fn default_category() -> String {
+    "custom".to_string()
+}
 
 /// Wrapper for YAML input that may have a top-level `rule:` key.
 #[derive(Debug, Deserialize)]
@@ -275,7 +292,9 @@ fn validate_and_build(rule: DslRule) -> ParseResult {
     }
 
     // Trigger event whitelist
-    if !rule.trigger.event.is_empty() && !VALID_TRIGGER_EVENTS.contains(&rule.trigger.event.as_str()) {
+    if !rule.trigger.event.is_empty()
+        && !VALID_TRIGGER_EVENTS.contains(&rule.trigger.event.as_str())
+    {
         errors.push(format!(
             "Invalid trigger event '{}'. Valid: {}",
             rule.trigger.event,
@@ -315,7 +334,9 @@ fn validate_and_build(rule: DslRule) -> ParseResult {
         if !VALID_OPERATORS.contains(&cond.operator.as_str()) {
             errors.push(format!(
                 "conditions[{}] has invalid operator '{}'. Valid: {}",
-                i, cond.operator, VALID_OPERATORS.join(", ")
+                i,
+                cond.operator,
+                VALID_OPERATORS.join(", ")
             ));
         }
         // `in` / `not_in` operators require array value
@@ -332,7 +353,9 @@ fn validate_and_build(rule: DslRule) -> ParseResult {
         if !VALID_ACTION_TYPES.contains(&action.action_type.as_str()) {
             errors.push(format!(
                 "actions[{}] has invalid type '{}'. Valid: {}",
-                i, action.action_type, VALID_ACTION_TYPES.join(", ")
+                i,
+                action.action_type,
+                VALID_ACTION_TYPES.join(", ")
             ));
         }
         // Per-action parameter validation
@@ -374,29 +397,42 @@ fn validate_action_params(
                     ));
                 }
             } else if params.get("rate").is_none() {
-                warnings.push(format!("actions[{}]: tax rule has no 'rate' parameter", index));
+                warnings.push(format!(
+                    "actions[{}]: tax rule has no 'rate' parameter",
+                    index
+                ));
             }
             if params.get("target").is_none() {
-                warnings.push(format!("actions[{}]: tax rule has no 'target' parameter", index));
+                warnings.push(format!(
+                    "actions[{}]: tax rule has no 'target' parameter",
+                    index
+                ));
             }
         }
-        "penalty" | "reward"
-            if params.get("amount").is_none() =>
-        {
-                warnings.push(format!(
-                    "actions[{}]: {} has no 'amount' parameter",
-                    index, action.action_type
-                ));
+        "penalty" | "reward" if params.get("amount").is_none() => {
+            warnings.push(format!(
+                "actions[{}]: {} has no 'amount' parameter",
+                index, action.action_type
+            ));
         }
         "transfer" => {
             if params.get("amount").is_none() {
-                warnings.push(format!("actions[{}]: transfer has no 'amount' parameter", index));
+                warnings.push(format!(
+                    "actions[{}]: transfer has no 'amount' parameter",
+                    index
+                ));
             }
             if params.get("from").is_none() {
-                warnings.push(format!("actions[{}]: transfer has no 'from' parameter", index));
+                warnings.push(format!(
+                    "actions[{}]: transfer has no 'from' parameter",
+                    index
+                ));
             }
             if params.get("to").is_none() {
-                warnings.push(format!("actions[{}]: transfer has no 'to' parameter", index));
+                warnings.push(format!(
+                    "actions[{}]: transfer has no 'to' parameter",
+                    index
+                ));
             }
         }
         _ => {}
@@ -422,7 +458,9 @@ pub fn to_rule_effects(dsl_actions: &[DslAction]) -> Vec<RuleEffect> {
     dsl_actions
         .iter()
         .map(|a| {
-            let target = a.params.get("target")
+            let target = a
+                .params
+                .get("target")
                 .and_then(|v| v.as_str())
                 .unwrap_or("agent")
                 .to_string();
@@ -433,7 +471,10 @@ pub fn to_rule_effects(dsl_actions: &[DslAction]) -> Vec<RuleEffect> {
                 "block" => "block_action".to_string(),
                 _ => a.action_type.clone(),
             };
-            let value = a.params.get("value").cloned()
+            let value = a
+                .params
+                .get("value")
+                .cloned()
                 .or_else(|| a.params.get("amount").cloned())
                 .or_else(|| a.params.get("rate").cloned())
                 .unwrap_or(Value::Null);
@@ -493,7 +534,8 @@ pub fn builtin_templates() -> Vec<RuleTemplate> {
       params:
         rate: 0.05
         target: seller
-"#.to_string(),
+"#
+            .to_string(),
         },
         RuleTemplate {
             name: "warfare_law".to_string(),
@@ -514,7 +556,8 @@ pub fn builtin_templates() -> Vec<RuleTemplate> {
   actions:
     - type: block
       params: {}
-"#.to_string(),
+"#
+            .to_string(),
         },
         RuleTemplate {
             name: "resource_protection".to_string(),
@@ -536,7 +579,8 @@ pub fn builtin_templates() -> Vec<RuleTemplate> {
     - type: penalty
       params:
         amount: 10
-"#.to_string(),
+"#
+            .to_string(),
         },
         RuleTemplate {
             name: "newbie_protection".to_string(),
@@ -558,7 +602,8 @@ pub fn builtin_templates() -> Vec<RuleTemplate> {
     - type: reward
       params:
         amount: 5
-"#.to_string(),
+"#
+            .to_string(),
         },
         RuleTemplate {
             name: "anti_monopoly".to_string(),
@@ -581,11 +626,13 @@ pub fn builtin_templates() -> Vec<RuleTemplate> {
       params:
         rate: 0.1
         target: agent
-"#.to_string(),
+"#
+            .to_string(),
         },
         RuleTemplate {
             name: "diplomatic_sanction".to_string(),
-            description: "Diplomatic sanction: block interactions with sanctioned organizations".to_string(),
+            description: "Diplomatic sanction: block interactions with sanctioned organizations"
+                .to_string(),
             category: "diplomacy".to_string(),
             yaml: r#"rule:
   id: R-DIPLO-SANCTION
@@ -603,7 +650,8 @@ pub fn builtin_templates() -> Vec<RuleTemplate> {
   actions:
     - type: block
       params: {}
-"#.to_string(),
+"#
+            .to_string(),
         },
         RuleTemplate {
             name: "communication_filter".to_string(),
@@ -624,7 +672,8 @@ pub fn builtin_templates() -> Vec<RuleTemplate> {
   actions:
     - type: block
       params: {}
-"#.to_string(),
+"#
+            .to_string(),
         },
     ]
 }
@@ -674,7 +723,11 @@ rule:
         target: seller
 "#;
         let result = parse_yaml(yaml);
-        assert!(result.valid, "Expected valid, got errors: {:?}", result.errors);
+        assert!(
+            result.valid,
+            "Expected valid, got errors: {:?}",
+            result.errors
+        );
         let rule = result.rule.unwrap();
         assert_eq!(rule.id, "R-CUSTOM-001");
         assert_eq!(rule.name, "Test Rule");
@@ -695,7 +748,11 @@ actions:
     params: {}
 "#;
         let result = parse_yaml(yaml);
-        assert!(result.valid, "Expected valid, got errors: {:?}", result.errors);
+        assert!(
+            result.valid,
+            "Expected valid, got errors: {:?}",
+            result.errors
+        );
         let rule = result.rule.unwrap();
         assert_eq!(rule.id, "R-CUSTOM-002");
     }
@@ -710,7 +767,11 @@ actions:
             "actions": [{"type": "penalty", "params": {"amount": 5}}]
         }}"#;
         let result = parse_json(json);
-        assert!(result.valid, "Expected valid, got errors: {:?}", result.errors);
+        assert!(
+            result.valid,
+            "Expected valid, got errors: {:?}",
+            result.errors
+        );
         let rule = result.rule.unwrap();
         assert_eq!(rule.id, "R-CUSTOM-003");
         assert_eq!(rule.trigger.event, "on_attack");
@@ -725,7 +786,11 @@ actions:
             "actions": [{"type": "log_event", "params": {}}]
         }"#;
         let result = parse_json(json);
-        assert!(result.valid, "Expected valid, got errors: {:?}", result.errors);
+        assert!(
+            result.valid,
+            "Expected valid, got errors: {:?}",
+            result.errors
+        );
     }
 
     #[test]
@@ -780,7 +845,10 @@ rule:
 "#;
         let result = parse_yaml(yaml);
         assert!(!result.valid);
-        assert!(result.errors.iter().any(|e| e.contains("rule.id is required")));
+        assert!(result
+            .errors
+            .iter()
+            .any(|e| e.contains("rule.id is required")));
     }
 
     #[test]
@@ -796,7 +864,10 @@ rule:
 "#;
         let result = parse_yaml(yaml);
         assert!(!result.valid);
-        assert!(result.errors.iter().any(|e| e.contains("rule.name is required")));
+        assert!(result
+            .errors
+            .iter()
+            .any(|e| e.contains("rule.name is required")));
     }
 
     #[test]
@@ -830,7 +901,10 @@ rule:
 "#;
         let result = parse_yaml(yaml);
         assert!(!result.valid);
-        assert!(result.errors.iter().any(|e| e.contains("Invalid trigger event")));
+        assert!(result
+            .errors
+            .iter()
+            .any(|e| e.contains("Invalid trigger event")));
     }
 
     #[test]
@@ -904,7 +978,10 @@ rule:
 "#;
         let result = parse_yaml(yaml);
         assert!(!result.valid);
-        assert!(result.errors.iter().any(|e| e.contains("tax.rate must be between 0.0 and 1.0")));
+        assert!(result
+            .errors
+            .iter()
+            .any(|e| e.contains("tax.rate must be between 0.0 and 1.0")));
     }
 
     #[test]
@@ -947,7 +1024,8 @@ rule:
     #[test]
     fn test_all_trigger_events_parse() {
         for event in VALID_TRIGGER_EVENTS {
-            let yaml = format!(r#"
+            let yaml = format!(
+                r#"
 rule:
   id: R-TRIGGER-TEST
   name: Trigger Test
@@ -956,9 +1034,15 @@ rule:
   actions:
     - type: log_event
       params: {{}}
-"#, event);
+"#,
+                event
+            );
             let result = parse_yaml(&yaml);
-            assert!(result.valid, "Trigger '{}' should be valid, errors: {:?}", event, result.errors);
+            assert!(
+                result.valid,
+                "Trigger '{}' should be valid, errors: {:?}",
+                event, result.errors
+            );
         }
     }
 
@@ -967,7 +1051,8 @@ rule:
     #[test]
     fn test_all_action_types_parse() {
         for action_type in VALID_ACTION_TYPES {
-            let yaml = format!(r#"
+            let yaml = format!(
+                r#"
 rule:
   id: R-ACTION-TEST
   name: Action Test
@@ -976,9 +1061,15 @@ rule:
   actions:
     - type: {}
       params: {{}}
-"#, action_type);
+"#,
+                action_type
+            );
             let result = parse_yaml(&yaml);
-            assert!(result.valid, "Action '{}' should be valid, errors: {:?}", action_type, result.errors);
+            assert!(
+                result.valid,
+                "Action '{}' should be valid, errors: {:?}",
+                action_type, result.errors
+            );
         }
     }
 
@@ -991,8 +1082,7 @@ rule:
             assert!(
                 result.valid,
                 "Template '{}' should validate, errors: {:?}",
-                template.name,
-                result.errors
+                template.name, result.errors
             );
         }
     }

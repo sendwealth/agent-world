@@ -1,11 +1,11 @@
 use axum::{
-    Json,
     extract::{Path, Query, State},
     http::StatusCode,
     response::IntoResponse,
     routing::*,
+    Json,
 };
-use serde::{Deserialize, Serialize};
+use serde::Deserialize;
 
 use crate::api::AppState;
 
@@ -142,16 +142,23 @@ pub async fn fed_register_world(
     let id = body.id.clone();
     match fed.register_world(body.id, body.name, body.endpoint, body.tick) {
         Ok(()) => {
-            let world = fed.list_worlds().into_iter().find(|w| w.id == id).unwrap().clone();
+            let world = fed
+                .list_worlds()
+                .into_iter()
+                .find(|w| w.id == id)
+                .unwrap()
+                .clone();
             (StatusCode::CREATED, Json(serde_json::json!(world))).into_response()
         }
-        Err(e) => (fed_error_to_status(&e), Json(serde_json::json!({"error": e.to_string()}))).into_response(),
+        Err(e) => (
+            fed_error_to_status(&e),
+            Json(serde_json::json!({"error": e.to_string()})),
+        )
+            .into_response(),
     }
 }
 
-pub async fn fed_list_worlds(
-    State(state): State<AppState>,
-) -> impl IntoResponse {
+pub async fn fed_list_worlds(State(state): State<AppState>) -> impl IntoResponse {
     let fed = require_federation!(state);
     let fed = fed.lock().await;
     let worlds: Vec<_> = fed.list_worlds().into_iter().cloned().collect();
@@ -166,7 +173,11 @@ pub async fn fed_get_world(
     let fed = fed.lock().await;
     match fed.get_world(&id) {
         Some(world) => (StatusCode::OK, Json(serde_json::json!(world))).into_response(),
-        None => (StatusCode::NOT_FOUND, Json(serde_json::json!({"error": "world not found"}))).into_response(),
+        None => (
+            StatusCode::NOT_FOUND,
+            Json(serde_json::json!({"error": "world not found"})),
+        )
+            .into_response(),
     }
 }
 
@@ -177,8 +188,16 @@ pub async fn fed_deregister_world(
     let fed = require_federation!(state);
     let mut fed = fed.lock().await;
     match fed.deregister_world(&id) {
-        Ok(()) => (StatusCode::OK, Json(serde_json::json!({"status": "deregistered"}))).into_response(),
-        Err(e) => (fed_error_to_status(&e), Json(serde_json::json!({"error": e.to_string()}))).into_response(),
+        Ok(()) => (
+            StatusCode::OK,
+            Json(serde_json::json!({"status": "deregistered"})),
+        )
+            .into_response(),
+        Err(e) => (
+            fed_error_to_status(&e),
+            Json(serde_json::json!({"error": e.to_string()})),
+        )
+            .into_response(),
     }
 }
 
@@ -193,7 +212,11 @@ pub async fn fed_establish_relations(
             let world = fed.get_world(&body.world_id).unwrap().clone();
             (StatusCode::OK, Json(serde_json::json!(world))).into_response()
         }
-        Err(e) => (fed_error_to_status(&e), Json(serde_json::json!({"error": e.to_string()}))).into_response(),
+        Err(e) => (
+            fed_error_to_status(&e),
+            Json(serde_json::json!({"error": e.to_string()})),
+        )
+            .into_response(),
     }
 }
 
@@ -204,8 +227,11 @@ pub async fn fed_list_treaties(
     let fed = require_federation!(state);
     let fed = fed.lock().await;
     let status_filter = query.status.as_deref().and_then(parse_treaty_status);
-    let treaties: Vec<_> = fed.list_treaties(query.world_id.as_deref(), status_filter)
-        .into_iter().cloned().collect();
+    let treaties: Vec<_> = fed
+        .list_treaties(query.world_id.as_deref(), status_filter)
+        .into_iter()
+        .cloned()
+        .collect();
     (StatusCode::OK, Json(serde_json::json!(treaties))).into_response()
 }
 
@@ -214,16 +240,30 @@ pub async fn fed_propose_treaty(
     Json(body): Json<FedProposeTreatyRequest>,
 ) -> impl IntoResponse {
     let Some(treaty_type) = parse_treaty_type(&body.treaty_type) else {
-        return (StatusCode::BAD_REQUEST, Json(serde_json::json!({"error": "invalid treaty_type"}))).into_response();
+        return (
+            StatusCode::BAD_REQUEST,
+            Json(serde_json::json!({"error": "invalid treaty_type"})),
+        )
+            .into_response();
     };
     let fed = require_federation!(state);
     let mut fed = fed.lock().await;
-    match fed.propose_treaty(&body.world_id, treaty_type, body.tick, body.duration_ticks, body.terms.clone()) {
+    match fed.propose_treaty(
+        &body.world_id,
+        treaty_type,
+        body.tick,
+        body.duration_ticks,
+        body.terms.clone(),
+    ) {
         Ok(id) => {
             let treaty = fed.get_treaty(&id).unwrap().clone();
             (StatusCode::CREATED, Json(serde_json::json!(treaty))).into_response()
         }
-        Err(e) => (fed_error_to_status(&e), Json(serde_json::json!({"error": e.to_string()}))).into_response(),
+        Err(e) => (
+            fed_error_to_status(&e),
+            Json(serde_json::json!({"error": e.to_string()})),
+        )
+            .into_response(),
     }
 }
 
@@ -235,7 +275,11 @@ pub async fn fed_get_treaty(
     let fed = fed.lock().await;
     match fed.get_treaty(&id) {
         Some(treaty) => (StatusCode::OK, Json(serde_json::json!(treaty))).into_response(),
-        None => (StatusCode::NOT_FOUND, Json(serde_json::json!({"error": "treaty not found"}))).into_response(),
+        None => (
+            StatusCode::NOT_FOUND,
+            Json(serde_json::json!({"error": "treaty not found"})),
+        )
+            .into_response(),
     }
 }
 
@@ -251,7 +295,11 @@ pub async fn fed_accept_treaty(
             let treaty = fed.get_treaty(&id).unwrap().clone();
             (StatusCode::OK, Json(serde_json::json!(treaty))).into_response()
         }
-        Err(e) => (fed_error_to_status(&e), Json(serde_json::json!({"error": e.to_string()}))).into_response(),
+        Err(e) => (
+            fed_error_to_status(&e),
+            Json(serde_json::json!({"error": e.to_string()})),
+        )
+            .into_response(),
     }
 }
 
@@ -267,7 +315,11 @@ pub async fn fed_reject_treaty(
             let treaty = fed.get_treaty(&id).unwrap().clone();
             (StatusCode::OK, Json(serde_json::json!(treaty))).into_response()
         }
-        Err(e) => (fed_error_to_status(&e), Json(serde_json::json!({"error": e.to_string()}))).into_response(),
+        Err(e) => (
+            fed_error_to_status(&e),
+            Json(serde_json::json!({"error": e.to_string()})),
+        )
+            .into_response(),
     }
 }
 
@@ -283,7 +335,11 @@ pub async fn fed_break_treaty(
             let treaty = fed.get_treaty(&id).unwrap().clone();
             (StatusCode::OK, Json(serde_json::json!(treaty))).into_response()
         }
-        Err(e) => (fed_error_to_status(&e), Json(serde_json::json!({"error": e.to_string()}))).into_response(),
+        Err(e) => (
+            fed_error_to_status(&e),
+            Json(serde_json::json!({"error": e.to_string()})),
+        )
+            .into_response(),
     }
 }
 
@@ -298,7 +354,11 @@ pub async fn fed_impose_sanctions(
             let world = fed.get_world(&body.world_id).unwrap().clone();
             (StatusCode::OK, Json(serde_json::json!(world))).into_response()
         }
-        Err(e) => (fed_error_to_status(&e), Json(serde_json::json!({"error": e.to_string()}))).into_response(),
+        Err(e) => (
+            fed_error_to_status(&e),
+            Json(serde_json::json!({"error": e.to_string()})),
+        )
+            .into_response(),
     }
 }
 
@@ -309,8 +369,16 @@ pub async fn fed_lift_sanctions(
     let fed = require_federation!(state);
     let mut fed = fed.lock().await;
     match fed.lift_sanctions(&id) {
-        Ok(status) => (StatusCode::OK, Json(serde_json::json!({"world_id": id, "diplomatic_status": status.to_string()}))).into_response(),
-        Err(e) => (fed_error_to_status(&e), Json(serde_json::json!({"error": e.to_string()}))).into_response(),
+        Ok(status) => (
+            StatusCode::OK,
+            Json(serde_json::json!({"world_id": id, "diplomatic_status": status.to_string()})),
+        )
+            .into_response(),
+        Err(e) => (
+            fed_error_to_status(&e),
+            Json(serde_json::json!({"error": e.to_string()})),
+        )
+            .into_response(),
     }
 }
 
@@ -325,7 +393,11 @@ pub async fn fed_sever_ties(
             let world = fed.get_world(&body.world_id).unwrap().clone();
             (StatusCode::OK, Json(serde_json::json!(world))).into_response()
         }
-        Err(e) => (fed_error_to_status(&e), Json(serde_json::json!({"error": e.to_string()}))).into_response(),
+        Err(e) => (
+            fed_error_to_status(&e),
+            Json(serde_json::json!({"error": e.to_string()})),
+        )
+            .into_response(),
     }
 }
 
@@ -340,7 +412,11 @@ pub async fn fed_declare_war(
             let world = fed.get_world(&body.world_id).unwrap().clone();
             (StatusCode::OK, Json(serde_json::json!(world))).into_response()
         }
-        Err(e) => (fed_error_to_status(&e), Json(serde_json::json!({"error": e.to_string()}))).into_response(),
+        Err(e) => (
+            fed_error_to_status(&e),
+            Json(serde_json::json!({"error": e.to_string()})),
+        )
+            .into_response(),
     }
 }
 
@@ -367,13 +443,15 @@ pub async fn fed_accept_peace(
             let world = fed.get_world(&id).unwrap().clone();
             (StatusCode::OK, Json(serde_json::json!(world))).into_response()
         }
-        Err(e) => (fed_error_to_status(&e), Json(serde_json::json!({"error": e.to_string()}))).into_response(),
+        Err(e) => (
+            fed_error_to_status(&e),
+            Json(serde_json::json!({"error": e.to_string()})),
+        )
+            .into_response(),
     }
 }
 
-pub async fn fed_summary(
-    State(state): State<AppState>,
-) -> impl IntoResponse {
+pub async fn fed_summary(State(state): State<AppState>) -> impl IntoResponse {
     let fed = require_federation!(state);
     let fed = fed.lock().await;
     let summary = fed.summary();
@@ -386,19 +464,40 @@ pub fn diplomacy_routes() -> axum::Router<AppState> {
         .route("/api/v1/federation/worlds", post(fed_register_world))
         .route("/api/v1/federation/worlds", get(fed_list_worlds))
         .route("/api/v1/federation/worlds/:id", get(fed_get_world))
-        .route("/api/v1/federation/worlds/:id", delete(fed_deregister_world))
-        .route("/api/v1/federation/establish-relations", post(fed_establish_relations))
+        .route(
+            "/api/v1/federation/worlds/:id",
+            delete(fed_deregister_world),
+        )
+        .route(
+            "/api/v1/federation/establish-relations",
+            post(fed_establish_relations),
+        )
         .route("/api/v1/federation/treaties", get(fed_list_treaties))
         .route("/api/v1/federation/treaties", post(fed_propose_treaty))
         .route("/api/v1/federation/treaties/:id", get(fed_get_treaty))
-        .route("/api/v1/federation/treaties/:id/accept", post(fed_accept_treaty))
-        .route("/api/v1/federation/treaties/:id/reject", post(fed_reject_treaty))
-        .route("/api/v1/federation/treaties/:id/break", post(fed_break_treaty))
+        .route(
+            "/api/v1/federation/treaties/:id/accept",
+            post(fed_accept_treaty),
+        )
+        .route(
+            "/api/v1/federation/treaties/:id/reject",
+            post(fed_reject_treaty),
+        )
+        .route(
+            "/api/v1/federation/treaties/:id/break",
+            post(fed_break_treaty),
+        )
         .route("/api/v1/federation/sanctions", post(fed_impose_sanctions))
-        .route("/api/v1/federation/sanctions/:id/lift", post(fed_lift_sanctions))
+        .route(
+            "/api/v1/federation/sanctions/:id/lift",
+            post(fed_lift_sanctions),
+        )
         .route("/api/v1/federation/sever-ties", post(fed_sever_ties))
         .route("/api/v1/federation/declare-war", post(fed_declare_war))
         .route("/api/v1/federation/propose-peace", post(fed_propose_peace))
-        .route("/api/v1/federation/accept-peace/:id", post(fed_accept_peace))
+        .route(
+            "/api/v1/federation/accept-peace/:id",
+            post(fed_accept_peace),
+        )
         .route("/api/v1/federation/summary", get(fed_summary))
 }

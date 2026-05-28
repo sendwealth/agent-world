@@ -5,8 +5,8 @@
 
 use std::sync::Arc;
 
-use crate::federation::registry::WorldRegistry;
 use crate::federation::migration::{MigrationManager, MigrationPolicy};
+use crate::federation::registry::WorldRegistry;
 
 /// Federation gRPC service combining WorldRegistry + Migration RPCs.
 #[derive(Clone)]

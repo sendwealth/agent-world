@@ -70,16 +70,36 @@ pub struct TrustConfig {
     pub interaction_interval: u64,
 }
 
-fn default_cooperation_gain() -> f64 { 0.1 }
-fn default_betrayal_loss() -> f64 { 0.3 }
-fn default_trade_gain() -> f64 { 0.05 }
-fn default_task_gain() -> f64 { 0.08 }
-fn default_gift_gain() -> f64 { 0.15 }
-fn default_attack_loss() -> f64 { 0.5 }
-fn default_decay_rate() -> f64 { 0.001 }
-fn default_min_trust() -> f64 { -1.0 }
-fn default_max_trust() -> f64 { 1.0 }
-fn default_interaction_interval() -> u64 { 50 }
+fn default_cooperation_gain() -> f64 {
+    0.1
+}
+fn default_betrayal_loss() -> f64 {
+    0.3
+}
+fn default_trade_gain() -> f64 {
+    0.05
+}
+fn default_task_gain() -> f64 {
+    0.08
+}
+fn default_gift_gain() -> f64 {
+    0.15
+}
+fn default_attack_loss() -> f64 {
+    0.5
+}
+fn default_decay_rate() -> f64 {
+    0.001
+}
+fn default_min_trust() -> f64 {
+    -1.0
+}
+fn default_max_trust() -> f64 {
+    1.0
+}
+fn default_interaction_interval() -> u64 {
+    50
+}
 
 impl Default for TrustConfig {
     fn default() -> Self {
@@ -151,8 +171,7 @@ impl TrustNetwork {
             last_interaction_tick: 0,
         });
 
-        let new_score = (old_score + delta)
-            .clamp(self.config.min_trust, self.config.max_trust);
+        let new_score = (old_score + delta).clamp(self.config.min_trust, self.config.max_trust);
 
         edge.score = new_score;
         edge.interaction_count += 1;

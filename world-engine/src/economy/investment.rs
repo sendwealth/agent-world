@@ -495,8 +495,8 @@ impl InvestmentSystem {
 
         // Check total issue limit
         let new_issued = product.issued_shares + req.shares;
-        let total_bps = (new_issued as u128 * BPS_DENOMINATOR as u128
-            / product.total_shares as u128) as u64;
+        let total_bps =
+            (new_issued as u128 * BPS_DENOMINATOR as u128 / product.total_shares as u128) as u64;
         if total_bps > self.config.max_total_share_bps {
             return Err(InvestmentError::TotalShareLimit(
                 total_bps,
@@ -642,10 +642,7 @@ impl InvestmentSystem {
         let investor_id = req.investor_id.clone();
 
         // Update issued shares
-        self.products
-            .get_mut(&product_id)
-            .unwrap()
-            .issued_shares -= req.shares;
+        self.products.get_mut(&product_id).unwrap().issued_shares -= req.shares;
 
         // Update position
         let position = self.positions.get_mut(&pos_id).unwrap();
@@ -913,14 +910,16 @@ mod tests {
     }
 
     fn make_product(system: &mut InvestmentSystem) -> InvestmentProduct {
-        system.create_product(CreateProductRequest {
-            target_id: "agent-1".to_string(),
-            target_name: "Agent One".to_string(),
-            entity_type: InvestmentEntityType::Agent,
-            total_shares: 10_000,
-            price_per_share: 100,
-            owner_id: "owner-1".to_string(),
-        }).unwrap()
+        system
+            .create_product(CreateProductRequest {
+                target_id: "agent-1".to_string(),
+                target_name: "Agent One".to_string(),
+                entity_type: InvestmentEntityType::Agent,
+                total_shares: 10_000,
+                price_per_share: 100,
+                owner_id: "owner-1".to_string(),
+            })
+            .unwrap()
     }
 
     #[test]
@@ -980,12 +979,14 @@ mod tests {
     fn buy_shares_success() {
         let mut sys = make_system();
         let p = make_product(&mut sys);
-        let (pos, tx) = sys.buy_shares(BuySharesRequest {
-            product_id: p.id.clone(),
-            investor_id: "investor-1".to_string(),
-            shares: 100,
-            idempotency_key: None,
-        }).unwrap();
+        let (pos, tx) = sys
+            .buy_shares(BuySharesRequest {
+                product_id: p.id.clone(),
+                investor_id: "investor-1".to_string(),
+                shares: 100,
+                idempotency_key: None,
+            })
+            .unwrap();
         assert_eq!(pos.shares, 100);
         assert_eq!(tx.total_amount, 10_000);
     }
@@ -1047,14 +1048,17 @@ mod tests {
             investor_id: "investor-1".to_string(),
             shares: 100,
             idempotency_key: None,
-        }).unwrap();
+        })
+        .unwrap();
 
-        let (pos, _tx) = sys.sell_shares(SellSharesRequest {
-            product_id: p.id.clone(),
-            investor_id: "investor-1".to_string(),
-            shares: 50,
-            idempotency_key: None,
-        }).unwrap();
+        let (pos, _tx) = sys
+            .sell_shares(SellSharesRequest {
+                product_id: p.id.clone(),
+                investor_id: "investor-1".to_string(),
+                shares: 50,
+                idempotency_key: None,
+            })
+            .unwrap();
         assert_eq!(pos.shares, 50);
         assert_eq!(pos.status, PositionStatus::Active);
     }
@@ -1068,7 +1072,8 @@ mod tests {
             investor_id: "investor-1".to_string(),
             shares: 50,
             idempotency_key: None,
-        }).unwrap();
+        })
+        .unwrap();
 
         let res = sys.sell_shares(SellSharesRequest {
             product_id: p.id.clone(),
@@ -1088,14 +1093,17 @@ mod tests {
             investor_id: "investor-1".to_string(),
             shares: 100,
             idempotency_key: None,
-        }).unwrap();
+        })
+        .unwrap();
 
-        let (pos, _) = sys.sell_shares(SellSharesRequest {
-            product_id: p.id.clone(),
-            investor_id: "investor-1".to_string(),
-            shares: 100,
-            idempotency_key: None,
-        }).unwrap();
+        let (pos, _) = sys
+            .sell_shares(SellSharesRequest {
+                product_id: p.id.clone(),
+                investor_id: "investor-1".to_string(),
+                shares: 100,
+                idempotency_key: None,
+            })
+            .unwrap();
         assert_eq!(pos.status, PositionStatus::Closed);
     }
 
@@ -1108,7 +1116,8 @@ mod tests {
             investor_id: "investor-1".to_string(),
             shares: 100,
             idempotency_key: None,
-        }).unwrap();
+        })
+        .unwrap();
 
         // Unauthorized: wrong requester
         let res = sys.close_investment(CloseInvestmentRequest {
@@ -1136,7 +1145,8 @@ mod tests {
             investor_id: "investor-1".to_string(),
             shares: 100,
             idempotency_key: None,
-        }).unwrap();
+        })
+        .unwrap();
 
         // Unauthorized: wrong distributor
         let res = sys.distribute_returns(DistributeReturnsRequest {
@@ -1198,7 +1208,8 @@ mod tests {
         sys.freeze_product(FreezeProductRequest {
             product_id: p.id.clone(),
             requester_id: "owner-1".to_string(),
-        }).unwrap();
+        })
+        .unwrap();
 
         let res = sys.buy_shares(BuySharesRequest {
             product_id: p.id.clone(),
@@ -1228,13 +1239,15 @@ mod tests {
             investor_id: "investor-1".to_string(),
             shares: 100,
             idempotency_key: None,
-        }).unwrap();
+        })
+        .unwrap();
         sys.sell_shares(SellSharesRequest {
             product_id: p.id.clone(),
             investor_id: "investor-1".to_string(),
             shares: 100,
             idempotency_key: None,
-        }).unwrap();
+        })
+        .unwrap();
 
         let portfolio = sys.get_portfolio("investor-1");
         assert!(portfolio.is_empty());
@@ -1249,13 +1262,15 @@ mod tests {
             investor_id: "investor-1".to_string(),
             shares: 500,
             idempotency_key: None,
-        }).unwrap();
+        })
+        .unwrap();
         sys.buy_shares(BuySharesRequest {
             product_id: p.id.clone(),
             investor_id: "investor-2".to_string(),
             shares: 100,
             idempotency_key: None,
-        }).unwrap();
+        })
+        .unwrap();
 
         let lb = sys.get_leaderboard();
         assert_eq!(lb[0].investor_id, "investor-1");
@@ -1271,13 +1286,15 @@ mod tests {
             investor_id: "investor-1".to_string(),
             shares: 100,
             idempotency_key: None,
-        }).unwrap();
+        })
+        .unwrap();
         sys.sell_shares(SellSharesRequest {
             product_id: p.id.clone(),
             investor_id: "investor-1".to_string(),
             shares: 50,
             idempotency_key: None,
-        }).unwrap();
+        })
+        .unwrap();
 
         let all = sys.list_transactions(&ListTransactionsQuery::default());
         assert_eq!(all.len(), 2);
@@ -1305,18 +1322,21 @@ mod tests {
             investor_id: "investor-1".to_string(),
             shares: 100,
             idempotency_key: None,
-        }).unwrap();
+        })
+        .unwrap();
         // Update price
         sys.update_performance(&p.id, 8.0).unwrap();
         let updated_price = sys.get_product(&p.id).unwrap().price_per_share;
 
         // Buy more at new price
-        let (pos, _) = sys.buy_shares(BuySharesRequest {
-            product_id: p.id.clone(),
-            investor_id: "investor-1".to_string(),
-            shares: 100,
-            idempotency_key: None,
-        }).unwrap();
+        let (pos, _) = sys
+            .buy_shares(BuySharesRequest {
+                product_id: p.id.clone(),
+                investor_id: "investor-1".to_string(),
+                shares: 100,
+                idempotency_key: None,
+            })
+            .unwrap();
         // avg should be between original and new price
         assert!(pos.avg_buy_price > 100);
         assert!(pos.avg_buy_price < updated_price + 100);
@@ -1331,18 +1351,21 @@ mod tests {
             investor_id: "investor-1".to_string(),
             shares: 100,
             idempotency_key: None,
-        }).unwrap();
+        })
+        .unwrap();
         sys.buy_shares(BuySharesRequest {
             product_id: p.id.clone(),
             investor_id: "investor-2".to_string(),
             shares: 200,
             idempotency_key: None,
-        }).unwrap();
+        })
+        .unwrap();
 
         sys.close_investment(CloseInvestmentRequest {
             product_id: p.id.clone(),
             requester_id: "owner-1".to_string(),
-        }).unwrap();
+        })
+        .unwrap();
 
         let portfolio1 = sys.get_portfolio("investor-1");
         let portfolio2 = sys.get_portfolio("investor-2");

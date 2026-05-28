@@ -1,21 +1,20 @@
 use axum::{
-    Json,
     extract::{Path, Query, State},
     http::StatusCode,
     response::IntoResponse,
     routing::*,
+    Json,
 };
-use serde::{Deserialize, Serialize};
-use uuid::Uuid;
+use serde::Deserialize;
 
-use crate::api::{AppState, api_ok, api_err};
+use crate::api::{api_err, api_ok, AppState};
 
 // ══════════════════════════════════════════════════════════════════════════════
 // Marketplace API handlers
 // ══════════════════════════════════════════════════════════════════════════════
 
 #[derive(Debug, Deserialize)]
-struct MpPublishListingRequest {
+pub struct MpPublishListingRequest {
     pub title: String,
     #[serde(default)]
     pub description: String,
@@ -37,7 +36,12 @@ pub async fn mp_publish_listing(
 ) -> impl IntoResponse {
     let mp = match &state.marketplace {
         Some(m) => m.clone(),
-        None => return api_err(StatusCode::SERVICE_UNAVAILABLE, "marketplace not configured"),
+        None => {
+            return api_err(
+                StatusCode::SERVICE_UNAVAILABLE,
+                "marketplace not configured",
+            )
+        }
     };
     let mut mp = mp.lock().await;
     match mp.publish_listing(
@@ -61,7 +65,7 @@ pub async fn mp_publish_listing(
 
 #[derive(Debug, Default, Deserialize)]
 #[serde(default)]
-struct MpListListingsQuery {
+pub struct MpListListingsQuery {
     pub category: Option<crate::economy::marketplace::KnowledgeCategory>,
     pub publisher_id: Option<String>,
     pub min_price: Option<u64>,
@@ -82,7 +86,12 @@ pub async fn mp_list_listings(
 ) -> impl IntoResponse {
     let mp = match &state.marketplace {
         Some(m) => m.clone(),
-        None => return api_err(StatusCode::SERVICE_UNAVAILABLE, "marketplace not configured"),
+        None => {
+            return api_err(
+                StatusCode::SERVICE_UNAVAILABLE,
+                "marketplace not configured",
+            )
+        }
     };
     let mp = mp.lock().await;
     let listings = if params.include_all.unwrap_or(false) {
@@ -111,7 +120,12 @@ pub async fn mp_get_listing(
 ) -> impl IntoResponse {
     let mp = match &state.marketplace {
         Some(m) => m.clone(),
-        None => return api_err(StatusCode::SERVICE_UNAVAILABLE, "marketplace not configured"),
+        None => {
+            return api_err(
+                StatusCode::SERVICE_UNAVAILABLE,
+                "marketplace not configured",
+            )
+        }
     };
     let mp = mp.lock().await;
     match mp.get(id) {
@@ -121,7 +135,7 @@ pub async fn mp_get_listing(
 }
 
 #[derive(Debug, Deserialize)]
-struct MpUpdateListingRequest {
+pub struct MpUpdateListingRequest {
     pub publisher_id: String,
     pub price: Option<u64>,
     pub status: Option<crate::economy::marketplace::ListingStatus>,
@@ -136,7 +150,12 @@ pub async fn mp_update_listing(
 ) -> impl IntoResponse {
     let mp = match &state.marketplace {
         Some(m) => m.clone(),
-        None => return api_err(StatusCode::SERVICE_UNAVAILABLE, "marketplace not configured"),
+        None => {
+            return api_err(
+                StatusCode::SERVICE_UNAVAILABLE,
+                "marketplace not configured",
+            )
+        }
     };
     let mut mp = mp.lock().await;
     match mp.update_listing(id, &body.publisher_id, body.price, body.status, body.tags) {
@@ -149,7 +168,7 @@ pub async fn mp_update_listing(
 }
 
 #[derive(Debug, Deserialize)]
-struct MpDelistRequest {
+pub struct MpDelistRequest {
     pub publisher_id: String,
 }
 
@@ -161,7 +180,12 @@ pub async fn mp_delist_listing(
 ) -> impl IntoResponse {
     let mp = match &state.marketplace {
         Some(m) => m.clone(),
-        None => return api_err(StatusCode::SERVICE_UNAVAILABLE, "marketplace not configured"),
+        None => {
+            return api_err(
+                StatusCode::SERVICE_UNAVAILABLE,
+                "marketplace not configured",
+            )
+        }
     };
     let mut mp = mp.lock().await;
     match mp.delist_listing(id, &body.publisher_id) {
@@ -171,7 +195,7 @@ pub async fn mp_delist_listing(
 }
 
 #[derive(Debug, Deserialize)]
-struct MpPurchaseRequest {
+pub struct MpPurchaseRequest {
     pub buyer_id: String,
     #[serde(default)]
     pub tick: u64,
@@ -185,7 +209,12 @@ pub async fn mp_purchase_listing(
 ) -> impl IntoResponse {
     let mp = match &state.marketplace {
         Some(m) => m.clone(),
-        None => return api_err(StatusCode::SERVICE_UNAVAILABLE, "marketplace not configured"),
+        None => {
+            return api_err(
+                StatusCode::SERVICE_UNAVAILABLE,
+                "marketplace not configured",
+            )
+        }
     };
     let mut mp = mp.lock().await;
     match mp.purchase_listing(id, &body.buyer_id, body.tick) {
@@ -195,7 +224,7 @@ pub async fn mp_purchase_listing(
 }
 
 #[derive(Debug, Deserialize)]
-struct MpRateRequest {
+pub struct MpRateRequest {
     pub rater_id: String,
     pub score: u8,
     pub review: Option<String>,
@@ -211,7 +240,12 @@ pub async fn mp_rate_listing(
 ) -> impl IntoResponse {
     let mp = match &state.marketplace {
         Some(m) => m.clone(),
-        None => return api_err(StatusCode::SERVICE_UNAVAILABLE, "marketplace not configured"),
+        None => {
+            return api_err(
+                StatusCode::SERVICE_UNAVAILABLE,
+                "marketplace not configured",
+            )
+        }
     };
     let mut mp = mp.lock().await;
     match mp.rate_listing(id, &body.rater_id, body.score, body.review, body.tick) {
@@ -227,7 +261,12 @@ pub async fn mp_list_ratings(
 ) -> impl IntoResponse {
     let mp = match &state.marketplace {
         Some(m) => m.clone(),
-        None => return api_err(StatusCode::SERVICE_UNAVAILABLE, "marketplace not configured"),
+        None => {
+            return api_err(
+                StatusCode::SERVICE_UNAVAILABLE,
+                "marketplace not configured",
+            )
+        }
     };
     let mp = mp.lock().await;
     let ratings = mp.listing_ratings(id);
@@ -241,14 +280,19 @@ pub async fn mp_get_balance(
 ) -> impl IntoResponse {
     let mp = match &state.marketplace {
         Some(m) => m.clone(),
-        None => return api_err(StatusCode::SERVICE_UNAVAILABLE, "marketplace not configured"),
+        None => {
+            return api_err(
+                StatusCode::SERVICE_UNAVAILABLE,
+                "marketplace not configured",
+            )
+        }
     };
     let mp = mp.lock().await;
     api_ok(serde_json::json!({"agent_id": agent_id, "balance": mp.get_balance(&agent_id)}))
 }
 
 #[derive(Debug, Deserialize)]
-struct MpSetBalanceRequest {
+pub struct MpSetBalanceRequest {
     pub agent_id: String,
     pub amount: u64,
 }
@@ -260,7 +304,12 @@ pub async fn mp_set_balance(
 ) -> impl IntoResponse {
     let mp = match &state.marketplace {
         Some(m) => m.clone(),
-        None => return api_err(StatusCode::SERVICE_UNAVAILABLE, "marketplace not configured"),
+        None => {
+            return api_err(
+                StatusCode::SERVICE_UNAVAILABLE,
+                "marketplace not configured",
+            )
+        }
     };
     let mut mp = mp.lock().await;
     mp.set_balance(&body.agent_id, body.amount);
@@ -268,7 +317,7 @@ pub async fn mp_set_balance(
 }
 
 #[derive(Debug, Deserialize)]
-struct MpTransferRequest {
+pub struct MpTransferRequest {
     pub from: String,
     pub to: String,
     pub amount: u64,
@@ -282,7 +331,12 @@ pub async fn mp_transfer(
 ) -> impl IntoResponse {
     let mp = match &state.marketplace {
         Some(m) => m.clone(),
-        None => return api_err(StatusCode::SERVICE_UNAVAILABLE, "marketplace not configured"),
+        None => {
+            return api_err(
+                StatusCode::SERVICE_UNAVAILABLE,
+                "marketplace not configured",
+            )
+        }
     };
     let mut mp = mp.lock().await;
     match mp.transfer(&body.from, &body.to, body.amount, body.currency) {
@@ -298,10 +352,22 @@ pub fn marketplace_routes() -> axum::Router<AppState> {
         .route("/api/v1/marketplace/listings", get(mp_list_listings))
         .route("/api/v1/marketplace/listings/:id", get(mp_get_listing))
         .route("/api/v1/marketplace/listings/:id", put(mp_update_listing))
-        .route("/api/v1/marketplace/listings/:id/delist", post(mp_delist_listing))
-        .route("/api/v1/marketplace/listings/:id/purchase", post(mp_purchase_listing))
-        .route("/api/v1/marketplace/listings/:id/rate", post(mp_rate_listing))
-        .route("/api/v1/marketplace/listings/:id/ratings", get(mp_list_ratings))
+        .route(
+            "/api/v1/marketplace/listings/:id/delist",
+            post(mp_delist_listing),
+        )
+        .route(
+            "/api/v1/marketplace/listings/:id/purchase",
+            post(mp_purchase_listing),
+        )
+        .route(
+            "/api/v1/marketplace/listings/:id/rate",
+            post(mp_rate_listing),
+        )
+        .route(
+            "/api/v1/marketplace/listings/:id/ratings",
+            get(mp_list_ratings),
+        )
         .route("/api/v1/marketplace/balance/:agent_id", get(mp_get_balance))
         .route("/api/v1/marketplace/balance", post(mp_set_balance))
         .route("/api/v1/marketplace/transfer", post(mp_transfer))

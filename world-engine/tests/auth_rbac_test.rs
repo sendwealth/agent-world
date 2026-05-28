@@ -9,12 +9,12 @@
 //! - human_stats deadlock fix verification
 //! - Password security (unique salts, min length)
 
-use std::sync::Arc;
 use std::collections::HashMap;
+use std::sync::Arc;
 use tokio::sync::Mutex;
 
-use agent_world_engine::api::{AppState, TestOverrides, build_full_router};
-use agent_world_engine::auth::{AuthStore, HumanRole, Capability};
+use agent_world_engine::api::{build_full_router, AppState, TestOverrides};
+use agent_world_engine::auth::{AuthStore, Capability, HumanRole};
 use agent_world_engine::economy::task::TaskBoard;
 use agent_world_engine::wal::WAL;
 
@@ -31,10 +31,14 @@ fn test_app() -> Router {
     let wal = Arc::new(Mutex::new(WAL::new("./data/test-wal")));
     let auth_store = Arc::new(Mutex::new(AuthStore::new("test-jwt-secret")));
 
-    let state = AppState::for_test_with(board, wal, TestOverrides {
-        auth_store: Some(auth_store),
-        ..TestOverrides::default()
-    });
+    let state = AppState::for_test_with(
+        board,
+        wal,
+        TestOverrides {
+            auth_store: Some(auth_store),
+            ..TestOverrides::default()
+        },
+    );
 
     build_full_router(state)
 }
@@ -49,7 +53,12 @@ async fn register_and_login(app: &Router, username: &str, role: &str) -> (String
         .body(Body::from(serde_json::to_vec(&body).unwrap()))
         .unwrap();
     let resp = app.clone().oneshot(req).await.unwrap();
-    assert_eq!(resp.status(), StatusCode::CREATED, "Register {} failed", username);
+    assert_eq!(
+        resp.status(),
+        StatusCode::CREATED,
+        "Register {} failed",
+        username
+    );
 
     // Login
     let body = json!({"username": username, "password": "password123"});
@@ -62,7 +71,9 @@ async fn register_and_login(app: &Router, username: &str, role: &str) -> (String
     let resp = app.clone().oneshot(req).await.unwrap();
     assert_eq!(resp.status(), StatusCode::OK, "Login {} failed", username);
 
-    let body_bytes = axum::body::to_bytes(resp.into_body(), 1024 * 1024).await.unwrap();
+    let body_bytes = axum::body::to_bytes(resp.into_body(), 1024 * 1024)
+        .await
+        .unwrap();
     let resp_json: serde_json::Value = serde_json::from_slice(&body_bytes).unwrap();
     let user_id = resp_json["user"]["id"].as_str().unwrap().to_string();
     let token = resp_json["token"].as_str().unwrap().to_string();
@@ -255,7 +266,9 @@ async fn test_identity_spoofing_prevented_in_oracle() {
     assert_eq!(resp.status(), StatusCode::CREATED);
 
     // Verify the oracle used the authenticated user's ID, not the spoofed one
-    let body_bytes = axum::body::to_bytes(resp.into_body(), 1024 * 1024).await.unwrap();
+    let body_bytes = axum::body::to_bytes(resp.into_body(), 1024 * 1024)
+        .await
+        .unwrap();
     let oracle: serde_json::Value = serde_json::from_slice(&body_bytes).unwrap();
     assert_ne!(oracle["human_id"].as_str().unwrap(), "victim-user-id");
     assert_eq!(oracle["human_id"].as_str().unwrap(), real_user_id);
@@ -341,9 +354,16 @@ async fn test_list_users_requires_creator() {
 #[tokio::test]
 async fn test_password_has_unique_salts() {
     let mut store = AuthStore::new("test-secret");
-    let u1 = store.register("salt_test_1", "same_pass1", HumanRole::Observer).unwrap();
-    let u2 = store.register("salt_test_2", "same_pass1", HumanRole::Observer).unwrap();
-    assert_ne!(u1.password_hash, u2.password_hash, "Same password should produce different hashes");
+    let u1 = store
+        .register("salt_test_1", "same_pass1", HumanRole::Observer)
+        .unwrap();
+    let u2 = store
+        .register("salt_test_2", "same_pass1", HumanRole::Observer)
+        .unwrap();
+    assert_ne!(
+        u1.password_hash, u2.password_hash,
+        "Same password should produce different hashes"
+    );
 }
 
 #[tokio::test]

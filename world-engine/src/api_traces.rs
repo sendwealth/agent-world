@@ -1,18 +1,17 @@
-use std::collections::HashMap;
-use std::sync::Arc;
-
 use axum::{
-    Json,
     extract::{Path, Query, State},
     http::StatusCode,
     response::IntoResponse,
     routing::*,
+    Json,
 };
 use serde::{Deserialize, Serialize};
 
-use crate::api::{AppState, ErrorResponse, AgentRecord, A2AMessage};
+use crate::api::{A2AMessage, AgentRecord, AppState, ErrorResponse};
 
-pub fn default_format() -> String { "json".to_string() }
+pub fn default_format() -> String {
+    "json".to_string()
+}
 
 #[derive(Debug, Deserialize)]
 pub struct ExportSnapshotQuery {
@@ -68,7 +67,7 @@ pub struct ExportFilters {
 // ── Trace Handlers ────────────────────────────────────────
 
 #[derive(Debug, Deserialize)]
-struct ListTracesQuery {
+pub struct ListTracesQuery {
     limit: Option<usize>,
     offset: Option<usize>,
 }
@@ -80,7 +79,15 @@ pub async fn list_agent_traces(
 ) -> impl IntoResponse {
     let store = match &state.trace_store {
         Some(s) => s.clone(),
-        None => return (StatusCode::SERVICE_UNAVAILABLE, Json(ErrorResponse { error: "trace store not configured".into() })).into_response(),
+        None => {
+            return (
+                StatusCode::SERVICE_UNAVAILABLE,
+                Json(ErrorResponse {
+                    error: "trace store not configured".into(),
+                }),
+            )
+                .into_response()
+        }
     };
     let store = store.lock().await;
     let limit = query.limit.unwrap_or(100);
@@ -95,12 +102,26 @@ pub async fn get_latest_trace(
 ) -> impl IntoResponse {
     let store = match &state.trace_store {
         Some(s) => s.clone(),
-        None => return (StatusCode::SERVICE_UNAVAILABLE, Json(ErrorResponse { error: "trace store not configured".into() })).into_response(),
+        None => {
+            return (
+                StatusCode::SERVICE_UNAVAILABLE,
+                Json(ErrorResponse {
+                    error: "trace store not configured".into(),
+                }),
+            )
+                .into_response()
+        }
     };
     let store = store.lock().await;
     match store.get_latest(&agent_id) {
         Some(trace) => Json(trace).into_response(),
-        None => (StatusCode::NOT_FOUND, Json(ErrorResponse { error: "no traces for agent".into() })).into_response(),
+        None => (
+            StatusCode::NOT_FOUND,
+            Json(ErrorResponse {
+                error: "no traces for agent".into(),
+            }),
+        )
+            .into_response(),
     }
 }
 
@@ -110,12 +131,26 @@ pub async fn get_trace_by_tick(
 ) -> impl IntoResponse {
     let store = match &state.trace_store {
         Some(s) => s.clone(),
-        None => return (StatusCode::SERVICE_UNAVAILABLE, Json(ErrorResponse { error: "trace store not configured".into() })).into_response(),
+        None => {
+            return (
+                StatusCode::SERVICE_UNAVAILABLE,
+                Json(ErrorResponse {
+                    error: "trace store not configured".into(),
+                }),
+            )
+                .into_response()
+        }
     };
     let store = store.lock().await;
     match store.get_tick(&agent_id, tick) {
         Some(trace) => Json(trace).into_response(),
-        None => (StatusCode::NOT_FOUND, Json(ErrorResponse { error: format!("no trace at tick {} for agent", tick) })).into_response(),
+        None => (
+            StatusCode::NOT_FOUND,
+            Json(ErrorResponse {
+                error: format!("no trace at tick {} for agent", tick),
+            }),
+        )
+            .into_response(),
     }
 }
 
@@ -125,7 +160,15 @@ pub async fn submit_trace(
 ) -> impl IntoResponse {
     let store = match &state.trace_store {
         Some(s) => s.clone(),
-        None => return (StatusCode::SERVICE_UNAVAILABLE, Json(ErrorResponse { error: "trace store not configured".into() })).into_response(),
+        None => {
+            return (
+                StatusCode::SERVICE_UNAVAILABLE,
+                Json(ErrorResponse {
+                    error: "trace store not configured".into(),
+                }),
+            )
+                .into_response()
+        }
     };
     let mut store = store.lock().await;
     store.save(trace);
@@ -135,13 +178,18 @@ pub async fn submit_trace(
 // ── Data Export Handlers ──────────────────────────────────
 
 pub fn compute_gini(values: &[u64]) -> f64 {
-    if values.is_empty() { return 0.0; }
+    if values.is_empty() {
+        return 0.0;
+    }
     let n = values.len() as f64;
     let mean: f64 = values.iter().sum::<u64>() as f64 / n;
-    if mean == 0.0 { return 0.0; }
+    if mean == 0.0 {
+        return 0.0;
+    }
     let mut sorted: Vec<u64> = values.to_vec();
     sorted.sort();
-    let sum_diff: f64 = sorted.iter()
+    let sum_diff: f64 = sorted
+        .iter()
         .flat_map(|&xi| sorted.iter().map(move |&xj| (xi as f64 - xj as f64).abs()))
         .sum();
     sum_diff / (2.0 * n * n * mean)
@@ -183,23 +231,39 @@ pub async fn export_snapshot(
             let body = axum::body::Body::from(csv);
             let mut resp = axum::response::Response::new(body);
             *resp.status_mut() = StatusCode::OK;
-            resp.headers_mut().insert("content-type", "text/csv".parse().unwrap());
-            resp.headers_mut().insert("content-disposition", "attachment; filename=\"world_snapshot.csv\"".parse().unwrap());
+            resp.headers_mut()
+                .insert("content-type", "text/csv".parse().unwrap());
+            resp.headers_mut().insert(
+                "content-disposition",
+                "attachment; filename=\"world_snapshot.csv\""
+                    .parse()
+                    .unwrap(),
+            );
             resp
         }
-        _ => {
-            match serde_json::to_string_pretty(&snapshot) {
-                Ok(json) => {
-                    let body = axum::body::Body::from(json);
-                    let mut resp = axum::response::Response::new(body);
-                    *resp.status_mut() = StatusCode::OK;
-                    resp.headers_mut().insert("content-type", "application/json".parse().unwrap());
-                    resp.headers_mut().insert("content-disposition", "attachment; filename=\"world_snapshot.json\"".parse().unwrap());
-                    resp
-                }
-                Err(e) => (StatusCode::INTERNAL_SERVER_ERROR, Json(ErrorResponse { error: e.to_string() })).into_response(),
+        _ => match serde_json::to_string_pretty(&snapshot) {
+            Ok(json) => {
+                let body = axum::body::Body::from(json);
+                let mut resp = axum::response::Response::new(body);
+                *resp.status_mut() = StatusCode::OK;
+                resp.headers_mut()
+                    .insert("content-type", "application/json".parse().unwrap());
+                resp.headers_mut().insert(
+                    "content-disposition",
+                    "attachment; filename=\"world_snapshot.json\""
+                        .parse()
+                        .unwrap(),
+                );
+                resp
             }
-        }
+            Err(e) => (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                Json(ErrorResponse {
+                    error: e.to_string(),
+                }),
+            )
+                .into_response(),
+        },
     }
 }
 
@@ -214,7 +278,8 @@ pub async fn export_snapshot_by_tick(
     let task_count = board.list().len();
 
     // Filter messages to the specific tick
-    let filtered_messages: Vec<A2AMessage> = messages.iter()
+    let filtered_messages: Vec<A2AMessage> = messages
+        .iter()
         .filter(|m| m.tick == tick)
         .cloned()
         .collect();
@@ -234,23 +299,39 @@ pub async fn export_snapshot_by_tick(
             let body = axum::body::Body::from(csv);
             let mut resp = axum::response::Response::new(body);
             *resp.status_mut() = StatusCode::OK;
-            resp.headers_mut().insert("content-type", "text/csv".parse().unwrap());
-            resp.headers_mut().insert("content-disposition", "attachment; filename=\"world_snapshot.csv\"".parse().unwrap());
+            resp.headers_mut()
+                .insert("content-type", "text/csv".parse().unwrap());
+            resp.headers_mut().insert(
+                "content-disposition",
+                "attachment; filename=\"world_snapshot.csv\""
+                    .parse()
+                    .unwrap(),
+            );
             resp
         }
-        _ => {
-            match serde_json::to_string_pretty(&snapshot) {
-                Ok(json) => {
-                    let body = axum::body::Body::from(json);
-                    let mut resp = axum::response::Response::new(body);
-                    *resp.status_mut() = StatusCode::OK;
-                    resp.headers_mut().insert("content-type", "application/json".parse().unwrap());
-                    resp.headers_mut().insert("content-disposition", "attachment; filename=\"world_snapshot.json\"".parse().unwrap());
-                    resp
-                }
-                Err(e) => (StatusCode::INTERNAL_SERVER_ERROR, Json(ErrorResponse { error: e.to_string() })).into_response(),
+        _ => match serde_json::to_string_pretty(&snapshot) {
+            Ok(json) => {
+                let body = axum::body::Body::from(json);
+                let mut resp = axum::response::Response::new(body);
+                *resp.status_mut() = StatusCode::OK;
+                resp.headers_mut()
+                    .insert("content-type", "application/json".parse().unwrap());
+                resp.headers_mut().insert(
+                    "content-disposition",
+                    "attachment; filename=\"world_snapshot.json\""
+                        .parse()
+                        .unwrap(),
+                );
+                resp
             }
-        }
+            Err(e) => (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                Json(ErrorResponse {
+                    error: e.to_string(),
+                }),
+            )
+                .into_response(),
+        },
     }
 }
 
@@ -287,33 +368,55 @@ pub async fn export_economy(
 
     match query.format.as_str() {
         "csv" => {
-            let mut csv = String::from("tick,total_money,total_tokens,alive_count,gini,task_count\n");
+            let mut csv =
+                String::from("tick,total_money,total_tokens,alive_count,gini,task_count\n");
             for d in &data {
                 csv.push_str(&format!(
                     "{},{},{},{},{},{}\n",
-                    d.tick, d.total_money, d.total_tokens, d.alive_count, d.gini_coefficient, d.task_count
+                    d.tick,
+                    d.total_money,
+                    d.total_tokens,
+                    d.alive_count,
+                    d.gini_coefficient,
+                    d.task_count
                 ));
             }
             let body = axum::body::Body::from(csv);
             let mut resp = axum::response::Response::new(body);
             *resp.status_mut() = StatusCode::OK;
-            resp.headers_mut().insert("content-type", "text/csv".parse().unwrap());
-            resp.headers_mut().insert("content-disposition", "attachment; filename=\"economy_export.csv\"".parse().unwrap());
+            resp.headers_mut()
+                .insert("content-type", "text/csv".parse().unwrap());
+            resp.headers_mut().insert(
+                "content-disposition",
+                "attachment; filename=\"economy_export.csv\""
+                    .parse()
+                    .unwrap(),
+            );
             resp
         }
-        _ => {
-            match serde_json::to_string_pretty(&data) {
-                Ok(json) => {
-                    let body = axum::body::Body::from(json);
-                    let mut resp = axum::response::Response::new(body);
-                    *resp.status_mut() = StatusCode::OK;
-                    resp.headers_mut().insert("content-type", "application/json".parse().unwrap());
-                    resp.headers_mut().insert("content-disposition", "attachment; filename=\"economy_export.json\"".parse().unwrap());
-                    resp
-                }
-                Err(e) => (StatusCode::INTERNAL_SERVER_ERROR, Json(ErrorResponse { error: e.to_string() })).into_response(),
+        _ => match serde_json::to_string_pretty(&data) {
+            Ok(json) => {
+                let body = axum::body::Body::from(json);
+                let mut resp = axum::response::Response::new(body);
+                *resp.status_mut() = StatusCode::OK;
+                resp.headers_mut()
+                    .insert("content-type", "application/json".parse().unwrap());
+                resp.headers_mut().insert(
+                    "content-disposition",
+                    "attachment; filename=\"economy_export.json\""
+                        .parse()
+                        .unwrap(),
+                );
+                resp
             }
-        }
+            Err(e) => (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                Json(ErrorResponse {
+                    error: e.to_string(),
+                }),
+            )
+                .into_response(),
+        },
     }
 }
 
@@ -327,21 +430,33 @@ pub async fn export_query(
     let tick_range = match filters.tick_range {
         Some((from, to)) if from <= to => Some((from, to)),
         Some((from, to)) => {
-            return (StatusCode::BAD_REQUEST, Json(ErrorResponse {
-                error: format!("invalid tick_range: start ({}) must be <= end ({})", from, to),
-            })).into_response();
+            return (
+                StatusCode::BAD_REQUEST,
+                Json(ErrorResponse {
+                    error: format!(
+                        "invalid tick_range: start ({}) must be <= end ({})",
+                        from, to
+                    ),
+                }),
+            )
+                .into_response();
         }
         None => {
-            return (StatusCode::BAD_REQUEST, Json(ErrorResponse {
-                error: "tick_range is required".into(),
-            })).into_response();
+            return (
+                StatusCode::BAD_REQUEST,
+                Json(ErrorResponse {
+                    error: "tick_range is required".into(),
+                }),
+            )
+                .into_response();
         }
     };
 
     // Filter agents
     let agents = state.agents.lock().await;
     let filtered_agents: Vec<AgentRecord> = match &filters.agent_ids {
-        Some(ids) => agents.iter()
+        Some(ids) => agents
+            .iter()
             .filter(|a| ids.contains(&a.id))
             .cloned()
             .collect(),
@@ -357,10 +472,9 @@ pub async fn export_query(
 
             // Filter by event_types if provided
             if let Some(ref event_types) = filters.event_types {
-                all_traces.into_iter()
-                    .filter(|trace| {
-                        trace.phases.iter().any(|p| event_types.contains(&p.phase))
-                    })
+                all_traces
+                    .into_iter()
+                    .filter(|trace| trace.phases.iter().any(|p| event_types.contains(&p.phase)))
                     .cloned()
                     .collect::<Vec<_>>()
             } else {
@@ -382,23 +496,37 @@ pub async fn export_query(
             let body = axum::body::Body::from(csv);
             let mut resp = axum::response::Response::new(body);
             *resp.status_mut() = StatusCode::OK;
-            resp.headers_mut().insert("content-type", "text/csv".parse().unwrap());
-            resp.headers_mut().insert("content-disposition", "attachment; filename=\"query_export.csv\"".parse().unwrap());
+            resp.headers_mut()
+                .insert("content-type", "text/csv".parse().unwrap());
+            resp.headers_mut().insert(
+                "content-disposition",
+                "attachment; filename=\"query_export.csv\"".parse().unwrap(),
+            );
             resp
         }
-        _ => {
-            match serde_json::to_string_pretty(&result) {
-                Ok(json) => {
-                    let body = axum::body::Body::from(json);
-                    let mut resp = axum::response::Response::new(body);
-                    *resp.status_mut() = StatusCode::OK;
-                    resp.headers_mut().insert("content-type", "application/json".parse().unwrap());
-                    resp.headers_mut().insert("content-disposition", "attachment; filename=\"query_export.json\"".parse().unwrap());
-                    resp
-                }
-                Err(e) => (StatusCode::INTERNAL_SERVER_ERROR, Json(ErrorResponse { error: e.to_string() })).into_response(),
+        _ => match serde_json::to_string_pretty(&result) {
+            Ok(json) => {
+                let body = axum::body::Body::from(json);
+                let mut resp = axum::response::Response::new(body);
+                *resp.status_mut() = StatusCode::OK;
+                resp.headers_mut()
+                    .insert("content-type", "application/json".parse().unwrap());
+                resp.headers_mut().insert(
+                    "content-disposition",
+                    "attachment; filename=\"query_export.json\""
+                        .parse()
+                        .unwrap(),
+                );
+                resp
             }
-        }
+            Err(e) => (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                Json(ErrorResponse {
+                    error: e.to_string(),
+                }),
+            )
+                .into_response(),
+        },
     }
 }
 
@@ -410,7 +538,10 @@ pub fn trace_routes() -> axum::Router<AppState> {
         .route("/api/v1/agents/:id/traces/:tick", get(get_trace_by_tick))
         .route("/api/v1/agents/:id/traces", post(submit_trace))
         .route("/api/v1/export/snapshot", get(export_snapshot))
-        .route("/api/v1/export/snapshot/:tick", get(export_snapshot_by_tick))
+        .route(
+            "/api/v1/export/snapshot/:tick",
+            get(export_snapshot_by_tick),
+        )
         .route("/api/v1/export/economy", get(export_economy))
         .route("/api/v1/export/query", post(export_query))
 }

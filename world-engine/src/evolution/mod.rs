@@ -11,20 +11,17 @@
 //! - **Natural selection** evaluating agent fitness and applying culling pressure
 //! - **Decline** for agents inactive beyond a threshold
 
-pub mod skill_tree;
-pub mod mutation;
 pub mod crossover;
+pub mod mutation;
 pub mod selection;
+pub mod skill_tree;
 pub mod subsystem;
 
-pub use skill_tree::{SkillTree, SkillBranch, SkillNode};
+pub use crossover::{CrossoverConfig, CrossoverEngine, CrossoverResult, CrossoverStrategy};
 pub use mutation::{
-    MutationEngine, MutationType, MutationOutcome,
-    OffspringMutationType, OffspringMutation, OffspringMutationResult, OffspringMutationConfig,
-    HeritableMutation, EnvironmentPressure,
-};
-pub use crossover::{
-    CrossoverEngine, CrossoverConfig, CrossoverStrategy, CrossoverResult,
+    EnvironmentPressure, HeritableMutation, MutationEngine, MutationOutcome, MutationType,
+    OffspringMutation, OffspringMutationConfig, OffspringMutationResult, OffspringMutationType,
 };
 pub use selection::{FitnessEvaluator, FitnessReport, SelectionEngine};
+pub use skill_tree::{SkillBranch, SkillNode, SkillTree};
 pub use subsystem::EvolutionSubsystem;

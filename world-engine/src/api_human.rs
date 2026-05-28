@@ -1,21 +1,18 @@
 use std::collections::HashMap;
 
 use axum::{
-    Json,
     extract::{Path, Query, State},
     http::StatusCode,
     response::IntoResponse,
     routing::*,
+    Json,
 };
-use serde::Deserialize;
 
-use crate::api::{AppState, ErrorResponse, AgentRecord};
-use crate::auth::{RequireAuth, Capability, extractors::require_capability};
+use crate::api::{AppState, ErrorResponse};
+use crate::auth::{extractors::require_capability, Capability, RequireAuth};
 use crate::human::store::{
-    HumanParticipationStore, SharedHumanStore,
-    SendOracleRequest, CreateBountyRequest, ClaimBountyRequest,
-    CompleteBountyRequest, ClaimAgentRequest, InvestRequest,
-    ListBountiesQuery, ListOraclesQuery, InfluenceRankingsQuery,
+    ClaimAgentRequest, ClaimBountyRequest, CompleteBountyRequest, CreateBountyRequest,
+    InfluenceRankingsQuery, InvestRequest, ListBountiesQuery, ListOraclesQuery, SendOracleRequest,
 };
 
 // ── Human Participation API Handlers ──────────────────────
@@ -34,7 +31,10 @@ pub async fn human_list_claimed_agents(
     Query(query): Query<HashMap<String, String>>,
 ) -> impl IntoResponse {
     // SECURITY: Only allow users to see their own claimed agents
-    let human_id = query.get("human_id").cloned().unwrap_or_else(|| auth.user_id.clone());
+    let human_id = query
+        .get("human_id")
+        .cloned()
+        .unwrap_or_else(|| auth.user_id.clone());
     let store = state.human_store.lock().await;
     let agents: Vec<&crate::human::store::ClaimedAgent> = store.list_claimed_agents(&human_id);
     Json(agents).into_response()
@@ -50,7 +50,15 @@ pub async fn human_claim_agent(
         let agents = state.agents.lock().await;
         match agents.iter().find(|a| a.id == body.agent_id) {
             Some(a) => (a.name.clone(), a.tokens, a.money, a.ticks_survived),
-            None => return (StatusCode::NOT_FOUND, Json(ErrorResponse { error: "Agent not found".into() })).into_response(),
+            None => {
+                return (
+                    StatusCode::NOT_FOUND,
+                    Json(ErrorResponse {
+                        error: "Agent not found".into(),
+                    }),
+                )
+                    .into_response()
+            }
         }
     };
 
@@ -89,13 +97,31 @@ pub async fn human_send_oracle(
     // SECURITY: Replace client-provided human_id with authenticated user ID
     body.human_id = auth.user_id.clone();
     if body.content.trim().is_empty() {
-        return (StatusCode::BAD_REQUEST, Json(ErrorResponse { error: "Oracle content cannot be empty".into() })).into_response();
+        return (
+            StatusCode::BAD_REQUEST,
+            Json(ErrorResponse {
+                error: "Oracle content cannot be empty".into(),
+            }),
+        )
+            .into_response();
     }
     if body.content.len() > 500 {
-        return (StatusCode::BAD_REQUEST, Json(ErrorResponse { error: "Oracle content exceeds 500 characters".into() })).into_response();
+        return (
+            StatusCode::BAD_REQUEST,
+            Json(ErrorResponse {
+                error: "Oracle content exceeds 500 characters".into(),
+            }),
+        )
+            .into_response();
     }
     if body.target_agent_id.trim().is_empty() {
-        return (StatusCode::BAD_REQUEST, Json(ErrorResponse { error: "target_agent_id is required".into() })).into_response();
+        return (
+            StatusCode::BAD_REQUEST,
+            Json(ErrorResponse {
+                error: "target_agent_id is required".into(),
+            }),
+        )
+            .into_response();
     }
 
     let tick = *state.tick_rx.borrow();
@@ -112,7 +138,13 @@ pub async fn human_get_oracle(
     let store = state.human_store.lock().await;
     match store.get_oracle(&id) {
         Some(oracle) => Json(oracle).into_response(),
-        None => (StatusCode::NOT_FOUND, Json(ErrorResponse { error: "Oracle not found".into() })).into_response(),
+        None => (
+            StatusCode::NOT_FOUND,
+            Json(ErrorResponse {
+                error: "Oracle not found".into(),
+            }),
+        )
+            .into_response(),
     }
 }
 
@@ -137,10 +169,22 @@ pub async fn human_create_bounty(
     // SECURITY: Replace client-provided human_id with authenticated user ID
     body.human_id = auth.user_id.clone();
     if body.title.trim().is_empty() {
-        return (StatusCode::BAD_REQUEST, Json(ErrorResponse { error: "Bounty title cannot be empty".into() })).into_response();
+        return (
+            StatusCode::BAD_REQUEST,
+            Json(ErrorResponse {
+                error: "Bounty title cannot be empty".into(),
+            }),
+        )
+            .into_response();
     }
     if body.reward == 0 {
-        return (StatusCode::BAD_REQUEST, Json(ErrorResponse { error: "Reward must be greater than 0".into() })).into_response();
+        return (
+            StatusCode::BAD_REQUEST,
+            Json(ErrorResponse {
+                error: "Reward must be greater than 0".into(),
+            }),
+        )
+            .into_response();
     }
 
     let tick = *state.tick_rx.borrow();
@@ -157,7 +201,13 @@ pub async fn human_get_bounty(
     let store = state.human_store.lock().await;
     match store.get_bounty(&id) {
         Some(bounty) => Json(bounty).into_response(),
-        None => (StatusCode::NOT_FOUND, Json(ErrorResponse { error: "Bounty not found".into() })).into_response(),
+        None => (
+            StatusCode::NOT_FOUND,
+            Json(ErrorResponse {
+                error: "Bounty not found".into(),
+            }),
+        )
+            .into_response(),
     }
 }
 
@@ -169,7 +219,13 @@ pub async fn human_claim_bounty(
     let mut store = state.human_store.lock().await;
     match store.claim_bounty(&id, &body.agent_id) {
         Some(bounty) => Json(bounty).into_response(),
-        None => (StatusCode::BAD_REQUEST, Json(ErrorResponse { error: "Bounty not available for claiming".into() })).into_response(),
+        None => (
+            StatusCode::BAD_REQUEST,
+            Json(ErrorResponse {
+                error: "Bounty not available for claiming".into(),
+            }),
+        )
+            .into_response(),
     }
 }
 
@@ -181,7 +237,13 @@ pub async fn human_complete_bounty(
     let mut store = state.human_store.lock().await;
     match store.complete_bounty(&id, &body.result) {
         Some(bounty) => Json(bounty).into_response(),
-        None => (StatusCode::BAD_REQUEST, Json(ErrorResponse { error: "Bounty cannot be completed".into() })).into_response(),
+        None => (
+            StatusCode::BAD_REQUEST,
+            Json(ErrorResponse {
+                error: "Bounty cannot be completed".into(),
+            }),
+        )
+            .into_response(),
     }
 }
 
@@ -194,14 +256,34 @@ pub async fn human_cancel_bounty(
     // SECURITY: Verify ownership — only the creator can cancel
     let bounty = match store.get_bounty(&id) {
         Some(b) => b.clone(),
-        None => return (StatusCode::NOT_FOUND, Json(ErrorResponse { error: "Bounty not found".into() })).into_response(),
+        None => {
+            return (
+                StatusCode::NOT_FOUND,
+                Json(ErrorResponse {
+                    error: "Bounty not found".into(),
+                }),
+            )
+                .into_response()
+        }
     };
     if bounty.human_id != auth.user_id {
-        return (StatusCode::FORBIDDEN, Json(ErrorResponse { error: "Only the bounty creator can cancel".into() })).into_response();
+        return (
+            StatusCode::FORBIDDEN,
+            Json(ErrorResponse {
+                error: "Only the bounty creator can cancel".into(),
+            }),
+        )
+            .into_response();
     }
     match store.cancel_bounty(&id) {
         Some(bounty) => Json(bounty).into_response(),
-        None => (StatusCode::BAD_REQUEST, Json(ErrorResponse { error: "Bounty cannot be cancelled".into() })).into_response(),
+        None => (
+            StatusCode::BAD_REQUEST,
+            Json(ErrorResponse {
+                error: "Bounty cannot be cancelled".into(),
+            }),
+        )
+            .into_response(),
     }
 }
 
@@ -237,7 +319,13 @@ pub async fn human_invest(
         return e.into_response();
     }
     if body.amount == 0 {
-        return (StatusCode::BAD_REQUEST, Json(ErrorResponse { error: "Investment amount must be greater than 0".into() })).into_response();
+        return (
+            StatusCode::BAD_REQUEST,
+            Json(ErrorResponse {
+                error: "Investment amount must be greater than 0".into(),
+            }),
+        )
+            .into_response();
     }
 
     // Find agent name
@@ -245,7 +333,15 @@ pub async fn human_invest(
         let agents = state.agents.lock().await;
         match agents.iter().find(|a| a.id == body.agent_id) {
             Some(a) => a.name.clone(),
-            None => return (StatusCode::NOT_FOUND, Json(ErrorResponse { error: "Agent not found".into() })).into_response(),
+            None => {
+                return (
+                    StatusCode::NOT_FOUND,
+                    Json(ErrorResponse {
+                        error: "Agent not found".into(),
+                    }),
+                )
+                    .into_response()
+            }
         }
     };
 
@@ -264,7 +360,8 @@ pub async fn human_rankings(
     let sort_by = query.sort_by.as_deref().unwrap_or("total_influence");
     let limit = query.limit.unwrap_or(50);
     let store = state.human_store.lock().await;
-    let rankings: Vec<&crate::human::store::HumanInfluenceEntry> = store.get_influence_rankings(sort_by, limit);
+    let rankings: Vec<&crate::human::store::HumanInfluenceEntry> =
+        store.get_influence_rankings(sort_by, limit);
     Json(rankings).into_response()
 }
 
@@ -273,11 +370,13 @@ pub async fn human_list_interventions(
     Query(query): Query<HashMap<String, String>>,
 ) -> impl IntoResponse {
     let human_id = query.get("human_id").map(|s| s.as_str());
-    let limit: usize = query.get("limit")
+    let limit: usize = query
+        .get("limit")
         .and_then(|s| s.parse().ok())
         .unwrap_or(50);
     let store = state.human_store.lock().await;
-    let interventions: Vec<&crate::human::store::HumanInterventionEvent> = store.list_interventions(human_id, limit);
+    let interventions: Vec<&crate::human::store::HumanInterventionEvent> =
+        store.list_interventions(human_id, limit);
     Json(interventions).into_response()
 }
 
@@ -294,9 +393,18 @@ pub fn human_routes() -> axum::Router<AppState> {
         .route("/api/v1/human/bounties", post(human_create_bounty))
         .route("/api/v1/human/bounties/:id", get(human_get_bounty))
         .route("/api/v1/human/bounties/:id/claim", post(human_claim_bounty))
-        .route("/api/v1/human/bounties/:id/complete", post(human_complete_bounty))
-        .route("/api/v1/human/bounties/:id/cancel", post(human_cancel_bounty))
-        .route("/api/v1/human/portfolio/:human_id", get(human_get_portfolio))
+        .route(
+            "/api/v1/human/bounties/:id/complete",
+            post(human_complete_bounty),
+        )
+        .route(
+            "/api/v1/human/bounties/:id/cancel",
+            post(human_cancel_bounty),
+        )
+        .route(
+            "/api/v1/human/portfolio/:human_id",
+            get(human_get_portfolio),
+        )
         .route("/api/v1/human/portfolio/invest", post(human_invest))
         .route("/api/v1/human/rankings", get(human_rankings))
         .route("/api/v1/human/interventions", get(human_list_interventions))

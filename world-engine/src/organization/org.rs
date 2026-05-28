@@ -242,15 +242,19 @@ impl OrganizationStore {
 
         // Register agent -> org mappings
         for member in &org.members {
-            self.agent_to_org.insert(member.agent_id.clone(), org_id.clone());
+            self.agent_to_org
+                .insert(member.agent_id.clone(), org_id.clone());
         }
 
-        Self::emit_event(&self.event_bus,WorldEvent::OrgCreated {
-            org_id: org_id.clone(),
-            name: name.clone(),
-            org_type: format!("{:?}", org.org_type).to_lowercase(),
-            founder_count: org.members.len(),
-        });
+        Self::emit_event(
+            &self.event_bus,
+            WorldEvent::OrgCreated {
+                org_id: org_id.clone(),
+                name: name.clone(),
+                org_type: format!("{:?}", org.org_type).to_lowercase(),
+                founder_count: org.members.len(),
+            },
+        );
 
         self.organizations.insert(org_id, org.clone());
         Ok(org)
@@ -292,7 +296,9 @@ impl OrganizationStore {
             return Err(OrgError::AgentAlreadyInOrg(agent_id));
         }
 
-        let org = self.organizations.get_mut(org_id)
+        let org = self
+            .organizations
+            .get_mut(org_id)
             .ok_or_else(|| OrgError::NotFound(org_id.to_string()))?;
 
         if org.status == OrgStatus::Dissolved {
@@ -321,7 +327,8 @@ impl OrganizationStore {
         let total_members = org.members.len();
         let org_clone = org.clone();
 
-        self.agent_to_org.insert(agent_id.clone(), org_id.to_string());
+        self.agent_to_org
+            .insert(agent_id.clone(), org_id.to_string());
 
         if let Some(ref bus) = self.event_bus {
             bus.emit(WorldEvent::OrgMemberJoined {
@@ -343,7 +350,9 @@ impl OrganizationStore {
         agent_id: &str,
         current_tick: u64,
     ) -> Result<Organization, OrgError> {
-        let org = self.organizations.get_mut(org_id)
+        let org = self
+            .organizations
+            .get_mut(org_id)
             .ok_or_else(|| OrgError::NotFound(org_id.to_string()))?;
 
         if org.status == OrgStatus::Dissolved {
@@ -351,7 +360,10 @@ impl OrganizationStore {
         }
 
         // Find the member
-        let member_idx = org.members.iter().position(|m| m.agent_id == agent_id)
+        let member_idx = org
+            .members
+            .iter()
+            .position(|m| m.agent_id == agent_id)
             .ok_or_else(|| MemberError::NotMember(agent_id.to_string()))?;
 
         let removed_member = org.members.remove(member_idx);
@@ -413,7 +425,8 @@ impl OrganizationStore {
     /// Returns the list of org IDs that transitioned to inactive.
     pub fn check_inactivity(&mut self, current_tick: u64) -> Vec<String> {
         // Collect data in first pass
-        let transitions: Vec<(String, u64)> = self.organizations
+        let transitions: Vec<(String, u64)> = self
+            .organizations
             .values_mut()
             .filter_map(|org| {
                 if org.should_be_inactive(current_tick) {
@@ -443,7 +456,8 @@ impl OrganizationStore {
     /// Returns the list of org IDs that were dissolved.
     pub fn check_bankruptcy(&mut self) -> Vec<String> {
         // Collect data in first pass
-        let dissolved: Vec<String> = self.organizations
+        let dissolved: Vec<String> = self
+            .organizations
             .values_mut()
             .filter_map(|org| {
                 if org.status != OrgStatus::Dissolved && org.is_bankrupt() {
@@ -470,7 +484,9 @@ impl OrganizationStore {
 
     /// Manually dissolve an organization.
     pub fn dissolve_org(&mut self, org_id: &str, reason: &str) -> Result<(), OrgError> {
-        let org = self.organizations.get_mut(org_id)
+        let org = self
+            .organizations
+            .get_mut(org_id)
             .ok_or_else(|| OrgError::NotFound(org_id.to_string()))?;
 
         org.status = OrgStatus::Dissolved;
@@ -522,13 +538,15 @@ mod tests {
     #[test]
     fn create_org_success() {
         let mut store = OrganizationStore::new();
-        let org = store.create_org(
-            "TestCorp".to_string(),
-            OrgType::Company,
-            Some(test_charter()),
-            make_founders(3),
-            100,
-        ).unwrap();
+        let org = store
+            .create_org(
+                "TestCorp".to_string(),
+                OrgType::Company,
+                Some(test_charter()),
+                make_founders(3),
+                100,
+            )
+            .unwrap();
 
         assert_eq!(org.name, "TestCorp");
         assert_eq!(org.org_type, OrgType::Company);
@@ -580,20 +598,25 @@ mod tests {
     fn create_org_rejects_duplicate_founder() {
         let mut store = OrganizationStore::new();
         // First create an org
-        store.create_org(
-            "First".to_string(),
-            OrgType::Company,
-            Some(test_charter()),
-            make_founders(2),
-            100,
-        ).unwrap();
+        store
+            .create_org(
+                "First".to_string(),
+                OrgType::Company,
+                Some(test_charter()),
+                make_founders(2),
+                100,
+            )
+            .unwrap();
 
         // Try to use an existing member as founder
         let result = store.create_org(
             "Second".to_string(),
             OrgType::Guild,
             Some(test_charter()),
-            vec![("agent-0".to_string(), "Agent 0".to_string()), ("agent-99".to_string(), "Agent 99".to_string())],
+            vec![
+                ("agent-0".to_string(), "Agent 0".to_string()),
+                ("agent-99".to_string(), "Agent 99".to_string()),
+            ],
             100,
         );
         assert!(result.is_err());
@@ -602,15 +625,24 @@ mod tests {
     #[test]
     fn join_org_success() {
         let mut store = OrganizationStore::new();
-        let org = store.create_org(
-            "TestOrg".to_string(),
-            OrgType::Guild,
-            Some(test_charter()),
-            make_founders(2),
-            100,
-        ).unwrap();
+        let org = store
+            .create_org(
+                "TestOrg".to_string(),
+                OrgType::Guild,
+                Some(test_charter()),
+                make_founders(2),
+                100,
+            )
+            .unwrap();
 
-        let updated = store.join_org(&org.id, "agent-new".to_string(), "New Agent".to_string(), 200).unwrap();
+        let updated = store
+            .join_org(
+                &org.id,
+                "agent-new".to_string(),
+                "New Agent".to_string(),
+                200,
+            )
+            .unwrap();
         assert_eq!(updated.members.len(), 3);
         assert_eq!(updated.members[2].agent_id, "agent-new");
         assert_eq!(updated.members[2].role, MemberRole::Member);
@@ -619,13 +651,15 @@ mod tests {
     #[test]
     fn join_org_rejects_existing_member() {
         let mut store = OrganizationStore::new();
-        let org = store.create_org(
-            "TestOrg".to_string(),
-            OrgType::Guild,
-            Some(test_charter()),
-            make_founders(2),
-            100,
-        ).unwrap();
+        let org = store
+            .create_org(
+                "TestOrg".to_string(),
+                OrgType::Guild,
+                Some(test_charter()),
+                make_founders(2),
+                100,
+            )
+            .unwrap();
 
         let result = store.join_org(&org.id, "agent-0".to_string(), "Agent 0".to_string(), 200);
         assert!(result.is_err());
@@ -634,13 +668,15 @@ mod tests {
     #[test]
     fn leave_org_success() {
         let mut store = OrganizationStore::new();
-        let org = store.create_org(
-            "TestOrg".to_string(),
-            OrgType::Guild,
-            Some(test_charter()),
-            make_founders(3),
-            100,
-        ).unwrap();
+        let org = store
+            .create_org(
+                "TestOrg".to_string(),
+                OrgType::Guild,
+                Some(test_charter()),
+                make_founders(3),
+                100,
+            )
+            .unwrap();
 
         let updated = store.leave_org(&org.id, "agent-1", 300).unwrap();
         assert_eq!(updated.members.len(), 2);
@@ -651,13 +687,15 @@ mod tests {
     #[test]
     fn leave_org_cannot_remove_last_founder_when_members_remain() {
         let mut store = OrganizationStore::new();
-        let org = store.create_org(
-            "TestOrg".to_string(),
-            OrgType::Guild,
-            Some(test_charter()),
-            make_founders(3),
-            100,
-        ).unwrap();
+        let org = store
+            .create_org(
+                "TestOrg".to_string(),
+                OrgType::Guild,
+                Some(test_charter()),
+                make_founders(3),
+                100,
+            )
+            .unwrap();
 
         // All 3 are founders; remove 2 of them, leaving 1 founder
         store.leave_org(&org.id, "agent-0", 300).unwrap();
@@ -675,16 +713,25 @@ mod tests {
     #[test]
     fn leave_org_cannot_remove_last_founder_with_remaining_members() {
         let mut store = OrganizationStore::new();
-        let org = store.create_org(
-            "TestOrg".to_string(),
-            OrgType::Guild,
-            Some(test_charter()),
-            make_founders(2),
-            100,
-        ).unwrap();
+        let org = store
+            .create_org(
+                "TestOrg".to_string(),
+                OrgType::Guild,
+                Some(test_charter()),
+                make_founders(2),
+                100,
+            )
+            .unwrap();
 
         // Join a regular member
-        store.join_org(&org.id, "agent-regular".to_string(), "Regular Member".to_string(), 200).unwrap();
+        store
+            .join_org(
+                &org.id,
+                "agent-regular".to_string(),
+                "Regular Member".to_string(),
+                200,
+            )
+            .unwrap();
 
         // Remove one founder -> now only 1 founder remains with 1 regular member
         store.leave_org(&org.id, "agent-0", 300).unwrap();
@@ -697,13 +744,15 @@ mod tests {
     #[test]
     fn leave_org_auto_dissolves_when_empty() {
         let mut store = OrganizationStore::new();
-        let org = store.create_org(
-            "TestOrg".to_string(),
-            OrgType::Guild,
-            Some(test_charter()),
-            make_founders(3),
-            100,
-        ).unwrap();
+        let org = store
+            .create_org(
+                "TestOrg".to_string(),
+                OrgType::Guild,
+                Some(test_charter()),
+                make_founders(3),
+                100,
+            )
+            .unwrap();
 
         store.leave_org(&org.id, "agent-0", 300).unwrap();
         store.leave_org(&org.id, "agent-1", 300).unwrap();
@@ -716,18 +765,22 @@ mod tests {
     #[test]
     fn shares_redistributed_on_join() {
         let mut store = OrganizationStore::new();
-        let org = store.create_org(
-            "TestOrg".to_string(),
-            OrgType::Company,
-            Some(test_charter()),
-            make_founders(2),
-            100,
-        ).unwrap();
+        let org = store
+            .create_org(
+                "TestOrg".to_string(),
+                OrgType::Company,
+                Some(test_charter()),
+                make_founders(2),
+                100,
+            )
+            .unwrap();
 
         // Initially 2 founders: 0.5 each
         assert!((org.members[0].share - 0.5).abs() < 0.01);
 
-        let updated = store.join_org(&org.id, "agent-new".to_string(), "New".to_string(), 200).unwrap();
+        let updated = store
+            .join_org(&org.id, "agent-new".to_string(), "New".to_string(), 200)
+            .unwrap();
         // Now 3 members: ~0.333 each
         for member in &updated.members {
             assert!((member.share - 0.333).abs() < 0.01);
@@ -737,13 +790,15 @@ mod tests {
     #[test]
     fn inactivity_check() {
         let mut store = OrganizationStore::new();
-        let org = store.create_org(
-            "TestOrg".to_string(),
-            OrgType::Company,
-            Some(test_charter()),
-            make_founders(2),
-            100,
-        ).unwrap();
+        let org = store
+            .create_org(
+                "TestOrg".to_string(),
+                OrgType::Company,
+                Some(test_charter()),
+                make_founders(2),
+                100,
+            )
+            .unwrap();
 
         // At tick 100, org is active
         let transitioned = store.check_inactivity(100);
@@ -761,13 +816,15 @@ mod tests {
     #[test]
     fn bankruptcy_check() {
         let mut store = OrganizationStore::new();
-        let org = store.create_org(
-            "TestOrg".to_string(),
-            OrgType::Company,
-            Some(test_charter()),
-            make_founders(2),
-            100,
-        ).unwrap();
+        let org = store
+            .create_org(
+                "TestOrg".to_string(),
+                OrgType::Company,
+                Some(test_charter()),
+                make_founders(2),
+                100,
+            )
+            .unwrap();
         let org_id = org.id.clone();
 
         // Treasury is CREATION_COST_MONEY (100), debts = 0 -> not bankrupt
@@ -788,20 +845,27 @@ mod tests {
 
     #[test]
     fn all_four_org_types() {
-        let types = vec![OrgType::Company, OrgType::Guild, OrgType::Alliance, OrgType::University];
+        let types = vec![
+            OrgType::Company,
+            OrgType::Guild,
+            OrgType::Alliance,
+            OrgType::University,
+        ];
         let mut store = OrganizationStore::new();
 
         for (i, org_type) in types.into_iter().enumerate() {
             let founders: Vec<(String, String)> = (0..2)
                 .map(|j| (format!("type{}-agent{}", i, j), format!("Agent {}", j)))
                 .collect();
-            let org = store.create_org(
-                format!("Org{}", i),
-                org_type,
-                Some(test_charter()),
-                founders,
-                100,
-            ).unwrap();
+            let org = store
+                .create_org(
+                    format!("Org{}", i),
+                    org_type,
+                    Some(test_charter()),
+                    founders,
+                    100,
+                )
+                .unwrap();
             assert!(store.get(&org.id).is_some());
         }
         assert_eq!(store.list().len(), 4);

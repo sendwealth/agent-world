@@ -15,9 +15,8 @@ pub mod service;
 
 pub use client_pool::ConnectionPool;
 pub use federation::{
-    FederationEngine, FederationError, FederationSummary,
-    ForeignWorld, DiplomaticStatus,
-    CrossWorldTreaty, CrossWorldTreatyType, CrossWorldTreatyStatus,
+    CrossWorldTreaty, CrossWorldTreatyStatus, CrossWorldTreatyType, DiplomaticStatus,
+    FederationEngine, FederationError, FederationSummary, ForeignWorld,
 };
 pub use registry::{AgentRegistry, RegisteredAgent};
 pub use router::MessageRouter;

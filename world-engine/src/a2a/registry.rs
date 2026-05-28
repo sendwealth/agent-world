@@ -78,10 +78,11 @@ impl AgentRegistry {
 
         if is_new {
             drop(agents); // release write lock before publishing event
-            self.event_bus.publish(crate::world::event::WorldEvent::AgentSpawned {
-                agent_id,
-                name: String::new(), // name already stored in registry
-            });
+            self.event_bus
+                .publish(crate::world::event::WorldEvent::AgentSpawned {
+                    agent_id,
+                    name: String::new(), // name already stored in registry
+                });
         }
 
         is_new
@@ -104,10 +105,11 @@ impl AgentRegistry {
         let mut agents = self.agents.write().await;
         if agents.remove(agent_id).is_some() {
             drop(agents);
-            self.event_bus.publish(crate::world::event::WorldEvent::AgentDied {
-                agent_id: agent_id.to_string(),
-                reason: crate::world::enums::DeathReason::HumanTerminated,
-            });
+            self.event_bus
+                .publish(crate::world::event::WorldEvent::AgentDied {
+                    agent_id: agent_id.to_string(),
+                    reason: crate::world::enums::DeathReason::HumanTerminated,
+                });
             true
         } else {
             false
@@ -232,10 +234,11 @@ impl AgentRegistry {
         for agent_id in &stale {
             agents.remove(agent_id);
             drop(agents);
-            self.event_bus.publish(crate::world::event::WorldEvent::AgentDied {
-                agent_id: agent_id.clone(),
-                reason: crate::world::enums::DeathReason::TokenDepleted, // timeout = effectively died
-            });
+            self.event_bus
+                .publish(crate::world::event::WorldEvent::AgentDied {
+                    agent_id: agent_id.clone(),
+                    reason: crate::world::enums::DeathReason::TokenDepleted, // timeout = effectively died
+                });
             agents = self.agents.write().await;
         }
 
@@ -274,13 +277,8 @@ mod tests {
     #[tokio::test]
     async fn register_existing_agent_is_update() {
         let reg = make_registry();
-        reg.register(
-            "agent-1".into(),
-            "Alice".into(),
-            vec![],
-            "pk".into(),
-        )
-        .await;
+        reg.register("agent-1".into(), "Alice".into(), vec![], "pk".into())
+            .await;
         let is_new = reg
             .register(
                 "agent-1".into(),
@@ -299,13 +297,8 @@ mod tests {
     #[tokio::test]
     async fn heartbeat_updates_last_seen() {
         let reg = make_registry();
-        reg.register(
-            "agent-1".into(),
-            "Alice".into(),
-            vec![],
-            "pk".into(),
-        )
-        .await;
+        reg.register("agent-1".into(), "Alice".into(), vec![], "pk".into())
+            .await;
 
         let agent = reg.get("agent-1").await.unwrap();
         let first_seen = agent.last_seen;
@@ -328,13 +321,8 @@ mod tests {
     #[tokio::test]
     async fn deregister_removes_agent() {
         let reg = make_registry();
-        reg.register(
-            "agent-1".into(),
-            "Alice".into(),
-            vec![],
-            "pk".into(),
-        )
-        .await;
+        reg.register("agent-1".into(), "Alice".into(), vec![], "pk".into())
+            .await;
         assert!(reg.deregister("agent-1").await);
         assert_eq!(reg.count().await, 0);
     }
@@ -385,9 +373,7 @@ mod tests {
         )
         .await;
 
-        let found = reg
-            .discover(&["coding".into()])
-            .await;
+        let found = reg.discover(&["coding".into()]).await;
         assert_eq!(found.len(), 1);
         assert_eq!(found[0].agent_id, "a1");
     }
@@ -410,9 +396,7 @@ mod tests {
         )
         .await;
 
-        let found = reg
-            .discover(&["coding".into(), "research".into()])
-            .await;
+        let found = reg.discover(&["coding".into(), "research".into()]).await;
         assert_eq!(found.len(), 1);
         assert_eq!(found[0].agent_id, "a1");
     }
@@ -420,17 +404,19 @@ mod tests {
     #[tokio::test]
     async fn update_stats() {
         let reg = make_registry();
-        reg.register(
-            "a1".into(),
-            "Alice".into(),
-            vec![],
-            "pk".into(),
-        )
-        .await;
+        reg.register("a1".into(), "Alice".into(), vec![], "pk".into())
+            .await;
 
         assert!(
-            reg.update_stats("a1", Some(100), Some(50), Some(vec!["coding".into()]), Some(0.8), Some(2))
-                .await
+            reg.update_stats(
+                "a1",
+                Some(100),
+                Some(50),
+                Some(vec!["coding".into()]),
+                Some(0.8),
+                Some(2)
+            )
+            .await
         );
 
         let agent = reg.get("a1").await.unwrap();
@@ -444,7 +430,10 @@ mod tests {
     #[tokio::test]
     async fn update_stats_unknown_agent() {
         let reg = make_registry();
-        assert!(!reg.update_stats("unknown", Some(100), None, None, None, None).await);
+        assert!(
+            !reg.update_stats("unknown", Some(100), None, None, None, None)
+                .await
+        );
     }
 
     #[tokio::test]
@@ -470,9 +459,7 @@ mod tests {
             "pk".into(),
         )
         .await;
-        let found = reg
-            .discover(&["teaching".into()])
-            .await;
+        let found = reg.discover(&["teaching".into()]).await;
         assert!(found.is_empty());
     }
 }

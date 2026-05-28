@@ -5,9 +5,9 @@ use tokio::sync::{mpsc, RwLock};
 use tokio_stream::wrappers::ReceiverStream;
 use tonic::Status;
 
+use super::registry::AgentRegistry;
 use crate::agentworld::a2a::v1::A2aMessage;
 use crate::world::intervention::MessageInterventionGuard;
-use super::registry::AgentRegistry;
 
 /// A message waiting to be delivered to an agent.
 pub type PendingMessage = A2aMessage;

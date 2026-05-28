@@ -218,10 +218,8 @@ mod tests {
 
     #[tokio::test]
     async fn test_pool_creation() {
-        let pool = GrpcConnectionPool::new(
-            "http://127.0.0.1:50051".to_string(),
-            PoolConfig::default(),
-        );
+        let pool =
+            GrpcConnectionPool::new("http://127.0.0.1:50051".to_string(), PoolConfig::default());
         let stats = pool.stats().await;
         assert_eq!(stats.active_connections, 0);
         assert_eq!(stats.max_connections, 20);
@@ -248,13 +246,15 @@ mod tests {
     async fn test_pooled_connection_expiry() {
         let config = PoolConfig::default();
         // A connection just created should not be expired
-        let conn = PooledConnection::new(Channel::from_static("http://127.0.0.1:50051").connect_lazy());
+        let conn =
+            PooledConnection::new(Channel::from_static("http://127.0.0.1:50051").connect_lazy());
         assert!(!conn.is_expired(config.max_idle_age));
     }
 
     #[tokio::test]
     async fn test_pooled_connection_use_count() {
-        let mut conn = PooledConnection::new(Channel::from_static("http://127.0.0.1:50051").connect_lazy());
+        let mut conn =
+            PooledConnection::new(Channel::from_static("http://127.0.0.1:50051").connect_lazy());
         assert_eq!(conn.use_count, 0);
         conn.use_count += 1;
         assert_eq!(conn.use_count, 1);

@@ -5,11 +5,11 @@
 //! agent_id and time range.
 
 use axum::{
-    Router,
     extract::{Path, Query, State},
-    http::{StatusCode, header},
+    http::{header, StatusCode},
     response::IntoResponse,
     routing::get,
+    Router,
 };
 use serde::{Deserialize, Serialize};
 
@@ -55,7 +55,10 @@ pub struct BehaviorLogEntry {
 pub fn behavior_log_routes() -> Router<AppState> {
     Router::new()
         .route("/api/v2/export/behavior", get(export_behavior_log))
-        .route("/api/v2/export/behavior/{agent_id}", get(export_agent_behavior_log))
+        .route(
+            "/api/v2/export/behavior/{agent_id}",
+            get(export_agent_behavior_log),
+        )
 }
 
 // ── Helpers ───────────────────────────────────────────────
@@ -82,11 +85,8 @@ async fn collect_behavior_entries(
     let to = to_tick.unwrap_or(current_tick);
 
     // Parse event type filter
-    let type_filter: Option<std::collections::HashSet<String>> = event_type_filter.map(|s| {
-        s.split(',')
-            .map(|t| t.trim().to_lowercase())
-            .collect()
-    });
+    let type_filter: Option<std::collections::HashSet<String>> =
+        event_type_filter.map(|s| s.split(',').map(|t| t.trim().to_lowercase()).collect());
 
     // 1. Collect from A2A messages
     let messages = state.messages.lock().await;
@@ -207,7 +207,12 @@ async fn collect_behavior_entries(
             target_agent_id: None,
             description: format!(
                 "Agent {} (phase: {}, tokens: {}, money: {}, alive: {}, ticks_survived: {})",
-                agent.name, agent.phase, agent.tokens, agent.money, agent.alive, agent.ticks_survived
+                agent.name,
+                agent.phase,
+                agent.tokens,
+                agent.money,
+                agent.alive,
+                agent.ticks_survived
             ),
             details: serde_json::json!({
                 "name": agent.name,
@@ -225,7 +230,11 @@ async fn collect_behavior_entries(
     drop(agents);
 
     // Sort by tick, then by event_type
-    entries.sort_by(|a, b| a.tick.cmp(&b.tick).then_with(|| a.event_type.cmp(&b.event_type)));
+    entries.sort_by(|a, b| {
+        a.tick
+            .cmp(&b.tick)
+            .then_with(|| a.event_type.cmp(&b.event_type))
+    });
 
     // Apply limit
     entries.truncate(limit as usize);

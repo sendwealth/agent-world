@@ -83,7 +83,11 @@ impl HexPos {
     }
 
     /// Origin position (0, 0, layer 0).
-    pub const ORIGIN: HexPos = HexPos { q: 0, r: 0, layer: 0 };
+    pub const ORIGIN: HexPos = HexPos {
+        q: 0,
+        r: 0,
+        layer: 0,
+    };
 
     // ── Neighbor offsets for pointy-top hex grid ──────────────────────
 
@@ -98,12 +102,12 @@ impl HexPos {
     ///      (-1, +1)  (+1, 0)
     /// ```
     pub const NEIGHBOR_OFFSETS: [(i32, i32); 6] = [
-        (1, 0),   // East
-        (1, -1),  // Northeast
-        (0, -1),  // Northwest
-        (-1, 0),  // West
-        (-1, 1),  // Southwest
-        (0, 1),   // Southeast
+        (1, 0),  // East
+        (1, -1), // Northeast
+        (0, -1), // Northwest
+        (-1, 0), // West
+        (-1, 1), // Southwest
+        (0, 1),  // Southeast
     ];
 
     /// Return the six neighboring positions (same layer).
@@ -291,12 +295,12 @@ mod tests {
     #[test]
     fn neighbor_by_direction() {
         let pos = HexPos::new(0, 0);
-        assert_eq!(pos.neighbor(0), HexPos::new(1, 0));   // East
-        assert_eq!(pos.neighbor(1), HexPos::new(1, -1));  // NE
-        assert_eq!(pos.neighbor(2), HexPos::new(0, -1));  // NW
-        assert_eq!(pos.neighbor(3), HexPos::new(-1, 0));  // West
-        assert_eq!(pos.neighbor(4), HexPos::new(-1, 1));  // SW
-        assert_eq!(pos.neighbor(5), HexPos::new(0, 1));   // SE
+        assert_eq!(pos.neighbor(0), HexPos::new(1, 0)); // East
+        assert_eq!(pos.neighbor(1), HexPos::new(1, -1)); // NE
+        assert_eq!(pos.neighbor(2), HexPos::new(0, -1)); // NW
+        assert_eq!(pos.neighbor(3), HexPos::new(-1, 0)); // West
+        assert_eq!(pos.neighbor(4), HexPos::new(-1, 1)); // SW
+        assert_eq!(pos.neighbor(5), HexPos::new(0, 1)); // SE
     }
 
     #[test]

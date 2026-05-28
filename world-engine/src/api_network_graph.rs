@@ -7,11 +7,11 @@
 use std::collections::HashMap;
 
 use axum::{
-    Router,
     extract::{Query, State},
-    http::{StatusCode, header},
+    http::{header, StatusCode},
     response::IntoResponse,
     routing::get,
+    Router,
 };
 use serde::{Deserialize, Serialize};
 
@@ -101,13 +101,23 @@ fn build_graphml(graph: &NetworkGraph, include_attributes: bool) -> String {
 
     // Define attribute keys
     if include_attributes {
-        xml.push_str("  <key id=\"label\" for=\"node\" attr.name=\"label\" attr.type=\"string\"/>\n");
-        xml.push_str("  <key id=\"phase\" for=\"node\" attr.name=\"phase\" attr.type=\"string\"/>\n");
-        xml.push_str("  <key id=\"alive\" for=\"node\" attr.name=\"alive\" attr.type=\"boolean\"/>\n");
-        xml.push_str("  <key id=\"tokens\" for=\"node\" attr.name=\"tokens\" attr.type=\"long\"/>\n");
+        xml.push_str(
+            "  <key id=\"label\" for=\"node\" attr.name=\"label\" attr.type=\"string\"/>\n",
+        );
+        xml.push_str(
+            "  <key id=\"phase\" for=\"node\" attr.name=\"phase\" attr.type=\"string\"/>\n",
+        );
+        xml.push_str(
+            "  <key id=\"alive\" for=\"node\" attr.name=\"alive\" attr.type=\"boolean\"/>\n",
+        );
+        xml.push_str(
+            "  <key id=\"tokens\" for=\"node\" attr.name=\"tokens\" attr.type=\"long\"/>\n",
+        );
     }
     xml.push_str("  <key id=\"weight\" for=\"edge\" attr.name=\"weight\" attr.type=\"double\"/>\n");
-    xml.push_str("  <key id=\"edge_type\" for=\"edge\" attr.name=\"edge_type\" attr.type=\"string\"/>\n");
+    xml.push_str(
+        "  <key id=\"edge_type\" for=\"edge\" attr.name=\"edge_type\" attr.type=\"string\"/>\n",
+    );
 
     xml.push_str("  <graph id=\"G\" edgedefault=\"directed\">\n");
 
@@ -159,11 +169,10 @@ async fn export_network_graph(
     let min_weight = query.min_weight.unwrap_or(0.0);
 
     // Parse edge type filter
-    let type_filter: Option<std::collections::HashSet<String>> = query.edge_types.as_deref().map(|s| {
-        s.split(',')
-            .map(|t| t.trim().to_lowercase())
-            .collect()
-    });
+    let type_filter: Option<std::collections::HashSet<String>> = query
+        .edge_types
+        .as_deref()
+        .map(|s| s.split(',').map(|t| t.trim().to_lowercase()).collect());
 
     // Collect nodes from agents
     let agents = state.agents.lock().await;
@@ -213,7 +222,11 @@ async fn export_network_graph(
     if type_filter.as_ref().is_none_or(|tf| tf.contains("message")) {
         let messages = state.messages.lock().await;
         for msg in messages.iter() {
-            let key = (msg.from_agent.clone(), msg.to_agent.clone(), "message".to_string());
+            let key = (
+                msg.from_agent.clone(),
+                msg.to_agent.clone(),
+                "message".to_string(),
+            );
             let entry = edge_map.entry(key).or_insert((0.0, 0));
             entry.0 += 1.0;
             entry.1 += 1;
@@ -238,7 +251,11 @@ async fn export_network_graph(
             // Get trade history from marketplace listings
             for listing in mp.list_all().iter() {
                 for purchase in mp.listing_purchases(listing.id) {
-                    let key = (purchase.buyer_id.clone(), listing.publisher_id.clone(), "trade".to_string());
+                    let key = (
+                        purchase.buyer_id.clone(),
+                        listing.publisher_id.clone(),
+                        "trade".to_string(),
+                    );
                     let entry = edge_map.entry(key).or_insert((0.0, 0));
                     entry.0 += listing.price as f64;
                     entry.1 += 1;
@@ -251,13 +268,15 @@ async fn export_network_graph(
     let edges: Vec<NetworkEdge> = edge_map
         .into_iter()
         .filter(|(_, (weight, _))| *weight >= min_weight)
-        .map(|((source, target, edge_type), (weight, count))| NetworkEdge {
-            source,
-            target,
-            weight,
-            edge_type,
-            interaction_count: Some(count),
-        })
+        .map(
+            |((source, target, edge_type), (weight, count))| NetworkEdge {
+                source,
+                target,
+                weight,
+                edge_type,
+                interaction_count: Some(count),
+            },
+        )
         .collect();
 
     let graph = NetworkGraph {

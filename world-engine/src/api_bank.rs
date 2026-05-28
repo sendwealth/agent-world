@@ -1,15 +1,15 @@
 use axum::{
-    Json,
     extract::{Path, Query, State},
     http::StatusCode,
     response::IntoResponse,
     routing::*,
+    Json,
 };
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
 use crate::api::{AppState, ErrorResponse, SharedBankingSystem};
-use crate::economy::banking::{BankingSystem, BankAccountType, Loan, LoanStatus, Collateral};
+use crate::economy::banking::{BankAccountType, Collateral, Loan, LoanStatus};
 
 #[derive(Debug, Deserialize)]
 pub struct BankOpenAccountRequest {
@@ -132,9 +132,16 @@ pub fn parse_loan_status(s: &str) -> Option<LoanStatus> {
 
 // ── Banking Handlers ─────────────────────────────────────
 
-pub fn get_banking(state: &AppState) -> Result<SharedBankingSystem, (StatusCode, Json<ErrorResponse>)> {
+pub fn get_banking(
+    state: &AppState,
+) -> Result<SharedBankingSystem, (StatusCode, Json<ErrorResponse>)> {
     state.banking_system.clone().ok_or_else(|| {
-        (StatusCode::SERVICE_UNAVAILABLE, Json(ErrorResponse { error: "banking system not configured".into() }))
+        (
+            StatusCode::SERVICE_UNAVAILABLE,
+            Json(ErrorResponse {
+                error: "banking system not configured".into(),
+            }),
+        )
     })
 }
 
@@ -149,11 +156,25 @@ pub async fn bank_open_account(
 
     let account_type = match parse_bank_account_type(&body.account_type) {
         Some(t) => t,
-        None => return (StatusCode::BAD_REQUEST, Json(ErrorResponse { error: "account_type must be 'savings' or 'checking'".into() })).into_response(),
+        None => {
+            return (
+                StatusCode::BAD_REQUEST,
+                Json(ErrorResponse {
+                    error: "account_type must be 'savings' or 'checking'".into(),
+                }),
+            )
+                .into_response()
+        }
     };
 
     if body.owner_id.is_empty() {
-        return (StatusCode::BAD_REQUEST, Json(ErrorResponse { error: "owner_id is required".into() })).into_response();
+        return (
+            StatusCode::BAD_REQUEST,
+            Json(ErrorResponse {
+                error: "owner_id is required".into(),
+            }),
+        )
+            .into_response();
     }
 
     let label = if body.label.is_empty() {
@@ -177,30 +198,38 @@ pub async fn bank_open_account(
             };
             (StatusCode::CREATED, Json(resp)).into_response()
         }
-        Err(e) => (StatusCode::BAD_REQUEST, Json(ErrorResponse { error: e.to_string() })).into_response(),
+        Err(e) => (
+            StatusCode::BAD_REQUEST,
+            Json(ErrorResponse {
+                error: e.to_string(),
+            }),
+        )
+            .into_response(),
     }
 }
 
-pub async fn bank_list_accounts(
-    State(state): State<AppState>,
-) -> impl IntoResponse {
+pub async fn bank_list_accounts(State(state): State<AppState>) -> impl IntoResponse {
     let banking = match get_banking(&state) {
         Ok(b) => b,
         Err(e) => return e.into_response(),
     };
 
     let banking = banking.lock().await;
-    let accounts: Vec<BankAccountResponse> = banking.list_accounts().into_iter().map(|a| {
-        let balance = banking.get_balance(a.id).unwrap_or(0);
-        BankAccountResponse {
-            id: a.id.to_string(),
-            owner_id: a.owner_id.clone(),
-            account_type: format!("{:?}", a.account_type).to_lowercase(),
-            label: a.label.clone(),
-            balance,
-            created_tick: a.created_tick,
-        }
-    }).collect();
+    let accounts: Vec<BankAccountResponse> = banking
+        .list_accounts()
+        .into_iter()
+        .map(|a| {
+            let balance = banking.get_balance(a.id).unwrap_or(0);
+            BankAccountResponse {
+                id: a.id.to_string(),
+                owner_id: a.owner_id.clone(),
+                account_type: format!("{:?}", a.account_type).to_lowercase(),
+                label: a.label.clone(),
+                balance,
+                created_tick: a.created_tick,
+            }
+        })
+        .collect();
     Json(accounts).into_response()
 }
 
@@ -214,7 +243,13 @@ pub async fn bank_get_account(
     };
 
     let Ok(uuid) = Uuid::parse_str(&id) else {
-        return (StatusCode::BAD_REQUEST, Json(ErrorResponse { error: "invalid account id".into() })).into_response();
+        return (
+            StatusCode::BAD_REQUEST,
+            Json(ErrorResponse {
+                error: "invalid account id".into(),
+            }),
+        )
+            .into_response();
     };
 
     let banking = banking.lock().await;
@@ -231,7 +266,13 @@ pub async fn bank_get_account(
             };
             Json(resp).into_response()
         }
-        None => (StatusCode::NOT_FOUND, Json(ErrorResponse { error: "account not found".into() })).into_response(),
+        None => (
+            StatusCode::NOT_FOUND,
+            Json(ErrorResponse {
+                error: "account not found".into(),
+            }),
+        )
+            .into_response(),
     }
 }
 
@@ -245,7 +286,13 @@ pub async fn bank_deposit(
     };
 
     let Ok(uuid) = Uuid::parse_str(&body.account_id) else {
-        return (StatusCode::BAD_REQUEST, Json(ErrorResponse { error: "invalid account id".into() })).into_response();
+        return (
+            StatusCode::BAD_REQUEST,
+            Json(ErrorResponse {
+                error: "invalid account id".into(),
+            }),
+        )
+            .into_response();
     };
 
     let tick = *state.tick_rx.borrow();
@@ -255,8 +302,15 @@ pub async fn bank_deposit(
             "account_id": result.account_id,
             "amount": result.amount,
             "new_balance": result.new_balance,
-        })).into_response(),
-        Err(e) => (StatusCode::BAD_REQUEST, Json(ErrorResponse { error: e.to_string() })).into_response(),
+        }))
+        .into_response(),
+        Err(e) => (
+            StatusCode::BAD_REQUEST,
+            Json(ErrorResponse {
+                error: e.to_string(),
+            }),
+        )
+            .into_response(),
     }
 }
 
@@ -270,7 +324,13 @@ pub async fn bank_withdraw(
     };
 
     let Ok(uuid) = Uuid::parse_str(&body.account_id) else {
-        return (StatusCode::BAD_REQUEST, Json(ErrorResponse { error: "invalid account id".into() })).into_response()
+        return (
+            StatusCode::BAD_REQUEST,
+            Json(ErrorResponse {
+                error: "invalid account id".into(),
+            }),
+        )
+            .into_response();
     };
 
     let tick = *state.tick_rx.borrow();
@@ -280,8 +340,15 @@ pub async fn bank_withdraw(
             "account_id": result.account_id,
             "amount": result.amount,
             "new_balance": result.new_balance,
-        })).into_response(),
-        Err(e) => (StatusCode::BAD_REQUEST, Json(ErrorResponse { error: e.to_string() })).into_response(),
+        }))
+        .into_response(),
+        Err(e) => (
+            StatusCode::BAD_REQUEST,
+            Json(ErrorResponse {
+                error: e.to_string(),
+            }),
+        )
+            .into_response(),
     }
 }
 
@@ -295,21 +362,43 @@ pub async fn bank_apply_loan(
     };
 
     if body.borrower_id.is_empty() {
-        return (StatusCode::BAD_REQUEST, Json(ErrorResponse { error: "borrower_id is required".into() })).into_response();
+        return (
+            StatusCode::BAD_REQUEST,
+            Json(ErrorResponse {
+                error: "borrower_id is required".into(),
+            }),
+        )
+            .into_response();
     }
 
     let tick = *state.tick_rx.borrow();
     let mut banking = banking.lock().await;
-    match banking.apply_for_loan(&body.borrower_id, body.amount, body.term_ticks, body.collateral, tick) {
-        Ok(result) => (StatusCode::CREATED, Json(serde_json::json!({
-            "loan_id": result.loan_id.to_string(),
-            "borrower_id": result.borrower_id,
-            "principal": result.principal,
-            "interest_rate": result.interest_rate,
-            "term_ticks": result.term_ticks,
-            "status": format!("{:?}", result.status).to_lowercase(),
-        }))).into_response(),
-        Err(e) => (StatusCode::BAD_REQUEST, Json(ErrorResponse { error: e.to_string() })).into_response(),
+    match banking.apply_for_loan(
+        &body.borrower_id,
+        body.amount,
+        body.term_ticks,
+        body.collateral,
+        tick,
+    ) {
+        Ok(result) => (
+            StatusCode::CREATED,
+            Json(serde_json::json!({
+                "loan_id": result.loan_id.to_string(),
+                "borrower_id": result.borrower_id,
+                "principal": result.principal,
+                "interest_rate": result.interest_rate,
+                "term_ticks": result.term_ticks,
+                "status": format!("{:?}", result.status).to_lowercase(),
+            })),
+        )
+            .into_response(),
+        Err(e) => (
+            StatusCode::BAD_REQUEST,
+            Json(ErrorResponse {
+                error: e.to_string(),
+            }),
+        )
+            .into_response(),
     }
 }
 
@@ -324,7 +413,8 @@ pub async fn bank_list_loans(
 
     let status_filter = query.status.as_deref().and_then(parse_loan_status);
     let banking = banking.lock().await;
-    let loans: Vec<LoanResponse> = banking.list_loans(query.borrower_id.as_deref(), status_filter)
+    let loans: Vec<LoanResponse> = banking
+        .list_loans(query.borrower_id.as_deref(), status_filter)
         .into_iter()
         .map(LoanResponse::from)
         .collect();
@@ -341,13 +431,25 @@ pub async fn bank_get_loan(
     };
 
     let Ok(uuid) = Uuid::parse_str(&id) else {
-        return (StatusCode::BAD_REQUEST, Json(ErrorResponse { error: "invalid loan id".into() })).into_response();
+        return (
+            StatusCode::BAD_REQUEST,
+            Json(ErrorResponse {
+                error: "invalid loan id".into(),
+            }),
+        )
+            .into_response();
     };
 
     let banking = banking.lock().await;
     match banking.get_loan(uuid) {
         Some(loan) => Json(LoanResponse::from(loan)).into_response(),
-        None => (StatusCode::NOT_FOUND, Json(ErrorResponse { error: "loan not found".into() })).into_response(),
+        None => (
+            StatusCode::NOT_FOUND,
+            Json(ErrorResponse {
+                error: "loan not found".into(),
+            }),
+        )
+            .into_response(),
     }
 }
 
@@ -361,14 +463,26 @@ pub async fn bank_approve_loan(
     };
 
     let Ok(uuid) = Uuid::parse_str(&id) else {
-        return (StatusCode::BAD_REQUEST, Json(ErrorResponse { error: "invalid loan id".into() })).into_response()
+        return (
+            StatusCode::BAD_REQUEST,
+            Json(ErrorResponse {
+                error: "invalid loan id".into(),
+            }),
+        )
+            .into_response();
     };
 
     let tick = *state.tick_rx.borrow();
     let mut banking = banking.lock().await;
     match banking.approve_loan(uuid, tick) {
         Ok(loan) => Json(LoanResponse::from(&loan)).into_response(),
-        Err(e) => (StatusCode::BAD_REQUEST, Json(ErrorResponse { error: e.to_string() })).into_response(),
+        Err(e) => (
+            StatusCode::BAD_REQUEST,
+            Json(ErrorResponse {
+                error: e.to_string(),
+            }),
+        )
+            .into_response(),
     }
 }
 
@@ -382,14 +496,26 @@ pub async fn bank_disburse_loan(
     };
 
     let Ok(uuid) = Uuid::parse_str(&id) else {
-        return (StatusCode::BAD_REQUEST, Json(ErrorResponse { error: "invalid loan id".into() })).into_response()
+        return (
+            StatusCode::BAD_REQUEST,
+            Json(ErrorResponse {
+                error: "invalid loan id".into(),
+            }),
+        )
+            .into_response();
     };
 
     let tick = *state.tick_rx.borrow();
     let mut banking = banking.lock().await;
     match banking.disburse_loan(uuid, tick) {
         Ok(loan) => Json(LoanResponse::from(&loan)).into_response(),
-        Err(e) => (StatusCode::BAD_REQUEST, Json(ErrorResponse { error: e.to_string() })).into_response(),
+        Err(e) => (
+            StatusCode::BAD_REQUEST,
+            Json(ErrorResponse {
+                error: e.to_string(),
+            }),
+        )
+            .into_response(),
     }
 }
 
@@ -404,7 +530,13 @@ pub async fn bank_repay_loan(
     };
 
     let Ok(uuid) = Uuid::parse_str(&id) else {
-        return (StatusCode::BAD_REQUEST, Json(ErrorResponse { error: "invalid loan id".into() })).into_response()
+        return (
+            StatusCode::BAD_REQUEST,
+            Json(ErrorResponse {
+                error: "invalid loan id".into(),
+            }),
+        )
+            .into_response();
     };
 
     let tick = *state.tick_rx.borrow();
@@ -415,8 +547,15 @@ pub async fn bank_repay_loan(
             "amount_paid": result.amount_paid,
             "outstanding_balance": result.outstanding_balance,
             "fully_repaid": result.fully_repaid,
-        })).into_response(),
-        Err(e) => (StatusCode::BAD_REQUEST, Json(ErrorResponse { error: e.to_string() })).into_response(),
+        }))
+        .into_response(),
+        Err(e) => (
+            StatusCode::BAD_REQUEST,
+            Json(ErrorResponse {
+                error: e.to_string(),
+            }),
+        )
+            .into_response(),
     }
 }
 
@@ -434,7 +573,8 @@ pub async fn bank_adjust_rates(
     Json(serde_json::json!({
         "new_savings_rate": result.new_savings_rate,
         "new_loan_rate": result.new_loan_rate,
-    })).into_response()
+    }))
+    .into_response()
 }
 
 pub async fn bank_mint_money(
@@ -449,10 +589,14 @@ pub async fn bank_mint_money(
     let tick = *state.tick_rx.borrow();
     let mut banking = banking.lock().await;
     let result = banking.mint_money(body.amount, tick);
-    (StatusCode::CREATED, Json(serde_json::json!({
-        "amount": result.amount,
-        "total_money_supply": result.total_money_supply,
-    }))).into_response()
+    (
+        StatusCode::CREATED,
+        Json(serde_json::json!({
+            "amount": result.amount,
+            "total_money_supply": result.total_money_supply,
+        })),
+    )
+        .into_response()
 }
 
 pub async fn bank_write_off(
@@ -465,7 +609,13 @@ pub async fn bank_write_off(
     };
 
     let Ok(uuid) = Uuid::parse_str(&id) else {
-        return (StatusCode::BAD_REQUEST, Json(ErrorResponse { error: "invalid loan id".into() })).into_response()
+        return (
+            StatusCode::BAD_REQUEST,
+            Json(ErrorResponse {
+                error: "invalid loan id".into(),
+            }),
+        )
+            .into_response();
     };
 
     let tick = *state.tick_rx.borrow();
@@ -474,14 +624,19 @@ pub async fn bank_write_off(
         Ok(result) => Json(serde_json::json!({
             "loan_id": result.loan_id.to_string(),
             "amount_written_off": result.amount_written_off,
-        })).into_response(),
-        Err(e) => (StatusCode::BAD_REQUEST, Json(ErrorResponse { error: e.to_string() })).into_response(),
+        }))
+        .into_response(),
+        Err(e) => (
+            StatusCode::BAD_REQUEST,
+            Json(ErrorResponse {
+                error: e.to_string(),
+            }),
+        )
+            .into_response(),
     }
 }
 
-pub async fn bank_stats(
-    State(state): State<AppState>,
-) -> impl IntoResponse {
+pub async fn bank_stats(State(state): State<AppState>) -> impl IntoResponse {
     let banking = match get_banking(&state) {
         Ok(b) => b,
         Err(e) => return e.into_response(),
@@ -497,7 +652,8 @@ pub async fn bank_stats(
         "total_loan_debt": banking.total_loan_debt(),
         "savings_rate": banking.config().savings_rate,
         "loan_rate": banking.config().loan_rate,
-    })).into_response()
+    }))
+    .into_response()
 }
 
 /// Banking routes.

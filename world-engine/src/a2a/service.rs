@@ -446,10 +446,20 @@ mod tests {
     async fn discover_returns_registered_agents() {
         let (service, registry, _) = make_service();
         registry
-            .register("a1".into(), "Alice".into(), vec!["coding".into()], "pk1".into())
+            .register(
+                "a1".into(),
+                "Alice".into(),
+                vec!["coding".into()],
+                "pk1".into(),
+            )
             .await;
         registry
-            .register("a2".into(), "Bob".into(), vec!["research".into()], "pk2".into())
+            .register(
+                "a2".into(),
+                "Bob".into(),
+                vec!["research".into()],
+                "pk2".into(),
+            )
             .await;
 
         let resp = service
@@ -468,10 +478,20 @@ mod tests {
     async fn discover_filter_by_capability() {
         let (service, registry, _) = make_service();
         registry
-            .register("a1".into(), "Alice".into(), vec!["coding".into()], "pk1".into())
+            .register(
+                "a1".into(),
+                "Alice".into(),
+                vec!["coding".into()],
+                "pk1".into(),
+            )
             .await;
         registry
-            .register("a2".into(), "Bob".into(), vec!["research".into()], "pk2".into())
+            .register(
+                "a2".into(),
+                "Bob".into(),
+                vec!["research".into()],
+                "pk2".into(),
+            )
             .await;
 
         let resp = service
@@ -687,10 +707,20 @@ mod tests {
     async fn discover_all_returns_all_agents() {
         let (service, registry, _) = make_service();
         registry
-            .register("a1".into(), "Alice".into(), vec!["coding".into()], "pk1".into())
+            .register(
+                "a1".into(),
+                "Alice".into(),
+                vec!["coding".into()],
+                "pk1".into(),
+            )
             .await;
         registry
-            .register("a2".into(), "Bob".into(), vec!["research".into()], "pk2".into())
+            .register(
+                "a2".into(),
+                "Bob".into(),
+                vec!["research".into()],
+                "pk2".into(),
+            )
             .await;
 
         let resp = service.discover_all().await.unwrap();

@@ -4,8 +4,8 @@
 use std::collections::HashMap;
 use std::sync::Mutex;
 
-use rand::SeedableRng;
 use rand::rngs::StdRng;
+use rand::SeedableRng;
 use uuid::Uuid;
 
 use crate::economy::token_burn::AgentRecord;
@@ -13,10 +13,10 @@ use crate::world::enums::AgentPhase;
 use crate::world::event::WorldEvent;
 use crate::world::subsystem::Subsystem;
 
+use super::crossover::{CrossoverConfig, CrossoverEngine};
 use super::mutation::MutationEngine;
 use super::mutation::MutationType;
 use super::mutation::OffspringMutationConfig;
-use super::crossover::{CrossoverConfig, CrossoverEngine};
 use super::selection::SelectionEngine;
 use super::skill_tree::{SkillNode, SkillTree};
 
@@ -174,10 +174,7 @@ impl EvolutionSubsystem {
         let mut events = Vec::new();
 
         // Compute current world token total
-        let current_tokens: u64 = agents
-            .iter()
-            .map(|(_, _, a)| a.tokens)
-            .sum();
+        let current_tokens: u64 = agents.iter().map(|(_, _, a)| a.tokens).sum();
 
         let prev_tokens = {
             let mut prev = self.prev_world_tokens.lock().unwrap();
@@ -243,12 +240,8 @@ impl EvolutionSubsystem {
         // Phase 2: Natural selection
         {
             let mut selection = self.selection.lock().unwrap();
-            let (reports, to_cull) = selection.evaluate_cycle(
-                tick,
-                agents,
-                current_tokens,
-                prev_tokens,
-            );
+            let (reports, to_cull) =
+                selection.evaluate_cycle(tick, agents, current_tokens, prev_tokens);
 
             // Emit fitness reports for all evaluated agents
             for report in reports {
@@ -304,11 +297,7 @@ impl Subsystem for EvolutionSubsystem {
         "evolution"
     }
 
-    fn on_tick(
-        &self,
-        tick: u64,
-        agents: &mut [(Uuid, u64, AgentRecord)],
-    ) -> Vec<WorldEvent> {
+    fn on_tick(&self, tick: u64, agents: &mut [(Uuid, u64, AgentRecord)]) -> Vec<WorldEvent> {
         let mut events = Vec::new();
 
         // Passive XP every tick
@@ -340,8 +329,8 @@ mod tests {
                 tokens,
                 skills: HashMap::new(),
                 personality: String::new(),
-            tasks_completed: 0,
-            tasks_attempted: 0,
+                tasks_completed: 0,
+                tasks_attempted: 0,
             },
         )
     }
@@ -374,8 +363,8 @@ mod tests {
                     })
                     .collect(),
                 personality: String::new(),
-            tasks_completed: 0,
-            tasks_attempted: 0,
+                tasks_completed: 0,
+                tasks_attempted: 0,
             },
         )
     }
@@ -449,12 +438,16 @@ mod tests {
 
         // Tick 999 should not trigger evaluation
         let events = sub.on_tick(999, &mut agents);
-        let has_fitness = events.iter().any(|e| matches!(e, WorldEvent::FitnessEvaluated { .. }));
+        let has_fitness = events
+            .iter()
+            .any(|e| matches!(e, WorldEvent::FitnessEvaluated { .. }));
         assert!(!has_fitness);
 
         // Tick 1000 should trigger evaluation
         let events = sub.on_tick(1000, &mut agents);
-        let has_fitness = events.iter().any(|e| matches!(e, WorldEvent::FitnessEvaluated { .. }));
+        let has_fitness = events
+            .iter()
+            .any(|e| matches!(e, WorldEvent::FitnessEvaluated { .. }));
         assert!(has_fitness);
     }
 
@@ -468,7 +461,9 @@ mod tests {
         let mut agents = vec![make_agent(AgentPhase::Adult, 100_000)];
 
         let events = sub.on_tick(1000, &mut agents);
-        let has_mutation = events.iter().any(|e| matches!(e, WorldEvent::SkillMutated { .. }));
+        let has_mutation = events
+            .iter()
+            .any(|e| matches!(e, WorldEvent::SkillMutated { .. }));
         assert!(has_mutation);
     }
 }

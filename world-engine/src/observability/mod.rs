@@ -10,12 +10,12 @@
 
 use std::time::Instant;
 
-use axum::http::{header, Response, StatusCode};
 use axum::body::Body;
+use axum::http::{header, Response, StatusCode};
 use prometheus::{
-    self, Encoder, IntCounter, IntGauge, Histogram, HistogramOpts, Registry, TextEncoder,
+    self, Encoder, Histogram, HistogramOpts, IntCounter, IntGauge, Registry, TextEncoder,
 };
-use tracing::{info, error, warn};
+use tracing::{error, info, warn};
 
 // ── Global registry ──────────────────────────────────────
 
@@ -167,7 +167,10 @@ pub async fn metrics_handler() -> Response<Body> {
 
     Response::builder()
         .status(StatusCode::OK)
-        .header(header::CONTENT_TYPE, "text/plain; version=0.0.4; charset=utf-8")
+        .header(
+            header::CONTENT_TYPE,
+            "text/plain; version=0.0.4; charset=utf-8",
+        )
         .body(Body::from(buffer))
         .unwrap()
 }
@@ -233,21 +236,13 @@ pub fn log_transaction(from: &str, to: &str, amount: i64, currency: &str) {
 
 /// Log an agent death event.
 pub fn log_agent_death(agent_id: &str, cause: &str) {
-    warn!(
-        agent_id = agent_id,
-        cause = cause,
-        "Agent died"
-    );
+    warn!(agent_id = agent_id, cause = cause, "Agent died");
     DEATHS_TOTAL.inc();
 }
 
 /// Log an error with structured context.
 pub fn log_error(context: &str, error: &str) {
-    error!(
-        context = context,
-        error = error,
-        "Error occurred"
-    );
+    error!(context = context, error = error, "Error occurred");
 }
 
 #[cfg(test)]

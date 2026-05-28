@@ -105,12 +105,24 @@ impl Default for EconomySection {
     }
 }
 
-fn default_initial_tokens() -> u64 { 100_000 }
-fn default_think_cost() -> u64 { 1 }
-fn default_memory_cost() -> f64 { 0.1 }
-fn default_communicate_cost() -> u64 { 10 }
-fn default_token_price() -> u64 { 100 }
-fn default_interest_rate() -> f64 { 0.001 }
+fn default_initial_tokens() -> u64 {
+    100_000
+}
+fn default_think_cost() -> u64 {
+    1
+}
+fn default_memory_cost() -> f64 {
+    0.1
+}
+fn default_communicate_cost() -> u64 {
+    10
+}
+fn default_token_price() -> u64 {
+    100
+}
+fn default_interest_rate() -> f64 {
+    0.001
+}
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct LifecycleSection {
@@ -138,11 +150,21 @@ impl Default for LifecycleSection {
     }
 }
 
-fn default_birth_tokens() -> u64 { 100_000 }
-fn default_childhood_ticks() -> u64 { 100 }
-fn default_adult_ticks() -> u64 { 1000 }
-fn default_elder_ticks() -> u64 { 200 }
-fn default_death_grace_ticks() -> u64 { 10 }
+fn default_birth_tokens() -> u64 {
+    100_000
+}
+fn default_childhood_ticks() -> u64 {
+    100
+}
+fn default_adult_ticks() -> u64 {
+    1000
+}
+fn default_elder_ticks() -> u64 {
+    200
+}
+fn default_death_grace_ticks() -> u64 {
+    10
+}
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct SafetySection {
@@ -164,9 +186,15 @@ impl Default for SafetySection {
     }
 }
 
-fn default_max_agents_per_org() -> u32 { 5 }
-fn default_anti_monopoly() -> f64 { 0.3 }
-fn default_protection_ticks() -> u64 { 50 }
+fn default_max_agents_per_org() -> u32 {
+    5
+}
+fn default_anti_monopoly() -> f64 {
+    0.3
+}
+fn default_protection_ticks() -> u64 {
+    50
+}
 
 #[cfg(test)]
 mod tests {

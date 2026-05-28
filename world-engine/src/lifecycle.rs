@@ -325,7 +325,10 @@ impl LifecycleMachine {
     ) -> Vec<WorldEvent> {
         match result {
             TransitionResult::NoTransition => vec![],
-            TransitionResult::PhaseChanged { old_phase, new_phase } => {
+            TransitionResult::PhaseChanged {
+                old_phase,
+                new_phase,
+            } => {
                 vec![WorldEvent::PhaseChanged {
                     agent_id: agent.id.to_string(),
                     old_phase: *old_phase,
@@ -491,9 +494,7 @@ pub fn run_subsystem_isolated(
     // Note: This requires the agents slice to be UnwindSafe. Since we're
     // doing mutable borrowing, we use AssertUnwindSafe.
     use std::panic::AssertUnwindSafe;
-    match std::panic::catch_unwind(AssertUnwindSafe(|| {
-        subsystem.execute(tick, agents)
-    })) {
+    match std::panic::catch_unwind(AssertUnwindSafe(|| subsystem.execute(tick, agents))) {
         Ok(events) => SubsystemResult::ok(&id, events),
         Err(payload) => {
             let msg = if let Some(s) = payload.downcast_ref::<&str>() {
@@ -699,34 +700,91 @@ some_other_section:
 
     #[test]
     fn test_valid_transitions() {
-        assert!(LifecycleMachine::can_transition(AgentPhase::Birth, AgentPhase::Childhood));
-        assert!(LifecycleMachine::can_transition(AgentPhase::Childhood, AgentPhase::Adult));
-        assert!(LifecycleMachine::can_transition(AgentPhase::Adult, AgentPhase::Elder));
-        assert!(LifecycleMachine::can_transition(AgentPhase::Elder, AgentPhase::Dead));
-        assert!(LifecycleMachine::can_transition(AgentPhase::Adult, AgentPhase::Dying));
-        assert!(LifecycleMachine::can_transition(AgentPhase::Dying, AgentPhase::Dead));
-        assert!(LifecycleMachine::can_transition(AgentPhase::Dying, AgentPhase::Adult));
-        assert!(LifecycleMachine::can_transition(AgentPhase::Childhood, AgentPhase::Dead));
-        assert!(LifecycleMachine::can_transition(AgentPhase::Adult, AgentPhase::Dead));
+        assert!(LifecycleMachine::can_transition(
+            AgentPhase::Birth,
+            AgentPhase::Childhood
+        ));
+        assert!(LifecycleMachine::can_transition(
+            AgentPhase::Childhood,
+            AgentPhase::Adult
+        ));
+        assert!(LifecycleMachine::can_transition(
+            AgentPhase::Adult,
+            AgentPhase::Elder
+        ));
+        assert!(LifecycleMachine::can_transition(
+            AgentPhase::Elder,
+            AgentPhase::Dead
+        ));
+        assert!(LifecycleMachine::can_transition(
+            AgentPhase::Adult,
+            AgentPhase::Dying
+        ));
+        assert!(LifecycleMachine::can_transition(
+            AgentPhase::Dying,
+            AgentPhase::Dead
+        ));
+        assert!(LifecycleMachine::can_transition(
+            AgentPhase::Dying,
+            AgentPhase::Adult
+        ));
+        assert!(LifecycleMachine::can_transition(
+            AgentPhase::Childhood,
+            AgentPhase::Dead
+        ));
+        assert!(LifecycleMachine::can_transition(
+            AgentPhase::Adult,
+            AgentPhase::Dead
+        ));
     }
 
     #[test]
     fn test_invalid_transitions() {
         // Dead is terminal
-        assert!(!LifecycleMachine::can_transition(AgentPhase::Dead, AgentPhase::Birth));
-        assert!(!LifecycleMachine::can_transition(AgentPhase::Dead, AgentPhase::Childhood));
-        assert!(!LifecycleMachine::can_transition(AgentPhase::Dead, AgentPhase::Adult));
-        assert!(!LifecycleMachine::can_transition(AgentPhase::Dead, AgentPhase::Elder));
-        assert!(!LifecycleMachine::can_transition(AgentPhase::Dead, AgentPhase::Dying));
+        assert!(!LifecycleMachine::can_transition(
+            AgentPhase::Dead,
+            AgentPhase::Birth
+        ));
+        assert!(!LifecycleMachine::can_transition(
+            AgentPhase::Dead,
+            AgentPhase::Childhood
+        ));
+        assert!(!LifecycleMachine::can_transition(
+            AgentPhase::Dead,
+            AgentPhase::Adult
+        ));
+        assert!(!LifecycleMachine::can_transition(
+            AgentPhase::Dead,
+            AgentPhase::Elder
+        ));
+        assert!(!LifecycleMachine::can_transition(
+            AgentPhase::Dead,
+            AgentPhase::Dying
+        ));
 
         // No backwards transitions
-        assert!(!LifecycleMachine::can_transition(AgentPhase::Adult, AgentPhase::Childhood));
-        assert!(!LifecycleMachine::can_transition(AgentPhase::Elder, AgentPhase::Adult));
-        assert!(!LifecycleMachine::can_transition(AgentPhase::Childhood, AgentPhase::Birth));
+        assert!(!LifecycleMachine::can_transition(
+            AgentPhase::Adult,
+            AgentPhase::Childhood
+        ));
+        assert!(!LifecycleMachine::can_transition(
+            AgentPhase::Elder,
+            AgentPhase::Adult
+        ));
+        assert!(!LifecycleMachine::can_transition(
+            AgentPhase::Childhood,
+            AgentPhase::Birth
+        ));
 
         // No skipping phases forward
-        assert!(!LifecycleMachine::can_transition(AgentPhase::Birth, AgentPhase::Adult));
-        assert!(!LifecycleMachine::can_transition(AgentPhase::Childhood, AgentPhase::Elder));
+        assert!(!LifecycleMachine::can_transition(
+            AgentPhase::Birth,
+            AgentPhase::Adult
+        ));
+        assert!(!LifecycleMachine::can_transition(
+            AgentPhase::Childhood,
+            AgentPhase::Elder
+        ));
     }
 
     // ── evaluate_aging tests ──
@@ -832,7 +890,10 @@ some_other_section:
         let spawn_tick = 0u64;
 
         // Childhood: ticks 1-100
-        assert_eq!(machine.evaluate_aging(50, spawn_tick, &mut agent), TransitionResult::NoTransition);
+        assert_eq!(
+            machine.evaluate_aging(50, spawn_tick, &mut agent),
+            TransitionResult::NoTransition
+        );
         assert_eq!(agent.phase, AgentPhase::Childhood);
 
         // Childhood -> Adult at tick 101
@@ -843,7 +904,10 @@ some_other_section:
         assert_eq!(agent.phase, AgentPhase::Adult);
 
         // Adult: ticks 101-1100
-        assert_eq!(machine.evaluate_aging(500, spawn_tick, &mut agent), TransitionResult::NoTransition);
+        assert_eq!(
+            machine.evaluate_aging(500, spawn_tick, &mut agent),
+            TransitionResult::NoTransition
+        );
         assert_eq!(agent.phase, AgentPhase::Adult);
 
         // Adult -> Elder at tick 1101
@@ -854,7 +918,10 @@ some_other_section:
         assert_eq!(agent.phase, AgentPhase::Elder);
 
         // Elder: ticks 1101-1300
-        assert_eq!(machine.evaluate_aging(1200, spawn_tick, &mut agent), TransitionResult::NoTransition);
+        assert_eq!(
+            machine.evaluate_aging(1200, spawn_tick, &mut agent),
+            TransitionResult::NoTransition
+        );
         assert_eq!(agent.phase, AgentPhase::Elder);
 
         // Elder -> Dead at tick 1301
@@ -884,11 +951,14 @@ some_other_section:
         };
         let events = machine.events_for_transition(&agent, &result);
         assert_eq!(events.len(), 1);
-        assert!(matches!(&events[0], WorldEvent::PhaseChanged {
-            old_phase: AgentPhase::Childhood,
-            new_phase: AgentPhase::Adult,
-            ..
-        }));
+        assert!(matches!(
+            &events[0],
+            WorldEvent::PhaseChanged {
+                old_phase: AgentPhase::Childhood,
+                new_phase: AgentPhase::Adult,
+                ..
+            }
+        ));
     }
 
     #[test]
@@ -920,10 +990,8 @@ some_other_section:
 
     #[test]
     fn test_death_cleanup_archives_skills() {
-        let mut agent = make_agent_with_skills(AgentPhase::Dead, 100, vec![
-            ("mining", 5),
-            ("trading", 3),
-        ]);
+        let mut agent =
+            make_agent_with_skills(AgentPhase::Dead, 100, vec![("mining", 5), ("trading", 3)]);
         let result = perform_death_cleanup(&mut agent);
 
         assert_eq!(result.skills_archived.len(), 2);
@@ -975,19 +1043,28 @@ some_other_section:
         let mut agent = make_agent(AgentPhase::Childhood, 500);
 
         // childhood_end_tick(0) = 0 + 1 + 50 = 51
-        assert_eq!(machine.evaluate_aging(50, 0, &mut agent), TransitionResult::NoTransition);
+        assert_eq!(
+            machine.evaluate_aging(50, 0, &mut agent),
+            TransitionResult::NoTransition
+        );
         let result = machine.evaluate_aging(51, 0, &mut agent);
         assert!(matches!(result, TransitionResult::PhaseChanged { .. }));
         assert_eq!(agent.phase, AgentPhase::Adult);
 
         // adult_end_tick(0) = 51 + 500 = 551
-        assert_eq!(machine.evaluate_aging(550, 0, &mut agent), TransitionResult::NoTransition);
+        assert_eq!(
+            machine.evaluate_aging(550, 0, &mut agent),
+            TransitionResult::NoTransition
+        );
         let result = machine.evaluate_aging(551, 0, &mut agent);
         assert!(matches!(result, TransitionResult::PhaseChanged { .. }));
         assert_eq!(agent.phase, AgentPhase::Elder);
 
         // elder_end_tick(0) = 551 + 100 = 651
-        assert_eq!(machine.evaluate_aging(650, 0, &mut agent), TransitionResult::NoTransition);
+        assert_eq!(
+            machine.evaluate_aging(650, 0, &mut agent),
+            TransitionResult::NoTransition
+        );
         let result = machine.evaluate_aging(651, 0, &mut agent);
         assert!(matches!(result, TransitionResult::Died { .. }));
     }
@@ -997,9 +1074,15 @@ some_other_section:
     struct TestSubsystem;
 
     impl Subsystem for TestSubsystem {
-        fn id(&self) -> &str { "test" }
-        fn name(&self) -> &str { "Test Subsystem" }
-        fn priority(&self) -> u32 { 100 }
+        fn id(&self) -> &str {
+            "test"
+        }
+        fn name(&self) -> &str {
+            "Test Subsystem"
+        }
+        fn priority(&self) -> u32 {
+            100
+        }
 
         fn execute(&self, _tick: u64, agents: &mut [(Uuid, u64, AgentRecord)]) -> Vec<WorldEvent> {
             // Burn 1 token from each agent
@@ -1015,9 +1098,15 @@ some_other_section:
     struct PanickingSubsystem;
 
     impl Subsystem for PanickingSubsystem {
-        fn id(&self) -> &str { "panic" }
-        fn name(&self) -> &str { "Panicking Subsystem" }
-        fn priority(&self) -> u32 { 200 }
+        fn id(&self) -> &str {
+            "panic"
+        }
+        fn name(&self) -> &str {
+            "Panicking Subsystem"
+        }
+        fn priority(&self) -> u32 {
+            200
+        }
 
         fn execute(&self, _tick: u64, _agents: &mut [(Uuid, u64, AgentRecord)]) -> Vec<WorldEvent> {
             panic!("intentional panic for testing");
@@ -1028,9 +1117,8 @@ some_other_section:
     fn test_subsystem_execute() {
         let sub = TestSubsystem;
         let id = Uuid::new_v4();
-        let mut agents: Vec<(Uuid, u64, AgentRecord)> = vec![
-            (id, 0, make_agent(AgentPhase::Adult, 100)),
-        ];
+        let mut agents: Vec<(Uuid, u64, AgentRecord)> =
+            vec![(id, 0, make_agent(AgentPhase::Adult, 100))];
 
         let events = sub.execute(1, &mut agents);
         assert!(events.is_empty());
@@ -1041,9 +1129,8 @@ some_other_section:
     fn test_run_subsystem_isolated_success() {
         let sub = TestSubsystem;
         let id = Uuid::new_v4();
-        let mut agents: Vec<(Uuid, u64, AgentRecord)> = vec![
-            (id, 0, make_agent(AgentPhase::Adult, 100)),
-        ];
+        let mut agents: Vec<(Uuid, u64, AgentRecord)> =
+            vec![(id, 0, make_agent(AgentPhase::Adult, 100))];
 
         let result = run_subsystem_isolated(&sub, 1, &mut agents);
         assert!(result.success);
@@ -1055,9 +1142,8 @@ some_other_section:
     fn test_run_subsystem_isolated_panic() {
         let sub = PanickingSubsystem;
         let id = Uuid::new_v4();
-        let mut agents: Vec<(Uuid, u64, AgentRecord)> = vec![
-            (id, 0, make_agent(AgentPhase::Adult, 100)),
-        ];
+        let mut agents: Vec<(Uuid, u64, AgentRecord)> =
+            vec![(id, 0, make_agent(AgentPhase::Adult, 100))];
 
         let result = run_subsystem_isolated(&sub, 1, &mut agents);
         assert!(!result.success);

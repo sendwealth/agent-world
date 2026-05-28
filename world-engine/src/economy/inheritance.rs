@@ -75,8 +75,12 @@ pub struct InheritanceConfig {
     pub skill_transfer_ratio: f64,
 }
 
-fn default_inheritance_ratio() -> f64 { 0.5 }
-fn default_skill_transfer_ratio() -> f64 { 0.3 }
+fn default_inheritance_ratio() -> f64 {
+    0.5
+}
+fn default_skill_transfer_ratio() -> f64 {
+    0.3
+}
 
 impl Default for InheritanceConfig {
     fn default() -> Self {
@@ -178,7 +182,9 @@ impl InheritanceSystem {
 
         // Find deceased agent's tokens
         let (deceased_tokens, deceased_skills) = {
-            let deceased = agents.iter().find(|(_, _, a)| a.id.to_string() == deceased_id);
+            let deceased = agents
+                .iter()
+                .find(|(_, _, a)| a.id.to_string() == deceased_id);
             match deceased {
                 Some((_, _, a)) => (a.tokens, a.skills.clone()),
                 None => {
@@ -202,10 +208,9 @@ impl InheritanceSystem {
             will.beneficiaries.clone()
         } else {
             // No will: equal split among living agents (excluding self)
-            let living: Vec<String> = agents.iter()
-                .filter(|(_, _, a)| {
-                    a.id.to_string() != deceased_id && a.phase != AgentPhase::Dead
-                })
+            let living: Vec<String> = agents
+                .iter()
+                .filter(|(_, _, a)| a.id.to_string() != deceased_id && a.phase != AgentPhase::Dead)
                 .map(|(_, _, a)| a.id.to_string())
                 .collect();
 
@@ -220,8 +225,12 @@ impl InheritanceSystem {
             }
 
             let share = 1.0 / living.len() as f64;
-            living.into_iter()
-                .map(|id| Beneficiary { agent_id: id, share })
+            living
+                .into_iter()
+                .map(|id| Beneficiary {
+                    agent_id: id,
+                    share,
+                })
                 .collect()
         };
 
@@ -229,8 +238,9 @@ impl InheritanceSystem {
         let mut total_distributed: u64 = 0;
         for beneficiary in &beneficiaries {
             // Check beneficiary is alive
-            let beneficiary_alive = agents.iter()
-                .any(|(_, _, a)| a.id.to_string() == beneficiary.agent_id && a.phase != AgentPhase::Dead);
+            let beneficiary_alive = agents.iter().any(|(_, _, a)| {
+                a.id.to_string() == beneficiary.agent_id && a.phase != AgentPhase::Dead
+            });
             if !beneficiary_alive {
                 continue;
             }
@@ -250,7 +260,9 @@ impl InheritanceSystem {
                     // Transfer skills
                     use crate::economy::token_burn::SkillRecord;
                     for (skill_name, skill) in &deceased_skills {
-                        let transferred_level = ((skill.level as f64) * self.config.skill_transfer_ratio).floor() as u32;
+                        let transferred_level = ((skill.level as f64)
+                            * self.config.skill_transfer_ratio)
+                            .floor() as u32;
                         if transferred_level == 0 {
                             continue;
                         }
@@ -286,7 +298,11 @@ impl InheritanceSystem {
                 skills_transferred,
             });
 
-            beneficiaries_paid.push((beneficiary.agent_id.clone(), token_share, skills_transferred));
+            beneficiaries_paid.push((
+                beneficiary.agent_id.clone(),
+                token_share,
+                skills_transferred,
+            ));
         }
 
         // Remove deceased tokens (already handled in death cleanup, but ensure here)
@@ -345,49 +361,67 @@ mod tests {
         let bystander = Uuid::new_v4();
 
         vec![
-            (mentor, 0, AgentRecord {
-                id: mentor,
-                name: "mentor".into(),
-                phase: AgentPhase::Adult,
-                tokens: 1000,
-                skills: {
-                    let mut m = HashMap::new();
-                    m.insert("mining".into(), SkillRecord {
-                        name: "mining".into(),
-                        level: 8,
-                        experience: 0.0,
-                    });
-                    m.insert("crafting".into(), SkillRecord {
-                        name: "crafting".into(),
-                        level: 5,
-                        experience: 0.0,
-                    });
-                    m
+            (
+                mentor,
+                0,
+                AgentRecord {
+                    id: mentor,
+                    name: "mentor".into(),
+                    phase: AgentPhase::Adult,
+                    tokens: 1000,
+                    skills: {
+                        let mut m = HashMap::new();
+                        m.insert(
+                            "mining".into(),
+                            SkillRecord {
+                                name: "mining".into(),
+                                level: 8,
+                                experience: 0.0,
+                            },
+                        );
+                        m.insert(
+                            "crafting".into(),
+                            SkillRecord {
+                                name: "crafting".into(),
+                                level: 5,
+                                experience: 0.0,
+                            },
+                        );
+                        m
+                    },
+                    personality: String::new(),
+                    tasks_completed: 0,
+                    tasks_attempted: 0,
                 },
-                personality: String::new(),
-            tasks_completed: 0,
-            tasks_attempted: 0,
-            }),
-            (heir, 0, AgentRecord {
-                id: heir,
-                name: "heir".into(),
-                phase: AgentPhase::Adult,
-                tokens: 100,
-                skills: HashMap::new(),
-                personality: String::new(),
-            tasks_completed: 0,
-            tasks_attempted: 0,
-            }),
-            (bystander, 0, AgentRecord {
-                id: bystander,
-                name: "bystander".into(),
-                phase: AgentPhase::Adult,
-                tokens: 50,
-                skills: HashMap::new(),
-                personality: String::new(),
-            tasks_completed: 0,
-            tasks_attempted: 0,
-            }),
+            ),
+            (
+                heir,
+                0,
+                AgentRecord {
+                    id: heir,
+                    name: "heir".into(),
+                    phase: AgentPhase::Adult,
+                    tokens: 100,
+                    skills: HashMap::new(),
+                    personality: String::new(),
+                    tasks_completed: 0,
+                    tasks_attempted: 0,
+                },
+            ),
+            (
+                bystander,
+                0,
+                AgentRecord {
+                    id: bystander,
+                    name: "bystander".into(),
+                    phase: AgentPhase::Adult,
+                    tokens: 50,
+                    skills: HashMap::new(),
+                    personality: String::new(),
+                    tasks_completed: 0,
+                    tasks_attempted: 0,
+                },
+            ),
         ]
     }
 
@@ -399,7 +433,10 @@ mod tests {
 
         let result = sys.create_will(
             &mentor_id,
-            vec![Beneficiary { agent_id: heir_id, share: 1.0 }],
+            vec![Beneficiary {
+                agent_id: heir_id,
+                share: 1.0,
+            }],
             100,
         );
         assert!(result.is_ok());
@@ -412,8 +449,14 @@ mod tests {
         let result = sys.create_will(
             "a",
             vec![
-                Beneficiary { agent_id: "b".into(), share: 0.8 },
-                Beneficiary { agent_id: "c".into(), share: 0.3 },
+                Beneficiary {
+                    agent_id: "b".into(),
+                    share: 0.8,
+                },
+                Beneficiary {
+                    agent_id: "c".into(),
+                    share: 0.3,
+                },
             ],
             100,
         );
@@ -425,7 +468,10 @@ mod tests {
         let mut sys = InheritanceSystem::default();
         let result = sys.create_will(
             "a",
-            vec![Beneficiary { agent_id: "a".into(), share: 1.0 }],
+            vec![Beneficiary {
+                agent_id: "a".into(),
+                share: 1.0,
+            }],
             100,
         );
         assert!(result.is_err());
@@ -450,9 +496,13 @@ mod tests {
 
         sys.create_will(
             &mentor_id.to_string(),
-            vec![Beneficiary { agent_id: heir_id.to_string(), share: 1.0 }],
+            vec![Beneficiary {
+                agent_id: heir_id.to_string(),
+                share: 1.0,
+            }],
             100,
-        ).unwrap();
+        )
+        .unwrap();
 
         // Mark mentor as dead
         agents[0].2.phase = AgentPhase::Dead;
@@ -497,15 +547,24 @@ mod tests {
         let mut sys = InheritanceSystem::default();
         sys.create_will(
             "a",
-            vec![Beneficiary { agent_id: "b".into(), share: 1.0 }],
+            vec![Beneficiary {
+                agent_id: "b".into(),
+                share: 1.0,
+            }],
             100,
-        ).unwrap();
+        )
+        .unwrap();
 
-        let _id2 = sys.create_will(
-            "a",
-            vec![Beneficiary { agent_id: "c".into(), share: 1.0 }],
-            200,
-        ).unwrap();
+        let _id2 = sys
+            .create_will(
+                "a",
+                vec![Beneficiary {
+                    agent_id: "c".into(),
+                    share: 1.0,
+                }],
+                200,
+            )
+            .unwrap();
 
         let will = sys.get_will("a").unwrap();
         assert_eq!(will.beneficiaries[0].agent_id, "c");
@@ -532,16 +591,17 @@ mod tests {
     fn test_event_bus_integration() {
         let bus = EventBus::new(64);
         let mut rx = bus.subscribe();
-        let mut sys = InheritanceSystem::with_event_bus(
-            InheritanceConfig::default(),
-            bus,
-        );
+        let mut sys = InheritanceSystem::with_event_bus(InheritanceConfig::default(), bus);
 
         sys.create_will(
             "a",
-            vec![Beneficiary { agent_id: "b".into(), share: 1.0 }],
+            vec![Beneficiary {
+                agent_id: "b".into(),
+                share: 1.0,
+            }],
             100,
-        ).unwrap();
+        )
+        .unwrap();
 
         let event = rx.try_recv().unwrap();
         assert!(matches!(event, WorldEvent::WillCreated { .. }));

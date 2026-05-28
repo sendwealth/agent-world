@@ -16,9 +16,7 @@ use std::time::Instant;
 use agent_world_engine::economy::reward::RewardConfig;
 use agent_world_engine::economy::task::TaskBoard;
 use agent_world_engine::economy::token_burn::{AgentRecord, ConsumptionConfig};
-use agent_world_engine::rules::{
-    custom_registry, RuleRegistry,
-};
+use agent_world_engine::rules::{custom_registry, RuleRegistry};
 use agent_world_engine::world::enums::{AgentPhase, Currency, DeathReason};
 use agent_world_engine::world::event::WorldEvent;
 use agent_world_engine::world::state::EventBus;
@@ -226,21 +224,27 @@ impl WorldSimulation {
     /// Run rule evaluation on all agents.
     fn run_rules(&mut self) {
         // Build AgentRecord list from sim agents
-        let mut agent_records: Vec<(Uuid, u64, AgentRecord)> = self.agents.iter().map(|a| {
-            let record = AgentRecord {
-                id: a.id,
-                name: a.name.clone(),
-                phase: a.phase,
-                tokens: a.tokens,
-                skills: HashMap::new(),
-                personality: String::new(),
-                tasks_completed: 0,
-                tasks_attempted: 0,
-            };
-            (a.id, a.spawn_tick, record)
-        }).collect();
+        let mut agent_records: Vec<(Uuid, u64, AgentRecord)> = self
+            .agents
+            .iter()
+            .map(|a| {
+                let record = AgentRecord {
+                    id: a.id,
+                    name: a.name.clone(),
+                    phase: a.phase,
+                    tokens: a.tokens,
+                    skills: HashMap::new(),
+                    personality: String::new(),
+                    tasks_completed: 0,
+                    tasks_attempted: 0,
+                };
+                (a.id, a.spawn_tick, record)
+            })
+            .collect();
 
-        let results = self.rule_registry.evaluate_all(self.tick, &mut agent_records);
+        let results = self
+            .rule_registry
+            .evaluate_all(self.tick, &mut agent_records);
 
         // Apply results back to sim agents
         for (agent_id, rule_results) in &results {
@@ -268,7 +272,11 @@ impl WorldSimulation {
             for rr in rule_results {
                 for event in &rr.events {
                     if let WorldEvent::AgentDied { agent_id, reason } = event {
-                        if let Some(agent) = self.agents.iter_mut().find(|a| a.id.to_string() == *agent_id) {
+                        if let Some(agent) = self
+                            .agents
+                            .iter_mut()
+                            .find(|a| a.id.to_string() == *agent_id)
+                        {
                             agent.phase = AgentPhase::Dead;
                             agent.death_tick = Some(self.tick);
                             agent.death_reason = Some(*reason);
@@ -285,7 +293,10 @@ impl WorldSimulation {
         let token_price: u64 = 100; // 1 Money = 100 Tokens
 
         // Collect alive agent snapshots: (index, id, tokens, money)
-        let alive: Vec<(usize, Uuid, u64, u64)> = self.agents.iter().enumerate()
+        let alive: Vec<(usize, Uuid, u64, u64)> = self
+            .agents
+            .iter()
+            .enumerate()
             .filter(|(_, a)| a.is_alive())
             .map(|(i, a)| (i, a.id, a.tokens, a.money))
             .collect();
@@ -361,7 +372,10 @@ impl WorldSimulation {
         }
 
         // Collect alive agent snapshots: (index, id, tokens)
-        let alive: Vec<(usize, Uuid, u64)> = self.agents.iter().enumerate()
+        let alive: Vec<(usize, Uuid, u64)> = self
+            .agents
+            .iter()
+            .enumerate()
             .filter(|(_, a)| a.is_alive() && a.age(self.tick) >= 50) // Past newbie protection
             .map(|(i, a)| (i, a.id, a.tokens))
             .collect();
@@ -401,7 +415,11 @@ impl WorldSimulation {
                 });
 
                 // Worker claims the task
-                if self.task_board.claim_task(task_id, worker_id_str.clone()).is_ok() {
+                if self
+                    .task_board
+                    .claim_task(task_id, worker_id_str.clone())
+                    .is_ok()
+                {
                     self.agents[*worker_idx].tasks_claimed += 1;
                     self.collect_event(WorldEvent::TaskClaimed {
                         task_id: task_id.to_string(),
@@ -415,13 +433,17 @@ impl WorldSimulation {
                     });
 
                     // Submit
-                    let _ = self.task_board.submit_result(task_id, format!("Completed work at tick {}", self.tick));
+                    let _ = self
+                        .task_board
+                        .submit_result(task_id, format!("Completed work at tick {}", self.tick));
                     self.collect_event(WorldEvent::TaskSubmitted {
                         task_id: task_id.to_string(),
                     });
 
                     // Review
-                    let _ = self.task_board.review_task(task_id, &publisher_id_str, true);
+                    let _ = self
+                        .task_board
+                        .review_task(task_id, &publisher_id_str, true);
                     self.collect_event(WorldEvent::TaskReviewed {
                         task_id: task_id.to_string(),
                         approved: true,
@@ -472,9 +494,7 @@ impl WorldSimulation {
             }
         }
         for agent_id in rescued_ids {
-            self.collect_event(WorldEvent::AgentRescued {
-                agent_id,
-            });
+            self.collect_event(WorldEvent::AgentRescued { agent_id });
         }
     }
 
@@ -515,11 +535,18 @@ impl WorldSimulation {
         let start = Instant::now();
 
         println!("\n╔══════════════════════════════════════════════════════════════╗");
-        println!("║       Agent World — E2E Demo: {} Agents × {} Ticks       ", self.agents.len(), self.max_ticks);
+        println!(
+            "║       Agent World — E2E Demo: {} Agents × {} Ticks       ",
+            self.agents.len(),
+            self.max_ticks
+        );
         println!("╚══════════════════════════════════════════════════════════════╝\n");
         println!("  Agents spawned:");
         for a in &self.agents {
-            println!("    {} ({}): {} tokens, phase {:?}", a.name, a.id, a.tokens, a.phase);
+            println!(
+                "    {} ({}): {} tokens, phase {:?}",
+                a.name, a.id, a.tokens, a.phase
+            );
         }
         println!();
 
@@ -576,7 +603,10 @@ impl WorldSimulation {
     }
 
     fn print_status(&self) {
-        println!("  ┌─ Tick {} ─────────────────────────────────────────", self.tick);
+        println!(
+            "  ┌─ Tick {} ─────────────────────────────────────────",
+            self.tick
+        );
         for agent in &self.agents {
             let status = if agent.is_alive() { "ALIVE" } else { "DEAD" };
             println!(
@@ -603,8 +633,10 @@ impl WorldSimulation {
         println!("║                    FINAL REPORT                              ║");
         println!("╚══════════════════════════════════════════════════════════════╝\n");
 
-        println!("  Duration: {} ticks in {}ms ({:.0} ticks/sec)",
-            metrics.total_ticks, metrics.wall_time_ms, metrics.ticks_per_second);
+        println!(
+            "  Duration: {} ticks in {}ms ({:.0} ticks/sec)",
+            metrics.total_ticks, metrics.wall_time_ms, metrics.ticks_per_second
+        );
         println!();
 
         println!("  Agents:");
@@ -614,19 +646,29 @@ impl WorldSimulation {
             println!("      Phase: {:?}", agent.phase);
             println!("      Tokens: {} (started 100,000)", agent.tokens);
             println!("      Money: {}", agent.money);
-            println!("      Tasks created: {}, completed: {}, claimed: {}",
-                agent.tasks_created, agent.tasks_completed, agent.tasks_claimed);
-            println!("      Trades: {}, Reputation: {:.1}, XP: {}",
-                agent.trades_made, agent.reputation, agent.xp);
+            println!(
+                "      Tasks created: {}, completed: {}, claimed: {}",
+                agent.tasks_created, agent.tasks_completed, agent.tasks_claimed
+            );
+            println!(
+                "      Trades: {}, Reputation: {:.1}, XP: {}",
+                agent.trades_made, agent.reputation, agent.xp
+            );
             if let Some(death_tick) = agent.death_tick {
-                println!("      Died at tick {} ({:?})", death_tick, agent.death_reason);
+                println!(
+                    "      Died at tick {} ({:?})",
+                    death_tick, agent.death_reason
+                );
             }
             println!();
         }
 
         println!("  Economy:");
         println!("    Total tokens burned: {}", metrics.total_tokens_burned);
-        println!("    Total money transferred: {}", metrics.total_money_transferred);
+        println!(
+            "    Total money transferred: {}",
+            metrics.total_money_transferred
+        );
         println!("    Total platform fees: {}", metrics.total_platform_fees);
         println!();
 
@@ -648,19 +690,30 @@ impl WorldSimulation {
         }
         println!();
 
-        println!("  Outcome: {}/{} agents survived {} ticks",
+        println!(
+            "  Outcome: {}/{} agents survived {} ticks",
             metrics.agents_alive_at_end,
             metrics.agents_alive_at_end + metrics.agents_died,
-            metrics.total_ticks);
+            metrics.total_ticks
+        );
         println!();
 
         // Summary for quick parsing
         println!("╔══════════════════════════════════════════════════════════════╗");
-        println!("║  SUMMARY: {} agents, {} ticks, {:.0} t/s, {} events        ",
-            self.agents.len(), metrics.total_ticks, metrics.ticks_per_second, metrics.total_events);
-        println!("║  ALIVE: {} | DIED: {} | TASKS: {} | TRADES: {} ticks       ",
-            metrics.agents_alive_at_end, metrics.agents_died,
-            metrics.tasks_completed, metrics.ticks_with_trades);
+        println!(
+            "║  SUMMARY: {} agents, {} ticks, {:.0} t/s, {} events        ",
+            self.agents.len(),
+            metrics.total_ticks,
+            metrics.ticks_per_second,
+            metrics.total_events
+        );
+        println!(
+            "║  ALIVE: {} | DIED: {} | TASKS: {} | TRADES: {} ticks       ",
+            metrics.agents_alive_at_end,
+            metrics.agents_died,
+            metrics.tasks_completed,
+            metrics.ticks_with_trades
+        );
         println!("╚══════════════════════════════════════════════════════════════╝\n");
     }
 }
@@ -678,7 +731,10 @@ fn test_e2e_two_agents_1000_ticks_survival() {
     assert_eq!(metrics.total_ticks, 1000, "Simulation must run 1000 ticks");
 
     // Both agents should survive (they get rescue aid when critically low)
-    assert!(metrics.agents_alive_at_end >= 1, "At least one agent should survive");
+    assert!(
+        metrics.agents_alive_at_end >= 1,
+        "At least one agent should survive"
+    );
     assert!(metrics.agents_alive_at_end <= 2, "Max 2 agents");
 
     // Events should be generated
@@ -688,11 +744,17 @@ fn test_e2e_two_agents_1000_ticks_survival() {
     assert!(metrics.events_by_type.contains_key("AgentSpawned"));
 
     // Tokens must be burned
-    assert!(metrics.total_tokens_burned > 0, "Tokens must be burned during simulation");
+    assert!(
+        metrics.total_tokens_burned > 0,
+        "Tokens must be burned during simulation"
+    );
 
     // Performance: should complete in reasonable time
-    assert!(metrics.ticks_per_second > 100.0,
-        "Simulation should process >100 ticks/sec, got {:.0}", metrics.ticks_per_second);
+    assert!(
+        metrics.ticks_per_second > 100.0,
+        "Simulation should process >100 ticks/sec, got {:.0}",
+        metrics.ticks_per_second
+    );
 
     println!("✓ All assertions passed");
 }
@@ -711,8 +773,14 @@ fn test_e2e_death_scenario_low_tokens() {
     assert!(metrics.agents_died >= 1, "Agent with 30 tokens should die");
 
     // Should have death events
-    let has_dying_event = sim.events.iter().any(|e| matches!(e, WorldEvent::AgentDying { .. }));
-    let has_died_event = sim.events.iter().any(|e| matches!(e, WorldEvent::AgentDied { .. }));
+    let has_dying_event = sim
+        .events
+        .iter()
+        .any(|e| matches!(e, WorldEvent::AgentDying { .. }));
+    let has_died_event = sim
+        .events
+        .iter()
+        .any(|e| matches!(e, WorldEvent::AgentDied { .. }));
     assert!(has_dying_event, "Should emit AgentDying event");
     assert!(has_died_event, "Should emit AgentDied event");
 
@@ -733,11 +801,18 @@ fn test_e2e_newbie_protection() {
     let agent = sim.agents.iter().find(|a| a.name == "Protected").unwrap();
 
     // Agent should have transitioned from Birth -> Childhood -> Adult
-    assert!(agent.phase == AgentPhase::Adult || agent.phase == AgentPhase::Childhood,
-        "Agent should have progressed past Birth phase, got {:?}", agent.phase);
+    assert!(
+        agent.phase == AgentPhase::Adult || agent.phase == AgentPhase::Childhood,
+        "Agent should have progressed past Birth phase, got {:?}",
+        agent.phase
+    );
 
     // Agent should survive with tokens to spare
-    assert!(agent.tokens > 0, "Agent should still have tokens: {}", agent.tokens);
+    assert!(
+        agent.tokens > 0,
+        "Agent should still have tokens: {}",
+        agent.tokens
+    );
 
     println!("✓ Newbie protection assertions passed");
 }
@@ -752,7 +827,9 @@ fn test_e2e_lifecycle_phases() {
     let agent = sim.agents.iter().find(|a| a.name == "LifeCycle").unwrap();
 
     // Should have phase change events
-    let phase_events: Vec<&WorldEvent> = sim.events.iter()
+    let phase_events: Vec<&WorldEvent> = sim
+        .events
+        .iter()
         .filter(|e| matches!(e, WorldEvent::PhaseChanged { .. }))
         .collect();
 
@@ -760,7 +837,12 @@ fn test_e2e_lifecycle_phases() {
 
     // Verify Birth -> Childhood transition happened
     let birth_to_childhood = phase_events.iter().any(|e| {
-        if let WorldEvent::PhaseChanged { old_phase, new_phase, .. } = e {
+        if let WorldEvent::PhaseChanged {
+            old_phase,
+            new_phase,
+            ..
+        } = e
+        {
             *old_phase == AgentPhase::Birth && *new_phase == AgentPhase::Childhood
         } else {
             false
@@ -769,8 +851,11 @@ fn test_e2e_lifecycle_phases() {
     assert!(birth_to_childhood, "Should transition Birth -> Childhood");
 
     // At tick 200, with childhood_ticks=100, agent should have transitioned to Adult
-    assert_eq!(agent.phase, AgentPhase::Adult,
-        "Agent should be Adult after 200 ticks");
+    assert_eq!(
+        agent.phase,
+        AgentPhase::Adult,
+        "Agent should be Adult after 200 ticks"
+    );
 
     println!("✓ Lifecycle phase assertions passed");
 }
@@ -784,23 +869,31 @@ fn test_e2e_task_lifecycle() {
     sim.run();
 
     // Should have task events
-    let task_events: Vec<&WorldEvent> = sim.events.iter()
-        .filter(|e| matches!(e,
-            WorldEvent::TaskCreated { .. } |
-            WorldEvent::TaskClaimed { .. } |
-            WorldEvent::TaskStarted { .. } |
-            WorldEvent::TaskSubmitted { .. } |
-            WorldEvent::TaskReviewed { .. } |
-            WorldEvent::TaskCompleted { .. } |
-            WorldEvent::RewardDistributed { .. }
-        ))
+    let task_events: Vec<&WorldEvent> = sim
+        .events
+        .iter()
+        .filter(|e| {
+            matches!(
+                e,
+                WorldEvent::TaskCreated { .. }
+                    | WorldEvent::TaskClaimed { .. }
+                    | WorldEvent::TaskStarted { .. }
+                    | WorldEvent::TaskSubmitted { .. }
+                    | WorldEvent::TaskReviewed { .. }
+                    | WorldEvent::TaskCompleted { .. }
+                    | WorldEvent::RewardDistributed { .. }
+            )
+        })
         .collect();
 
-    assert!(!task_events.is_empty(), "Should have task events, got {} total events", sim.events.len());
+    assert!(
+        !task_events.is_empty(),
+        "Should have task events, got {} total events",
+        sim.events.len()
+    );
 
     // Tasks should have been created and completed
-    assert!(!task_events.is_empty(),
-        "Should have task activity");
+    assert!(!task_events.is_empty(), "Should have task activity");
 
     println!("✓ Task lifecycle assertions passed");
 }
@@ -819,7 +912,9 @@ fn test_e2e_trading_between_agents() {
     sim.run();
 
     // Should have transaction events
-    let tx_events: Vec<&WorldEvent> = sim.events.iter()
+    let tx_events: Vec<&WorldEvent> = sim
+        .events
+        .iter()
         .filter(|e| matches!(e, WorldEvent::TransactionCompleted { .. }))
         .collect();
 
@@ -841,13 +936,24 @@ fn test_e2e_event_bus_integration() {
     sim.run();
 
     // Verify event types are diverse
-    let event_types: std::collections::HashSet<String> = sim.events.iter()
+    let event_types: std::collections::HashSet<String> = sim
+        .events
+        .iter()
         .map(|e| format!("{:?}", e.event_type()))
         .collect();
 
-    assert!(event_types.contains("TickAdvanced"), "Must have TickAdvanced events");
-    assert!(event_types.contains("AgentSpawned"), "Must have AgentSpawned events");
-    assert!(event_types.contains("BalanceChanged"), "Must have BalanceChanged events");
+    assert!(
+        event_types.contains("TickAdvanced"),
+        "Must have TickAdvanced events"
+    );
+    assert!(
+        event_types.contains("AgentSpawned"),
+        "Must have AgentSpawned events"
+    );
+    assert!(
+        event_types.contains("BalanceChanged"),
+        "Must have BalanceChanged events"
+    );
 
     println!("  Event types observed: {:?}", event_types);
     println!("✓ Event bus integration assertions passed");
@@ -863,11 +969,17 @@ fn test_e2e_performance_baseline() {
     println!("    Wall time: {}ms", metrics.wall_time_ms);
     println!("    Throughput: {:.0} ticks/sec", metrics.ticks_per_second);
     println!("    Total events: {}", metrics.total_events);
-    println!("    Events/tick: {:.1}", metrics.total_events as f64 / metrics.total_ticks as f64);
+    println!(
+        "    Events/tick: {:.1}",
+        metrics.total_events as f64 / metrics.total_ticks as f64
+    );
 
     // Should be fast enough for real-time at 1000ms tick interval
-    assert!(metrics.wall_time_ms < 5000,
-        "1000 ticks should complete in <5s, took {}ms", metrics.wall_time_ms);
+    assert!(
+        metrics.wall_time_ms < 5000,
+        "1000 ticks should complete in <5s, took {}ms",
+        metrics.wall_time_ms
+    );
 
     println!("✓ Performance baseline assertions passed");
 }

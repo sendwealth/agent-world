@@ -5,12 +5,12 @@
 //! - `MigrationManager` — handles agent migration between worlds
 //! - gRPC services for both WorldRegistryService and MigrationService
 
-pub mod registry;
 pub mod migration;
+pub mod registry;
 pub mod service;
 
-pub use registry::{WorldRegistry, WorldEntry, WorldStatus};
 pub use migration::{
-    MigrationManager, MigrationApplication, MigrationPolicy, MigrationStatus,
-    AgentSnapshot, MigrationRecord, MigrationType, MigrationStats,
+    AgentSnapshot, MigrationApplication, MigrationManager, MigrationPolicy, MigrationRecord,
+    MigrationStats, MigrationStatus, MigrationType,
 };
+pub use registry::{WorldEntry, WorldRegistry, WorldStatus};

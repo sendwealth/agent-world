@@ -18,8 +18,8 @@ use serde::{Deserialize, Serialize};
 use tokio::sync::Mutex;
 use tracing::{error, info, warn};
 
-use crate::world::EventBus;
 use crate::world::event::WorldEvent;
+use crate::world::EventBus;
 
 // ── Genesis Config ────────────────────────────────────────
 
@@ -76,9 +76,15 @@ impl Default for WorldConfig {
     }
 }
 
-fn default_world_name() -> String { "agent-world-v1".to_string() }
-fn default_tick_interval_ms() -> u64 { 1000 }
-fn default_max_agents() -> u32 { 10 }
+fn default_world_name() -> String {
+    "agent-world-v1".to_string()
+}
+fn default_tick_interval_ms() -> u64 {
+    1000
+}
+fn default_max_agents() -> u32 {
+    10
+}
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub struct EconomyConfig {
@@ -112,12 +118,24 @@ impl Default for EconomyConfig {
     }
 }
 
-fn default_initial_tokens() -> u64 { 100_000 }
-fn default_think_cost_per_token() -> u64 { 1 }
-fn default_memory_cost_per_kb() -> f64 { 0.1 }
-fn default_communicate_cost() -> u64 { 10 }
-fn default_token_price() -> u64 { 100 }
-fn default_interest_rate() -> f64 { 0.001 }
+fn default_initial_tokens() -> u64 {
+    100_000
+}
+fn default_think_cost_per_token() -> u64 {
+    1
+}
+fn default_memory_cost_per_kb() -> f64 {
+    0.1
+}
+fn default_communicate_cost() -> u64 {
+    10
+}
+fn default_token_price() -> u64 {
+    100
+}
+fn default_interest_rate() -> f64 {
+    0.001
+}
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub struct LifecycleConfig {
@@ -145,11 +163,21 @@ impl Default for LifecycleConfig {
     }
 }
 
-fn default_birth_tokens() -> u64 { 100_000 }
-fn default_childhood_ticks() -> u64 { 100 }
-fn default_adult_ticks() -> u64 { 1000 }
-fn default_elder_ticks() -> u64 { 200 }
-fn default_death_grace_ticks() -> u64 { 10 }
+fn default_birth_tokens() -> u64 {
+    100_000
+}
+fn default_childhood_ticks() -> u64 {
+    100
+}
+fn default_adult_ticks() -> u64 {
+    1000
+}
+fn default_elder_ticks() -> u64 {
+    200
+}
+fn default_death_grace_ticks() -> u64 {
+    10
+}
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub struct EvolutionConfig {
@@ -208,21 +236,51 @@ impl Default for EvolutionConfig {
     }
 }
 
-fn default_skill_max_level() -> u32 { 10 }
-fn default_mutation_rate() -> f64 { 0.05 }
-fn default_inheritance_ratio() -> f64 { 0.5 }
-fn default_evaluation_interval() -> u64 { 1000 }
-fn default_inactivity_threshold() -> u64 { 500 }
-fn default_passive_xp_per_tick() -> f64 { 1.0 }
-fn default_offspring_mutation_rate() -> f64 { 0.15 }
-fn default_max_offspring_mutations() -> usize { 3 }
-fn default_personality_dimensions() -> usize { 5 }
-fn default_personality_shift_magnitude() -> f64 { 0.2 }
-fn default_skill_level_jump_range() -> u32 { 2 }
-fn default_skill_level_drop_range() -> u32 { 1 }
-fn default_env_pressure_multiplier() -> f64 { 2.0 }
-fn default_heritable_strengthen_chance() -> f64 { 0.3 }
-fn default_heritable_disappear_chance() -> f64 { 0.2 }
+fn default_skill_max_level() -> u32 {
+    10
+}
+fn default_mutation_rate() -> f64 {
+    0.05
+}
+fn default_inheritance_ratio() -> f64 {
+    0.5
+}
+fn default_evaluation_interval() -> u64 {
+    1000
+}
+fn default_inactivity_threshold() -> u64 {
+    500
+}
+fn default_passive_xp_per_tick() -> f64 {
+    1.0
+}
+fn default_offspring_mutation_rate() -> f64 {
+    0.15
+}
+fn default_max_offspring_mutations() -> usize {
+    3
+}
+fn default_personality_dimensions() -> usize {
+    5
+}
+fn default_personality_shift_magnitude() -> f64 {
+    0.2
+}
+fn default_skill_level_jump_range() -> u32 {
+    2
+}
+fn default_skill_level_drop_range() -> u32 {
+    1
+}
+fn default_env_pressure_multiplier() -> f64 {
+    2.0
+}
+fn default_heritable_strengthen_chance() -> f64 {
+    0.3
+}
+fn default_heritable_disappear_chance() -> f64 {
+    0.2
+}
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub struct A2aConfig {
@@ -247,10 +305,18 @@ impl Default for A2aConfig {
     }
 }
 
-fn default_protocol_version() -> String { "v1".to_string() }
-fn default_max_message_size_kb() -> u32 { 64 }
-fn default_message_timeout_ms() -> u64 { 30_000 }
-fn default_discovery_interval_ms() -> u64 { 5000 }
+fn default_protocol_version() -> String {
+    "v1".to_string()
+}
+fn default_max_message_size_kb() -> u32 {
+    64
+}
+fn default_message_timeout_ms() -> u64 {
+    30_000
+}
+fn default_discovery_interval_ms() -> u64 {
+    5000
+}
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub struct SurvivalConfig {
@@ -299,9 +365,15 @@ impl Default for MarketConfig {
     }
 }
 
-fn default_task_expiry_ticks() -> u64 { 500 }
-fn default_min_reward_money() -> u64 { 1 }
-fn default_reputation_decay() -> f64 { 0.01 }
+fn default_task_expiry_ticks() -> u64 {
+    500
+}
+fn default_min_reward_money() -> u64 {
+    1
+}
+fn default_reputation_decay() -> f64 {
+    0.01
+}
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub struct SafetyConfig {
@@ -323,9 +395,15 @@ impl Default for SafetyConfig {
     }
 }
 
-fn default_max_agents_per_org() -> u32 { 5 }
-fn default_anti_monopoly_threshold() -> f64 { 0.3 }
-fn default_new_agent_protection_ticks() -> u64 { 50 }
+fn default_max_agents_per_org() -> u32 {
+    5
+}
+fn default_anti_monopoly_threshold() -> f64 {
+    0.3
+}
+fn default_new_agent_protection_ticks() -> u64 {
+    50
+}
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub struct TrustConfigSection {
@@ -350,10 +428,18 @@ impl Default for TrustConfigSection {
     }
 }
 
-fn default_trust_cooperation_gain() -> f64 { 0.1 }
-fn default_trust_betrayal_loss() -> f64 { 0.3 }
-fn default_trust_decay_rate() -> f64 { 0.001 }
-fn default_trust_interaction_interval() -> u64 { 50 }
+fn default_trust_cooperation_gain() -> f64 {
+    0.1
+}
+fn default_trust_betrayal_loss() -> f64 {
+    0.3
+}
+fn default_trust_decay_rate() -> f64 {
+    0.001
+}
+fn default_trust_interaction_interval() -> u64 {
+    50
+}
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub struct MentorshipConfigSection {
@@ -375,9 +461,15 @@ impl Default for MentorshipConfigSection {
     }
 }
 
-fn default_mentorship_ticks_per_level() -> u64 { 20 }
-fn default_mentorship_transfer_ratio() -> f64 { 0.7 }
-fn default_mentorship_max_apprentices() -> u32 { 3 }
+fn default_mentorship_ticks_per_level() -> u64 {
+    20
+}
+fn default_mentorship_transfer_ratio() -> f64 {
+    0.7
+}
+fn default_mentorship_max_apprentices() -> u32 {
+    3
+}
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub struct InheritanceConfigSection {
@@ -396,8 +488,12 @@ impl Default for InheritanceConfigSection {
     }
 }
 
-fn default_inheritance_ratio_config() -> f64 { 0.5 }
-fn default_skill_transfer_ratio_config() -> f64 { 0.3 }
+fn default_inheritance_ratio_config() -> f64 {
+    0.5
+}
+fn default_skill_transfer_ratio_config() -> f64 {
+    0.3
+}
 
 // ── Migration Config ─────────────────────────────────────
 
@@ -439,13 +535,27 @@ impl Default for MigrationConfigSection {
     }
 }
 
-fn default_migration_enabled() -> bool { true }
-fn default_daily_quota() -> u32 { 10 }
-fn default_weekly_quota() -> u32 { 50 }
-fn default_min_reputation() -> f64 { 0.0 }
-fn default_token_cost() -> u64 { 10_000 }
-fn default_resource_tax_rate() -> f64 { 0.2 }
-fn default_cooldown_ticks() -> u32 { 100 }
+fn default_migration_enabled() -> bool {
+    true
+}
+fn default_daily_quota() -> u32 {
+    10
+}
+fn default_weekly_quota() -> u32 {
+    50
+}
+fn default_min_reputation() -> f64 {
+    0.0
+}
+fn default_token_cost() -> u64 {
+    10_000
+}
+fn default_resource_tax_rate() -> f64 {
+    0.2
+}
+fn default_cooldown_ticks() -> u32 {
+    100
+}
 
 // ── Federation Config ─────────────────────────────────────
 
@@ -469,8 +579,12 @@ impl Default for FederationConfigSection {
     }
 }
 
-fn default_heartbeat_timeout() -> u64 { 90 }
-fn default_world_id() -> String { uuid::Uuid::new_v4().to_string() }
+fn default_heartbeat_timeout() -> u64 {
+    90
+}
+fn default_world_id() -> String {
+    uuid::Uuid::new_v4().to_string()
+}
 
 // ── Validation ────────────────────────────────────────────
 
@@ -634,7 +748,10 @@ pub struct ConfigManager {
 
 impl ConfigManager {
     /// Create a new config manager by loading genesis.yaml from disk.
-    pub fn new(path: impl Into<PathBuf>, event_bus: Option<Arc<EventBus>>) -> Result<Self, Box<dyn std::error::Error + Send + Sync>> {
+    pub fn new(
+        path: impl Into<PathBuf>,
+        event_bus: Option<Arc<EventBus>>,
+    ) -> Result<Self, Box<dyn std::error::Error + Send + Sync>> {
         let path = path.into();
         let config = GenesisConfig::load_from_file(&path)?;
         info!("Loaded genesis config from {:?}", path);
@@ -662,7 +779,10 @@ impl ConfigManager {
 
     /// Stage a new config for application at the next tick boundary.
     /// Validates the config first; returns `Err` and keeps the old config if invalid.
-    pub async fn stage_reload(&self, new_config: GenesisConfig) -> Result<(), Vec<ValidationError>> {
+    pub async fn stage_reload(
+        &self,
+        new_config: GenesisConfig,
+    ) -> Result<(), Vec<ValidationError>> {
         let errors = new_config.validate();
         if !errors.is_empty() {
             for e in &errors {
@@ -711,12 +831,10 @@ impl ConfigManager {
         let config = GenesisConfig::load_from_file(&self.path)
             .map_err(|e| format!("Failed to parse genesis.yaml: {}", e))?;
 
-        self.stage_reload(config)
-            .await
-            .map_err(|errors| {
-                let msgs: Vec<String> = errors.iter().map(|e| e.to_string()).collect();
-                format!("Config validation failed: {}", msgs.join("; "))
-            })
+        self.stage_reload(config).await.map_err(|errors| {
+            let msgs: Vec<String> = errors.iter().map(|e| e.to_string()).collect();
+            format!("Config validation failed: {}", msgs.join("; "))
+        })
     }
 
     /// Path to the watched genesis.yaml file.
@@ -733,7 +851,13 @@ impl ConfigManager {
 /// Returns a `JoinHandle` for the watcher loop and a cancellation token.
 pub fn spawn_config_watcher(
     config_manager: SharedConfig,
-) -> Result<(tokio::task::JoinHandle<()>, tokio::sync::oneshot::Sender<()>), Box<dyn std::error::Error + Send + Sync>> {
+) -> Result<
+    (
+        tokio::task::JoinHandle<()>,
+        tokio::sync::oneshot::Sender<()>,
+    ),
+    Box<dyn std::error::Error + Send + Sync>,
+> {
     let watch_path = config_manager.path().to_path_buf();
 
     // Debounce: coalesce rapid file-writes within this window.
@@ -763,7 +887,10 @@ pub fn spawn_config_watcher(
 
     // Watch the parent directory (more robust than watching the file itself;
     // some editors replace the file via rename which breaks direct file watches).
-    let parent = config_manager.path().parent().unwrap_or_else(|| Path::new("."));
+    let parent = config_manager
+        .path()
+        .parent()
+        .unwrap_or_else(|| Path::new("."));
     watcher.watch(parent, RecursiveMode::NonRecursive)?;
 
     // oneshot channel for graceful cancellation.
@@ -933,7 +1060,9 @@ safety:
         let mut config = GenesisConfig::default();
         config.lifecycle.childhood_ticks = 0;
         let errors = config.validate();
-        assert!(errors.iter().any(|e| e.field == "lifecycle.childhood_ticks"));
+        assert!(errors
+            .iter()
+            .any(|e| e.field == "lifecycle.childhood_ticks"));
     }
 
     #[test]
@@ -941,7 +1070,9 @@ safety:
         let mut config = GenesisConfig::default();
         config.evolution.skill_max_level = 0;
         let errors = config.validate();
-        assert!(errors.iter().any(|e| e.field == "evolution.skill_max_level"));
+        assert!(errors
+            .iter()
+            .any(|e| e.field == "evolution.skill_max_level"));
     }
 
     #[tokio::test]

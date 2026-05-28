@@ -17,7 +17,11 @@ use agent_world_engine::wal::WAL;
 use agent_world_engine::world::event::WorldEvent;
 use agent_world_engine::world::state::EventBus;
 
-fn build_app() -> (Arc<EventBus>, Arc<Mutex<GovernanceMetricsCollector>>, axum::Router) {
+fn build_app() -> (
+    Arc<EventBus>,
+    Arc<Mutex<GovernanceMetricsCollector>>,
+    axum::Router,
+) {
     let dir = tempfile::TempDir::new().unwrap();
     let event_bus = Arc::new(EventBus::new(256));
     let board = Arc::new(Mutex::new(TaskBoard::with_event_bus((*event_bus).clone())));
@@ -27,11 +31,15 @@ fn build_app() -> (Arc<EventBus>, Arc<Mutex<GovernanceMetricsCollector>>, axum::
     let collector = GovernanceMetricsCollector::new(&event_bus);
     let metrics = Arc::new(Mutex::new(collector));
 
-    let state = AppState::for_test_with(board, wal, TestOverrides {
-        event_bus: Some(event_bus.clone()),
-        governance_metrics: Some(metrics.clone()),
-        ..TestOverrides::default()
-    });
+    let state = AppState::for_test_with(
+        board,
+        wal,
+        TestOverrides {
+            event_bus: Some(event_bus.clone()),
+            governance_metrics: Some(metrics.clone()),
+            ..TestOverrides::default()
+        },
+    );
 
     let app = agent_world_engine::api::build_full_router(state);
     (event_bus, metrics, app)
@@ -98,7 +106,10 @@ async fn governance_summary_returns_world_summary() {
 
     let client = reqwest::Client::new();
     let resp = client
-        .get(format!("http://127.0.0.1:{}/api/v1/governance/summary", port))
+        .get(format!(
+            "http://127.0.0.1:{}/api/v1/governance/summary",
+            port
+        ))
         .send()
         .await
         .unwrap();
@@ -269,7 +280,10 @@ async fn governance_endpoints_503_when_not_configured() {
 
     let client = reqwest::Client::new();
     let resp = client
-        .get(format!("http://127.0.0.1:{}/api/v1/governance/summary", port))
+        .get(format!(
+            "http://127.0.0.1:{}/api/v1/governance/summary",
+            port
+        ))
         .send()
         .await
         .unwrap();

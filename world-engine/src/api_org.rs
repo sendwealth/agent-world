@@ -1,21 +1,22 @@
-use std::sync::Arc;
-
 use axum::{
-    Json,
     extract::{Path, State},
     http::StatusCode,
     response::IntoResponse,
     routing::*,
+    Json,
 };
 use serde::{Deserialize, Serialize};
-use uuid::Uuid;
 
 use crate::api::{AppState, ErrorResponse};
-use crate::organization::org::{OrganizationStore, OrgType};
 use crate::organization::charter::{Charter, GovernanceModel, ProfitSharing};
+use crate::organization::org::OrgType;
 
-pub fn default_governance() -> String { "vote".to_string() }
-pub fn default_profit_sharing() -> String { "equal".to_string() }
+pub fn default_governance() -> String {
+    "vote".to_string()
+}
+pub fn default_profit_sharing() -> String {
+    "equal".to_string()
+}
 
 #[derive(Debug, Deserialize)]
 pub struct CreateOrgRequest {
@@ -118,7 +119,6 @@ pub struct DistributionRequest {
 
 // ── Organization & Governance Response Types ──────────────
 
-
 #[derive(Debug, Serialize)]
 pub struct OrgResponse {
     pub id: String,
@@ -181,13 +181,17 @@ impl From<&crate::organization::org::Organization> for OrgResponse {
             treasury: org.treasury,
             debts: org.debts,
             member_count: org.members.len(),
-            members: org.members.iter().map(|m| OrgMemberResponse {
-                agent_id: m.agent_id.clone(),
-                agent_name: m.agent_name.clone(),
-                role: format!("{:?}", m.role).to_lowercase(),
-                share: m.share,
-                joined_tick: m.joined_tick,
-            }).collect(),
+            members: org
+                .members
+                .iter()
+                .map(|m| OrgMemberResponse {
+                    agent_id: m.agent_id.clone(),
+                    agent_name: m.agent_name.clone(),
+                    role: format!("{:?}", m.role).to_lowercase(),
+                    share: m.share,
+                    joined_tick: m.joined_tick,
+                })
+                .collect(),
             created_tick: org.created_tick,
             last_activity_tick: org.last_activity_tick,
             charter: String::new(),
@@ -220,7 +224,9 @@ pub fn org_to_response(org: &crate::organization::governance::Organization) -> O
     }
 }
 
-pub fn proposal_to_response(proposal: &crate::organization::governance::Proposal) -> ProposalResponse {
+pub fn proposal_to_response(
+    proposal: &crate::organization::governance::Proposal,
+) -> ProposalResponse {
     ProposalResponse {
         id: proposal.id.to_string(),
         org_id: proposal.org_id.to_string(),
@@ -262,12 +268,15 @@ pub fn parse_proposal_type(s: &str) -> Option<crate::organization::governance::P
 pub fn governance_error_status(e: &crate::organization::governance::GovernanceError) -> StatusCode {
     use crate::organization::governance::GovernanceError;
     match e {
-        GovernanceError::NotFound(_)
-        | GovernanceError::OrganizationNotFound(_) => StatusCode::NOT_FOUND,
-        GovernanceError::AlreadyMember { .. }
-        | GovernanceError::AlreadyVoted { .. } => StatusCode::CONFLICT,
-        GovernanceError::NotMember { .. }
-        | GovernanceError::NotFounder { .. } => StatusCode::FORBIDDEN,
+        GovernanceError::NotFound(_) | GovernanceError::OrganizationNotFound(_) => {
+            StatusCode::NOT_FOUND
+        }
+        GovernanceError::AlreadyMember { .. } | GovernanceError::AlreadyVoted { .. } => {
+            StatusCode::CONFLICT
+        }
+        GovernanceError::NotMember { .. } | GovernanceError::NotFounder { .. } => {
+            StatusCode::FORBIDDEN
+        }
         GovernanceError::InvalidTransition { .. }
         | GovernanceError::VotingNotOpen(_)
         | GovernanceError::ProposalNotOpen(_) => StatusCode::CONFLICT,
@@ -280,14 +289,21 @@ pub fn governance_error_status(e: &crate::organization::governance::GovernanceEr
 
 // ── Organization & Governance Handlers ────────────────────
 
-
 pub async fn create_org(
     State(state): State<AppState>,
     Json(body): Json<CreateOrgRequest>,
 ) -> impl IntoResponse {
     let store = match &state.org_store {
         Some(s) => s.clone(),
-        None => return (StatusCode::SERVICE_UNAVAILABLE, Json(ErrorResponse { error: "organization system not configured".into() })).into_response(),
+        None => {
+            return (
+                StatusCode::SERVICE_UNAVAILABLE,
+                Json(ErrorResponse {
+                    error: "organization system not configured".into(),
+                }),
+            )
+                .into_response()
+        }
     };
 
     let org_type = match body.org_type.as_str() {
@@ -295,21 +311,45 @@ pub async fn create_org(
         "guild" => OrgType::Guild,
         "alliance" => OrgType::Alliance,
         "university" => OrgType::University,
-        other => return (StatusCode::BAD_REQUEST, Json(ErrorResponse { error: format!("unknown org type: {}", other) })).into_response(),
+        other => {
+            return (
+                StatusCode::BAD_REQUEST,
+                Json(ErrorResponse {
+                    error: format!("unknown org type: {}", other),
+                }),
+            )
+                .into_response()
+        }
     };
 
     let governance = match body.charter.governance.as_str() {
         "vote" => GovernanceModel::Vote,
         "dictator" => GovernanceModel::Dictator,
         "council" => GovernanceModel::Council,
-        other => return (StatusCode::BAD_REQUEST, Json(ErrorResponse { error: format!("unknown governance model: {}", other) })).into_response(),
+        other => {
+            return (
+                StatusCode::BAD_REQUEST,
+                Json(ErrorResponse {
+                    error: format!("unknown governance model: {}", other),
+                }),
+            )
+                .into_response()
+        }
     };
 
     let profit_sharing = match body.charter.profit_sharing.as_str() {
         "equal" => ProfitSharing::Equal,
         "proportional" => ProfitSharing::Proportional,
         "custom" => ProfitSharing::Custom,
-        other => return (StatusCode::BAD_REQUEST, Json(ErrorResponse { error: format!("unknown profit sharing mode: {}", other) })).into_response(),
+        other => {
+            return (
+                StatusCode::BAD_REQUEST,
+                Json(ErrorResponse {
+                    error: format!("unknown profit sharing mode: {}", other),
+                }),
+            )
+                .into_response()
+        }
     };
 
     let charter = Charter {
@@ -319,7 +359,9 @@ pub async fn create_org(
         membership_fee: body.charter.membership_fee,
     };
 
-    let founders: Vec<(String, String)> = body.founders.into_iter()
+    let founders: Vec<(String, String)> = body
+        .founders
+        .into_iter()
         .map(|f| (f.agent_id, f.agent_name))
         .collect();
 
@@ -337,17 +379,29 @@ pub async fn create_org(
                 crate::organization::org::OrgError::AgentAlreadyInOrg(_) => StatusCode::CONFLICT,
                 _ => StatusCode::BAD_REQUEST,
             };
-            (status, Json(ErrorResponse { error: e.to_string() })).into_response()
+            (
+                status,
+                Json(ErrorResponse {
+                    error: e.to_string(),
+                }),
+            )
+                .into_response()
         }
     }
 }
 
-pub async fn list_orgs(
-    State(state): State<AppState>,
-) -> impl IntoResponse {
+pub async fn list_orgs(State(state): State<AppState>) -> impl IntoResponse {
     let store = match &state.org_store {
         Some(s) => s.clone(),
-        None => return (StatusCode::SERVICE_UNAVAILABLE, Json(ErrorResponse { error: "organization system not configured".into() })).into_response(),
+        None => {
+            return (
+                StatusCode::SERVICE_UNAVAILABLE,
+                Json(ErrorResponse {
+                    error: "organization system not configured".into(),
+                }),
+            )
+                .into_response()
+        }
     };
 
     let store = store.lock().await;
@@ -355,19 +409,30 @@ pub async fn list_orgs(
     Json(orgs).into_response()
 }
 
-pub async fn get_org(
-    State(state): State<AppState>,
-    Path(id): Path<String>,
-) -> impl IntoResponse {
+pub async fn get_org(State(state): State<AppState>, Path(id): Path<String>) -> impl IntoResponse {
     let store = match &state.org_store {
         Some(s) => s.clone(),
-        None => return (StatusCode::SERVICE_UNAVAILABLE, Json(ErrorResponse { error: "organization system not configured".into() })).into_response(),
+        None => {
+            return (
+                StatusCode::SERVICE_UNAVAILABLE,
+                Json(ErrorResponse {
+                    error: "organization system not configured".into(),
+                }),
+            )
+                .into_response()
+        }
     };
 
     let store = store.lock().await;
     match store.get(&id) {
         Some(org) => Json(OrgResponse::from(org)).into_response(),
-        None => (StatusCode::NOT_FOUND, Json(ErrorResponse { error: "organization not found".into() })).into_response(),
+        None => (
+            StatusCode::NOT_FOUND,
+            Json(ErrorResponse {
+                error: "organization not found".into(),
+            }),
+        )
+            .into_response(),
     }
 }
 
@@ -378,7 +443,15 @@ pub async fn join_org(
 ) -> impl IntoResponse {
     let store = match &state.org_store {
         Some(s) => s.clone(),
-        None => return (StatusCode::SERVICE_UNAVAILABLE, Json(ErrorResponse { error: "organization system not configured".into() })).into_response(),
+        None => {
+            return (
+                StatusCode::SERVICE_UNAVAILABLE,
+                Json(ErrorResponse {
+                    error: "organization system not configured".into(),
+                }),
+            )
+                .into_response()
+        }
     };
 
     let tick = *state.tick_rx.borrow();
@@ -392,7 +465,13 @@ pub async fn join_org(
                 crate::organization::org::OrgError::AgentAlreadyInOrg(_) => StatusCode::CONFLICT,
                 _ => StatusCode::BAD_REQUEST,
             };
-            (status, Json(ErrorResponse { error: e.to_string() })).into_response()
+            (
+                status,
+                Json(ErrorResponse {
+                    error: e.to_string(),
+                }),
+            )
+                .into_response()
         }
     }
 }
@@ -404,7 +483,15 @@ pub async fn leave_org(
 ) -> impl IntoResponse {
     let store = match &state.org_store {
         Some(s) => s.clone(),
-        None => return (StatusCode::SERVICE_UNAVAILABLE, Json(ErrorResponse { error: "organization system not configured".into() })).into_response(),
+        None => {
+            return (
+                StatusCode::SERVICE_UNAVAILABLE,
+                Json(ErrorResponse {
+                    error: "organization system not configured".into(),
+                }),
+            )
+                .into_response()
+        }
     };
 
     let tick = *state.tick_rx.borrow();
@@ -417,7 +504,13 @@ pub async fn leave_org(
                 crate::organization::org::OrgError::OrgDissolved => StatusCode::CONFLICT,
                 _ => StatusCode::BAD_REQUEST,
             };
-            (status, Json(ErrorResponse { error: e.to_string() })).into_response()
+            (
+                status,
+                Json(ErrorResponse {
+                    error: e.to_string(),
+                }),
+            )
+                .into_response()
         }
     }
 }
@@ -429,7 +522,15 @@ pub async fn dissolve_org(
 ) -> impl IntoResponse {
     let store = match &state.org_store {
         Some(s) => s.clone(),
-        None => return (StatusCode::SERVICE_UNAVAILABLE, Json(ErrorResponse { error: "organization system not configured".into() })).into_response(),
+        None => {
+            return (
+                StatusCode::SERVICE_UNAVAILABLE,
+                Json(ErrorResponse {
+                    error: "organization system not configured".into(),
+                }),
+            )
+                .into_response()
+        }
     };
 
     let mut store = store.lock().await;
@@ -437,18 +538,46 @@ pub async fn dissolve_org(
     // Verify requester is a founder/leader
     let org = store.get(&id);
     match org {
-        None => return (StatusCode::NOT_FOUND, Json(ErrorResponse { error: "organization not found".into() })).into_response(),
+        None => {
+            return (
+                StatusCode::NOT_FOUND,
+                Json(ErrorResponse {
+                    error: "organization not found".into(),
+                }),
+            )
+                .into_response()
+        }
         Some(org) => {
             let member = org.get_member(&body.requester_id);
             match member {
-                None => return (StatusCode::FORBIDDEN, Json(ErrorResponse { error: "requester is not a member".into() })).into_response(),
-                Some(m) if !m.role.is_admin() => return (StatusCode::FORBIDDEN, Json(ErrorResponse { error: "only founders or leaders can dissolve".into() })).into_response(),
+                None => {
+                    return (
+                        StatusCode::FORBIDDEN,
+                        Json(ErrorResponse {
+                            error: "requester is not a member".into(),
+                        }),
+                    )
+                        .into_response()
+                }
+                Some(m) if !m.role.is_admin() => {
+                    return (
+                        StatusCode::FORBIDDEN,
+                        Json(ErrorResponse {
+                            error: "only founders or leaders can dissolve".into(),
+                        }),
+                    )
+                        .into_response()
+                }
                 _ => {}
             }
         }
     }
 
-    let reason = if body.reason.is_empty() { "manual_dissolution".to_string() } else { body.reason };
+    let reason = if body.reason.is_empty() {
+        "manual_dissolution".to_string()
+    } else {
+        body.reason
+    };
     match store.dissolve_org(&id, &reason) {
         Ok(()) => Json(serde_json::json!({ "dissolved": true, "org_id": id })).into_response(),
         Err(e) => {
@@ -456,7 +585,13 @@ pub async fn dissolve_org(
                 crate::organization::org::OrgError::NotFound(_) => StatusCode::NOT_FOUND,
                 _ => StatusCode::BAD_REQUEST,
             };
-            (status, Json(ErrorResponse { error: e.to_string() })).into_response()
+            (
+                status,
+                Json(ErrorResponse {
+                    error: e.to_string(),
+                }),
+            )
+                .into_response()
         }
     }
 }

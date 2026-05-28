@@ -15,9 +15,7 @@ use std::collections::HashMap;
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
-use crate::economy::ledger::{
-    Account, AccountType, ExchangeRate, MoneyLedger,
-};
+use crate::economy::ledger::{Account, AccountType, ExchangeRate, MoneyLedger};
 use crate::world::enums::Currency;
 use crate::world::event::WorldEvent;
 use crate::world::state::EventBus;
@@ -131,10 +129,10 @@ pub struct CentralBankConfig {
 impl Default for CentralBankConfig {
     fn default() -> Self {
         Self {
-            savings_rate: 0.0005,    // 0.05% per tick
-            loan_rate: 0.001,        // 0.1% per tick
-            auto_deduct_rate: 0.1,   // 10% of overdue balance per tick
-            ltv_ratio: 0.7,          // 70% LTV
+            savings_rate: 0.0005,  // 0.05% per tick
+            loan_rate: 0.001,      // 0.1% per tick
+            auto_deduct_rate: 0.1, // 10% of overdue balance per tick
+            ltv_ratio: 0.7,        // 70% LTV
             grace_ticks: 10,
             skill_collateral_value: 100,
             reputation_collateral_value: 50,
@@ -373,7 +371,9 @@ impl BankingSystem {
         amount: u64,
         tick: u64,
     ) -> Result<DepositResult, BankingError> {
-        let _account = self.bank_accounts.get(&account_id)
+        let _account = self
+            .bank_accounts
+            .get(&account_id)
             .ok_or_else(|| BankingError::AccountNotFound(account_id.to_string()))?;
 
         if amount == 0 {
@@ -388,7 +388,8 @@ impl BankingSystem {
 
         // Ensure the agent has a ledger account.
         if !self.ledger.account_exists(owner_id) {
-            self.ledger.create_account(Account::new_agent(owner_id, owner_id));
+            self.ledger
+                .create_account(Account::new_agent(owner_id, owner_id));
         }
 
         self.ledger
@@ -428,7 +429,9 @@ impl BankingSystem {
         amount: u64,
         tick: u64,
     ) -> Result<WithdrawResult, BankingError> {
-        let _account = self.bank_accounts.get(&account_id)
+        let _account = self
+            .bank_accounts
+            .get(&account_id)
             .ok_or_else(|| BankingError::AccountNotFound(account_id.to_string()))?;
 
         if amount == 0 {
@@ -451,7 +454,8 @@ impl BankingSystem {
 
         // Ensure the agent has a ledger account to receive the withdrawal.
         if !self.ledger.account_exists(owner_id) {
-            self.ledger.create_account(Account::new_agent(owner_id, owner_id));
+            self.ledger
+                .create_account(Account::new_agent(owner_id, owner_id));
         }
 
         self.ledger
@@ -551,7 +555,9 @@ impl BankingSystem {
 
     /// Approve a pending loan application.
     pub fn approve_loan(&mut self, loan_id: Uuid, _tick: u64) -> Result<Loan, BankingError> {
-        let loan = self.loans.get_mut(&loan_id)
+        let loan = self
+            .loans
+            .get_mut(&loan_id)
             .ok_or_else(|| BankingError::LoanNotFound(loan_id.to_string()))?;
 
         if loan.status != LoanStatus::Pending {
@@ -577,7 +583,9 @@ impl BankingSystem {
 
     /// Disburse an approved loan, transferring funds to the borrower's wallet.
     pub fn disburse_loan(&mut self, loan_id: Uuid, tick: u64) -> Result<Loan, BankingError> {
-        let loan = self.loans.get_mut(&loan_id)
+        let loan = self
+            .loans
+            .get_mut(&loan_id)
             .ok_or_else(|| BankingError::LoanNotFound(loan_id.to_string()))?;
 
         if loan.status != LoanStatus::Approved {
@@ -592,7 +600,8 @@ impl BankingSystem {
 
         // Ensure the borrower has a ledger account.
         if !self.ledger.account_exists(&borrower_id) {
-            self.ledger.create_account(Account::new_agent(&borrower_id, &borrower_id));
+            self.ledger
+                .create_account(Account::new_agent(&borrower_id, &borrower_id));
         }
 
         // Transfer from central bank to borrower.
@@ -633,7 +642,9 @@ impl BankingSystem {
         amount: u64,
         tick: u64,
     ) -> Result<RepaymentResult, BankingError> {
-        let loan = self.loans.get_mut(&loan_id)
+        let loan = self
+            .loans
+            .get_mut(&loan_id)
             .ok_or_else(|| BankingError::LoanNotFound(loan_id.to_string()))?;
 
         if loan.status != LoanStatus::Active && loan.status != LoanStatus::Defaulted {
@@ -714,7 +725,9 @@ impl BankingSystem {
         let rate = self.config.savings_rate;
         let mut results = Vec::new();
 
-        let savings_accounts: Vec<(Uuid, String)> = self.bank_accounts.values()
+        let savings_accounts: Vec<(Uuid, String)> = self
+            .bank_accounts
+            .values()
             .filter(|a| a.account_type == BankAccountType::Savings)
             .map(|a| (a.id, a.owner_id.clone()))
             .collect();
@@ -732,16 +745,20 @@ impl BankingSystem {
             }
 
             // Central bank pays interest to the savings account.
-            if self.ledger.transfer(
-                "central_bank",
-                &ledger_id,
-                interest,
-                Currency::Money,
-                crate::economy::reward::TransactionType::Interest,
-                format!("Savings interest for account {}", account_id),
-                tick,
-                Some(account_id.to_string()),
-            ).is_ok() {
+            if self
+                .ledger
+                .transfer(
+                    "central_bank",
+                    &ledger_id,
+                    interest,
+                    Currency::Money,
+                    crate::economy::reward::TransactionType::Interest,
+                    format!("Savings interest for account {}", account_id),
+                    tick,
+                    Some(account_id.to_string()),
+                )
+                .is_ok()
+            {
                 let new_balance = self.ledger.get_balance(&ledger_id, Currency::Money);
                 results.push(InterestPaymentResult {
                     account_id: account_id.to_string(),
@@ -757,7 +774,9 @@ impl BankingSystem {
     /// Accrue interest on active loans (adds to outstanding balance).
     pub fn accrue_loan_interest(&mut self, _tick: u64) {
         let rate = self.config.loan_rate;
-        let active_loans: Vec<Uuid> = self.loans.values()
+        let active_loans: Vec<Uuid> = self
+            .loans
+            .values()
             .filter(|l| l.status == LoanStatus::Active || l.status == LoanStatus::Defaulted)
             .map(|l| l.id)
             .collect();
@@ -780,7 +799,9 @@ impl BankingSystem {
         let rate = self.config.auto_deduct_rate;
 
         // Find loans past their due date.
-        let overdue_loans: Vec<Uuid> = self.loans.values()
+        let overdue_loans: Vec<Uuid> = self
+            .loans
+            .values()
             .filter(|l| {
                 (l.status == LoanStatus::Active || l.status == LoanStatus::Defaulted)
                     && l.due_tick.is_some_and(|due| tick > due)
@@ -807,25 +828,32 @@ impl BankingSystem {
 
                 let borrower_id = loan.borrower_id.clone();
                 let borrower_balance = self.ledger.get_balance(&borrower_id, Currency::Money);
-                let actual_deduction = deduction.min(borrower_balance).min(loan.outstanding_balance);
+                let actual_deduction = deduction
+                    .min(borrower_balance)
+                    .min(loan.outstanding_balance);
 
                 if actual_deduction == 0 {
                     continue;
                 }
 
                 // Deduct from borrower wallet.
-                if self.ledger.transfer(
-                    &borrower_id,
-                    "central_bank",
-                    actual_deduction,
-                    Currency::Money,
-                    crate::economy::reward::TransactionType::LoanRepayment,
-                    format!("Auto-deduction for overdue loan {}", loan_id),
-                    tick,
-                    Some(loan_id.to_string()),
-                ).is_ok() {
+                if self
+                    .ledger
+                    .transfer(
+                        &borrower_id,
+                        "central_bank",
+                        actual_deduction,
+                        Currency::Money,
+                        crate::economy::reward::TransactionType::LoanRepayment,
+                        format!("Auto-deduction for overdue loan {}", loan_id),
+                        tick,
+                        Some(loan_id.to_string()),
+                    )
+                    .is_ok()
+                {
                     loan.total_repaid += actual_deduction;
-                    loan.outstanding_balance = loan.outstanding_balance.saturating_sub(actual_deduction);
+                    loan.outstanding_balance =
+                        loan.outstanding_balance.saturating_sub(actual_deduction);
 
                     let fully_repaid = loan.outstanding_balance == 0;
                     if fully_repaid {
@@ -880,7 +908,8 @@ impl BankingSystem {
     pub fn mint_money(&mut self, amount: u64, _tick: u64) -> MintResult {
         // Use genesis-style balance injection for minting.
         let current = self.ledger.get_balance("central_bank", Currency::Money);
-        self.ledger.set_balance_genesis("central_bank", Currency::Money, current + amount);
+        self.ledger
+            .set_balance_genesis("central_bank", Currency::Money, current + amount);
 
         self.emit(WorldEvent::MoneyMinted {
             amount,
@@ -894,8 +923,14 @@ impl BankingSystem {
     }
 
     /// Write off a bad debt loan. The outstanding balance is absorbed by the central bank.
-    pub fn write_off_bad_debt(&mut self, loan_id: Uuid, _tick: u64) -> Result<WriteOffResult, BankingError> {
-        let loan = self.loans.get_mut(&loan_id)
+    pub fn write_off_bad_debt(
+        &mut self,
+        loan_id: Uuid,
+        _tick: u64,
+    ) -> Result<WriteOffResult, BankingError> {
+        let loan = self
+            .loans
+            .get_mut(&loan_id)
             .ok_or_else(|| BankingError::LoanNotFound(loan_id.to_string()))?;
 
         if loan.status != LoanStatus::Defaulted {
@@ -930,12 +965,9 @@ impl BankingSystem {
     }
 
     /// List all loans, optionally filtered by borrower or status.
-    pub fn list_loans(
-        &self,
-        borrower_id: Option<&str>,
-        status: Option<LoanStatus>,
-    ) -> Vec<&Loan> {
-        self.loans.values()
+    pub fn list_loans(&self, borrower_id: Option<&str>, status: Option<LoanStatus>) -> Vec<&Loan> {
+        self.loans
+            .values()
             .filter(|l| {
                 borrower_id.is_none_or(|b| l.borrower_id == b)
                     && status.is_none_or(|s| l.status == s)
@@ -960,7 +992,8 @@ impl BankingSystem {
 
     /// Get the total outstanding loan debt.
     pub fn total_loan_debt(&self) -> u64 {
-        self.loans.values()
+        self.loans
+            .values()
             .filter(|l| l.status == LoanStatus::Active || l.status == LoanStatus::Defaulted)
             .map(|l| l.outstanding_balance)
             .sum()
@@ -1000,7 +1033,9 @@ mod tests {
     #[test]
     fn test_open_savings_account() {
         let mut sys = make_system();
-        let account = sys.open_account("alice", BankAccountType::Savings, "Alice Savings", 0).unwrap();
+        let account = sys
+            .open_account("alice", BankAccountType::Savings, "Alice Savings", 0)
+            .unwrap();
         assert_eq!(account.owner_id, "alice");
         assert_eq!(account.account_type, BankAccountType::Savings);
         assert_eq!(sys.get_balance(account.id), Some(0));
@@ -1009,22 +1044,29 @@ mod tests {
     #[test]
     fn test_open_checking_account() {
         let mut sys = make_system();
-        let account = sys.open_account("bob", BankAccountType::Checking, "Bob Checking", 0).unwrap();
+        let account = sys
+            .open_account("bob", BankAccountType::Checking, "Bob Checking", 0)
+            .unwrap();
         assert_eq!(account.account_type, BankAccountType::Checking);
     }
 
     #[test]
     fn test_open_both_account_types() {
         let mut sys = make_system();
-        let savings = sys.open_account("alice", BankAccountType::Savings, "Alice Savings", 0).unwrap();
-        let checking = sys.open_account("alice", BankAccountType::Checking, "Alice Checking", 0).unwrap();
+        let savings = sys
+            .open_account("alice", BankAccountType::Savings, "Alice Savings", 0)
+            .unwrap();
+        let checking = sys
+            .open_account("alice", BankAccountType::Checking, "Alice Checking", 0)
+            .unwrap();
         assert_ne!(savings.id, checking.id);
     }
 
     #[test]
     fn test_duplicate_account_type_rejected() {
         let mut sys = make_system();
-        sys.open_account("alice", BankAccountType::Savings, "Alice Savings", 0).unwrap();
+        sys.open_account("alice", BankAccountType::Savings, "Alice Savings", 0)
+            .unwrap();
         let result = sys.open_account("alice", BankAccountType::Savings, "Alice Savings 2", 0);
         assert!(result.is_err());
     }
@@ -1032,9 +1074,12 @@ mod tests {
     #[test]
     fn test_list_accounts() {
         let mut sys = make_system();
-        sys.open_account("alice", BankAccountType::Savings, "Alice Savings", 0).unwrap();
-        sys.open_account("alice", BankAccountType::Checking, "Alice Checking", 0).unwrap();
-        sys.open_account("bob", BankAccountType::Savings, "Bob Savings", 0).unwrap();
+        sys.open_account("alice", BankAccountType::Savings, "Alice Savings", 0)
+            .unwrap();
+        sys.open_account("alice", BankAccountType::Checking, "Alice Checking", 0)
+            .unwrap();
+        sys.open_account("bob", BankAccountType::Savings, "Bob Savings", 0)
+            .unwrap();
         assert_eq!(sys.list_accounts().len(), 3);
         assert_eq!(sys.get_accounts_by_owner("alice").len(), 2);
         assert_eq!(sys.get_accounts_by_owner("bob").len(), 1);
@@ -1046,10 +1091,14 @@ mod tests {
     fn test_deposit_and_withdraw() {
         let mut sys = make_system();
         // Give alice some initial money.
-        sys.ledger.create_account(Account::new_agent("alice", "Alice"));
-        sys.ledger.set_balance_genesis("alice", Currency::Money, 1000);
+        sys.ledger
+            .create_account(Account::new_agent("alice", "Alice"));
+        sys.ledger
+            .set_balance_genesis("alice", Currency::Money, 1000);
 
-        let account = sys.open_account("alice", BankAccountType::Savings, "Alice Savings", 0).unwrap();
+        let account = sys
+            .open_account("alice", BankAccountType::Savings, "Alice Savings", 0)
+            .unwrap();
 
         // Deposit 500.
         let result = sys.deposit(account.id, "alice", 500, 1).unwrap();
@@ -1069,7 +1118,9 @@ mod tests {
     #[test]
     fn test_withdraw_insufficient_funds() {
         let mut sys = make_system();
-        let account = sys.open_account("alice", BankAccountType::Checking, "Alice Checking", 0).unwrap();
+        let account = sys
+            .open_account("alice", BankAccountType::Checking, "Alice Checking", 0)
+            .unwrap();
         let result = sys.withdraw(account.id, "alice", 100, 1);
         assert!(result.is_err());
     }
@@ -1087,7 +1138,8 @@ mod tests {
     fn test_full_loan_lifecycle() {
         let mut sys = make_system();
         // Setup borrower.
-        sys.ledger.create_account(Account::new_agent("alice", "Alice"));
+        sys.ledger
+            .create_account(Account::new_agent("alice", "Alice"));
 
         let collateral = Collateral::Skill {
             skill_name: "trading".to_string(),
@@ -1096,7 +1148,9 @@ mod tests {
         // Collateral value = 10 * 100 = 1000, max loan = 1000 * 0.7 = 700.
 
         // Apply.
-        let application = sys.apply_for_loan("alice", 500, 100, Some(collateral), 1).unwrap();
+        let application = sys
+            .apply_for_loan("alice", 500, 100, Some(collateral), 1)
+            .unwrap();
         assert_eq!(application.status, LoanStatus::Pending);
         assert_eq!(application.principal, 500);
 
@@ -1149,7 +1203,8 @@ mod tests {
     #[test]
     fn test_approve_non_pending_rejected() {
         let mut sys = make_system();
-        sys.ledger.create_account(Account::new_agent("alice", "Alice"));
+        sys.ledger
+            .create_account(Account::new_agent("alice", "Alice"));
         let app = sys.apply_for_loan("alice", 100, 50, None, 1).unwrap();
         sys.approve_loan(app.loan_id, 2).unwrap();
         // Try to approve again.
@@ -1169,7 +1224,8 @@ mod tests {
     #[test]
     fn test_repay_insufficient_funds() {
         let mut sys = make_system();
-        sys.ledger.create_account(Account::new_agent("alice", "Alice"));
+        sys.ledger
+            .create_account(Account::new_agent("alice", "Alice"));
         let app = sys.apply_for_loan("alice", 500, 100, None, 1).unwrap();
         sys.approve_loan(app.loan_id, 2).unwrap();
         sys.disburse_loan(app.loan_id, 3).unwrap();
@@ -1186,10 +1242,14 @@ mod tests {
     #[test]
     fn test_savings_interest() {
         let mut sys = make_system();
-        sys.ledger.create_account(Account::new_agent("alice", "Alice"));
+        sys.ledger
+            .create_account(Account::new_agent("alice", "Alice"));
 
-        let account = sys.open_account("alice", BankAccountType::Savings, "Alice Savings", 0).unwrap();
-        sys.ledger.set_balance_genesis("alice", Currency::Money, 10000);
+        let account = sys
+            .open_account("alice", BankAccountType::Savings, "Alice Savings", 0)
+            .unwrap();
+        sys.ledger
+            .set_balance_genesis("alice", Currency::Money, 10000);
         sys.deposit(account.id, "alice", 10000, 1).unwrap();
 
         // Accrue interest.
@@ -1203,10 +1263,14 @@ mod tests {
     #[test]
     fn test_checking_no_interest() {
         let mut sys = make_system();
-        sys.ledger.create_account(Account::new_agent("alice", "Alice"));
+        sys.ledger
+            .create_account(Account::new_agent("alice", "Alice"));
 
-        let account = sys.open_account("alice", BankAccountType::Checking, "Alice Checking", 0).unwrap();
-        sys.ledger.set_balance_genesis("alice", Currency::Money, 10000);
+        let account = sys
+            .open_account("alice", BankAccountType::Checking, "Alice Checking", 0)
+            .unwrap();
+        sys.ledger
+            .set_balance_genesis("alice", Currency::Money, 10000);
         sys.deposit(account.id, "alice", 10000, 1).unwrap();
 
         // Checking accounts should not accrue interest.
@@ -1217,7 +1281,8 @@ mod tests {
     #[test]
     fn test_loan_interest_accrual() {
         let mut sys = make_system();
-        sys.ledger.create_account(Account::new_agent("alice", "Alice"));
+        sys.ledger
+            .create_account(Account::new_agent("alice", "Alice"));
 
         let app = sys.apply_for_loan("alice", 1000, 100, None, 1).unwrap();
         sys.approve_loan(app.loan_id, 2).unwrap();
@@ -1236,7 +1301,8 @@ mod tests {
     #[test]
     fn test_overdue_loan_auto_deduction() {
         let mut sys = make_system();
-        sys.ledger.create_account(Account::new_agent("alice", "Alice"));
+        sys.ledger
+            .create_account(Account::new_agent("alice", "Alice"));
 
         let app = sys.apply_for_loan("alice", 1000, 10, None, 1).unwrap();
         sys.approve_loan(app.loan_id, 2).unwrap();
@@ -1284,7 +1350,8 @@ mod tests {
     #[test]
     fn test_write_off_bad_debt() {
         let mut sys = make_system();
-        sys.ledger.create_account(Account::new_agent("alice", "Alice"));
+        sys.ledger
+            .create_account(Account::new_agent("alice", "Alice"));
 
         let app = sys.apply_for_loan("alice", 1000, 10, None, 1).unwrap();
         sys.approve_loan(app.loan_id, 2).unwrap();
@@ -1332,7 +1399,8 @@ mod tests {
     #[test]
     fn test_total_loan_debt() {
         let mut sys = make_system();
-        sys.ledger.create_account(Account::new_agent("alice", "Alice"));
+        sys.ledger
+            .create_account(Account::new_agent("alice", "Alice"));
         sys.ledger.create_account(Account::new_agent("bob", "Bob"));
 
         let app1 = sys.apply_for_loan("alice", 500, 100, None, 1).unwrap();
@@ -1370,7 +1438,9 @@ mod tests {
     #[test]
     fn test_zero_deposit_is_noop() {
         let mut sys = make_system();
-        let account = sys.open_account("alice", BankAccountType::Savings, "Alice Savings", 0).unwrap();
+        let account = sys
+            .open_account("alice", BankAccountType::Savings, "Alice Savings", 0)
+            .unwrap();
         let result = sys.deposit(account.id, "alice", 0, 1).unwrap();
         assert_eq!(result.amount, 0);
     }
@@ -1378,7 +1448,9 @@ mod tests {
     #[test]
     fn test_zero_withdraw_is_noop() {
         let mut sys = make_system();
-        let account = sys.open_account("alice", BankAccountType::Savings, "Alice Savings", 0).unwrap();
+        let account = sys
+            .open_account("alice", BankAccountType::Savings, "Alice Savings", 0)
+            .unwrap();
         let result = sys.withdraw(account.id, "alice", 0, 1).unwrap();
         assert_eq!(result.amount, 0);
     }
@@ -1386,7 +1458,8 @@ mod tests {
     #[test]
     fn test_zero_repayment_is_noop() {
         let mut sys = make_system();
-        sys.ledger.create_account(Account::new_agent("alice", "Alice"));
+        sys.ledger
+            .create_account(Account::new_agent("alice", "Alice"));
         let app = sys.apply_for_loan("alice", 100, 50, None, 1).unwrap();
         sys.approve_loan(app.loan_id, 2).unwrap();
         sys.disburse_loan(app.loan_id, 3).unwrap();

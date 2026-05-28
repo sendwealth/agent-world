@@ -14,7 +14,7 @@ use std::collections::HashMap;
 
 use agent_world_engine::organization::charter::{Charter, GovernanceModel, ProfitSharing};
 use agent_world_engine::organization::org::{
-    OrganizationStore, OrgStatus, OrgType, CREATION_COST_MONEY, INACTIVE_THRESHOLD_TICKS,
+    OrgStatus, OrgType, OrganizationStore, CREATION_COST_MONEY, INACTIVE_THRESHOLD_TICKS,
 };
 use agent_world_engine::world::event::WorldEvent;
 use agent_world_engine::world::state::EventBus;

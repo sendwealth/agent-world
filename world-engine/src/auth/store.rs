@@ -43,7 +43,7 @@ pub type SharedAuthStore = Arc<Mutex<AuthStore>>;
 #[derive(Debug, Clone)]
 pub struct AuthStore {
     users: HashMap<String, HumanUser>,       // id → user
-    username_index: HashMap<String, String>,  // username → id
+    username_index: HashMap<String, String>, // username → id
     jwt_secret: String,
     token_duration_hours: i64,
 }
@@ -65,7 +65,12 @@ impl AuthStore {
 
     // ── Registration ─────────────────────────────────────────
 
-    pub fn register(&mut self, username: &str, password: &str, role: HumanRole) -> Result<HumanUser, String> {
+    pub fn register(
+        &mut self,
+        username: &str,
+        password: &str,
+        role: HumanRole,
+    ) -> Result<HumanUser, String> {
         if username.trim().is_empty() {
             return Err("Username cannot be empty".into());
         }
@@ -96,11 +101,15 @@ impl AuthStore {
     // ── Login ────────────────────────────────────────────────
 
     pub fn login(&mut self, username: &str, password: &str) -> Result<(HumanUser, String), String> {
-        let user_id = self.username_index.get(username)
+        let user_id = self
+            .username_index
+            .get(username)
             .ok_or("Invalid username or password")?
             .clone();
 
-        let user = self.users.get_mut(&user_id)
+        let user = self
+            .users
+            .get_mut(&user_id)
             .ok_or("Invalid username or password")?;
 
         if !Self::verify_password(password, &user.password_hash) {
@@ -151,8 +160,7 @@ impl AuthStore {
     }
 
     pub fn update_role(&mut self, user_id: &str, new_role: HumanRole) -> Result<HumanUser, String> {
-        let user = self.users.get_mut(user_id)
-            .ok_or("User not found")?;
+        let user = self.users.get_mut(user_id).ok_or("User not found")?;
         user.role = new_role;
         Ok(user.clone())
     }
@@ -167,7 +175,7 @@ impl AuthStore {
     //   sha256$<salt_hex>$<hash_hex>
 
     fn hash_password(password: &str) -> String {
-        use sha2::{Sha256, Digest};
+        use sha2::{Digest, Sha256};
         let salt = Uuid::new_v4().to_string();
         let mut hasher = Sha256::new();
         hasher.update(salt.as_bytes());
@@ -177,7 +185,7 @@ impl AuthStore {
     }
 
     fn verify_password(password: &str, stored: &str) -> bool {
-        use sha2::{Sha256, Digest};
+        use sha2::{Digest, Sha256};
         let parts: Vec<&str> = stored.splitn(3, '$').collect();
         if parts.len() != 3 || parts[0] != "sha256" {
             return false;
@@ -219,7 +227,9 @@ mod tests {
     #[test]
     fn test_register_and_login() {
         let mut store = test_store();
-        let user = store.register("alice", "password123", HumanRole::Investor).unwrap();
+        let user = store
+            .register("alice", "password123", HumanRole::Investor)
+            .unwrap();
         assert_eq!(user.username, "alice");
         assert_eq!(user.role, HumanRole::Investor);
 
@@ -231,22 +241,30 @@ mod tests {
     #[test]
     fn test_register_duplicate_fails() {
         let mut store = test_store();
-        store.register("bob", "pass123456", HumanRole::Observer).unwrap();
-        let err = store.register("bob", "otherpass1", HumanRole::Investor).unwrap_err();
+        store
+            .register("bob", "pass123456", HumanRole::Observer)
+            .unwrap();
+        let err = store
+            .register("bob", "otherpass1", HumanRole::Investor)
+            .unwrap_err();
         assert!(err.contains("already taken"));
     }
 
     #[test]
     fn test_register_short_password() {
         let mut store = test_store();
-        let err = store.register("charlie", "short", HumanRole::Observer).unwrap_err();
+        let err = store
+            .register("charlie", "short", HumanRole::Observer)
+            .unwrap_err();
         assert!(err.contains("at least 6"));
     }
 
     #[test]
     fn test_login_wrong_password() {
         let mut store = test_store();
-        store.register("dave", "password123", HumanRole::Observer).unwrap();
+        store
+            .register("dave", "password123", HumanRole::Observer)
+            .unwrap();
         let err = store.login("dave", "wrongpass1").unwrap_err();
         assert!(err.contains("Invalid"));
     }
@@ -261,7 +279,9 @@ mod tests {
     #[test]
     fn test_jwt_encode_decode() {
         let mut store = test_store();
-        store.register("eve", "password123", HumanRole::Creator).unwrap();
+        store
+            .register("eve", "password123", HumanRole::Creator)
+            .unwrap();
         let (user, token) = store.login("eve", "password123").unwrap();
 
         let claims = store.verify_token(&token).unwrap();
@@ -279,7 +299,9 @@ mod tests {
     #[test]
     fn test_wrong_secret_rejected() {
         let mut store = test_store();
-        store.register("frank", "password123", HumanRole::Observer).unwrap();
+        store
+            .register("frank", "password123", HumanRole::Observer)
+            .unwrap();
         let (_, token) = store.login("frank", "password123").unwrap();
 
         let other_store = AuthStore::new("different-secret");
@@ -298,7 +320,9 @@ mod tests {
     #[test]
     fn test_get_user() {
         let mut store = test_store();
-        let user = store.register("grace", "password123", HumanRole::Experimenter).unwrap();
+        let user = store
+            .register("grace", "password123", HumanRole::Experimenter)
+            .unwrap();
         let found = store.get_user(&user.id).unwrap();
         assert_eq!(found.username, "grace");
         assert_eq!(found.role, HumanRole::Experimenter);
@@ -307,7 +331,9 @@ mod tests {
     #[test]
     fn test_update_role() {
         let mut store = test_store();
-        let user = store.register("heidi", "password123", HumanRole::Observer).unwrap();
+        let user = store
+            .register("heidi", "password123", HumanRole::Observer)
+            .unwrap();
         let updated = store.update_role(&user.id, HumanRole::Investor).unwrap();
         assert_eq!(updated.role, HumanRole::Investor);
     }
@@ -315,16 +341,24 @@ mod tests {
     #[test]
     fn test_list_users() {
         let mut store = test_store();
-        store.register("u1", "password123", HumanRole::Observer).unwrap();
-        store.register("u2", "password123", HumanRole::Investor).unwrap();
+        store
+            .register("u1", "password123", HumanRole::Observer)
+            .unwrap();
+        store
+            .register("u2", "password123", HumanRole::Investor)
+            .unwrap();
         assert_eq!(store.list_users().len(), 2);
     }
 
     #[test]
     fn test_password_has_unique_salts() {
         let mut store = test_store();
-        let u1 = store.register("s1", "same_pass1", HumanRole::Observer).unwrap();
-        let u2 = store.register("s2", "same_pass1", HumanRole::Observer).unwrap();
+        let u1 = store
+            .register("s1", "same_pass1", HumanRole::Observer)
+            .unwrap();
+        let u2 = store
+            .register("s2", "same_pass1", HumanRole::Observer)
+            .unwrap();
         // Same password, different hashes due to unique salts
         assert_ne!(u1.password_hash, u2.password_hash);
     }

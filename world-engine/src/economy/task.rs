@@ -8,7 +8,7 @@ use crate::world::enums::Currency;
 use crate::world::event::WorldEvent;
 use crate::world::state::EventBus;
 
-use super::reward::{RewardConfig, RewardDistributor, RewardDistribution};
+use super::reward::{RewardConfig, RewardDistribution, RewardDistributor};
 
 // ── Task Status ───────────────────────────────────────────
 
@@ -265,7 +265,13 @@ impl TaskBoard {
         expires_at: Option<u64>,
     ) -> Result<Uuid, TaskError> {
         self.create_task_with_currency(
-            title, description, reward, publisher_id, created_tick, expires_at, Currency::Money,
+            title,
+            description,
+            reward,
+            publisher_id,
+            created_tick,
+            expires_at,
+            Currency::Money,
         )
     }
 
@@ -350,7 +356,9 @@ impl TaskBoard {
     /// Delete a task. Only published tasks can be deleted.
     /// Refunds escrow if held.
     pub fn delete_task(&mut self, id: Uuid) -> Result<(), TaskError> {
-        let task = self.tasks.get(&id)
+        let task = self
+            .tasks
+            .get(&id)
             .ok_or_else(|| TaskError::NotFound(id.to_string()))?;
 
         if task.status != TaskStatus::Published {
@@ -375,7 +383,9 @@ impl TaskBoard {
 
     /// Claim a published task.
     pub fn claim_task(&mut self, id: Uuid, assignee_id: String) -> Result<(), TaskError> {
-        let task = self.tasks.get_mut(&id)
+        let task = self
+            .tasks
+            .get_mut(&id)
             .ok_or_else(|| TaskError::NotFound(id.to_string()))?;
 
         if !task.status.can_transition_to(&TaskStatus::Claimed) {
@@ -398,7 +408,9 @@ impl TaskBoard {
 
     /// Start working on a claimed task.
     pub fn start_task(&mut self, id: Uuid) -> Result<(), TaskError> {
-        let task = self.tasks.get_mut(&id)
+        let task = self
+            .tasks
+            .get_mut(&id)
             .ok_or_else(|| TaskError::NotFound(id.to_string()))?;
 
         if !task.status.can_transition_to(&TaskStatus::InProgress) {
@@ -423,7 +435,9 @@ impl TaskBoard {
             return Err(TaskError::ResultRequired);
         }
 
-        let task = self.tasks.get_mut(&id)
+        let task = self
+            .tasks
+            .get_mut(&id)
             .ok_or_else(|| TaskError::NotFound(id.to_string()))?;
 
         if !task.status.can_transition_to(&TaskStatus::Submitted) {
@@ -444,8 +458,15 @@ impl TaskBoard {
     }
 
     /// Review a submitted task. Only the publisher can review.
-    pub fn review_task(&mut self, id: Uuid, reviewer_id: &str, approved: bool) -> Result<(), TaskError> {
-        let task = self.tasks.get(&id)
+    pub fn review_task(
+        &mut self,
+        id: Uuid,
+        reviewer_id: &str,
+        approved: bool,
+    ) -> Result<(), TaskError> {
+        let task = self
+            .tasks
+            .get(&id)
             .ok_or_else(|| TaskError::NotFound(id.to_string()))?;
 
         if task.publisher_id != reviewer_id {
@@ -492,10 +513,16 @@ impl TaskBoard {
     /// - A `RewardDistributed` event is emitted
     ///
     /// If no `RewardDistributor`, the full escrow is released directly (legacy behavior).
-    pub fn complete_task(&mut self, id: Uuid, tick: u64) -> Result<Option<RewardDistribution>, TaskError> {
+    pub fn complete_task(
+        &mut self,
+        id: Uuid,
+        tick: u64,
+    ) -> Result<Option<RewardDistribution>, TaskError> {
         // Validate and extract needed data
         let (assignee_id, currency) = {
-            let task = self.tasks.get(&id)
+            let task = self
+                .tasks
+                .get(&id)
                 .ok_or_else(|| TaskError::NotFound(id.to_string()))?;
             if !task.status.can_transition_to(&TaskStatus::Completed) {
                 return Err(TaskError::InvalidTransition {
@@ -508,16 +535,12 @@ impl TaskBoard {
 
         let escrow_amount = self.escrows.remove(&id);
 
-        let distribution = if let (Some(ref assignee), Some(ref mut dist)) = (&assignee_id, self.reward_distributor.as_mut()) {
+        let distribution = if let (Some(ref assignee), Some(ref mut dist)) =
+            (&assignee_id, self.reward_distributor.as_mut())
+        {
             // Use reward distributor for fee + XP + reputation + ledger
             let gross = escrow_amount.unwrap_or(0);
-            let result = dist.distribute_reward(
-                &id.to_string(),
-                assignee,
-                gross,
-                currency,
-                tick,
-            );
+            let result = dist.distribute_reward(&id.to_string(), assignee, gross, currency, tick);
 
             // Update TaskBoard balance to stay consistent with distributor
             self.balances.insert(
@@ -542,7 +565,8 @@ impl TaskBoard {
             if let Some(escrow_amount) = escrow_amount {
                 if let Some(ref assignee) = assignee_id {
                     let bal = self.get_balance(assignee);
-                    self.balances.insert(assignee.clone(), bal.saturating_add(escrow_amount));
+                    self.balances
+                        .insert(assignee.clone(), bal.saturating_add(escrow_amount));
                 }
             }
             None
@@ -561,7 +585,9 @@ impl TaskBoard {
 
     /// Expire a published or claimed task. Refunds escrow to publisher.
     pub fn expire_task(&mut self, id: Uuid) -> Result<(), TaskError> {
-        let task = self.tasks.get(&id)
+        let task = self
+            .tasks
+            .get(&id)
             .ok_or_else(|| TaskError::NotFound(id.to_string()))?;
 
         if !task.status.can_transition_to(&TaskStatus::Expired) {
@@ -576,7 +602,8 @@ impl TaskBoard {
         // Refund escrow to publisher
         if let Some(escrow_amount) = self.escrows.remove(&id) {
             let bal = self.get_balance(&publisher_id);
-            self.balances.insert(publisher_id.clone(), bal + escrow_amount);
+            self.balances
+                .insert(publisher_id.clone(), bal + escrow_amount);
         }
 
         let task = self.tasks.get_mut(&id).unwrap();
@@ -592,7 +619,9 @@ impl TaskBoard {
 
     /// Batch-expire tasks whose expires_at <= current_tick.
     pub fn process_expiry(&mut self, current_tick: u64) -> Vec<Uuid> {
-        let expired_ids: Vec<Uuid> = self.tasks.iter()
+        let expired_ids: Vec<Uuid> = self
+            .tasks
+            .iter()
             .filter(|(_, task)| {
                 matches!(task.status, TaskStatus::Published | TaskStatus::Claimed)
                     && task.expires_at.is_some_and(|exp| exp <= current_tick)
@@ -620,13 +649,22 @@ impl TaskBoard {
     }
 
     /// List coordination tasks by status.
-    pub fn list_coordination_tasks_by_status(&self, status: CoordinationTaskStatus) -> Vec<&CoordinationTask> {
-        self.coordination_tasks.values().filter(|t| t.status == status).collect()
+    pub fn list_coordination_tasks_by_status(
+        &self,
+        status: CoordinationTaskStatus,
+    ) -> Vec<&CoordinationTask> {
+        self.coordination_tasks
+            .values()
+            .filter(|t| t.status == status)
+            .collect()
     }
 
     /// List coordination tasks where a given agent is a participant.
     pub fn list_coordination_tasks_by_participant(&self, agent_id: &str) -> Vec<&CoordinationTask> {
-        self.coordination_tasks.values().filter(|t| t.is_participant(agent_id)).collect()
+        self.coordination_tasks
+            .values()
+            .filter(|t| t.is_participant(agent_id))
+            .collect()
     }
 
     /// Create a new coordination task. Escrows the reward pool from the coordinator.
@@ -650,7 +688,8 @@ impl TaskBoard {
             }
             self.balances.insert(
                 coordinator_id.clone(),
-                self.get_balance(&coordinator_id).saturating_sub(reward_pool),
+                self.get_balance(&coordinator_id)
+                    .saturating_sub(reward_pool),
             );
         }
 
@@ -693,7 +732,9 @@ impl TaskBoard {
         id: Uuid,
         agent_id: String,
     ) -> Result<(), CoordinationTaskError> {
-        let task = self.coordination_tasks.get_mut(&id)
+        let task = self
+            .coordination_tasks
+            .get_mut(&id)
             .ok_or_else(|| CoordinationTaskError::NotFound(id.to_string()))?;
 
         if task.status != CoordinationTaskStatus::Open {
@@ -733,7 +774,9 @@ impl TaskBoard {
             return Err(CoordinationTaskError::ContributionRequired);
         }
 
-        let task = self.coordination_tasks.get(&id)
+        let task = self
+            .coordination_tasks
+            .get(&id)
             .ok_or_else(|| CoordinationTaskError::NotFound(id.to_string()))?;
 
         if !task.is_participant(agent_id) {
@@ -745,7 +788,10 @@ impl TaskBoard {
         }
 
         let current_status = task.status;
-        if !matches!(current_status, CoordinationTaskStatus::Open | CoordinationTaskStatus::InProgress) {
+        if !matches!(
+            current_status,
+            CoordinationTaskStatus::Open | CoordinationTaskStatus::InProgress
+        ) {
             return Err(CoordinationTaskError::InvalidTransition {
                 from: current_status,
                 to: current_status,
@@ -753,14 +799,20 @@ impl TaskBoard {
         }
 
         let task = self.coordination_tasks.get_mut(&id).unwrap();
-        task.contributions.insert(agent_id.to_string(), Contribution {
-            agent_id: agent_id.to_string(),
-            content,
-            submitted_tick: tick,
-        });
+        task.contributions.insert(
+            agent_id.to_string(),
+            Contribution {
+                agent_id: agent_id.to_string(),
+                content,
+                submitted_tick: tick,
+            },
+        );
 
         // Auto-transition: if all participants have submitted, move to AllSubmitted
-        let all_in = task.participants.iter().all(|a| task.contributions.contains_key(a));
+        let all_in = task
+            .participants
+            .iter()
+            .all(|a| task.contributions.contains_key(a));
         if all_in {
             task.status = CoordinationTaskStatus::AllSubmitted;
         } else if task.status == CoordinationTaskStatus::Open {
@@ -783,7 +835,9 @@ impl TaskBoard {
         reviewer_id: &str,
         reward_overrides: Option<HashMap<String, u64>>,
     ) -> Result<HashMap<String, u64>, CoordinationTaskError> {
-        let task = self.coordination_tasks.get(&id)
+        let task = self
+            .coordination_tasks
+            .get(&id)
             .ok_or_else(|| CoordinationTaskError::NotFound(id.to_string()))?;
 
         if task.coordinator_id != reviewer_id {
@@ -793,7 +847,10 @@ impl TaskBoard {
             });
         }
 
-        if !task.status.can_transition_to(&CoordinationTaskStatus::Completed) {
+        if !task
+            .status
+            .can_transition_to(&CoordinationTaskStatus::Completed)
+        {
             return Err(CoordinationTaskError::InvalidTransition {
                 from: task.status,
                 to: CoordinationTaskStatus::Completed,
@@ -825,7 +882,9 @@ impl TaskBoard {
                 let mut dist: HashMap<String, u64> = overrides.clone();
                 // Any participant not in overrides gets equal share of remainder
                 let remaining = task.reward_pool - total;
-                let unassigned: Vec<&String> = task.participants.iter()
+                let unassigned: Vec<&String> = task
+                    .participants
+                    .iter()
                     .filter(|p| !overrides.contains_key(*p))
                     .collect();
                 if !unassigned.is_empty() {
@@ -839,7 +898,10 @@ impl TaskBoard {
         } else {
             // Equal distribution
             let share = task.equal_share();
-            task.participants.iter().map(|p| (p.clone(), share)).collect()
+            task.participants
+                .iter()
+                .map(|p| (p.clone(), share))
+                .collect()
         };
 
         // Release escrow and credit participants
@@ -871,9 +933,15 @@ impl TaskBoard {
     ) -> Result<(), CoordinationTaskError> {
         // Validate first (immutable borrow)
         let (expected_coord, can_cancel) = {
-            let task = self.coordination_tasks.get(&id)
+            let task = self
+                .coordination_tasks
+                .get(&id)
                 .ok_or_else(|| CoordinationTaskError::NotFound(id.to_string()))?;
-            (task.coordinator_id.clone(), task.status.can_transition_to(&CoordinationTaskStatus::Cancelled))
+            (
+                task.coordinator_id.clone(),
+                task.status
+                    .can_transition_to(&CoordinationTaskStatus::Cancelled),
+            )
         };
 
         if expected_coord != coordinator_id {
@@ -893,7 +961,8 @@ impl TaskBoard {
         // Refund escrow
         if let Some(escrow_amount) = self.escrows.remove(&id) {
             let bal = self.get_balance(coordinator_id);
-            self.balances.insert(coordinator_id.to_string(), bal + escrow_amount);
+            self.balances
+                .insert(coordinator_id.to_string(), bal + escrow_amount);
         }
 
         // Update status
@@ -908,9 +977,15 @@ impl TaskBoard {
     pub fn expire_coordination_task(&mut self, id: Uuid) -> Result<(), CoordinationTaskError> {
         // Validate first (immutable borrow)
         let (coordinator_id, can_expire) = {
-            let task = self.coordination_tasks.get(&id)
+            let task = self
+                .coordination_tasks
+                .get(&id)
                 .ok_or_else(|| CoordinationTaskError::NotFound(id.to_string()))?;
-            (task.coordinator_id.clone(), task.status.can_transition_to(&CoordinationTaskStatus::Expired))
+            (
+                task.coordinator_id.clone(),
+                task.status
+                    .can_transition_to(&CoordinationTaskStatus::Expired),
+            )
         };
 
         if !can_expire {
@@ -936,10 +1011,14 @@ impl TaskBoard {
 
     /// Batch-expire coordination tasks whose expires_at <= current_tick.
     pub fn process_coordination_expiry(&mut self, current_tick: u64) -> Vec<Uuid> {
-        let expired: Vec<Uuid> = self.coordination_tasks.iter()
+        let expired: Vec<Uuid> = self
+            .coordination_tasks
+            .iter()
             .filter(|(_, task)| {
-                matches!(task.status, CoordinationTaskStatus::Open | CoordinationTaskStatus::InProgress)
-                    && task.expires_at.is_some_and(|exp| exp <= current_tick)
+                matches!(
+                    task.status,
+                    CoordinationTaskStatus::Open | CoordinationTaskStatus::InProgress
+                ) && task.expires_at.is_some_and(|exp| exp <= current_tick)
             })
             .map(|(id, _)| *id)
             .collect();
@@ -990,14 +1069,31 @@ impl CoordinationTaskStatus {
     pub fn can_transition_to(&self, next: &CoordinationTaskStatus) -> bool {
         matches!(
             (self, next),
-            (CoordinationTaskStatus::Open, CoordinationTaskStatus::InProgress)
-                | (CoordinationTaskStatus::Open, CoordinationTaskStatus::Expired)
-                | (CoordinationTaskStatus::Open, CoordinationTaskStatus::Cancelled)
-                | (CoordinationTaskStatus::InProgress, CoordinationTaskStatus::AllSubmitted)
-                | (CoordinationTaskStatus::InProgress, CoordinationTaskStatus::Expired)
-                | (CoordinationTaskStatus::InProgress, CoordinationTaskStatus::Cancelled)
-                | (CoordinationTaskStatus::AllSubmitted, CoordinationTaskStatus::Completed)
-                | (CoordinationTaskStatus::AllSubmitted, CoordinationTaskStatus::Cancelled)
+            (
+                CoordinationTaskStatus::Open,
+                CoordinationTaskStatus::InProgress
+            ) | (
+                CoordinationTaskStatus::Open,
+                CoordinationTaskStatus::Expired
+            ) | (
+                CoordinationTaskStatus::Open,
+                CoordinationTaskStatus::Cancelled
+            ) | (
+                CoordinationTaskStatus::InProgress,
+                CoordinationTaskStatus::AllSubmitted
+            ) | (
+                CoordinationTaskStatus::InProgress,
+                CoordinationTaskStatus::Expired
+            ) | (
+                CoordinationTaskStatus::InProgress,
+                CoordinationTaskStatus::Cancelled
+            ) | (
+                CoordinationTaskStatus::AllSubmitted,
+                CoordinationTaskStatus::Completed
+            ) | (
+                CoordinationTaskStatus::AllSubmitted,
+                CoordinationTaskStatus::Cancelled
+            )
         )
     }
 }
@@ -1064,7 +1160,10 @@ impl CoordinationTask {
     /// Whether all participants have submitted.
     pub fn all_submitted(&self) -> bool {
         !self.participants.is_empty()
-            && self.participants.iter().all(|a| self.contributions.contains_key(a))
+            && self
+                .participants
+                .iter()
+                .all(|a| self.contributions.contains_key(a))
     }
 
     /// Check if an agent is a participant.
@@ -1086,12 +1185,18 @@ impl CoordinationTask {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum CoordinationTaskError {
     NotFound(String),
-    InvalidTransition { from: CoordinationTaskStatus, to: CoordinationTaskStatus },
+    InvalidTransition {
+        from: CoordinationTaskStatus,
+        to: CoordinationTaskStatus,
+    },
     AlreadyJoined,
     NotParticipant,
     AlreadySubmitted,
     TaskFull,
-    NotCoordinator { expected: String, actual: String },
+    NotCoordinator {
+        expected: String,
+        actual: String,
+    },
     Expired,
     NoParticipants,
     ContributionRequired,
@@ -1106,14 +1211,22 @@ impl std::fmt::Display for CoordinationTaskError {
             }
             CoordinationTaskError::AlreadyJoined => write!(f, "agent already joined this task"),
             CoordinationTaskError::NotParticipant => write!(f, "agent is not a participant"),
-            CoordinationTaskError::AlreadySubmitted => write!(f, "agent already submitted contribution"),
+            CoordinationTaskError::AlreadySubmitted => {
+                write!(f, "agent already submitted contribution")
+            }
             CoordinationTaskError::TaskFull => write!(f, "task has reached maximum participants"),
             CoordinationTaskError::NotCoordinator { expected, actual } => {
-                write!(f, "only the coordinator can perform this action: expected {}, got {}", expected, actual)
+                write!(
+                    f,
+                    "only the coordinator can perform this action: expected {}, got {}",
+                    expected, actual
+                )
             }
             CoordinationTaskError::Expired => write!(f, "task has expired"),
             CoordinationTaskError::NoParticipants => write!(f, "task has no participants"),
-            CoordinationTaskError::ContributionRequired => write!(f, "contribution content is required"),
+            CoordinationTaskError::ContributionRequired => {
+                write!(f, "contribution content is required")
+            }
         }
     }
 }
@@ -1134,14 +1247,16 @@ mod tests {
     }
 
     fn create_default_task(board: &mut TaskBoard) -> Uuid {
-        board.create_task(
-            "Test Task".to_string(),
-            "A test task".to_string(),
-            100,
-            "publisher".to_string(),
-            1,
-            None,
-        ).unwrap()
+        board
+            .create_task(
+                "Test Task".to_string(),
+                "A test task".to_string(),
+                100,
+                "publisher".to_string(),
+                1,
+                None,
+            )
+            .unwrap()
     }
 
     // ── State Machine ──────────────────────────────────────
@@ -1197,14 +1312,16 @@ mod tests {
     #[test]
     fn test_create_task_no_reward() {
         let mut board = make_board();
-        let id = board.create_task(
-            "Free Task".to_string(),
-            "No reward".to_string(),
-            0,
-            "publisher".to_string(),
-            1,
-            None,
-        ).unwrap();
+        let id = board
+            .create_task(
+                "Free Task".to_string(),
+                "No reward".to_string(),
+                0,
+                "publisher".to_string(),
+                1,
+                None,
+            )
+            .unwrap();
         let task = board.get(id).unwrap();
         assert!(!task.escrow_held);
     }
@@ -1219,14 +1336,22 @@ mod tests {
 
         board.claim_task(id, "worker".to_string()).unwrap();
         assert_eq!(board.get(id).unwrap().status, TaskStatus::Claimed);
-        assert_eq!(board.get(id).unwrap().assignee_id.as_deref(), Some("worker"));
+        assert_eq!(
+            board.get(id).unwrap().assignee_id.as_deref(),
+            Some("worker")
+        );
 
         board.start_task(id).unwrap();
         assert_eq!(board.get(id).unwrap().status, TaskStatus::InProgress);
 
-        board.submit_result(id, "Work is done!".to_string()).unwrap();
+        board
+            .submit_result(id, "Work is done!".to_string())
+            .unwrap();
         assert_eq!(board.get(id).unwrap().status, TaskStatus::Submitted);
-        assert_eq!(board.get(id).unwrap().result.as_deref(), Some("Work is done!"));
+        assert_eq!(
+            board.get(id).unwrap().result.as_deref(),
+            Some("Work is done!")
+        );
 
         board.review_task(id, "publisher", true).unwrap();
         assert_eq!(board.get(id).unwrap().status, TaskStatus::Reviewed);
@@ -1309,9 +1434,15 @@ mod tests {
     #[test]
     fn test_batch_expiry() {
         let mut board = make_board();
-        let id1 = board.create_task("T1".into(), "".into(), 50, "publisher".into(), 1, Some(10)).unwrap();
-        let id2 = board.create_task("T2".into(), "".into(), 50, "publisher".into(), 1, Some(100)).unwrap();
-        let id3 = board.create_task("T3".into(), "".into(), 50, "publisher".into(), 1, Some(10)).unwrap();
+        let id1 = board
+            .create_task("T1".into(), "".into(), 50, "publisher".into(), 1, Some(10))
+            .unwrap();
+        let id2 = board
+            .create_task("T2".into(), "".into(), 50, "publisher".into(), 1, Some(100))
+            .unwrap();
+        let id3 = board
+            .create_task("T3".into(), "".into(), 50, "publisher".into(), 1, Some(10))
+            .unwrap();
 
         let expired = board.process_expiry(50);
         assert_eq!(expired.len(), 2);
@@ -1346,8 +1477,12 @@ mod tests {
     #[test]
     fn test_list_by_status() {
         let mut board = make_board();
-        let id1 = board.create_task("T1".into(), "".into(), 0, "p1".into(), 1, None).unwrap();
-        let _id2 = board.create_task("T2".into(), "".into(), 0, "p1".into(), 1, None).unwrap();
+        let id1 = board
+            .create_task("T1".into(), "".into(), 0, "p1".into(), 1, None)
+            .unwrap();
+        let _id2 = board
+            .create_task("T2".into(), "".into(), 0, "p1".into(), 1, None)
+            .unwrap();
         board.claim_task(id1, "w1".to_string()).unwrap();
 
         assert_eq!(board.list_by_status(TaskStatus::Published).len(), 1);
@@ -1358,8 +1493,12 @@ mod tests {
     fn test_list_by_publisher() {
         let mut board = make_board();
         board.set_balance("p2", 1000);
-        board.create_task("T1".into(), "".into(), 0, "publisher".into(), 1, None).unwrap();
-        board.create_task("T2".into(), "".into(), 0, "p2".into(), 1, None).unwrap();
+        board
+            .create_task("T1".into(), "".into(), 0, "publisher".into(), 1, None)
+            .unwrap();
+        board
+            .create_task("T2".into(), "".into(), 0, "p2".into(), 1, None)
+            .unwrap();
 
         assert_eq!(board.list_by_publisher("publisher").len(), 1);
         assert_eq!(board.list_by_publisher("p2").len(), 1);
@@ -1384,9 +1523,16 @@ mod tests {
         let mut board = TaskBoard::with_event_bus(bus);
         board.set_balance("publisher", 10_000);
 
-        let id = board.create_task(
-            "Lifecycle".into(), "desc".into(), 200, "publisher".into(), 1, None
-        ).unwrap();
+        let id = board
+            .create_task(
+                "Lifecycle".into(),
+                "desc".into(),
+                200,
+                "publisher".into(),
+                1,
+                None,
+            )
+            .unwrap();
         let _ = rx.try_recv().unwrap(); // TaskCreated
 
         board.claim_task(id, "worker".to_string()).unwrap();
@@ -1403,7 +1549,10 @@ mod tests {
 
         board.review_task(id, "publisher", true).unwrap();
         let reviewed = rx.try_recv().unwrap();
-        assert!(matches!(reviewed, WorldEvent::TaskReviewed { approved: true, .. }));
+        assert!(matches!(
+            reviewed,
+            WorldEvent::TaskReviewed { approved: true, .. }
+        ));
 
         board.complete_task(id, 10).unwrap();
         let completed = rx.try_recv().unwrap();
@@ -1469,11 +1618,21 @@ mod tests {
     fn test_complete_task_with_reward_distributor() {
         let mut board = TaskBoard::with_reward_distributor(RewardConfig::default());
         board.set_balance("publisher", 10_000);
-        board.reward_distributor_mut().unwrap().set_balance("worker", 0);
+        board
+            .reward_distributor_mut()
+            .unwrap()
+            .set_balance("worker", 0);
 
-        let id = board.create_task(
-            "Reward Task".into(), "desc".into(), 1000, "publisher".into(), 1, None,
-        ).unwrap();
+        let id = board
+            .create_task(
+                "Reward Task".into(),
+                "desc".into(),
+                1000,
+                "publisher".into(),
+                1,
+                None,
+            )
+            .unwrap();
         board.claim_task(id, "worker".to_string()).unwrap();
         board.start_task(id).unwrap();
         board.submit_result(id, "Done".into()).unwrap();
@@ -1504,11 +1663,22 @@ mod tests {
     fn test_complete_task_with_token_currency() {
         let mut board = TaskBoard::with_reward_distributor(RewardConfig::default());
         board.set_balance("publisher", 10_000);
-        board.reward_distributor_mut().unwrap().set_balance("worker", 0);
+        board
+            .reward_distributor_mut()
+            .unwrap()
+            .set_balance("worker", 0);
 
-        let id = board.create_task_with_currency(
-            "Token Task".into(), "desc".into(), 5000, "publisher".into(), 1, None, Currency::Token,
-        ).unwrap();
+        let id = board
+            .create_task_with_currency(
+                "Token Task".into(),
+                "desc".into(),
+                5000,
+                "publisher".into(),
+                1,
+                None,
+                Currency::Token,
+            )
+            .unwrap();
         board.claim_task(id, "worker".to_string()).unwrap();
         board.start_task(id).unwrap();
         board.submit_result(id, "Done".into()).unwrap();
@@ -1534,11 +1704,21 @@ mod tests {
         let mut board = TaskBoard::with_event_bus(bus);
         board.reward_distributor = Some(RewardDistributor::new(RewardConfig::default()));
         board.set_balance("publisher", 10_000);
-        board.reward_distributor_mut().unwrap().set_balance("worker", 0);
+        board
+            .reward_distributor_mut()
+            .unwrap()
+            .set_balance("worker", 0);
 
-        let id = board.create_task(
-            "Event Task".into(), "desc".into(), 500, "publisher".into(), 1, None,
-        ).unwrap();
+        let id = board
+            .create_task(
+                "Event Task".into(),
+                "desc".into(),
+                500,
+                "publisher".into(),
+                1,
+                None,
+            )
+            .unwrap();
         let _ = rx.try_recv().unwrap(); // TaskCreated
 
         board.claim_task(id, "worker".to_string()).unwrap();
@@ -1558,7 +1738,16 @@ mod tests {
         // Should get RewardDistributed then TaskCompleted
         let reward_evt = rx.try_recv().unwrap();
         assert!(matches!(reward_evt, WorldEvent::RewardDistributed { .. }));
-        if let WorldEvent::RewardDistributed { task_id, assignee_id, gross_reward, net_reward, platform_fee, xp_awarded, reputation_change } = reward_evt {
+        if let WorldEvent::RewardDistributed {
+            task_id,
+            assignee_id,
+            gross_reward,
+            net_reward,
+            platform_fee,
+            xp_awarded,
+            reputation_change,
+        } = reward_evt
+        {
             assert_eq!(task_id, id.to_string());
             assert_eq!(assignee_id, "worker");
             assert_eq!(gross_reward, 500);
@@ -1577,9 +1766,16 @@ mod tests {
         let mut board = TaskBoard::new();
         board.set_balance("publisher", 10_000);
 
-        let id = board.create_task(
-            "Legacy Task".into(), "desc".into(), 100, "publisher".into(), 1, None,
-        ).unwrap();
+        let id = board
+            .create_task(
+                "Legacy Task".into(),
+                "desc".into(),
+                100,
+                "publisher".into(),
+                1,
+                None,
+            )
+            .unwrap();
         board.claim_task(id, "worker".to_string()).unwrap();
         board.start_task(id).unwrap();
         board.submit_result(id, "Done".into()).unwrap();

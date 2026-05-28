@@ -16,7 +16,7 @@ use axum::body::Body;
 use axum::http::{Method, Request, StatusCode};
 use http_body_util::BodyExt;
 use serde_json::{json, Value};
-use tokio::sync::{Mutex, watch};
+use tokio::sync::{watch, Mutex};
 use tower::ServiceExt;
 
 use agent_world_engine::api::create_router_for_test;
@@ -74,7 +74,11 @@ async fn register_test_agent(app: &mut axum::Router) -> Value {
         })),
     );
     let resp = app.oneshot(req).await.unwrap();
-    assert_eq!(resp.status(), StatusCode::CREATED, "register should return 201");
+    assert_eq!(
+        resp.status(),
+        StatusCode::CREATED,
+        "register should return 201"
+    );
     body_json(resp.into_body()).await
 }
 
@@ -104,11 +108,15 @@ async fn test_register_agent() {
     let body = body_json(resp.into_body()).await;
 
     // Must contain agent_id (non-empty string)
-    let agent_id = body["agent_id"].as_str().expect("response must contain agent_id");
+    let agent_id = body["agent_id"]
+        .as_str()
+        .expect("response must contain agent_id");
     assert!(!agent_id.is_empty(), "agent_id must not be empty");
 
     // Must contain api_key (non-empty string)
-    let api_key = body["api_key"].as_str().expect("response must contain api_key");
+    let api_key = body["api_key"]
+        .as_str()
+        .expect("response must contain api_key");
     assert!(!api_key.is_empty(), "api_key must not be empty");
 
     // Should echo back name
@@ -209,13 +217,13 @@ async fn test_deregister_agent() {
     let agent_id = agent["agent_id"].as_str().unwrap();
 
     // Deregister
-    let req = make_request(
-        Method::DELETE,
-        &format!("/api/v1/agents/{agent_id}"),
-        None,
-    );
+    let req = make_request(Method::DELETE, &format!("/api/v1/agents/{agent_id}"), None);
     let resp = app.oneshot(req).await.unwrap();
-    assert_eq!(resp.status(), StatusCode::OK, "deregister should return 200");
+    assert_eq!(
+        resp.status(),
+        StatusCode::OK,
+        "deregister should return 200"
+    );
 
     let body = body_json(resp.into_body()).await;
     assert_eq!(body["deregistered"].as_str(), Some(agent_id));
@@ -234,11 +242,7 @@ async fn test_deregister_nonexistent() {
 
     let fake_id = "00000000-0000-0000-0000-000000000000";
 
-    let req = make_request(
-        Method::DELETE,
-        &format!("/api/v1/agents/{fake_id}"),
-        None,
-    );
+    let req = make_request(Method::DELETE, &format!("/api/v1/agents/{fake_id}"), None);
     let resp = app.oneshot(req).await.unwrap();
     assert_eq!(
         resp.status(),
@@ -267,11 +271,18 @@ async fn test_execute_action_move() {
         })),
     );
     let resp = app.oneshot(req).await.unwrap();
-    assert_eq!(resp.status(), StatusCode::OK, "move action should return 200");
+    assert_eq!(
+        resp.status(),
+        StatusCode::OK,
+        "move action should return 200"
+    );
 
     let body = body_json(resp.into_body()).await;
     assert_eq!(body["action"].as_str(), Some("move"));
-    assert!(body["success"].is_boolean(), "response must include 'success'");
+    assert!(
+        body["success"].is_boolean(),
+        "response must include 'success'"
+    );
     assert_eq!(body["success"], true, "move should succeed");
 }
 
@@ -319,7 +330,11 @@ async fn test_perception() {
         None,
     );
     let resp = app.oneshot(req).await.unwrap();
-    assert_eq!(resp.status(), StatusCode::OK, "perception should return 200");
+    assert_eq!(
+        resp.status(),
+        StatusCode::OK,
+        "perception should return 200"
+    );
 
     let body = body_json(resp.into_body()).await;
 
@@ -352,11 +367,7 @@ async fn test_action_on_dead_agent() {
     let agent_id = agent["agent_id"].as_str().unwrap();
 
     // Step 2: Deregister the agent
-    let req = make_request(
-        Method::DELETE,
-        &format!("/api/v1/agents/{agent_id}"),
-        None,
-    );
+    let req = make_request(Method::DELETE, &format!("/api/v1/agents/{agent_id}"), None);
     let resp = app.oneshot(req).await.unwrap();
     assert_eq!(resp.status(), StatusCode::OK, "deregister should succeed");
 

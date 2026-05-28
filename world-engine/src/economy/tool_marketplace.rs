@@ -179,15 +179,24 @@ impl std::fmt::Display for ToolMarketplaceError {
             ToolMarketplaceError::NotFound(id) => write!(f, "tool listing not found: {}", id),
             ToolMarketplaceError::ListingInactive => write!(f, "tool listing is not active"),
             ToolMarketplaceError::ListingDelisted => write!(f, "tool listing has been delisted"),
-            ToolMarketplaceError::InsufficientBalance { required, available } => {
-                write!(f, "insufficient balance: required {}, available {}", required, available)
+            ToolMarketplaceError::InsufficientBalance {
+                required,
+                available,
+            } => {
+                write!(
+                    f,
+                    "insufficient balance: required {}, available {}",
+                    required, available
+                )
             }
             ToolMarketplaceError::SelfPurchase => write!(f, "cannot purchase your own tool"),
             ToolMarketplaceError::SelfRent => write!(f, "cannot rent your own tool"),
             ToolMarketplaceError::NotForSale => write!(f, "tool is not available for purchase"),
             ToolMarketplaceError::NotForRent => write!(f, "tool is not available for rental"),
             ToolMarketplaceError::InvalidPrice => write!(f, "price must be greater than 0"),
-            ToolMarketplaceError::InvalidRentalDuration => write!(f, "rental duration must be at least 1 tick"),
+            ToolMarketplaceError::InvalidRentalDuration => {
+                write!(f, "rental duration must be at least 1 tick")
+            }
             ToolMarketplaceError::AlreadyOwned { tool_id, agent_id } => {
                 write!(f, "agent {} already owns tool {}", agent_id, tool_id)
             }
@@ -195,7 +204,9 @@ impl std::fmt::Display for ToolMarketplaceError {
             ToolMarketplaceError::RentalNotActive => write!(f, "rental is not active"),
             ToolMarketplaceError::InvalidRating => write!(f, "rating must be between 1 and 5"),
             ToolMarketplaceError::AlreadyRated => write!(f, "already rated this tool"),
-            ToolMarketplaceError::NotEligibleToRate => write!(f, "must purchase or rent before rating"),
+            ToolMarketplaceError::NotEligibleToRate => {
+                write!(f, "must purchase or rent before rating")
+            }
             ToolMarketplaceError::Unauthorized(msg) => write!(f, "unauthorized: {}", msg),
         }
     }
@@ -306,17 +317,40 @@ impl ToolMarketplace {
 
     /// Search/filter tool listings with optional sorting.
     pub fn search(&self, filter: &ToolMarketplaceFilter) -> Vec<&ToolListing> {
-        let mut results: Vec<&ToolListing> = self.listings
+        let mut results: Vec<&ToolListing> = self
+            .listings
             .values()
             .filter(|l| l.status == ToolListingStatus::Active)
-            .filter(|l| filter.category.map_or(true, |c| l.category == c))
-            .filter(|l| filter.owner_id.as_ref().map_or(true, |id| l.owner_id == *id))
-            .filter(|l| filter.listing_mode.map_or(true, |m| l.listing_mode == m))
-            .filter(|l| filter.min_price.map_or(true, |min| l.purchase_price >= min || l.rental_price_per_tick >= min))
-            .filter(|l| filter.max_price.map_or(true, |max| l.purchase_price <= max || l.rental_price_per_tick <= max))
-            .filter(|l| filter.tag.as_ref().map_or(true, |tag| l.tags.iter().any(|t| t.eq_ignore_ascii_case(tag))))
-            .filter(|l| filter.query.as_ref().map_or(true, |q| l.name.to_lowercase().contains(&q.to_lowercase())))
-            .filter(|l| filter.min_rating.map_or(true, |min| l.average_rating() >= min))
+            .filter(|l| filter.category.is_none_or(|c| l.category == c))
+            .filter(|l| filter.owner_id.as_ref().is_none_or(|id| l.owner_id == *id))
+            .filter(|l| filter.listing_mode.is_none_or(|m| l.listing_mode == m))
+            .filter(|l| {
+                filter
+                    .min_price
+                    .is_none_or(|min| l.purchase_price >= min || l.rental_price_per_tick >= min)
+            })
+            .filter(|l| {
+                filter
+                    .max_price
+                    .is_none_or(|max| l.purchase_price <= max || l.rental_price_per_tick <= max)
+            })
+            .filter(|l| {
+                filter
+                    .tag
+                    .as_ref()
+                    .is_none_or(|tag| l.tags.iter().any(|t| t.eq_ignore_ascii_case(tag)))
+            })
+            .filter(|l| {
+                filter
+                    .query
+                    .as_ref()
+                    .is_none_or(|q| l.name.to_lowercase().contains(&q.to_lowercase()))
+            })
+            .filter(|l| {
+                filter
+                    .min_rating
+                    .is_none_or(|min| l.average_rating() >= min)
+            })
             .collect();
 
         let sort = filter.sort.unwrap_or_default();
@@ -325,9 +359,10 @@ impl ToolMarketplace {
             ToolMarketplaceSort::Oldest => a.created_tick.cmp(&b.created_tick),
             ToolMarketplaceSort::PriceAsc => a.purchase_price.cmp(&b.purchase_price),
             ToolMarketplaceSort::PriceDesc => b.purchase_price.cmp(&a.purchase_price),
-            ToolMarketplaceSort::RatingDesc => {
-                b.average_rating().partial_cmp(&a.average_rating()).unwrap_or(std::cmp::Ordering::Equal)
-            }
+            ToolMarketplaceSort::RatingDesc => b
+                .average_rating()
+                .partial_cmp(&a.average_rating())
+                .unwrap_or(std::cmp::Ordering::Equal),
             ToolMarketplaceSort::MostPurchased => b.total_purchases.cmp(&a.total_purchases),
             ToolMarketplaceSort::MostRented => b.total_rentals.cmp(&a.total_rentals),
         });
@@ -350,17 +385,24 @@ impl ToolMarketplace {
 
     /// List all purchases for a tool.
     pub fn tool_purchases(&self, tool_id: Uuid) -> Vec<&ToolPurchaseRecord> {
-        self.purchases.iter().filter(|p| p.tool_id == tool_id).collect()
+        self.purchases
+            .iter()
+            .filter(|p| p.tool_id == tool_id)
+            .collect()
     }
 
     /// List ratings for a tool.
     pub fn tool_ratings(&self, tool_id: Uuid) -> Vec<&ToolRating> {
-        self.ratings.get(&tool_id).map(|v| v.iter().collect()).unwrap_or_default()
+        self.ratings
+            .get(&tool_id)
+            .map(|v| v.iter().collect())
+            .unwrap_or_default()
     }
 
     /// Check if agent owns (purchased) a tool.
     pub fn owns_tool(&self, agent_id: &str, tool_id: Uuid) -> bool {
-        self.ownership_index.contains(&(agent_id.to_string(), tool_id))
+        self.ownership_index
+            .contains(&(agent_id.to_string(), tool_id))
     }
 
     /// Check if agent has an active rental for a tool.
@@ -444,11 +486,15 @@ impl ToolMarketplace {
         status: Option<ToolListingStatus>,
         tags: Option<Vec<String>>,
     ) -> Result<(), ToolMarketplaceError> {
-        let listing = self.listings.get_mut(&tool_id)
+        let listing = self
+            .listings
+            .get_mut(&tool_id)
             .ok_or_else(|| ToolMarketplaceError::NotFound(tool_id.to_string()))?;
 
         if listing.owner_id != owner_id {
-            return Err(ToolMarketplaceError::Unauthorized("only the owner can update".into()));
+            return Err(ToolMarketplaceError::Unauthorized(
+                "only the owner can update".into(),
+            ));
         }
 
         if let Some(p) = purchase_price {
@@ -473,11 +519,15 @@ impl ToolMarketplace {
         tool_id: Uuid,
         owner_id: &str,
     ) -> Result<(), ToolMarketplaceError> {
-        let listing = self.listings.get_mut(&tool_id)
+        let listing = self
+            .listings
+            .get_mut(&tool_id)
             .ok_or_else(|| ToolMarketplaceError::NotFound(tool_id.to_string()))?;
 
         if listing.owner_id != owner_id {
-            return Err(ToolMarketplaceError::Unauthorized("only the owner can delist".into()));
+            return Err(ToolMarketplaceError::Unauthorized(
+                "only the owner can delist".into(),
+            ));
         }
 
         listing.status = ToolListingStatus::Delisted;
@@ -499,7 +549,9 @@ impl ToolMarketplace {
         tick: u64,
     ) -> Result<ToolPurchaseRecord, ToolMarketplaceError> {
         let (price, currency, owner_id) = {
-            let listing = self.listings.get(&tool_id)
+            let listing = self
+                .listings
+                .get(&tool_id)
                 .ok_or_else(|| ToolMarketplaceError::NotFound(tool_id.to_string()))?;
             match listing.status {
                 ToolListingStatus::Active => {}
@@ -509,13 +561,20 @@ impl ToolMarketplace {
             if listing.owner_id == buyer_id {
                 return Err(ToolMarketplaceError::SelfPurchase);
             }
-            if !matches!(listing.listing_mode, ToolListingMode::Sale | ToolListingMode::Both) {
+            if !matches!(
+                listing.listing_mode,
+                ToolListingMode::Sale | ToolListingMode::Both
+            ) {
                 return Err(ToolMarketplaceError::NotForSale);
             }
             if listing.purchase_price == 0 {
                 return Err(ToolMarketplaceError::NotForSale);
             }
-            (listing.purchase_price, listing.currency, listing.owner_id.clone())
+            (
+                listing.purchase_price,
+                listing.currency,
+                listing.owner_id.clone(),
+            )
         };
 
         // Check if already owned
@@ -536,9 +595,11 @@ impl ToolMarketplace {
         }
 
         // Transfer funds
-        self.balances.insert(buyer_id.to_string(), buyer_balance - price);
+        self.balances
+            .insert(buyer_id.to_string(), buyer_balance - price);
         let seller_balance = self.get_balance(&owner_id);
-        self.balances.insert(owner_id.clone(), seller_balance + price);
+        self.balances
+            .insert(owner_id.clone(), seller_balance + price);
 
         // Update listing stats
         let listing = self.listings.get_mut(&tool_id).unwrap();
@@ -556,7 +617,8 @@ impl ToolMarketplace {
         };
 
         self.ownership_index.insert((buyer_id.to_string(), tool_id));
-        self.interaction_index.insert((buyer_id.to_string(), tool_id));
+        self.interaction_index
+            .insert((buyer_id.to_string(), tool_id));
         self.purchases.push(record.clone());
 
         self.emit(WorldEvent::ToolPurchased {
@@ -585,7 +647,9 @@ impl ToolMarketplace {
         }
 
         let (price_per_tick, currency, owner_id) = {
-            let listing = self.listings.get(&tool_id)
+            let listing = self
+                .listings
+                .get(&tool_id)
                 .ok_or_else(|| ToolMarketplaceError::NotFound(tool_id.to_string()))?;
             match listing.status {
                 ToolListingStatus::Active => {}
@@ -595,13 +659,20 @@ impl ToolMarketplace {
             if listing.owner_id == renter_id {
                 return Err(ToolMarketplaceError::SelfRent);
             }
-            if !matches!(listing.listing_mode, ToolListingMode::Rent | ToolListingMode::Both) {
+            if !matches!(
+                listing.listing_mode,
+                ToolListingMode::Rent | ToolListingMode::Both
+            ) {
                 return Err(ToolMarketplaceError::NotForRent);
             }
             if listing.rental_price_per_tick == 0 {
                 return Err(ToolMarketplaceError::NotForRent);
             }
-            (listing.rental_price_per_tick, listing.currency, listing.owner_id.clone())
+            (
+                listing.rental_price_per_tick,
+                listing.currency,
+                listing.owner_id.clone(),
+            )
         };
 
         let total_cost = price_per_tick * duration_ticks;
@@ -616,9 +687,11 @@ impl ToolMarketplace {
         }
 
         // Transfer funds
-        self.balances.insert(renter_id.to_string(), renter_balance - total_cost);
+        self.balances
+            .insert(renter_id.to_string(), renter_balance - total_cost);
         let owner_balance = self.get_balance(&owner_id);
-        self.balances.insert(owner_id.clone(), owner_balance + total_cost);
+        self.balances
+            .insert(owner_id.clone(), owner_balance + total_cost);
 
         // Update listing stats
         let listing = self.listings.get_mut(&tool_id).unwrap();
@@ -639,7 +712,8 @@ impl ToolMarketplace {
         };
 
         self.rental_index.insert((renter_id.to_string(), tool_id));
-        self.interaction_index.insert((renter_id.to_string(), tool_id));
+        self.interaction_index
+            .insert((renter_id.to_string(), tool_id));
         self.rentals.insert(rental_id, record.clone());
 
         self.emit(WorldEvent::ToolRented {
@@ -662,35 +736,41 @@ impl ToolMarketplace {
         rental_id: Uuid,
         renter_id: &str,
     ) -> Result<(), ToolMarketplaceError> {
-        let rental = self.rentals.get_mut(&rental_id)
+        let rental = self
+            .rentals
+            .get_mut(&rental_id)
             .ok_or_else(|| ToolMarketplaceError::RentalNotFound(rental_id.to_string()))?;
 
         if rental.renter_id != renter_id {
-            return Err(ToolMarketplaceError::Unauthorized("only the renter can cancel".into()));
+            return Err(ToolMarketplaceError::Unauthorized(
+                "only the renter can cancel".into(),
+            ));
         }
         if rental.status != RentalStatus::Active {
             return Err(ToolMarketplaceError::RentalNotActive);
         }
 
         rental.status = RentalStatus::Cancelled;
-        self.rental_index.remove(&(renter_id.to_string(), rental.tool_id));
+        self.rental_index
+            .remove(&(renter_id.to_string(), rental.tool_id));
 
         Ok(())
     }
 
     /// Process rental expirations. Expires all rentals whose end_tick <= current_tick.
     pub fn process_rental_expiry(&mut self, current_tick: u64) -> Vec<Uuid> {
-        let expired: Vec<Uuid> = self.rentals.iter()
-            .filter(|(_, r)| {
-                r.status == RentalStatus::Active && r.end_tick <= current_tick
-            })
+        let expired: Vec<Uuid> = self
+            .rentals
+            .iter()
+            .filter(|(_, r)| r.status == RentalStatus::Active && r.end_tick <= current_tick)
             .map(|(id, _)| *id)
             .collect();
 
         for id in &expired {
             if let Some(rental) = self.rentals.get_mut(id) {
                 rental.status = RentalStatus::Expired;
-                self.rental_index.remove(&(rental.renter_id.clone(), rental.tool_id));
+                self.rental_index
+                    .remove(&(rental.renter_id.clone(), rental.tool_id));
             }
         }
 
@@ -712,12 +792,19 @@ impl ToolMarketplace {
             return Err(ToolMarketplaceError::InvalidRating);
         }
 
-        if !self.interaction_index.contains(&(rater_id.to_string(), tool_id)) {
+        if !self
+            .interaction_index
+            .contains(&(rater_id.to_string(), tool_id))
+        {
             return Err(ToolMarketplaceError::NotEligibleToRate);
         }
 
         // Check not already rated
-        if self.ratings.get(&tool_id).map_or(false, |rs| rs.iter().any(|r| r.rater_id == rater_id)) {
+        if self
+            .ratings
+            .get(&tool_id)
+            .is_some_and(|rs| rs.iter().any(|r| r.rater_id == rater_id))
+        {
             return Err(ToolMarketplaceError::AlreadyRated);
         }
 
@@ -785,7 +872,8 @@ mod tests {
             ToolListingMode::Sale,
             vec!["compute".into()],
             1,
-        ).unwrap()
+        )
+        .unwrap()
     }
 
     fn list_rent_tool(mp: &mut ToolMarketplace) -> Uuid {
@@ -800,7 +888,8 @@ mod tests {
             ToolListingMode::Rent,
             vec!["storage".into()],
             1,
-        ).unwrap()
+        )
+        .unwrap()
     }
 
     fn list_both_tool(mp: &mut ToolMarketplace) -> Uuid {
@@ -815,7 +904,8 @@ mod tests {
             ToolListingMode::Both,
             vec!["analysis".into()],
             1,
-        ).unwrap()
+        )
+        .unwrap()
     }
 
     // ── List Tool ──────────────────────────────────────────
@@ -855,10 +945,16 @@ mod tests {
     fn test_list_tool_empty_name_fails() {
         let mut mp = make_mp();
         let result = mp.list_tool(
-            "".into(), "desc".into(),
-            ToolCategory::Utility, "owner".into(),
-            100, 0, Currency::Token,
-            ToolListingMode::Sale, vec![], 1,
+            "".into(),
+            "desc".into(),
+            ToolCategory::Utility,
+            "owner".into(),
+            100,
+            0,
+            Currency::Token,
+            ToolListingMode::Sale,
+            vec![],
+            1,
         );
         assert!(result.is_err());
     }
@@ -867,10 +963,16 @@ mod tests {
     fn test_list_sale_tool_zero_price_fails() {
         let mut mp = make_mp();
         let result = mp.list_tool(
-            "Tool".into(), "desc".into(),
-            ToolCategory::Utility, "owner".into(),
-            0, 0, Currency::Token,
-            ToolListingMode::Sale, vec![], 1,
+            "Tool".into(),
+            "desc".into(),
+            ToolCategory::Utility,
+            "owner".into(),
+            0,
+            0,
+            Currency::Token,
+            ToolListingMode::Sale,
+            vec![],
+            1,
         );
         assert!(matches!(result, Err(ToolMarketplaceError::InvalidPrice)));
     }
@@ -879,10 +981,16 @@ mod tests {
     fn test_list_rent_tool_zero_price_fails() {
         let mut mp = make_mp();
         let result = mp.list_tool(
-            "Tool".into(), "desc".into(),
-            ToolCategory::Utility, "owner".into(),
-            0, 0, Currency::Token,
-            ToolListingMode::Rent, vec![], 1,
+            "Tool".into(),
+            "desc".into(),
+            ToolCategory::Utility,
+            "owner".into(),
+            0,
+            0,
+            Currency::Token,
+            ToolListingMode::Rent,
+            vec![],
+            1,
         );
         assert!(matches!(result, Err(ToolMarketplaceError::InvalidPrice)));
     }
@@ -919,7 +1027,10 @@ mod tests {
         let id = list_sale_tool(&mut mp);
         mp.set_balance("poor", 100);
         let result = mp.purchase_tool(id, "poor", 5);
-        assert!(matches!(result, Err(ToolMarketplaceError::InsufficientBalance { .. })));
+        assert!(matches!(
+            result,
+            Err(ToolMarketplaceError::InsufficientBalance { .. })
+        ));
     }
 
     #[test]
@@ -937,7 +1048,10 @@ mod tests {
         mp.purchase_tool(id, "buyer", 5).unwrap();
         mp.set_balance("buyer", 10_000);
         let result = mp.purchase_tool(id, "buyer", 10);
-        assert!(matches!(result, Err(ToolMarketplaceError::AlreadyOwned { .. })));
+        assert!(matches!(
+            result,
+            Err(ToolMarketplaceError::AlreadyOwned { .. })
+        ));
     }
 
     // ── Rental ─────────────────────────────────────────────
@@ -981,7 +1095,10 @@ mod tests {
         let mut mp = make_mp();
         let id = list_rent_tool(&mut mp);
         let result = mp.rent_tool(id, "renter", 0, 1);
-        assert!(matches!(result, Err(ToolMarketplaceError::InvalidRentalDuration)));
+        assert!(matches!(
+            result,
+            Err(ToolMarketplaceError::InvalidRentalDuration)
+        ));
     }
 
     #[test]
@@ -990,7 +1107,10 @@ mod tests {
         let id = list_rent_tool(&mut mp);
         mp.set_balance("poor", 10);
         let result = mp.rent_tool(id, "poor", 100, 1);
-        assert!(matches!(result, Err(ToolMarketplaceError::InsufficientBalance { .. })));
+        assert!(matches!(
+            result,
+            Err(ToolMarketplaceError::InsufficientBalance { .. })
+        ));
     }
 
     #[test]
@@ -1017,7 +1137,10 @@ mod tests {
         let rental = mp.rent_tool(id, "renter", 10, 1).unwrap();
 
         mp.cancel_rental(rental.id, "renter").unwrap();
-        assert_eq!(mp.get_rental(rental.id).unwrap().status, RentalStatus::Cancelled);
+        assert_eq!(
+            mp.get_rental(rental.id).unwrap().status,
+            RentalStatus::Cancelled
+        );
         assert!(!mp.has_active_rental("renter", id));
     }
 
@@ -1032,7 +1155,10 @@ mod tests {
 
         let expired = mp.process_rental_expiry(6);
         assert_eq!(expired.len(), 1);
-        assert_eq!(mp.get_rental(rental.id).unwrap().status, RentalStatus::Expired);
+        assert_eq!(
+            mp.get_rental(rental.id).unwrap().status,
+            RentalStatus::Expired
+        );
         assert!(!mp.has_active_rental("renter", id));
     }
 
@@ -1044,7 +1170,10 @@ mod tests {
 
         let expired = mp.process_rental_expiry(3);
         assert!(expired.is_empty());
-        assert_eq!(mp.get_rental(rental.id).unwrap().status, RentalStatus::Active);
+        assert_eq!(
+            mp.get_rental(rental.id).unwrap().status,
+            RentalStatus::Active
+        );
     }
 
     // ── Rating ─────────────────────────────────────────────
@@ -1055,7 +1184,9 @@ mod tests {
         let id = list_sale_tool(&mut mp);
         mp.purchase_tool(id, "buyer", 5).unwrap();
 
-        let rating_id = mp.rate_tool(id, "buyer", 5, Some("Excellent!".into()), 10).unwrap();
+        let rating_id = mp
+            .rate_tool(id, "buyer", 5, Some("Excellent!".into()), 10)
+            .unwrap();
         assert_ne!(rating_id, Uuid::nil());
 
         let tool = mp.get(id).unwrap();
@@ -1081,7 +1212,10 @@ mod tests {
         let mut mp = make_mp();
         let id = list_sale_tool(&mut mp);
         let result = mp.rate_tool(id, "buyer", 5, None, 10);
-        assert!(matches!(result, Err(ToolMarketplaceError::NotEligibleToRate)));
+        assert!(matches!(
+            result,
+            Err(ToolMarketplaceError::NotEligibleToRate)
+        ));
     }
 
     #[test]
@@ -1100,7 +1234,8 @@ mod tests {
     fn test_update_tool_price() {
         let mut mp = make_mp();
         let id = list_sale_tool(&mut mp);
-        mp.update_tool(id, "owner", Some(600), None, None, None).unwrap();
+        mp.update_tool(id, "owner", Some(600), None, None, None)
+            .unwrap();
         assert_eq!(mp.get(id).unwrap().purchase_price, 600);
     }
 
@@ -1187,7 +1322,11 @@ mod tests {
 
     #[test]
     fn test_tool_listing_mode_serialization() {
-        for mode in [ToolListingMode::Sale, ToolListingMode::Rent, ToolListingMode::Both] {
+        for mode in [
+            ToolListingMode::Sale,
+            ToolListingMode::Rent,
+            ToolListingMode::Both,
+        ] {
             let json = serde_json::to_string(&mode).unwrap();
             let back: ToolListingMode = serde_json::from_str(&json).unwrap();
             assert_eq!(mode, back);
@@ -1196,7 +1335,11 @@ mod tests {
 
     #[test]
     fn test_rental_status_serialization() {
-        for status in [RentalStatus::Active, RentalStatus::Expired, RentalStatus::Cancelled] {
+        for status in [
+            RentalStatus::Active,
+            RentalStatus::Expired,
+            RentalStatus::Cancelled,
+        ] {
             let json = serde_json::to_string(&status).unwrap();
             let back: RentalStatus = serde_json::from_str(&json).unwrap();
             assert_eq!(status, back);
@@ -1207,10 +1350,20 @@ mod tests {
 
     #[test]
     fn test_error_display() {
-        assert!(ToolMarketplaceError::NotFound("t1".into()).to_string().contains("t1"));
-        assert!(ToolMarketplaceError::SelfPurchase.to_string().contains("own tool"));
-        assert!(ToolMarketplaceError::NotForSale.to_string().contains("purchase"));
-        assert!(ToolMarketplaceError::NotForRent.to_string().contains("rental"));
-        assert!(ToolMarketplaceError::InvalidRating.to_string().contains("1 and 5"));
+        assert!(ToolMarketplaceError::NotFound("t1".into())
+            .to_string()
+            .contains("t1"));
+        assert!(ToolMarketplaceError::SelfPurchase
+            .to_string()
+            .contains("own tool"));
+        assert!(ToolMarketplaceError::NotForSale
+            .to_string()
+            .contains("purchase"));
+        assert!(ToolMarketplaceError::NotForRent
+            .to_string()
+            .contains("rental"));
+        assert!(ToolMarketplaceError::InvalidRating
+            .to_string()
+            .contains("1 and 5"));
     }
 }

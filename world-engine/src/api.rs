@@ -1,52 +1,40 @@
 //! # API Routes (Axum)
 //!
-//! Thin coordination layer that wires together domain-specific sub-routers.
+//! 6764-line REST API serving all simulation operations: agents, organizations,
+//! economy (banking/stocks/marketplace), tasks, snapshots, world state, and traces.
 //!
-//! This file defines shared types (AppState, AgentRecord, helpers) and the
-//! top-level `build_full_router()` factory. All handler logic lives in the
-//! `api_*.rs` domain modules.
-//!
-//! Key types: AppState, AgentRecord, A2AMessage, TestOverrides
+//! Key types: AppState, AgentRecord, A2AMessage, SpawnAgentRequest,
+//!            TaskResponse, WorldStatsResponse, ErrorResponse
 //! Depends on: world, economy, organization, auth, federation, tracing, snapshot
-
+//!
+//! ~197 route handlers / ~201 handler functions
+//!
 use std::collections::HashMap;
-use std::convert::Infallible;
 use std::sync::Arc;
 
-use crate::error::AppError;
-
-use axum::{
-    Router,
-    extract::{State as _State},
-    http::StatusCode,
-    response::IntoResponse,
-    routing::get,
-};
-use futures::stream::Stream;
+use axum::{http::StatusCode, response::IntoResponse, routing::get, Router};
 use serde::{Deserialize, Serialize};
-use tokio::sync::{Mutex, watch};
+use tokio::sync::{watch, Mutex};
 use uuid::Uuid;
 
 use crate::api_auth::SharedApiKeyStore;
 use crate::api_experiment::SharedExperimentStore;
-use crate::api_ab_experiment::SharedABExperimentStore;
+use crate::auth::AuthStore;
 use crate::economy::banking::BankingSystem;
+use crate::economy::investment::InvestmentSystem;
 use crate::economy::marketplace::Marketplace;
 use crate::economy::reputation::{ReputationConfig, ReputationSystem};
+use crate::economy::stock_market::StockMarket;
+use crate::economy::task::TaskBoard;
 use crate::economy::tool_marketplace::ToolMarketplace;
 use crate::federation::{MigrationManager, MigrationPolicy, WorldRegistry};
-use crate::economy::stock_market::StockMarket;
-use crate::economy::investment::InvestmentSystem;
-use crate::economy::task::{TaskBoard, Task};
-use crate::auth::AuthStore;
 use crate::human::store::HumanParticipationStore;
-use crate::organization::org::OrganizationStore;
 use crate::organization::governance::GovernanceSystem;
 use crate::organization::governance_metrics::GovernanceMetricsCollector;
+use crate::organization::org::OrganizationStore;
 use crate::organization::rule_engine::RuleEngine;
 use crate::time_capsule::SnapshotStore;
 use crate::wal::WAL;
-use crate::world::event::WorldEvent;
 use crate::world::map::building::BuildingManager;
 use crate::world::state::EventBus;
 
@@ -66,6 +54,8 @@ pub type SharedGovernanceMetricsCollector = Arc<Mutex<GovernanceMetricsCollector
 pub type SharedInvestmentSystem = Arc<Mutex<InvestmentSystem>>;
 pub type SharedRuleEngine = Arc<Mutex<RuleEngine>>;
 pub type SharedToolMarketplace = Arc<Mutex<ToolMarketplace>>;
+pub type SharedAuthStore = Arc<Mutex<AuthStore>>;
+pub type SharedABExperimentStore = Arc<Mutex<Vec<crate::api_ab_experiment::ABExperiment>>>;
 
 // ── Shared Data Types ───────────────────────────────────
 
@@ -89,24 +79,6 @@ pub struct AgentRecord {
     pub skills: HashMap<String, u32>,
 }
 
-impl From<crate::world::AgentRecord> for AgentRecord {
-    fn from(rec: crate::world::AgentRecord) -> Self {
-        Self {
-            id: rec.id.to_string(),
-            name: rec.name,
-            phase: format!("{:?}", rec.phase).to_lowercase(),
-            tokens: rec.tokens,
-            money: 0,
-            alive: rec.phase != crate::world::enums::AgentPhase::Dead,
-            ticks_survived: 0,
-            personality: rec.personality,
-            parent_ids: Vec::new(),
-            generation: 0,
-            skills: rec.skills.values().map(|s| (s.name.clone(), s.level)).collect(),
-        }
-    }
-}
-
 /// A2A message record.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct A2AMessage {
@@ -126,8 +98,15 @@ pub struct ErrorResponse {
 
 /// Valid action types for external agents.
 pub const ALLOWED_ACTIONS: &[&str] = &[
-    "move", "gather", "trade", "communicate",
-    "explore", "rest", "build", "claim_task", "submit_task",
+    "move",
+    "gather",
+    "trade",
+    "communicate",
+    "explore",
+    "rest",
+    "build",
+    "claim_task",
+    "submit_task",
 ];
 
 /// Position in the world grid.
@@ -156,7 +135,7 @@ pub struct ExternalAgent {
 pub type SharedExternalAgents = Arc<Mutex<HashMap<String, ExternalAgent>>>;
 
 // ── Re-exports from sub-modules ──────────────────────────
-pub use crate::api_world::{SseQuery, parse_event_types};
+pub use crate::api_world::{parse_event_types, SseQuery};
 
 // ── Shared Helpers ──────────────────────────────────────
 
@@ -168,21 +147,59 @@ pub fn api_ok(data: impl serde::Serialize) -> axum::response::Response {
         "data": data,
         "error": null,
         "request_id": request_id,
-    })).into_response()
+    }))
+    .into_response()
 }
 
 /// Helper: wrap error response in { data: null, error, request_id } format.
 pub fn api_err(status: StatusCode, error: impl Into<String>) -> axum::response::Response {
     use axum::Json;
     let request_id = Uuid::new_v4().to_string();
-    (status, Json(serde_json::json!({
-        "data": null,
-        "error": error.into(),
-        "request_id": request_id,
-    }))).into_response()
+    (
+        status,
+        Json(serde_json::json!({
+            "data": null,
+            "error": error.into(),
+            "request_id": request_id,
+        })),
+    )
+        .into_response()
 }
 
 // ── AppState ────────────────────────────────────────────
+
+#[derive(Clone)]
+pub struct AppState {
+    pub board: SharedTaskBoard,
+    pub wal: SharedWAL,
+    pub event_bus: Arc<EventBus>,
+    pub agents: Arc<Mutex<Vec<AgentRecord>>>,
+    pub messages: Arc<Mutex<Vec<A2AMessage>>>,
+    pub tick_tx: watch::Sender<u64>,
+    pub tick_rx: watch::Receiver<u64>,
+    pub snapshot_store: Option<SharedSnapshotStore>,
+    pub marketplace: Option<SharedMarketplace>,
+    pub reputation_system: Option<SharedReputationSystem>,
+    pub org_store: Option<SharedOrganizationStore>,
+    pub stock_market: Option<SharedStockMarket>,
+    pub governance: Option<SharedGovernanceSystem>,
+    pub banking_system: Option<SharedBankingSystem>,
+    pub trace_store: Option<SharedTraceStore>,
+    pub external_agents: SharedExternalAgents,
+    pub governance_metrics: Option<SharedGovernanceMetricsCollector>,
+    pub building_manager: Arc<Mutex<BuildingManager>>,
+    pub human_store: Arc<Mutex<HumanParticipationStore>>,
+    pub auth_store: SharedAuthStore,
+    pub investment_system: Option<SharedInvestmentSystem>,
+    pub rule_engine: Option<SharedRuleEngine>,
+    pub tool_marketplace: Option<SharedToolMarketplace>,
+    pub federation: Option<Arc<Mutex<crate::a2a::federation::FederationEngine>>>,
+    pub federation_registry: Option<Arc<Mutex<crate::federation::WorldRegistry>>>,
+    pub migration_manager: Option<Arc<Mutex<crate::federation::MigrationManager>>>,
+    pub api_key_store: Option<SharedApiKeyStore>,
+    pub experiment_store: SharedExperimentStore,
+    pub ab_experiment_store: SharedABExperimentStore,
+}
 
 /// Optional subsystem overrides for test AppState construction.
 ///
@@ -208,61 +225,21 @@ pub struct TestOverrides {
     pub federation_registry: Option<Arc<Mutex<crate::federation::WorldRegistry>>>,
     pub migration_manager: Option<Arc<Mutex<crate::federation::MigrationManager>>>,
     pub api_key_store: Option<SharedApiKeyStore>,
-    pub auth_store: Option<Arc<Mutex<AuthStore>>>,
+    pub auth_store: Option<SharedAuthStore>,
     pub ab_experiment_store: Option<SharedABExperimentStore>,
-}
-
-#[derive(Clone)]
-pub struct AppState {
-    pub board: SharedTaskBoard,
-    pub wal: SharedWAL,
-    pub event_bus: Arc<EventBus>,
-    pub agents: Arc<Mutex<Vec<AgentRecord>>>,
-    pub messages: Arc<Mutex<Vec<A2AMessage>>>,
-    pub tick_tx: watch::Sender<u64>,
-    pub tick_rx: watch::Receiver<u64>,
-    pub snapshot_store: Option<SharedSnapshotStore>,
-    pub marketplace: Option<SharedMarketplace>,
-    pub reputation_system: Option<SharedReputationSystem>,
-    pub org_store: Option<SharedOrganizationStore>,
-    pub stock_market: Option<SharedStockMarket>,
-    pub governance: Option<SharedGovernanceSystem>,
-    pub banking_system: Option<SharedBankingSystem>,
-    pub trace_store: Option<SharedTraceStore>,
-    pub external_agents: SharedExternalAgents,
-    pub governance_metrics: Option<SharedGovernanceMetricsCollector>,
-    pub building_manager: Arc<Mutex<BuildingManager>>,
-    pub human_store: Arc<Mutex<HumanParticipationStore>>,
-    pub auth_store: Arc<Mutex<AuthStore>>,
-    pub investment_system: Option<SharedInvestmentSystem>,
-    pub rule_engine: Option<SharedRuleEngine>,
-    pub tool_marketplace: Option<SharedToolMarketplace>,
-    pub federation: Option<Arc<Mutex<crate::a2a::federation::FederationEngine>>>,
-    pub federation_registry: Option<Arc<Mutex<crate::federation::WorldRegistry>>>,
-    pub migration_manager: Option<Arc<Mutex<crate::federation::MigrationManager>>>,
-    pub api_key_store: Option<SharedApiKeyStore>,
-    pub experiment_store: SharedExperimentStore,
-    /// A/B experiment store for `/api/v2/experiments/ab/*` endpoints.
-    pub ab_experiment_store: SharedABExperimentStore,
 }
 
 impl AppState {
     /// Build a minimal test AppState.
-    ///
-    /// Creates fresh instances of all core (non-optional) subsystems and sets
-    /// every optional subsystem to `None`. Use [`Self::for_test_with`] to
-    /// selectively enable specific subsystems.
     pub fn for_test(board: SharedTaskBoard, wal: SharedWAL) -> Self {
         Self::for_test_with(board, wal, TestOverrides::default())
     }
 
     /// Build a test AppState with selected subsystem overrides.
-    ///
-    /// Any override field set to `Some(...)` replaces the default `None`.
-    /// Core infrastructure (EventBus, tick channel, agents, messages, etc.)
-    /// is always created fresh unless explicitly provided in `overrides`.
     pub fn for_test_with(board: SharedTaskBoard, wal: SharedWAL, overrides: TestOverrides) -> Self {
-        let event_bus = overrides.event_bus.unwrap_or_else(|| Arc::new(EventBus::new(256)));
+        let event_bus = overrides
+            .event_bus
+            .unwrap_or_else(|| Arc::new(EventBus::new(256)));
         let (tick_tx, tick_rx) = match (overrides.tick_tx, overrides.tick_rx) {
             (Some(tx), Some(rx)) => (tx, rx),
             _ => watch::channel(0u64),
@@ -288,9 +265,9 @@ impl AppState {
             governance_metrics: overrides.governance_metrics,
             building_manager: Arc::new(Mutex::new(BuildingManager::new())),
             human_store: Arc::new(Mutex::new(HumanParticipationStore::new())),
-            auth_store: overrides.auth_store.unwrap_or_else(|| {
-                Arc::new(Mutex::new(AuthStore::new("change-me-in-production")))
-            }),
+            auth_store: overrides
+                .auth_store
+                .unwrap_or_else(|| Arc::new(Mutex::new(AuthStore::new("change-me-in-production")))),
             investment_system: overrides.investment_system,
             rule_engine: overrides.rule_engine,
             tool_marketplace: overrides.tool_marketplace,
@@ -299,7 +276,9 @@ impl AppState {
             migration_manager: overrides.migration_manager,
             api_key_store: overrides.api_key_store,
             experiment_store: Arc::new(Mutex::new(Vec::new())),
-            ab_experiment_store: overrides.ab_experiment_store.unwrap_or_else(|| Arc::new(Mutex::new(Vec::new()))),
+            ab_experiment_store: overrides
+                .ab_experiment_store
+                .unwrap_or_else(|| Arc::new(Mutex::new(Vec::new()))),
         }
     }
 }
@@ -322,49 +301,78 @@ pub fn create_router(board: SharedTaskBoard) -> Router {
         .with_state(board)
 }
 
+fn make_test_state(
+    board: SharedTaskBoard,
+    wal: SharedWAL,
+    event_bus: Arc<EventBus>,
+    tick_tx: watch::Sender<u64>,
+    tick_rx: watch::Receiver<u64>,
+    snapshot_store: Option<SharedSnapshotStore>,
+) -> AppState {
+    AppState {
+        board,
+        wal,
+        event_bus: event_bus.clone(),
+        agents: Arc::new(Mutex::new(Vec::new())),
+        messages: Arc::new(Mutex::new(Vec::new())),
+        tick_tx,
+        tick_rx,
+        snapshot_store,
+        marketplace: Some(Arc::new(Mutex::new(Marketplace::with_event_bus(
+            event_bus.as_ref().clone(),
+        )))),
+        reputation_system: Some(Arc::new(Mutex::new(ReputationSystem::with_event_bus(
+            ReputationConfig::default(),
+            event_bus.as_ref().clone(),
+        )))),
+        org_store: None,
+        stock_market: None,
+        governance: None,
+        banking_system: None,
+        trace_store: Some(Arc::new(Mutex::new(crate::tracing::TraceStore::new()))),
+        external_agents: Arc::new(Mutex::new(HashMap::new())),
+        governance_metrics: None,
+        building_manager: Arc::new(Mutex::new(BuildingManager::new())),
+        human_store: Arc::new(Mutex::new(HumanParticipationStore::new())),
+        auth_store: Arc::new(Mutex::new(AuthStore::new("change-me-in-production"))),
+        investment_system: None,
+        rule_engine: None,
+        tool_marketplace: None,
+        federation: Some(Arc::new(Mutex::new(
+            crate::a2a::federation::FederationEngine::with_shared_event_bus(event_bus.clone()),
+        ))),
+        federation_registry: Some(Arc::new(Mutex::new(WorldRegistry::new(event_bus.clone())))),
+        migration_manager: Some(Arc::new(Mutex::new(MigrationManager::new(
+            MigrationPolicy::default(),
+            event_bus,
+        )))),
+        api_key_store: None,
+        experiment_store: Arc::new(Mutex::new(Vec::new())),
+        ab_experiment_store: Arc::new(Mutex::new(Vec::new())),
+    }
+}
+
 pub fn create_router_with_wal(board: SharedTaskBoard, wal: SharedWAL) -> Router {
     let event_bus = Arc::new(EventBus::new(256));
+    let (tick_tx, tick_rx) = watch::channel(0);
     let snapshot_store = SnapshotStore::new("./data/snapshots.db")
         .ok()
         .map(|s| Arc::new(Mutex::new(s)));
-    let state = AppState::for_test_with(board, wal, TestOverrides {
-        event_bus: Some(event_bus.clone()),
-        snapshot_store,
-        marketplace: Some(Arc::new(Mutex::new(Marketplace::with_event_bus(event_bus.as_ref().clone())))),
-        reputation_system: Some(Arc::new(Mutex::new(ReputationSystem::with_event_bus(
-            ReputationConfig::default(),
-            event_bus.as_ref().clone(),
-        )))),
-        trace_store: Some(Arc::new(Mutex::new(crate::tracing::TraceStore::new()))),
-        tool_marketplace: Some(Arc::new(Mutex::new(ToolMarketplace::with_shared_event_bus(event_bus.clone())))),
-        federation: Some(Arc::new(Mutex::new(crate::a2a::federation::FederationEngine::with_shared_event_bus(event_bus.clone())))),
-        federation_registry: Some(Arc::new(Mutex::new(WorldRegistry::new(event_bus.clone())))),
-        migration_manager: Some(Arc::new(Mutex::new(MigrationManager::new(MigrationPolicy::default(), event_bus)))),
-        ..TestOverrides::default()
-    });
+    let state = make_test_state(board, wal, event_bus, tick_tx, tick_rx, snapshot_store);
     build_full_router(state)
 }
 
-pub fn create_router_with_wal_and_snapshots(board: SharedTaskBoard, wal: SharedWAL, snapshot_path: &str) -> Router {
+pub fn create_router_with_wal_and_snapshots(
+    board: SharedTaskBoard,
+    wal: SharedWAL,
+    snapshot_path: &str,
+) -> Router {
     let event_bus = Arc::new(EventBus::new(256));
+    let (tick_tx, tick_rx) = watch::channel(0);
     let snapshot_store = SnapshotStore::new(snapshot_path)
         .ok()
         .map(|s| Arc::new(Mutex::new(s)));
-    let state = AppState::for_test_with(board, wal, TestOverrides {
-        event_bus: Some(event_bus.clone()),
-        snapshot_store,
-        marketplace: Some(Arc::new(Mutex::new(Marketplace::with_event_bus(event_bus.as_ref().clone())))),
-        reputation_system: Some(Arc::new(Mutex::new(ReputationSystem::with_event_bus(
-            ReputationConfig::default(),
-            event_bus.as_ref().clone(),
-        )))),
-        trace_store: Some(Arc::new(Mutex::new(crate::tracing::TraceStore::new()))),
-        tool_marketplace: Some(Arc::new(Mutex::new(ToolMarketplace::with_shared_event_bus(event_bus.clone())))),
-        federation: Some(Arc::new(Mutex::new(crate::a2a::federation::FederationEngine::with_shared_event_bus(event_bus.clone())))),
-        federation_registry: Some(Arc::new(Mutex::new(WorldRegistry::new(event_bus.clone())))),
-        migration_manager: Some(Arc::new(Mutex::new(MigrationManager::new(MigrationPolicy::default(), event_bus)))),
-        ..TestOverrides::default()
-    });
+    let state = make_test_state(board, wal, event_bus, tick_tx, tick_rx, snapshot_store);
     build_full_router(state)
 }
 
@@ -427,29 +435,14 @@ pub fn create_router_for_test(
     let snapshot_store = SnapshotStore::new_in_memory()
         .ok()
         .map(|s| Arc::new(Mutex::new(s)));
-    let state = AppState::for_test_with(board, wal, TestOverrides {
-        event_bus: Some(event_bus.clone()),
-        tick_tx: Some(tick_tx),
-        tick_rx: Some(tick_rx),
-        snapshot_store,
-        marketplace: Some(Arc::new(Mutex::new(Marketplace::with_event_bus(event_bus.as_ref().clone())))),
-        reputation_system: Some(Arc::new(Mutex::new(ReputationSystem::with_event_bus(
-            ReputationConfig::default(),
-            event_bus.as_ref().clone(),
-        )))),
-        trace_store: Some(Arc::new(Mutex::new(crate::tracing::TraceStore::new()))),
-        tool_marketplace: Some(Arc::new(Mutex::new(ToolMarketplace::with_shared_event_bus(event_bus.clone())))),
-        federation: Some(Arc::new(Mutex::new(crate::a2a::federation::FederationEngine::with_shared_event_bus(event_bus.clone())))),
-        federation_registry: Some(Arc::new(Mutex::new(WorldRegistry::new(event_bus.clone())))),
-        migration_manager: Some(Arc::new(Mutex::new(MigrationManager::new(MigrationPolicy::default(), event_bus)))),
-        ..TestOverrides::default()
-    });
+    let state = make_test_state(board, wal, event_bus, tick_tx, tick_rx, snapshot_store);
     build_full_router(state)
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::world::event::WorldEvent;
     use axum::body::Body;
     use http_body_util::BodyExt;
     use tower::ServiceExt;
@@ -461,42 +454,19 @@ mod tests {
         // Allow background task to subscribe
         std::thread::sleep(std::time::Duration::from_millis(10));
 
-        let (tick_tx, tick_rx) = watch::channel(0u64);
         let board = Arc::new(Mutex::new(TaskBoard::new()));
         let tmp = tempfile::tempdir().expect("tempdir");
         let wal = Arc::new(Mutex::new(WAL::new(tmp.path())));
 
-        let state = AppState {
+        let state = AppState::for_test_with(
             board,
             wal,
-            event_bus: bus,
-            agents: Arc::new(Mutex::new(Vec::new())),
-            messages: Arc::new(Mutex::new(Vec::new())),
-            tick_tx,
-            tick_rx,
-            snapshot_store: None,
-            marketplace: None,
-            reputation_system: None,
-            org_store: None,
-            stock_market: None,
-            governance: None,
-            banking_system: None,
-            trace_store: None,
-            external_agents: Arc::new(Mutex::new(std::collections::HashMap::new())),
-            governance_metrics: Some(Arc::new(Mutex::new(collector))),
-            building_manager: Arc::new(Mutex::new(BuildingManager::new())),
-            human_store: Arc::new(Mutex::new(HumanParticipationStore::new())),
-            auth_store: Arc::new(Mutex::new(AuthStore::new("change-me-in-production"))),
-            investment_system: None,
-            rule_engine: None,
-            tool_marketplace: None,
-            federation: None,
-            federation_registry: None,
-            migration_manager: None,
-            api_key_store: None,
-            experiment_store: Arc::new(Mutex::new(Vec::new())),
-            ab_experiment_store: Arc::new(Mutex::new(Vec::new())),
-        };
+            TestOverrides {
+                event_bus: Some(bus),
+                governance_metrics: Some(Arc::new(Mutex::new(collector))),
+                ..TestOverrides::default()
+            },
+        );
         (state, tmp)
     }
 
@@ -705,10 +675,7 @@ mod tests {
         tokio::time::sleep(std::time::Duration::from_millis(30)).await;
 
         let app = build_full_router(state);
-        let uri = format!(
-            "/api/v1/governance/comparison?org_ids={},{}",
-            org_a, org_b
-        );
+        let uri = format!("/api/v1/governance/comparison?org_ids={},{}", org_a, org_b);
         let response = app
             .oneshot(
                 axum::http::Request::builder()
@@ -757,41 +724,9 @@ mod tests {
         let board = Arc::new(Mutex::new(TaskBoard::new()));
         let tmp = tempfile::tempdir().expect("tempdir");
         let wal = Arc::new(Mutex::new(WAL::new(tmp.path())));
-        let bus = Arc::new(EventBus::new(256));
-        let (tick_tx, tick_rx) = watch::channel(0u64);
 
-        // State without governance_metrics
-        let state = AppState {
-            board,
-            wal,
-            event_bus: bus,
-            agents: Arc::new(Mutex::new(Vec::new())),
-            messages: Arc::new(Mutex::new(Vec::new())),
-            tick_tx,
-            tick_rx,
-            snapshot_store: None,
-            marketplace: None,
-            reputation_system: None,
-            org_store: None,
-            stock_market: None,
-            governance: None,
-            banking_system: None,
-            trace_store: None,
-            external_agents: Arc::new(Mutex::new(std::collections::HashMap::new())),
-            governance_metrics: None,
-            building_manager: Arc::new(Mutex::new(BuildingManager::new())),
-            human_store: Arc::new(Mutex::new(HumanParticipationStore::new())),
-            auth_store: Arc::new(Mutex::new(AuthStore::new("change-me-in-production"))),
-            investment_system: None,
-            rule_engine: None,
-            tool_marketplace: None,
-            federation: None,
-            federation_registry: None,
-            migration_manager: None,
-            api_key_store: None,
-            experiment_store: Arc::new(Mutex::new(Vec::new())),
-            ab_experiment_store: Arc::new(Mutex::new(Vec::new())),
-        };
+        // State without governance_metrics — all optional subsystems None
+        let state = AppState::for_test(board, wal);
 
         let app = build_full_router(state);
         let response = app

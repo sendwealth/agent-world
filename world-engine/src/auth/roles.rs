@@ -50,10 +50,7 @@ impl HumanRole {
     /// Returns the capabilities granted to this role per DESIGN.md §12.1.
     pub fn capabilities(&self) -> &'static [Capability] {
         match self {
-            HumanRole::Observer => &[
-                Capability::ViewWorld,
-                Capability::ViewAgents,
-            ],
+            HumanRole::Observer => &[Capability::ViewWorld, Capability::ViewAgents],
             HumanRole::Investor => &[
                 Capability::ViewWorld,
                 Capability::ViewAgents,
@@ -209,7 +206,11 @@ mod tests {
             (HumanRole::TaskPublisher, Capability::Invest, false),
             (HumanRole::TaskPublisher, Capability::PublishTasks, true),
             (HumanRole::TaskPublisher, Capability::Arbitrate, false),
-            (HumanRole::TaskPublisher, Capability::ModifyWorldParams, false),
+            (
+                HumanRole::TaskPublisher,
+                Capability::ModifyWorldParams,
+                false,
+            ),
             (HumanRole::TaskPublisher, Capability::CreateAgent, false),
             (HumanRole::TaskPublisher, Capability::PauseWorld, false),
             (HumanRole::TaskPublisher, Capability::ResetWorld, false),
@@ -250,7 +251,9 @@ mod tests {
                 role.has_capability(cap),
                 expected,
                 "{:?}.has_capability({:?}) should be {}",
-                role, cap, expected
+                role,
+                cap,
+                expected
             );
         }
     }

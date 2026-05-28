@@ -1,13 +1,12 @@
 use axum::{
-    Json,
     extract::{Path, Query, State},
     http::StatusCode,
     response::IntoResponse,
     routing::*,
 };
-use serde::{Deserialize, Serialize};
+use serde::Deserialize;
 
-use crate::api::{AppState, api_ok, api_err};
+use crate::api::{api_err, api_ok, AppState};
 
 // ══════════════════════════════════════════════════════════════════════════════
 // Reputation API handlers
@@ -20,7 +19,12 @@ pub async fn rep_get_reputation(
 ) -> impl IntoResponse {
     let rep = match &state.reputation_system {
         Some(r) => r.clone(),
-        None => return api_err(StatusCode::SERVICE_UNAVAILABLE, "reputation system not configured"),
+        None => {
+            return api_err(
+                StatusCode::SERVICE_UNAVAILABLE,
+                "reputation system not configured",
+            )
+        }
     };
     let rep = rep.lock().await;
     let score = rep.get_reputation(&agent_id);
@@ -29,7 +33,7 @@ pub async fn rep_get_reputation(
 
 #[derive(Debug, Default, Deserialize)]
 #[serde(default)]
-struct RepRankingsQuery {
+pub struct RepRankingsQuery {
     pub limit: Option<usize>,
 }
 
@@ -40,7 +44,12 @@ pub async fn rep_rankings(
 ) -> impl IntoResponse {
     let rep = match &state.reputation_system {
         Some(r) => r.clone(),
-        None => return api_err(StatusCode::SERVICE_UNAVAILABLE, "reputation system not configured"),
+        None => {
+            return api_err(
+                StatusCode::SERVICE_UNAVAILABLE,
+                "reputation system not configured",
+            )
+        }
     };
     let rep = rep.lock().await;
     let rankings = rep.get_rankings(params.limit.unwrap_or(50));
@@ -49,7 +58,7 @@ pub async fn rep_rankings(
 
 #[derive(Debug, Default, Deserialize)]
 #[serde(default)]
-struct RepLowReputationQuery {
+pub struct RepLowReputationQuery {
     pub threshold: Option<f64>,
 }
 
@@ -60,7 +69,12 @@ pub async fn rep_low_reputation(
 ) -> impl IntoResponse {
     let rep = match &state.reputation_system {
         Some(r) => r.clone(),
-        None => return api_err(StatusCode::SERVICE_UNAVAILABLE, "reputation system not configured"),
+        None => {
+            return api_err(
+                StatusCode::SERVICE_UNAVAILABLE,
+                "reputation system not configured",
+            )
+        }
     };
     let rep = rep.lock().await;
     let agents = rep.get_low_reputation_agents(params.threshold.unwrap_or(-10.0));
@@ -68,12 +82,15 @@ pub async fn rep_low_reputation(
 }
 
 /// GET /api/v1/reputation/config — Get the reputation system configuration.
-pub async fn rep_get_config(
-    State(state): State<AppState>,
-) -> impl IntoResponse {
+pub async fn rep_get_config(State(state): State<AppState>) -> impl IntoResponse {
     let rep = match &state.reputation_system {
         Some(r) => r.clone(),
-        None => return api_err(StatusCode::SERVICE_UNAVAILABLE, "reputation system not configured"),
+        None => {
+            return api_err(
+                StatusCode::SERVICE_UNAVAILABLE,
+                "reputation system not configured",
+            )
+        }
     };
     let rep = rep.lock().await;
     api_ok(rep.config())

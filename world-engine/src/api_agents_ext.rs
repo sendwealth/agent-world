@@ -1,16 +1,16 @@
 use std::collections::HashMap;
 
 use axum::{
-    Json,
     extract::{Path, State},
     http::StatusCode,
     response::IntoResponse,
     routing::*,
+    Json,
 };
 use serde::Deserialize;
 use uuid::Uuid;
 
-use crate::api::{AppState, ErrorResponse, AgentRecord, ExternalAgent, Position, ALLOWED_ACTIONS, SharedExternalAgents};
+use crate::api::{AgentRecord, AppState, ErrorResponse, ExternalAgent, Position, ALLOWED_ACTIONS};
 use crate::world::event::WorldEvent;
 
 // ── Request Types ──────────────────────────────────────
@@ -40,7 +40,13 @@ pub async fn register_external_agent(
     Json(body): Json<RegisterAgentRequest>,
 ) -> impl IntoResponse {
     if body.name.is_empty() {
-        return (StatusCode::BAD_REQUEST, Json(ErrorResponse { error: "name is required".into() })).into_response();
+        return (
+            StatusCode::BAD_REQUEST,
+            Json(ErrorResponse {
+                error: "name is required".into(),
+            }),
+        )
+            .into_response();
     }
 
     let agent_id = Uuid::new_v4().to_string();
@@ -85,11 +91,15 @@ pub async fn register_external_agent(
         });
     }
 
-    (StatusCode::CREATED, Json(serde_json::json!({
-        "agent_id": agent_id,
-        "api_key": api_key,
-        "name": name,
-    }))).into_response()
+    (
+        StatusCode::CREATED,
+        Json(serde_json::json!({
+            "agent_id": agent_id,
+            "api_key": api_key,
+            "name": name,
+        })),
+    )
+        .into_response()
 }
 
 /// Deregister (remove) a third-party agent.
@@ -101,7 +111,15 @@ pub async fn deregister_external_agent(
         let mut external = state.external_agents.lock().await;
         match external.remove(&id) {
             Some(agent) => agent.agent_id,
-            None => return (StatusCode::NOT_FOUND, Json(ErrorResponse { error: "agent not found".into() })).into_response(),
+            None => {
+                return (
+                    StatusCode::NOT_FOUND,
+                    Json(ErrorResponse {
+                        error: "agent not found".into(),
+                    }),
+                )
+                    .into_response()
+            }
         }
     };
 
@@ -111,9 +129,13 @@ pub async fn deregister_external_agent(
         agents.retain(|a| a.id != agent_id);
     }
 
-    (StatusCode::OK, Json(serde_json::json!({
-        "deregistered": agent_id,
-    }))).into_response()
+    (
+        StatusCode::OK,
+        Json(serde_json::json!({
+            "deregistered": agent_id,
+        })),
+    )
+        .into_response()
 }
 
 /// Execute an action as a third-party agent.
@@ -124,17 +146,37 @@ pub async fn execute_agent_action(
 ) -> impl IntoResponse {
     // Validate action
     if !ALLOWED_ACTIONS.contains(&body.action.as_str()) {
-        return (StatusCode::BAD_REQUEST, Json(ErrorResponse {
-            error: format!("unknown action '{}'", body.action),
-        })).into_response();
+        return (
+            StatusCode::BAD_REQUEST,
+            Json(ErrorResponse {
+                error: format!("unknown action '{}'", body.action),
+            }),
+        )
+            .into_response();
     }
 
     // Check agent exists and is alive
     let mut external = state.external_agents.lock().await;
     let agent = match external.get_mut(&id) {
         Some(a) if a.alive => a,
-        Some(_) => return (StatusCode::GONE, Json(ErrorResponse { error: "agent is dead".into() })).into_response(),
-        None => return (StatusCode::NOT_FOUND, Json(ErrorResponse { error: "agent not found".into() })).into_response(),
+        Some(_) => {
+            return (
+                StatusCode::GONE,
+                Json(ErrorResponse {
+                    error: "agent is dead".into(),
+                }),
+            )
+                .into_response()
+        }
+        None => {
+            return (
+                StatusCode::NOT_FOUND,
+                Json(ErrorResponse {
+                    error: "agent not found".into(),
+                }),
+            )
+                .into_response()
+        }
     };
 
     // Execute action — update position for "move", etc.
@@ -142,7 +184,9 @@ pub async fn execute_agent_action(
     let success = match body.action.as_str() {
         "move" => {
             if let Some(dir) = body.params.get("direction").and_then(|d| d.as_str()) {
-                let distance = body.params.get("distance")
+                let distance = body
+                    .params
+                    .get("distance")
                     .and_then(|d| d.as_u64())
                     .unwrap_or(1) as i64;
                 match dir {
@@ -175,7 +219,9 @@ pub async fn execute_agent_action(
     {
         let current = *state.tick_rx.borrow();
         let new_tick = current + 1;
-        state.event_bus.emit(WorldEvent::TickAdvanced { tick: new_tick });
+        state
+            .event_bus
+            .emit(WorldEvent::TickAdvanced { tick: new_tick });
         let _ = state.tick_tx.send(new_tick);
     }
 
@@ -191,11 +237,15 @@ pub async fn execute_agent_action(
 
     let action_name = body.action.clone();
 
-    (StatusCode::OK, Json(serde_json::json!({
-        "action": action_name,
-        "success": success,
-        "tick": tick,
-    }))).into_response()
+    (
+        StatusCode::OK,
+        Json(serde_json::json!({
+            "action": action_name,
+            "success": success,
+            "tick": tick,
+        })),
+    )
+        .into_response()
 }
 
 /// Get perception data for a third-party agent.
@@ -206,21 +256,40 @@ pub async fn get_agent_perception(
     let external = state.external_agents.lock().await;
     let agent = match external.get(&id) {
         Some(a) if a.alive => a,
-        Some(_) => return (StatusCode::GONE, Json(ErrorResponse { error: "agent is dead".into() })).into_response(),
-        None => return (StatusCode::NOT_FOUND, Json(ErrorResponse { error: "agent not found".into() })).into_response(),
+        Some(_) => {
+            return (
+                StatusCode::GONE,
+                Json(ErrorResponse {
+                    error: "agent is dead".into(),
+                }),
+            )
+                .into_response()
+        }
+        None => {
+            return (
+                StatusCode::NOT_FOUND,
+                Json(ErrorResponse {
+                    error: "agent not found".into(),
+                }),
+            )
+                .into_response()
+        }
     };
 
     let tick = *state.tick_rx.borrow();
 
     // Build perception from the world state
     let agents = state.agents.lock().await;
-    let nearby_agents: Vec<serde_json::Value> = agents.iter()
+    let nearby_agents: Vec<serde_json::Value> = agents
+        .iter()
         .filter(|a| a.alive && a.id != id)
         .take(10)
-        .map(|a| serde_json::json!({
-            "id": a.id,
-            "name": a.name,
-        }))
+        .map(|a| {
+            serde_json::json!({
+                "id": a.id,
+                "name": a.name,
+            })
+        })
         .collect();
 
     let nearby_resources: Vec<serde_json::Value> = vec![
@@ -228,13 +297,17 @@ pub async fn get_agent_perception(
         serde_json::json!({ "type": "wood", "position": { "x": 3, "y": 5 } }),
     ];
 
-    (StatusCode::OK, Json(serde_json::json!({
-        "agent_id": id,
-        "nearby_agents": nearby_agents,
-        "nearby_resources": nearby_resources,
-        "position": agent.position,
-        "world_tick": tick,
-    }))).into_response()
+    (
+        StatusCode::OK,
+        Json(serde_json::json!({
+            "agent_id": id,
+            "nearby_agents": nearby_agents,
+            "nearby_resources": nearby_resources,
+            "position": agent.position,
+            "world_tick": tick,
+        })),
+    )
+        .into_response()
 }
 
 /// Get the status of a third-party agent.
@@ -245,22 +318,34 @@ pub async fn get_agent_status(
     let external = state.external_agents.lock().await;
     let agent = match external.get(&id) {
         Some(a) => a,
-        None => return (StatusCode::NOT_FOUND, Json(ErrorResponse { error: "agent not found".into() })).into_response(),
+        None => {
+            return (
+                StatusCode::NOT_FOUND,
+                Json(ErrorResponse {
+                    error: "agent not found".into(),
+                }),
+            )
+                .into_response()
+        }
     };
 
     let tick = *state.tick_rx.borrow();
 
-    (StatusCode::OK, Json(serde_json::json!({
-        "agent_id": agent.agent_id,
-        "name": agent.name,
-        "alive": agent.alive,
-        "phase": agent.phase,
-        "tokens": agent.tokens,
-        "money": agent.money,
-        "position": agent.position,
-        "registered_tick": agent.registered_tick,
-        "current_tick": tick,
-    }))).into_response()
+    (
+        StatusCode::OK,
+        Json(serde_json::json!({
+            "agent_id": agent.agent_id,
+            "name": agent.name,
+            "alive": agent.alive,
+            "phase": agent.phase,
+            "tokens": agent.tokens,
+            "money": agent.money,
+            "position": agent.position,
+            "registered_tick": agent.registered_tick,
+            "current_tick": tick,
+        })),
+    )
+        .into_response()
 }
 
 /// Third-party agent API routes.

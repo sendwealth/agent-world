@@ -175,8 +175,7 @@ impl CultureStore {
                 interaction_count: 0,
             });
 
-        entry.trust_value = (entry.trust_value + delta)
-            .clamp(MIN_OUT_GROUP_TRUST, 1.0);
+        entry.trust_value = (entry.trust_value + delta).clamp(MIN_OUT_GROUP_TRUST, 1.0);
         entry.interaction_count += 1;
         entry.trust_value
     }

@@ -12,15 +12,11 @@
 use std::sync::Arc;
 use std::collections::HashMap;
 use tokio::sync::Mutex;
-use tokio::sync::watch;
 
-use agent_world_engine::api::{AppState, build_full_router};
+use agent_world_engine::api::{AppState, TestOverrides, build_full_router};
 use agent_world_engine::auth::{AuthStore, HumanRole, Capability};
-use agent_world_engine::human::store::HumanParticipationStore;
 use agent_world_engine::economy::task::TaskBoard;
 use agent_world_engine::wal::WAL;
-use agent_world_engine::world::state::EventBus;
-use agent_world_engine::world::map::building::BuildingManager;
 
 use axum::{
     body::Body,
@@ -33,39 +29,12 @@ use tower::ServiceExt;
 fn test_app() -> Router {
     let board = Arc::new(Mutex::new(TaskBoard::new()));
     let wal = Arc::new(Mutex::new(WAL::new("./data/test-wal")));
-    let (tick_tx, tick_rx) = watch::channel(0u64);
     let auth_store = Arc::new(Mutex::new(AuthStore::new("test-jwt-secret")));
 
-    let state = AppState {
-        board,
-        wal,
-        event_bus: Arc::new(EventBus::new(256)),
-        agents: Arc::new(Mutex::new(Vec::new())),
-        messages: Arc::new(Mutex::new(Vec::new())),
-        tick_tx,
-        tick_rx,
-        snapshot_store: None,
-        marketplace: None,
-        reputation_system: None,
-        org_store: None,
-        stock_market: None,
-        governance: None,
-        banking_system: None,
-        trace_store: None,
-        external_agents: Arc::new(Mutex::new(HashMap::new())),
-        governance_metrics: None,
-        building_manager: Arc::new(Mutex::new(BuildingManager::new())),
-        human_store: Arc::new(Mutex::new(HumanParticipationStore::new())),
-        auth_store,
-        investment_system: None,
-        rule_engine: None,
-        tool_marketplace: None,
-        federation: None,
-        federation_registry: None,
-        migration_manager: None,
-        api_key_store: None,
-        experiment_store: Arc::new(Mutex::new(Vec::new())),
-    };
+    let state = AppState::for_test_with(board, wal, TestOverrides {
+        auth_store: Some(auth_store),
+        ..TestOverrides::default()
+    });
 
     build_full_router(state)
 }

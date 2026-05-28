@@ -10,7 +10,7 @@ use std::sync::Arc;
 
 use tokio::sync::Mutex;
 
-use agent_world_engine::api::AppState;
+use agent_world_engine::api::{AppState, TestOverrides};
 use agent_world_engine::economy::task::TaskBoard;
 use agent_world_engine::organization::governance_metrics::GovernanceMetricsCollector;
 use agent_world_engine::wal::WAL;
@@ -22,42 +22,16 @@ fn build_app() -> (Arc<EventBus>, Arc<Mutex<GovernanceMetricsCollector>>, axum::
     let event_bus = Arc::new(EventBus::new(256));
     let board = Arc::new(Mutex::new(TaskBoard::with_event_bus((*event_bus).clone())));
     let wal = Arc::new(Mutex::new(WAL::new(dir.path())));
-    let (tick_tx, tick_rx) = tokio::sync::watch::channel(0u64);
 
     // Create collector from the event bus — it spawns a background subscription task
     let collector = GovernanceMetricsCollector::new(&event_bus);
     let metrics = Arc::new(Mutex::new(collector));
 
-    let state = AppState {
-        board,
-        wal,
-        event_bus: event_bus.clone(),
-        agents: Arc::new(Mutex::new(Vec::new())),
-        messages: Arc::new(Mutex::new(Vec::new())),
-        tick_tx,
-        tick_rx,
-        snapshot_store: None,
-        marketplace: None,
-        reputation_system: None,
-        org_store: None,
-        stock_market: None,
-        governance: None,
-        banking_system: None,
-        trace_store: None,
-        external_agents: Arc::new(Mutex::new(std::collections::HashMap::new())),
+    let state = AppState::for_test_with(board, wal, TestOverrides {
+        event_bus: Some(event_bus.clone()),
         governance_metrics: Some(metrics.clone()),
-        building_manager: Arc::new(Mutex::new(agent_world_engine::world::map::building::BuildingManager::new())),
-        human_store: Arc::new(Mutex::new(agent_world_engine::human::store::HumanParticipationStore::new())),
-        auth_store: Arc::new(Mutex::new(agent_world_engine::auth::AuthStore::new("test-secret"))),
-        investment_system: None,
-        rule_engine: None,
-        tool_marketplace: None,
-        federation_registry: None,
-        migration_manager: None,
-        federation: None,
-        api_key_store: None,
-        experiment_store: Arc::new(Mutex::new(Vec::new())),
-    };
+        ..TestOverrides::default()
+    });
 
     let app = agent_world_engine::api::build_full_router(state);
     (event_bus, metrics, app)
@@ -281,41 +255,10 @@ async fn governance_comparison_400_without_org_ids() {
 #[tokio::test]
 async fn governance_endpoints_503_when_not_configured() {
     let dir = tempfile::TempDir::new().unwrap();
-    let event_bus = Arc::new(EventBus::new(256));
-    let board = Arc::new(Mutex::new(TaskBoard::with_event_bus((*event_bus).clone())));
+    let board = Arc::new(Mutex::new(TaskBoard::new()));
     let wal = Arc::new(Mutex::new(WAL::new(dir.path())));
-    let (tick_tx, tick_rx) = tokio::sync::watch::channel(0u64);
 
-    let state = AppState {
-        board,
-        wal,
-        event_bus: event_bus.clone(),
-        agents: Arc::new(Mutex::new(Vec::new())),
-        messages: Arc::new(Mutex::new(Vec::new())),
-        tick_tx,
-        tick_rx,
-        snapshot_store: None,
-        marketplace: None,
-        reputation_system: None,
-        org_store: None,
-        stock_market: None,
-        governance: None,
-        banking_system: None,
-        trace_store: None,
-        external_agents: Arc::new(Mutex::new(std::collections::HashMap::new())),
-        governance_metrics: None,
-        building_manager: Arc::new(Mutex::new(agent_world_engine::world::map::building::BuildingManager::new())),
-        human_store: Arc::new(Mutex::new(agent_world_engine::human::store::HumanParticipationStore::new())),
-        auth_store: Arc::new(Mutex::new(agent_world_engine::auth::AuthStore::new("test-secret"))),
-        investment_system: None,
-        rule_engine: None,
-        tool_marketplace: None,
-        federation_registry: None,
-        migration_manager: None,
-        federation: None,
-        api_key_store: None,
-        experiment_store: Arc::new(Mutex::new(Vec::new())),
-    };
+    let state = AppState::for_test(board, wal);
     let app = agent_world_engine::api::build_full_router(state);
     let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
     let port = listener.local_addr().unwrap().port();

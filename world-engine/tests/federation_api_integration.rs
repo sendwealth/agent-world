@@ -7,10 +7,9 @@
 //! 4. Agent migration: submit → review → execute / cancel
 //! 5. Summary endpoint
 
-use std::collections::HashMap;
 use std::sync::Arc;
 
-use tokio::sync::{Mutex, watch};
+use tokio::sync::Mutex;
 
 use agent_world_engine::api::{self};
 use agent_world_engine::economy::TaskBoard;
@@ -32,38 +31,9 @@ fn test_app() -> axum::Router {
     let tmp = tempfile::tempdir().unwrap();
     let wal = Arc::new(Mutex::new(WAL::new(tmp.path())));
     let event_bus = Arc::new(EventBus::new(256));
-    let (tick_tx, tick_rx) = watch::channel(0u64);
 
-    let state = api::AppState {
-        board,
-        wal,
-        event_bus: event_bus.clone(),
-        agents: Arc::new(Mutex::new(Vec::new())),
-        messages: Arc::new(Mutex::new(Vec::new())),
-        tick_tx,
-        tick_rx,
-        snapshot_store: None,
-        marketplace: None,
-        reputation_system: None,
-        org_store: None,
-        stock_market: None,
-        governance: None,
-        banking_system: None,
-        trace_store: None,
-        external_agents: Arc::new(Mutex::new(HashMap::new())),
-        governance_metrics: None,
-        building_manager: Arc::new(Mutex::new(
-            agent_world_engine::world::map::building::BuildingManager::new(),
-        )),
-        human_store: Arc::new(Mutex::new(
-            agent_world_engine::human::store::HumanParticipationStore::new(),
-        )),
-        auth_store: Arc::new(Mutex::new(
-            agent_world_engine::auth::AuthStore::new("test-secret"),
-        )),
-        investment_system: None,
-        rule_engine: None,
-        tool_marketplace: None,
+    let state = api::AppState::for_test_with(board, wal, api::TestOverrides {
+        event_bus: Some(event_bus.clone()),
         federation: Some(Arc::new(Mutex::new(
             agent_world_engine::a2a::federation::FederationEngine::with_shared_event_bus(event_bus.clone()),
         ))),
@@ -73,9 +43,8 @@ fn test_app() -> axum::Router {
         migration_manager: Some(Arc::new(Mutex::new(
             MigrationManager::new(MigrationPolicy::default(), event_bus),
         ))),
-        api_key_store: None,
-        experiment_store: Arc::new(Mutex::new(Vec::new())),
-    };
+        ..api::TestOverrides::default()
+    });
     api::build_full_router(state)
 }
 

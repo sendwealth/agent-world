@@ -4186,11 +4186,11 @@ async fn build_building(
         let mut external = state.external_agents.lock().await;
         if let Some(agent) = external.get_mut(&agent_id) {
             if !agent.alive {
-                return Err(AppError::BadRequest("agent is dead".into()));
+                return Err(AppError::Gone("agent is dead".into()));
             }
             let cost = crate::world::map::building::BuildingCost::for_type(building_type);
             if agent.tokens < cost.tokens {
-                return Err(AppError::BadRequest(format!("insufficient tokens: need {}, have {}", cost.tokens, agent.tokens)));
+                return Err(AppError::PaymentRequired(format!("insufficient tokens: need {}, have {}", cost.tokens, agent.tokens)));
             }
             agent.tokens -= cost.tokens;
         } else {
@@ -5030,7 +5030,7 @@ async fn dsl_try_auto_activate(
             }))).into_response()
         }
         Err(e) => {
-            (rule_engine_error_status(&e), Json(ErrorResponse { error: e.to_string() })).into_response()
+            AppError::from(e).into_response()
         }
     }
 }

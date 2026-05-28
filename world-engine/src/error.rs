@@ -26,6 +26,8 @@ pub enum AppError {
     Unauthorized(String),
     Forbidden(String),
     Conflict(String),
+    Gone(String),
+    PaymentRequired(String),
     Internal(String),
     ServiceUnavailable(String),
     UnprocessableEntity(String),
@@ -39,6 +41,8 @@ impl AppError {
             AppError::Unauthorized(_) => (StatusCode::UNAUTHORIZED, "UNAUTHORIZED"),
             AppError::Forbidden(_) => (StatusCode::FORBIDDEN, "FORBIDDEN"),
             AppError::Conflict(_) => (StatusCode::CONFLICT, "CONFLICT"),
+            AppError::Gone(_) => (StatusCode::GONE, "GONE"),
+            AppError::PaymentRequired(_) => (StatusCode::PAYMENT_REQUIRED, "PAYMENT_REQUIRED"),
             AppError::Internal(_) => (StatusCode::INTERNAL_SERVER_ERROR, "INTERNAL_SERVER_ERROR"),
             AppError::ServiceUnavailable(_) => {
                 (StatusCode::SERVICE_UNAVAILABLE, "SERVICE_UNAVAILABLE")
@@ -56,6 +60,8 @@ impl AppError {
             | AppError::Unauthorized(m)
             | AppError::Forbidden(m)
             | AppError::Conflict(m)
+            | AppError::Gone(m)
+            | AppError::PaymentRequired(m)
             | AppError::Internal(m)
             | AppError::ServiceUnavailable(m)
             | AppError::UnprocessableEntity(m) => m,
@@ -68,7 +74,7 @@ impl IntoResponse for AppError {
         let (status, code) = self.status_and_code();
         let body = ErrorBody {
             error: self.message().to_owned(),
-            code: code.to_owned(),
+            code: code.to_string(),
         };
         (status, Json(body)).into_response()
     }
@@ -146,13 +152,14 @@ impl From<crate::economy::banking::BankingError> for AppError {
     fn from(e: crate::economy::banking::BankingError) -> Self {
         use crate::economy::banking::BankingError;
         match &e {
-            BankingError::AccountNotFound(_) | BankingError::LoanNotFound(_) => {
+            BankingError::AccountNotFound(_)
+            | BankingError::LoanNotFound(_)
+            | BankingError::NoBankAccount { .. } => {
                 AppError::NotFound(e.to_string())
             }
             BankingError::DuplicateAccount(_) | BankingError::DuplicateAccountType { .. } => {
                 AppError::Conflict(e.to_string())
             }
-            BankingError::NoBankAccount { .. } => AppError::NotFound(e.to_string()),
             BankingError::InsufficientFunds { .. }
             | BankingError::InvalidLoanStatus { .. }
             | BankingError::InsufficientCollateral { .. }
@@ -245,15 +252,15 @@ impl From<crate::organization::governance::GovernanceError> for AppError {
         use crate::organization::governance::GovernanceError;
         match &e {
             GovernanceError::NotFound(_)
-            | GovernanceError::OrganizationNotFound(_)
-            | GovernanceError::CannotRemoveFounder => AppError::NotFound(e.to_string()),
+            | GovernanceError::OrganizationNotFound(_) => AppError::NotFound(e.to_string()),
             GovernanceError::AlreadyMember { .. }
-            | GovernanceError::OrganizationDissolved(_)
             | GovernanceError::InvalidTransition { .. }
             | GovernanceError::AlreadyVoted { .. } => AppError::Conflict(e.to_string()),
             GovernanceError::NotMember { .. }
             | GovernanceError::NotFounder { .. }
-            | GovernanceError::VotingNotOpen(_)
+            | GovernanceError::CannotRemoveFounder => AppError::Forbidden(e.to_string()),
+            GovernanceError::OrganizationDissolved(_) => AppError::Gone(e.to_string()),
+            GovernanceError::VotingNotOpen(_)
             | GovernanceError::ProposalNotOpen(_)
             | GovernanceError::EmptyName
             | GovernanceError::DiscussionPeriodNotElapsed { .. } => {
@@ -274,7 +281,7 @@ impl From<crate::organization::rule_engine::RuleEngineError> for AppError {
             | RuleEngineError::NotProposed(_)
             | RuleEngineError::AlreadyVoted { .. } => AppError::Conflict(e.to_string()),
             RuleEngineError::Expired(_) | RuleEngineError::Repealed(_) => {
-                AppError::NotFound(e.to_string())
+                AppError::Gone(e.to_string())
             }
         }
     }

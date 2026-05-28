@@ -504,6 +504,9 @@ pub fn build_full_router(state: AppState) -> Router {
         .route("/api/v1/rules/dsl/rules/:id/activate", post(dsl_activate_rule))
         .route("/api/v1/rules/dsl/rules/:id/suspend", post(dsl_suspend_rule))
         .route("/api/v1/rules/dsl/rules/:id/repeal", post(dsl_repeal_rule))
+        // Self-legislation: auto-activate eligible rules
+        .route("/api/v1/rules/dsl/rules/:id/try-auto-activate", post(dsl_try_auto_activate))
+        .route("/api/v1/rules/dsl/auto-activate-eligible", post(dsl_auto_activate_eligible))
         // Federation / Cross-world diplomacy routes
         .route("/api/v1/federation/worlds", post(fed_register_world))
         .route("/api/v1/federation/worlds", get(fed_list_worlds))
@@ -3809,7 +3812,7 @@ async fn governance_org_metrics(
     let metrics = metrics.lock().await;
     let m = metrics.get_org_metrics(org_id);
     // Check if org has any data (zeroed defaults means untracked)
-    if m.election_count == 0 && m.tax_collection_count == 0 && m.treaties_signed == 0 && m.member_count == 0 {
+    if m.election_count == 0 && m.tax_collection_count == 0 && m.treaties_signed == 0 && m.member_count == 0 && m.rules_proposed == 0 {
         return (StatusCode::NOT_FOUND, Json(ErrorResponse { error: format!("no metrics for org {}", org_id) })).into_response();
     }
     Json(m).into_response()
@@ -5243,6 +5246,85 @@ async fn dsl_repeal_rule(
         }
         Err(e) => (rule_engine_error_status(&e), Json(ErrorResponse { error: e.to_string() })).into_response(),
     }
+}
+
+// ── Self-Legislation: Auto-Activation ─────────────────────
+
+/// Request body for try-auto-activate.
+#[derive(Debug, Deserialize)]
+struct TryAutoActivateRequest {
+    /// Minimum number of votes required to activate.
+    #[serde(default = "default_quorum")]
+    quorum: usize,
+}
+
+fn default_quorum() -> usize { 3 }
+
+/// POST /api/v1/rules/dsl/rules/:id/try-auto-activate
+///
+/// Check whether a proposed rule meets the activation threshold
+/// (quorum + majority) and auto-activate it if so.
+async fn dsl_try_auto_activate(
+    State(state): State<AppState>,
+    Path(id): Path<String>,
+    Json(body): Json<TryAutoActivateRequest>,
+) -> impl IntoResponse {
+    let rule_engine = match &state.rule_engine {
+        Some(re) => re.clone(),
+        None => return (
+            StatusCode::SERVICE_UNAVAILABLE,
+            Json(ErrorResponse { error: "rule engine not configured".to_string() }),
+        ).into_response(),
+    };
+
+    let mut engine = rule_engine.lock().await;
+    match engine.try_auto_activate(&id, body.quorum) {
+        Ok(true) => {
+            let rule = engine.get_rule(&id).unwrap();
+            (StatusCode::OK, Json(dsl_rule_to_response(rule))).into_response()
+        }
+        Ok(false) => {
+            (StatusCode::OK, Json(serde_json::json!({
+                "activated": false,
+                "rule_id": id,
+                "message": "threshold not met (quorum or majority)"
+            }))).into_response()
+        }
+        Err(e) => {
+            (rule_engine_error_status(&e), Json(ErrorResponse { error: e.to_string() })).into_response()
+        }
+    }
+}
+
+/// Request body for batch auto-activate.
+#[derive(Debug, Deserialize)]
+struct AutoActivateEligibleRequest {
+    /// Minimum number of votes required to activate each rule.
+    #[serde(default = "default_quorum")]
+    quorum: usize,
+}
+
+/// POST /api/v1/rules/dsl/auto-activate-eligible
+///
+/// Batch auto-activate all proposed rules that meet the threshold.
+async fn dsl_auto_activate_eligible(
+    State(state): State<AppState>,
+    Json(body): Json<AutoActivateEligibleRequest>,
+) -> impl IntoResponse {
+    let rule_engine = match &state.rule_engine {
+        Some(re) => re.clone(),
+        None => return (
+            StatusCode::SERVICE_UNAVAILABLE,
+            Json(ErrorResponse { error: "rule engine not configured".to_string() }),
+        ).into_response(),
+    };
+
+    let mut engine = rule_engine.lock().await;
+    let activated = engine.auto_activate_eligible(body.quorum);
+    (StatusCode::OK, Json(serde_json::json!({
+        "activated_count": activated.len(),
+        "activated_rule_ids": activated,
+    }))).into_response()
 }
 
 // ── Federation / Migration REST Handlers ──────────────────

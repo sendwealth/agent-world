@@ -58,6 +58,13 @@ from .rule_proposal import (
     RuleProposal,
     RuleProposalEngine,
 )
+from .self_legislation import (
+    InMemoryRuleEngineClient,
+    LegislationCycle,
+    LegislationStatus,
+    RuleEngineClient,
+    SelfLegislationCycleEngine,
+)
 
 __all__ = [
     # formation
@@ -102,4 +109,10 @@ __all__ = [
     "RuleLifecycleEvent",
     "RuleLifecycleEventType",
     "RuleStats",
+    # self-legislation
+    "InMemoryRuleEngineClient",
+    "LegislationCycle",
+    "LegislationStatus",
+    "RuleEngineClient",
+    "SelfLegislationCycleEngine",
 ]

@@ -47,6 +47,12 @@ pub struct OrgMetrics {
     // Organization health
     pub member_count: usize,
     pub governance_stability_score: f64, // 0.0-1.0
+    // Legislation metrics (self-legislation cycle)
+    pub rules_proposed: usize,
+    pub rules_activated: usize,
+    pub rules_expired: usize,
+    pub rules_repealed: usize,
+    pub legislation_success_rate: f64, // 0.0-1.0
 }
 
 /// World-wide governance summary across all organizations.
@@ -57,6 +63,10 @@ pub struct WorldGovernanceSummary {
     pub total_tax_collected: u64,
     pub total_treaties: usize,
     pub election_activity_rate: f64,
+    // Legislation summary
+    pub total_rules_proposed: usize,
+    pub total_rules_activated: usize,
+    pub avg_legislation_success_rate: f64,
 }
 
 // ── Internal per-org accumulator ───────────────────────────────────────────
@@ -83,6 +93,12 @@ struct OrgAccumulator {
     // Membership tracking
     member_count: usize,
 
+    // Legislation tracking (self-legislation cycle)
+    rules_proposed: usize,
+    rules_activated: usize,
+    rules_expired: usize,
+    rules_repealed: usize,
+
     // Timeline
     timeline: Vec<GovernanceEvent>,
 }
@@ -101,6 +117,10 @@ impl OrgAccumulator {
             treaties_broken: 0,
             relation_partners: std::collections::HashSet::new(),
             member_count: 0,
+            rules_proposed: 0,
+            rules_activated: 0,
+            rules_expired: 0,
+            rules_repealed: 0,
             timeline: Vec::new(),
         }
     }
@@ -138,6 +158,10 @@ impl GovernanceMetricsCollector {
                 EventType::OrganizationMemberLeft,
                 EventType::OrgMemberJoined,
                 EventType::OrgMemberLeft,
+                EventType::SoftRuleProposed,
+                EventType::SoftRuleActivated,
+                EventType::SoftRuleExpired,
+                EventType::SoftRuleRepealed,
             ],
             None,
         );
@@ -175,6 +199,11 @@ impl GovernanceMetricsCollector {
                 active_relations_count: 0,
                 member_count: 0,
                 governance_stability_score: 0.0,
+                rules_proposed: 0,
+                rules_activated: 0,
+                rules_expired: 0,
+                rules_repealed: 0,
+                legislation_success_rate: 0.0,
             },
         }
     }
@@ -191,6 +220,9 @@ impl GovernanceMetricsCollector {
                 total_tax_collected: 0,
                 total_treaties: 0,
                 election_activity_rate: 0.0,
+                total_rules_proposed: 0,
+                total_rules_activated: 0,
+                avg_legislation_success_rate: 0.0,
             };
         }
 
@@ -198,6 +230,10 @@ impl GovernanceMetricsCollector {
         let mut total_tax: u64 = 0;
         let mut total_treaties: usize = 0;
         let mut orgs_with_elections: usize = 0;
+        let mut total_rules_proposed: usize = 0;
+        let mut total_rules_activated: usize = 0;
+        let mut total_legislation_rate: f64 = 0.0;
+        let mut orgs_with_legislation: usize = 0;
 
         for (org_id, acc) in data.iter() {
             let metrics = build_org_metrics(*org_id, acc);
@@ -207,6 +243,12 @@ impl GovernanceMetricsCollector {
             if metrics.election_count > 0 {
                 orgs_with_elections += 1;
             }
+            total_rules_proposed += metrics.rules_proposed;
+            total_rules_activated += metrics.rules_activated;
+            if metrics.rules_proposed > 0 {
+                total_legislation_rate += metrics.legislation_success_rate;
+                orgs_with_legislation += 1;
+            }
         }
 
         WorldGovernanceSummary {
@@ -215,6 +257,13 @@ impl GovernanceMetricsCollector {
             total_tax_collected: total_tax,
             total_treaties,
             election_activity_rate: orgs_with_elections as f64 / total_orgs as f64,
+            total_rules_proposed,
+            total_rules_activated,
+            avg_legislation_success_rate: if orgs_with_legislation > 0 {
+                total_legislation_rate / orgs_with_legislation as f64
+            } else {
+                0.0
+            },
         }
     }
 
@@ -533,6 +582,84 @@ fn process_event(
             });
         }
 
+        // ── Legislation (self-legislation cycle) ────────────────
+
+        WorldEvent::SoftRuleProposed {
+            rule_id,
+            org_id,
+            proposer_id,
+            title,
+        } => {
+            let org_uuid = parse_org_id(org_id);
+            let rid = rule_id.clone();
+            let pid = proposer_id.clone();
+            let t = title.clone();
+            let mut data = data.lock().unwrap();
+            let acc = data.entry(org_uuid).or_insert_with(OrgAccumulator::new);
+            acc.rules_proposed += 1;
+            acc.timeline.push(GovernanceEvent {
+                event_type: EventType::SoftRuleProposed,
+                org_id: org_uuid,
+                tick: 0,
+                summary: format!("Rule proposed: {} '{}' by {}", rid, t, pid),
+            });
+        }
+
+        WorldEvent::SoftRuleActivated {
+            rule_id,
+            org_id,
+        } => {
+            let org_uuid = parse_org_id(org_id);
+            let rid = rule_id.clone();
+            let mut data = data.lock().unwrap();
+            let acc = data.entry(org_uuid).or_insert_with(OrgAccumulator::new);
+            acc.rules_activated += 1;
+            acc.timeline.push(GovernanceEvent {
+                event_type: EventType::SoftRuleActivated,
+                org_id: org_uuid,
+                tick: 0,
+                summary: format!("Rule activated: {}", rid),
+            });
+        }
+
+        WorldEvent::SoftRuleExpired {
+            rule_id,
+            org_id,
+            tick,
+        } => {
+            let org_uuid = parse_org_id(org_id);
+            let rid = rule_id.clone();
+            let t = *tick;
+            let mut data = data.lock().unwrap();
+            let acc = data.entry(org_uuid).or_insert_with(OrgAccumulator::new);
+            acc.rules_expired += 1;
+            acc.timeline.push(GovernanceEvent {
+                event_type: EventType::SoftRuleExpired,
+                org_id: org_uuid,
+                tick: t,
+                summary: format!("Rule expired: {}", rid),
+            });
+        }
+
+        WorldEvent::SoftRuleRepealed {
+            rule_id,
+            org_id,
+            tick,
+        } => {
+            let org_uuid = parse_org_id(org_id);
+            let rid = rule_id.clone();
+            let t = *tick;
+            let mut data = data.lock().unwrap();
+            let acc = data.entry(org_uuid).or_insert_with(OrgAccumulator::new);
+            acc.rules_repealed += 1;
+            acc.timeline.push(GovernanceEvent {
+                event_type: EventType::SoftRuleRepealed,
+                org_id: org_uuid,
+                tick: t,
+                summary: format!("Rule repealed: {}", rid),
+            });
+        }
+
         _ => {} // Ignore other events
     }
 }
@@ -604,8 +731,15 @@ fn build_org_metrics(org_id: Uuid, acc: &OrgAccumulator) -> OrgMetrics {
         0.5
     };
 
+    // Legislation success rate: fraction of proposed rules that got activated
+    let legislation_success_rate = if acc.rules_proposed > 0 {
+        acc.rules_activated as f64 / acc.rules_proposed as f64
+    } else {
+        0.0 // neutral when no legislation data
+    };
+
     let governance_stability_score =
-        (diplomacy_health * 0.5 + leadership_stability * 0.5).clamp(0.0, 1.0);
+        (diplomacy_health * 0.4 + leadership_stability * 0.4 + legislation_success_rate * 0.2).clamp(0.0, 1.0);
 
     OrgMetrics {
         org_id,
@@ -622,6 +756,11 @@ fn build_org_metrics(org_id: Uuid, acc: &OrgAccumulator) -> OrgMetrics {
         active_relations_count: acc.relation_partners.len(),
         member_count: acc.member_count,
         governance_stability_score,
+        rules_proposed: acc.rules_proposed,
+        rules_activated: acc.rules_activated,
+        rules_expired: acc.rules_expired,
+        rules_repealed: acc.rules_repealed,
+        legislation_success_rate,
     }
 }
 
@@ -922,5 +1061,97 @@ mod tests {
 
         let metrics = collector.get_org_metrics(org_uuid);
         assert_eq!(metrics.member_count, 1);
+    }
+
+    #[tokio::test]
+    async fn test_legislation_metrics_tracking() {
+        let (bus, collector) = setup();
+        let org_id = Uuid::new_v4();
+        let org_id_str = org_id.to_string();
+
+        // Simulate rule lifecycle: proposed -> activated -> expired
+        bus.emit(WorldEvent::SoftRuleProposed {
+            rule_id: "rule-1".to_string(),
+            org_id: org_id_str.clone(),
+            proposer_id: "leader-1".to_string(),
+            title: "Tax reform".to_string(),
+        });
+        bus.emit(WorldEvent::SoftRuleProposed {
+            rule_id: "rule-2".to_string(),
+            org_id: org_id_str.clone(),
+            proposer_id: "leader-1".to_string(),
+            title: "Trade regulation".to_string(),
+        });
+        bus.emit(WorldEvent::SoftRuleActivated {
+            rule_id: "rule-1".to_string(),
+            org_id: org_id_str.clone(),
+        });
+        bus.emit(WorldEvent::SoftRuleRepealed {
+            rule_id: "rule-1".to_string(),
+            org_id: org_id_str.clone(),
+            tick: 50,
+        });
+        bus.emit(WorldEvent::SoftRuleExpired {
+            rule_id: "rule-2".to_string(),
+            org_id: org_id_str.clone(),
+            tick: 100,
+        });
+
+        tokio::time::sleep(std::time::Duration::from_millis(30)).await;
+
+        let metrics = collector.get_org_metrics(org_id);
+        assert_eq!(metrics.rules_proposed, 2);
+        assert_eq!(metrics.rules_activated, 1);
+        assert_eq!(metrics.rules_repealed, 1);
+        assert_eq!(metrics.rules_expired, 1);
+        // Success rate: 1 activated / 2 proposed = 0.5
+        assert!((metrics.legislation_success_rate - 0.5).abs() < f64::EPSILON);
+
+        // Check timeline has legislation events
+        let timeline = collector.get_timeline(org_id, Some(EventType::SoftRuleProposed), (0, u64::MAX));
+        assert_eq!(timeline.len(), 2);
+        let activated = collector.get_timeline(org_id, Some(EventType::SoftRuleActivated), (0, u64::MAX));
+        assert_eq!(activated.len(), 1);
+    }
+
+    #[tokio::test]
+    async fn test_world_summary_with_legislation() {
+        let (bus, collector) = setup();
+        let org_a = Uuid::new_v4();
+        let org_b = Uuid::new_v4();
+
+        // Org A: 3 proposed, 2 activated
+        for i in 1..=3 {
+            bus.emit(WorldEvent::SoftRuleProposed {
+                rule_id: format!("r-a-{}", i),
+                org_id: org_a.to_string(),
+                proposer_id: "leader".to_string(),
+                title: format!("Rule {}", i),
+            });
+        }
+        bus.emit(WorldEvent::SoftRuleActivated {
+            rule_id: "r-a-1".to_string(),
+            org_id: org_a.to_string(),
+        });
+        bus.emit(WorldEvent::SoftRuleActivated {
+            rule_id: "r-a-2".to_string(),
+            org_id: org_a.to_string(),
+        });
+
+        // Org B: 1 proposed, 0 activated
+        bus.emit(WorldEvent::SoftRuleProposed {
+            rule_id: "r-b-1".to_string(),
+            org_id: org_b.to_string(),
+            proposer_id: "leader".to_string(),
+            title: "Failed rule".to_string(),
+        });
+
+        tokio::time::sleep(std::time::Duration::from_millis(30)).await;
+
+        let summary = collector.get_world_governance_summary();
+        assert_eq!(summary.total_rules_proposed, 4);
+        assert_eq!(summary.total_rules_activated, 2);
+        // avg_legislation_success_rate: org_a=2/3=0.667, org_b=0/1=0.0 -> avg=0.333
+        assert!(summary.avg_legislation_success_rate > 0.0);
     }
 }

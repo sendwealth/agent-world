@@ -378,6 +378,75 @@ impl RuleEngine {
         expired
     }
 
+    // ── Auto-Activation (Self-Legislation) ────────────────
+
+    /// Check whether a proposed rule meets the activation threshold
+    /// and auto-activate it if so.
+    ///
+    /// A rule is auto-activated when:
+    /// - It is in `Proposed` status
+    /// - `votes_for > votes_against`
+    /// - Total votes >= `quorum` (minimum number of votes required)
+    ///
+    /// Returns `Ok(true)` if activated, `Ok(false)` if threshold not met.
+    pub fn try_auto_activate(
+        &mut self,
+        rule_id: &str,
+        quorum: usize,
+    ) -> Result<bool, RuleEngineError> {
+        let rule = self.rules.get(rule_id)
+            .ok_or_else(|| RuleEngineError::NotFound(rule_id.to_string()))?;
+
+        if rule.status != RuleStatus::Proposed {
+            return Err(RuleEngineError::NotProposed(rule_id.to_string()));
+        }
+
+        let total_votes = (rule.votes_for + rule.votes_against) as usize;
+        if total_votes < quorum {
+            return Ok(false);
+        }
+
+        if rule.votes_for <= rule.votes_against {
+            return Ok(false);
+        }
+
+        // Threshold met — activate
+        let rule = self.rules.get_mut(rule_id).unwrap();
+        rule.status = RuleStatus::Active;
+
+        if let Some(ref bus) = self.event_bus {
+            bus.emit(WorldEvent::SoftRuleActivated {
+                rule_id: rule.id.clone(),
+                org_id: rule.org_id.clone(),
+            });
+        }
+
+        Ok(true)
+    }
+
+    /// Batch auto-activate all proposed rules that meet the threshold.
+    ///
+    /// Returns a list of rule IDs that were activated.
+    pub fn auto_activate_eligible(&mut self, quorum: usize) -> Vec<String> {
+        let eligible: Vec<String> = self.rules.iter()
+            .filter(|(_, rule)| {
+                rule.status == RuleStatus::Proposed
+                    && (rule.votes_for + rule.votes_against) as usize >= quorum
+                    && rule.votes_for > rule.votes_against
+            })
+            .map(|(id, _)| id.clone())
+            .collect();
+
+        let mut activated = Vec::new();
+        for rule_id in &eligible {
+            if let Some(rule) = self.rules.get_mut(rule_id) {
+                rule.status = RuleStatus::Active;
+                activated.push(rule_id.clone());
+            }
+        }
+        activated
+    }
+
     // ── Query ──────────────────────────────────────────────
 
     pub fn get_rule(&self, rule_id: &str) -> Option<&SoftRule> {
@@ -1118,5 +1187,134 @@ mod tests {
         // Resume
         engine.resume_rule(&rule_id).unwrap();
         assert_eq!(engine.evaluate_rules(&ctx).len(), 1);
+    }
+
+    // ── Auto-Activation (Self-Legislation) ──────────────────
+
+    #[test]
+    fn test_try_auto_activate_meets_threshold() {
+        let mut engine = RuleEngine::new();
+        let rule_id = engine.propose_rule(
+            "leader-1".to_string(),
+            "org-1".to_string(),
+            "Tax on wealthy".to_string(),
+            "Extra tax for agents with high resources".to_string(),
+            RuleType::Tax,
+            vec![RuleCondition {
+                field: "agent.resources".to_string(),
+                operator: ">".to_string(),
+                value: json!(200),
+            }],
+            vec![RuleEffect {
+                target: "agent.tax_bonus".to_string(),
+                action: "set".to_string(),
+                value: json!(0.1),
+            }],
+            100,
+            None,
+        );
+
+        // 3 members vote (quorum=3), 2 for, 1 against → passes
+        engine.vote_on_rule(&rule_id, "agent-1".to_string(), true).unwrap();
+        engine.vote_on_rule(&rule_id, "agent-2".to_string(), true).unwrap();
+        engine.vote_on_rule(&rule_id, "agent-3".to_string(), false).unwrap();
+
+        let result = engine.try_auto_activate(&rule_id, 3).unwrap();
+        assert!(result);
+        assert_eq!(engine.get_rule(&rule_id).unwrap().status, RuleStatus::Active);
+    }
+
+    #[test]
+    fn test_try_auto_activate_insufficient_quorum() {
+        let mut engine = RuleEngine::new();
+        let rule_id = engine.propose_rule(
+            "leader-1".to_string(),
+            "org-1".to_string(),
+            "Test".to_string(),
+            "Desc".to_string(),
+            RuleType::Tax,
+            vec![],
+            vec![],
+            10,
+            None,
+        );
+
+        // Only 1 vote, quorum=3 → not enough
+        engine.vote_on_rule(&rule_id, "agent-1".to_string(), true).unwrap();
+
+        let result = engine.try_auto_activate(&rule_id, 3).unwrap();
+        assert!(!result);
+        assert_eq!(engine.get_rule(&rule_id).unwrap().status, RuleStatus::Proposed);
+    }
+
+    #[test]
+    fn test_try_auto_activate_more_against() {
+        let mut engine = RuleEngine::new();
+        let rule_id = engine.propose_rule(
+            "leader-1".to_string(),
+            "org-1".to_string(),
+            "Test".to_string(),
+            "Desc".to_string(),
+            RuleType::Tax,
+            vec![],
+            vec![],
+            10,
+            None,
+        );
+
+        // 1 for, 2 against → fails
+        engine.vote_on_rule(&rule_id, "agent-1".to_string(), true).unwrap();
+        engine.vote_on_rule(&rule_id, "agent-2".to_string(), false).unwrap();
+        engine.vote_on_rule(&rule_id, "agent-3".to_string(), false).unwrap();
+
+        let result = engine.try_auto_activate(&rule_id, 3).unwrap();
+        assert!(!result);
+    }
+
+    #[test]
+    fn test_auto_activate_eligible_batch() {
+        let mut engine = RuleEngine::new();
+
+        // Rule 1: passes (2 for, 1 against)
+        let r1 = engine.propose_rule(
+            "leader".to_string(),
+            "org-1".to_string(),
+            "Rule 1".to_string(),
+            "Desc".to_string(),
+            RuleType::Tax,
+            vec![],
+            vec![RuleEffect {
+                target: "agent.x".to_string(),
+                action: "set".to_string(),
+                value: json!(1),
+            }],
+            10,
+            None,
+        );
+        engine.vote_on_rule(&r1, "a1".to_string(), true).unwrap();
+        engine.vote_on_rule(&r1, "a2".to_string(), true).unwrap();
+        engine.vote_on_rule(&r1, "a3".to_string(), false).unwrap();
+
+        // Rule 2: doesn't pass (1 for, 2 against)
+        let r2 = engine.propose_rule(
+            "leader".to_string(),
+            "org-1".to_string(),
+            "Rule 2".to_string(),
+            "Desc".to_string(),
+            RuleType::Behavior,
+            vec![],
+            vec![],
+            10,
+            None,
+        );
+        engine.vote_on_rule(&r2, "a1".to_string(), true).unwrap();
+        engine.vote_on_rule(&r2, "a2".to_string(), false).unwrap();
+        engine.vote_on_rule(&r2, "a3".to_string(), false).unwrap();
+
+        let activated = engine.auto_activate_eligible(3);
+        assert_eq!(activated.len(), 1);
+        assert_eq!(activated[0], r1);
+        assert_eq!(engine.get_rule(&r1).unwrap().status, RuleStatus::Active);
+        assert_eq!(engine.get_rule(&r2).unwrap().status, RuleStatus::Proposed);
     }
 }

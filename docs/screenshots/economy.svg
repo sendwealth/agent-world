@@ -1,0 +1,48 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="640" height="360" viewBox="0 0 640 360">
+  <defs>
+    <linearGradient id="bg" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" style="stop-color:#0f172a"/>
+      <stop offset="100%" style="stop-color:#1e293b"/>
+    </linearGradient>
+  </defs>
+  <rect width="640" height="360" fill="url(#bg)" rx="8"/>
+  <!-- Header -->
+  <text x="320" y="36" text-anchor="middle" fill="#e2e8f0" font-family="system-ui, sans-serif" font-size="18" font-weight="600">💰 Economy</text>
+  <line x1="40" y1="52" x2="600" y2="52" stroke="#334155" stroke-width="1"/>
+  <!-- GDP Trend -->
+  <rect x="40" y="68" width="370" height="140" rx="6" fill="#0f172a" stroke="#334155" stroke-width="1"/>
+  <text x="225" y="90" text-anchor="middle" fill="#e2e8f0" font-family="system-ui, sans-serif" font-size="13" font-weight="600">GDP Trend (100 ticks)</text>
+  <!-- Simulated GDP line -->
+  <polyline points="60,190 80,185 100,188 120,180 140,175 160,170 180,165 200,160 220,155 240,150 260,145 280,140 300,135 320,130 340,128 360,125 380,120 400,115"
+    fill="none" stroke="#4ade80" stroke-width="2"/>
+  <text x="60" y="200" fill="#64748b" font-family="monospace" font-size="9">Tick 3141</text>
+  <text x="380" y="200" fill="#64748b" font-family="monospace" font-size="9">Tick 3241</text>
+  <!-- Summary stats -->
+  <text x="225" y="196" text-anchor="middle" fill="#4ade80" font-family="system-ui, sans-serif" font-size="10">GDP: 12,840₵ (+3.2% last 100 ticks)</text>
+  <!-- Gini & Population -->
+  <rect x="430" y="68" width="170" height="68" rx="6" fill="#0f172a" stroke="#334155" stroke-width="1"/>
+  <text x="515" y="90" text-anchor="middle" fill="#e2e8f0" font-family="system-ui, sans-serif" font-size="12" font-weight="600">Inequality</text>
+  <text x="515" y="112" text-anchor="middle" fill="#fbbf24" font-family="system-ui, sans-serif" font-size="24" font-weight="700">0.38</text>
+  <text x="515" y="128" text-anchor="middle" fill="#94a3b8" font-family="system-ui, sans-serif" font-size="10">Gini Coefficient</text>
+  <rect x="430" y="148" width="170" height="60" rx="6" fill="#0f172a" stroke="#334155" stroke-width="1"/>
+  <text x="515" y="168" text-anchor="middle" fill="#e2e8f0" font-family="system-ui, sans-serif" font-size="12" font-weight="600">Population</text>
+  <text x="515" y="190" text-anchor="middle" fill="#22d3ee" font-family="system-ui, sans-serif" font-size="20" font-weight="700">47/50</text>
+  <text x="515" y="202" text-anchor="middle" fill="#94a3b8" font-family="system-ui, sans-serif" font-size="9">alive / total spawned</text>
+  <!-- Banking & Central Bank -->
+  <rect x="40" y="220" width="270" height="100" rx="6" fill="#0f172a" stroke="#334155" stroke-width="1"/>
+  <text x="175" y="240" text-anchor="middle" fill="#e2e8f0" font-family="system-ui, sans-serif" font-size="13" font-weight="600">Banking System</text>
+  <text x="56" y="260" fill="#94a3b8" font-family="system-ui, sans-serif" font-size="11">Active Accounts: 38</text>
+  <text x="56" y="278" fill="#94a3b8" font-family="system-ui, sans-serif" font-size="11">Total Deposits: 8,420₵</text>
+  <text x="56" y="296" fill="#94a3b8" font-family="system-ui, sans-serif" font-size="11">Active Loans: 5 (1,200₵ outstanding)</text>
+  <text x="56" y="312" fill="#4ade80" font-family="system-ui, sans-serif" font-size="10">Interest Rate: 2.5%</text>
+  <!-- Money Supply -->
+  <rect x="330" y="220" width="270" height="100" rx="6" fill="#0f172a" stroke="#334155" stroke-width="1"/>
+  <text x="465" y="240" text-anchor="middle" fill="#e2e8f0" font-family="system-ui, sans-serif" font-size="13" font-weight="600">Central Bank</text>
+  <text x="346" y="262" fill="#94a3b8" font-family="system-ui, sans-serif" font-size="11">Money Supply:</text>
+  <text x="490" y="262" fill="#4ade80" font-family="system-ui, sans-serif" font-size="13" font-weight="600">24,500₵</text>
+  <text x="346" y="282" fill="#94a3b8" font-family="system-ui, sans-serif" font-size="11">Minted: 25,000₵</text>
+  <text x="346" y="300" fill="#94a3b8" font-family="system-ui, sans-serif" font-size="11">Burned: 500₵</text>
+  <text x="346" y="312" fill="#64748b" font-family="system-ui, sans-serif" font-size="9">Inflation rate: 0.4% per tick</text>
+  <!-- Watermark -->
+  <text x="320" y="350" text-anchor="middle" fill="#475569" font-family="system-ui, sans-serif" font-size="10" font-style="italic">Screenshot placeholder — replace with real capture from localhost:3001</text>
+</svg>

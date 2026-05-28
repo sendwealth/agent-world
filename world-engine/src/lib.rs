@@ -8,6 +8,24 @@
 //!
 pub mod a2a;
 pub mod api;
+pub mod api_agents_ext;
+pub mod api_auth_handlers;
+pub mod api_bank;
+pub mod api_buildings;
+pub mod api_diplomacy;
+pub mod api_dsl;
+pub mod api_federation;
+pub mod api_governance;
+pub mod api_human;
+pub mod api_investment;
+pub mod api_marketplace;
+pub mod api_org;
+pub mod api_population;
+pub mod api_reputation;
+pub mod api_stocks;
+pub mod api_tasks;
+pub mod api_traces;
+pub mod api_world;
 pub mod auth;
 pub mod api_auth;
 pub mod api_experiment;

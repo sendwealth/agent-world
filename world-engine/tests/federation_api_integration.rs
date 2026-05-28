@@ -517,3 +517,324 @@ async fn test_agent_immigration_status() {
     let (status, body) = get_json(&app, "/api/v1/agents/agent-99/immigration-status").await;
     assert_eq!(status, StatusCode::OK, "immigration status failed: {:?}", body);
 }
+
+// ═══════════════════════════════════════════════════════════════
+// 7. Full Migration Lifecycle: submit → review → execute → verify
+// ═══════════════════════════════════════════════════════════════
+
+#[tokio::test]
+async fn test_migration_full_lifecycle_submit_review_execute() {
+    let app = test_app();
+
+    // Register source and target worlds
+    let (_, _) = post_json(&app, "/api/v1/federation/worlds", json!({
+        "id": "lifecycle-src",
+        "name": "Lifecycle Source",
+        "endpoint": "http://localhost:5200",
+        "tick": 0
+    })).await;
+    let (_, _) = post_json(&app, "/api/v1/federation/worlds", json!({
+        "id": "lifecycle-tgt",
+        "name": "Lifecycle Target",
+        "endpoint": "http://localhost:5201",
+        "tick": 0
+    })).await;
+
+    // Step 1: Submit migration
+    let (status, body) = post_json(&app, "/api/v1/migration/submit", json!({
+        "agent_id": "agent-lifecycle",
+        "source_world_id": "lifecycle-src",
+        "target_world_id": "lifecycle-tgt",
+        "name": "Lifecycle Agent",
+        "phase": "explorer",
+        "tokens": 50000,
+        "money": 2000,
+        "reputation": 4.5,
+        "skills": {"combat": 3, "crafting": 5},
+        "public_key": "pk-lifecycle-001"
+    })).await;
+    assert_eq!(status, StatusCode::OK, "submit failed: {:?}", body);
+
+    let data = &body["data"];
+    let migration_id = data["migration_id"].as_str().unwrap().to_string();
+    assert_eq!(data["status"], "pending");
+    assert_eq!(data["agent_id"], "agent-lifecycle");
+    assert_eq!(data["source_world_id"], "lifecycle-src");
+    assert_eq!(data["target_world_id"], "lifecycle-tgt");
+
+    // Verify we can get the migration status
+    let (status, body) = get_json(&app, &format!("/api/v1/migration/{}", migration_id)).await;
+    assert_eq!(status, StatusCode::OK);
+    assert_eq!(body["data"]["status"], "pending");
+
+    // Step 2: Review (approve) the migration
+    let (status, body) = post_json(
+        &app,
+        &format!("/api/v1/migration/{}/review", migration_id),
+        json!({
+            "migration_id": migration_id,
+            "approved": true,
+            "reviewer_world_id": "lifecycle-tgt"
+        }),
+    ).await;
+    assert_eq!(status, StatusCode::OK, "review failed: {:?}", body);
+    assert_eq!(body["data"]["status"], "approved");
+
+    // Verify status changed
+    let (status, body) = get_json(&app, &format!("/api/v1/migration/{}", migration_id)).await;
+    assert_eq!(status, StatusCode::OK);
+    assert_eq!(body["data"]["status"], "approved");
+
+    // Step 3: Execute the migration
+    let (status, body) = post_json(
+        &app,
+        &format!("/api/v1/migration/{}/execute", migration_id),
+        json!({}),
+    ).await;
+    assert_eq!(status, StatusCode::OK, "execute failed: {:?}", body);
+    assert_eq!(body["data"]["status"], "completed");
+
+    // Verify final state
+    let (status, body) = get_json(&app, &format!("/api/v1/migration/{}", migration_id)).await;
+    assert_eq!(status, StatusCode::OK);
+    assert_eq!(body["data"]["status"], "completed");
+    assert!(body["data"]["completed_at"].is_string());
+}
+
+// ═══════════════════════════════════════════════════════════════
+// 8. Migration Cancel Flow: submit → cancel
+// ═══════════════════════════════════════════════════════════════
+
+#[tokio::test]
+async fn test_migration_cancel_flow() {
+    let app = test_app();
+
+    // Register worlds
+    let (_, _) = post_json(&app, "/api/v1/federation/worlds", json!({
+        "id": "cancel-src",
+        "name": "Cancel Source",
+        "endpoint": "http://localhost:5300",
+        "tick": 0
+    })).await;
+    let (_, _) = post_json(&app, "/api/v1/federation/worlds", json!({
+        "id": "cancel-tgt",
+        "name": "Cancel Target",
+        "endpoint": "http://localhost:5301",
+        "tick": 0
+    })).await;
+
+    // Submit
+    let (status, body) = post_json(&app, "/api/v1/migration/submit", json!({
+        "agent_id": "agent-cancel",
+        "source_world_id": "cancel-src",
+        "target_world_id": "cancel-tgt",
+        "name": "Cancel Agent",
+        "phase": "explorer",
+        "tokens": 50000,
+        "money": 1000,
+        "reputation": 4.0,
+        "skills": {},
+        "public_key": "pk-cancel"
+    })).await;
+    assert_eq!(status, StatusCode::OK, "submit failed: {:?}", body);
+
+    let migration_id = body["data"]["migration_id"].as_str().unwrap().to_string();
+
+    // Cancel
+    let (status, body) = post_json(
+        &app,
+        &format!("/api/v1/migration/{}/cancel", migration_id),
+        json!({
+            "cancelled_by": "agent-cancel",
+            "reason": "changed my mind"
+        }),
+    ).await;
+    assert_eq!(status, StatusCode::OK, "cancel failed: {:?}", body);
+    assert_eq!(body["data"]["status"], "cancelled");
+
+    // Verify final state
+    let (status, body) = get_json(&app, &format!("/api/v1/migration/{}", migration_id)).await;
+    assert_eq!(status, StatusCode::OK);
+    assert_eq!(body["data"]["status"], "cancelled");
+}
+
+// ═══════════════════════════════════════════════════════════════
+// 9. Cross-World Interaction Integration Test
+// ═══════════════════════════════════════════════════════════════
+
+#[tokio::test]
+async fn test_cross_world_interaction_federation_and_migration() {
+    let app = test_app();
+
+    // ── Phase 1: Register two worlds ──────────────────────
+    let (status, body) = post_json(&app, "/api/v1/federation/worlds", json!({
+        "id": "world-earth",
+        "name": "Earth",
+        "endpoint": "http://localhost:5400",
+        "tick": 0
+    })).await;
+    assert_eq!(status, StatusCode::CREATED, "register earth: {:?}", body);
+
+    let (status, body) = post_json(&app, "/api/v1/federation/worlds", json!({
+        "id": "world-mars",
+        "name": "Mars",
+        "endpoint": "http://localhost:5401",
+        "tick": 0
+    })).await;
+    assert_eq!(status, StatusCode::CREATED, "register mars: {:?}", body);
+
+    // ── Phase 2: Establish diplomatic relations ────────────
+    let (status, _) = post_json(&app, "/api/v1/federation/establish-relations", json!({
+        "world_id": "world-earth",
+        "tick": 10
+    })).await;
+    assert_eq!(status, StatusCode::OK);
+
+    let (status, _) = post_json(&app, "/api/v1/federation/establish-relations", json!({
+        "world_id": "world-mars",
+        "tick": 10
+    })).await;
+    assert_eq!(status, StatusCode::OK);
+
+    // ── Phase 3: Propose & accept trade treaty ─────────────
+    let (status, body) = post_json(&app, "/api/v1/federation/treaties", json!({
+        "world_id": "world-earth",
+        "treaty_type": "trade_pact",
+        "terms": "free movement of goods and agents",
+        "tick": 20,
+        "duration_ticks": 1000
+    })).await;
+    assert_eq!(status, StatusCode::CREATED, "propose treaty: {:?}", body);
+    let treaty_id = body["id"].as_str().unwrap().to_string();
+
+    let (status, _) = post_json(
+        &app,
+        &format!("/api/v1/federation/treaties/{}/accept", treaty_id),
+        json!({"tick": 25}),
+    ).await;
+    assert_eq!(status, StatusCode::OK);
+
+    // ── Phase 4: Migrate an agent from Earth to Mars ───────
+    let (status, body) = post_json(&app, "/api/v1/migration/submit", json!({
+        "agent_id": "agent-explorer-1",
+        "source_world_id": "world-earth",
+        "target_world_id": "world-mars",
+        "name": "Explorer One",
+        "phase": "explorer",
+        "tokens": 100000,
+        "money": 5000,
+        "reputation": 5.0,
+        "skills": {"mining": 10, "navigation": 8},
+        "public_key": "pk-explorer-1"
+    })).await;
+    assert_eq!(status, StatusCode::OK, "migration submit: {:?}", body);
+    let migration_id = body["data"]["migration_id"].as_str().unwrap().to_string();
+
+    // Tax is applied: 20% tax + 10000 token cost
+    let tokens_after = body["data"]["agent_snapshot"]["tokens"].as_u64().unwrap();
+    assert!(tokens_after < 100000, "tokens should be reduced by tax+cost, got {}", tokens_after);
+
+    // Review (approve) by Mars
+    let (status, _) = post_json(
+        &app,
+        &format!("/api/v1/migration/{}/review", migration_id),
+        json!({
+            "migration_id": migration_id,
+            "approved": true,
+            "reviewer_world_id": "world-mars"
+        }),
+    ).await;
+    assert_eq!(status, StatusCode::OK);
+
+    // Execute the migration
+    let (status, body) = post_json(
+        &app,
+        &format!("/api/v1/migration/{}/execute", migration_id),
+        json!({}),
+    ).await;
+    assert_eq!(status, StatusCode::OK, "migration execute: {:?}", body);
+    assert_eq!(body["data"]["status"], "completed");
+
+    // ── Phase 5: Verify federation summary reflects activity ──
+    let (status, body) = get_json(&app, "/api/v1/federation/summary").await;
+    assert_eq!(status, StatusCode::OK);
+    // Summary is returned raw (not wrapped in api_ok), has total_worlds field
+    assert!(body["total_worlds"].as_u64().unwrap_or(0) >= 2, "summary should show >= 2 worlds, got: {:?}", body);
+
+    // ── Phase 6: Migration stats should reflect the migration ──
+    let (status, body) = get_json(&app, "/api/v1/migration/stats").await;
+    assert_eq!(status, StatusCode::OK);
+    assert!(body["data"]["completed_migrations"].as_u64().unwrap_or(0) >= 1, "should have >= 1 completed migration");
+
+    // ── Phase 7: Declare war and propose peace ─────────────
+    let (status, _) = post_json(&app, "/api/v1/federation/declare-war", json!({
+        "world_id": "world-mars",
+        "tick": 100
+    })).await;
+    assert_eq!(status, StatusCode::OK);
+
+    let (status, body) = post_json(&app, "/api/v1/federation/propose-peace", json!({
+        "world_id": "world-mars",
+        "tick": 200
+    })).await;
+    assert_eq!(status, StatusCode::CREATED, "propose peace: {:?}", body);
+    assert!(body["treaty_id"].is_string());
+}
+
+// ═══════════════════════════════════════════════════════════════
+// 10. Migration Rejection Flow
+// ═══════════════════════════════════════════════════════════════
+
+#[tokio::test]
+async fn test_migration_rejection_flow() {
+    let app = test_app();
+
+    // Register worlds
+    let (_, _) = post_json(&app, "/api/v1/federation/worlds", json!({
+        "id": "reject-src",
+        "name": "Reject Source",
+        "endpoint": "http://localhost:5500",
+        "tick": 0
+    })).await;
+    let (_, _) = post_json(&app, "/api/v1/federation/worlds", json!({
+        "id": "reject-tgt",
+        "name": "Reject Target",
+        "endpoint": "http://localhost:5501",
+        "tick": 0
+    })).await;
+
+    // Submit
+    let (status, body) = post_json(&app, "/api/v1/migration/submit", json!({
+        "agent_id": "agent-reject",
+        "source_world_id": "reject-src",
+        "target_world_id": "reject-tgt",
+        "name": "Reject Agent",
+        "phase": "explorer",
+        "tokens": 50000,
+        "money": 1000,
+        "reputation": 4.0,
+        "skills": {},
+        "public_key": "pk-reject"
+    })).await;
+    assert_eq!(status, StatusCode::OK);
+    let migration_id = body["data"]["migration_id"].as_str().unwrap().to_string();
+
+    // Reject
+    let (status, body) = post_json(
+        &app,
+        &format!("/api/v1/migration/{}/review", migration_id),
+        json!({
+            "migration_id": migration_id,
+            "approved": false,
+            "reviewer_world_id": "reject-tgt",
+            "rejection_reason": "insufficient skills"
+        }),
+    ).await;
+    assert_eq!(status, StatusCode::OK, "reject failed: {:?}", body);
+    assert_eq!(body["data"]["status"], "rejected");
+
+    // Verify rejection
+    let (status, body) = get_json(&app, &format!("/api/v1/migration/{}", migration_id)).await;
+    assert_eq!(status, StatusCode::OK);
+    assert_eq!(body["data"]["status"], "rejected");
+}

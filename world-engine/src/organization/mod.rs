@@ -1,3 +1,17 @@
+//! # Organization Subsystem
+//!
+//! Multi-agent organizations with governance, leadership elections,
+//! treasury, diplomacy, competition, and rule engine.
+//!
+//! Key types: Organization, OrganizationStore, GovernanceSystem,
+//!            LeadershipEngine, CompetitionEngine, Treasury,
+//!            Charter, RuleEngine, DiplomacyEngine
+//! Depends on: world (WorldState, EventBus), economy (BankingSystem)
+//!
+//! Sub-modules: charter, competition, diplomacy, governance,
+//!              governance_metrics, leadership, members, org,
+//!              rule_engine, treasury
+//!
 pub mod charter;
 pub mod competition;
 pub mod diplomacy;

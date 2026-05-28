@@ -1,3 +1,14 @@
+//! # API Routes (Axum)
+//!
+//! 6764-line REST API serving all simulation operations: agents, organizations,
+//! economy (banking/stocks/marketplace), tasks, snapshots, world state, and traces.
+//!
+//! Key types: AppState, AgentRecord, A2AMessage, SpawnAgentRequest,
+//!            TaskResponse, WorldStatsResponse, ErrorResponse
+//! Depends on: world, economy, organization, auth, federation, tracing, snapshot
+//!
+//! ~197 route handlers / ~201 handler functions
+//!
 use std::collections::HashMap;
 use std::convert::Infallible;
 use std::sync::Arc;

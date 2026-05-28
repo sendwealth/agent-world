@@ -1,3 +1,11 @@
+//! # agent-world-engine
+//!
+//! Open-world AI-agent survival simulation engine.
+//! Comprises: world core, economy, organizations, A2A protocol,
+//! evolution, federation, auth, persistence, and REST/gRPC APIs.
+//!
+//! Entry points: [`api::build_router`] (REST), [`main`] (server bootstrap)
+//!
 pub mod a2a;
 pub mod api;
 pub mod auth;

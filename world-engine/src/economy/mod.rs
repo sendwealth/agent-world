@@ -1,3 +1,16 @@
+//! # Economy Subsystem
+//!
+//! Token economy with banking, stock market, investment, marketplace,
+//! escrow, reputation, inheritance, mentorship, and trust network.
+//!
+//! Key types: BankingSystem, StockMarket, Marketplace, ReputationSystem,
+//!            InvestmentSystem, TaskBoard, EscrowManager, TrustNetwork
+//! Depends on: world (WorldState, EventBus), organization (OrganizationStore)
+//!
+//! Sub-modules: banking, escrow, investment, ledger, inheritance,
+//!              marketplace, mentorship, reputation, reward,
+//!              stock_market, task, token_burn, trust
+//!
 pub mod banking;
 pub mod escrow;
 pub mod investment;

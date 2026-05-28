@@ -1,3 +1,10 @@
+//! # Binary Entry Point
+//!
+//! Bootstraps the agent-world server: loads genesis config, initializes
+//! all subsystems (banking, stock market, marketplace, reputation, tasks,
+//! organizations, governance, A2A federation, evolution, WAL), mounts the
+//! Axum REST router, starts the tick loop, and listens for shutdown.
+//!
 use std::sync::Arc;
 use std::time::Duration;
 

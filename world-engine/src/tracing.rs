@@ -1,3 +1,12 @@
+//! # Tick Tracing & Observability
+//!
+//! Per-agent, per-tick trace collection for debugging and analytics.
+//! Stores phase-level timing and I/O data with summary views.
+//!
+//! Key types: TickTraceData, TickTraceSummary, PhaseData,
+//!            TraceStore, AgentTraceStats
+//! Depends on: serde
+//!
 use std::collections::HashMap;
 use serde::{Deserialize, Serialize};
 

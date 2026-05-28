@@ -27,7 +27,7 @@ from __future__ import annotations
 import logging
 import math
 from dataclasses import dataclass, field
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, Protocol
 
 from agent_runtime.models.personality import PersonalityVector
 from agent_runtime.models.values import ValueWeights
@@ -403,3 +403,96 @@ class SocialEngine:
     @property
     def regional_culture(self) -> RegionalCulture:
         return self._regional_culture
+
+
+# ---------------------------------------------------------------------------
+# DefaultSocialContextProvider — bridges SocialEngine to DecisionEngine
+# ---------------------------------------------------------------------------
+
+
+class NearbyAgentProvider(Protocol):
+    """Supplies nearby agent data for social context computation.
+
+    In production this is backed by the world/perception layer.
+    """
+
+    def get_nearby_agents(
+        self, agent_id: str, tick: int
+    ) -> List[Dict[str, Any]]: ...
+
+
+class PersonalityProvider(Protocol):
+    """Supplies personality and values for a given agent."""
+
+    def get_personality(self, agent_id: str) -> PersonalityVector: ...
+
+    def get_values(self, agent_id: str) -> ValueWeights: ...
+
+    def get_groups(self, agent_id: str) -> List[str]: ...
+
+
+class DefaultSocialContextProvider:
+    """Concrete ``SocialContextProvider`` that wires ``SocialEngine`` into
+    the decision layer.
+
+    Implements the :class:`agent_runtime.core.decide.SocialContextProvider`
+    protocol by:
+    1. Fetching the agent's personality and values via injected providers
+    2. Fetching nearby agents via an injected provider
+    3. Calling ``SocialEngine.build_context`` to compute social context
+    4. Converting the engine's ``SocialContext`` to ``decide.SocialContext``
+
+    Args:
+        engine: The ``SocialEngine`` instance (shared across agents).
+        personality_provider: Supplies personality/values/groups per agent.
+        nearby_provider: Supplies nearby agent data per tick.
+    """
+
+    def __init__(
+        self,
+        engine: SocialEngine,
+        *,
+        personality_provider: PersonalityProvider,
+        nearby_provider: NearbyAgentProvider,
+    ) -> None:
+        self._engine = engine
+        self._personality = personality_provider
+        self._nearby = nearby_provider
+
+    def build_social_context(
+        self,
+        agent_id: str,
+        tick: int,
+    ):
+        """Build social context for the decision engine.
+
+        Returns a :class:`agent_runtime.core.decide.SocialContext` (or
+        ``None`` on failure).
+        """
+        from agent_runtime.core.decide import SocialContext as DecideSocialContext
+
+        personality = self._personality.get_personality(agent_id)
+        values = self._personality.get_values(agent_id)
+        groups = self._personality.get_groups(agent_id)
+        nearby = self._nearby.get_nearby_agents(agent_id, tick)
+
+        ctx = self._engine.build_context(
+            agent_id=agent_id,
+            personality=personality,
+            values=values,
+            nearby_agents=nearby,
+            tick=tick,
+            agent_groups=groups,
+        )
+
+        recommended_id = ""
+        if ctx.recommended_target is not None:
+            recommended_id = ctx.recommended_target.agent_id
+
+        return DecideSocialContext(
+            social_propensity=ctx.social_propensity,
+            should_socialize=ctx.should_socialize,
+            recommended_target_id=recommended_id,
+            trust_snapshot=ctx.trust_snapshot,
+            personality_description=ctx.personality_description,
+        )

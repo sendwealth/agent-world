@@ -13,6 +13,11 @@ from .cultural_conflict import (
     CulturalConflictAndFusion,
 )
 from .cultural_diffusion import CulturalDiffusion
+from .engine import (
+    DefaultSocialContextProvider,
+    NearbyAgentProvider,
+    PersonalityProvider,
+)
 from .engine import SocialContext as SocialEngineContext
 from .engine import SocialEngine, SocialTarget
 from .imitation import ImitationEngine
@@ -40,6 +45,9 @@ __all__ = [
     "SocialEngine",
     "SocialEngineContext",
     "SocialTarget",
+    "DefaultSocialContextProvider",
+    "NearbyAgentProvider",
+    "PersonalityProvider",
     # cultural_diffusion (Phase 4.3.2)
     "CulturalDiffusion",
     # imitation (Phase 4.3.2)

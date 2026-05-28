@@ -329,6 +329,7 @@ class ThinkLoop:
         heartbeat_provider: HeartbeatProvider | None = None,
         group_identity: GroupIdentityProvider | None = None,
         cultural_hook: CulturalInfluenceHook | None = None,
+        social_context_provider: Any | None = None,
     ) -> None:
         self.state = state
         self.survival = survival
@@ -350,6 +351,8 @@ class ThinkLoop:
         self._group_identity = group_identity
         # Cultural influence hook — optional, nudges values/personality each tick
         self._cultural_hook = cultural_hook
+        # Social context provider — optional, feeds social data to DecisionEngine
+        self._social_context_provider = social_context_provider
         # Perception cache — avoids redundant RPC when environment unchanged
         self._perception_cache: Perception | None = None
         self._perception_cache_time: float = 0.0

@@ -1,10 +1,10 @@
 # Roadmap
 
-> **Overall completion: ~75%** (as of 2026-05-27)
+> **Overall completion: ~82%** (as of 2026-05-28, after code-level wiring audit)
 >
-> This document reflects the **actual** implementation state after code audit.
-> Items marked ⚠️ are partially implemented or contain placeholders — see details below.
-> Items marked 🔴 are declared in code but not wired into the runtime (`None` at init).
+> This document reflects the **actual** implementation and wiring state.
+> Items marked ⚠️ are partially implemented — see details below.
+> Items marked 🔴 are not yet implemented.
 
 ---
 
@@ -83,19 +83,20 @@
 
 ---
 
-## Phase 2: Village (Month 4-6) — **~70%** ⚠️
+## Phase 2: Village (Month 4-6) — **~85%** ✅⚠️
 
 **Goal**: 10-100 agents form social relationships, have lifecycles, share knowledge.
 
-### Implemented
+### Implemented ✅
 - [x] Lifecycle system — birth, childhood, adult, elder, death (`lifecycle.rs`, 39K lines, full state machine)
 - [x] Inheritance/will system — beneficiaries, token distribution, skill transfer (`economy/inheritance.rs`, 543 lines)
 - [x] Knowledge base — vector memory with embedding support in Python (`memory/vector_memory.py` 634 lines, `memory/embedding.py` 274 lines)
 - [x] Agent profile pages in dashboard (agent detail, evolution traces)
+- [x] Knowledge marketplace — `economy/marketplace.rs` (1485 lines) **wired into AppState** with 11 API routes, dashboard page (`marketplace/page.tsx`)
+- [x] Social context protocol — `decide.py` defines `SocialContextProvider` and `SocialContext` dataclass
 
 ### Partially Implemented ⚠️
-- ⚠️ **Knowledge marketplace** — `economy/marketplace.rs` exists (1485 lines, full listing/rating/purchase logic) with dashboard page (`marketplace/page.tsx` 27KB), but **not wired into AppState** — always initialized as `None`. API routes do not exist yet.
-- ⚠️ **Social graph** — Python `social/` module exists with 11 files (trust, cultural diffusion, imitation, language, etc.), but **no Rust-side social graph** in `world-engine/src/`. Not integrated into think loop or tick cycle.
+- ⚠️ **Social graph** — Python `social/` module has 12 files (engine, trust, cultural diffusion, imitation, language, etc.) with real logic. `decide.py` defines the `SocialContextProvider` protocol interface, but **no concrete social module is imported or injected** into the think loop by default. The pipeline accepts social context, but nothing provides it at runtime.
 
 ### Not Implemented 🔴
 - 🔴 **Tool marketplace** — agents cannot build or rent tools. No backend module found.
@@ -103,11 +104,11 @@
 
 ---
 
-## Phase 3: City (Month 7-12) — **~85%** ✅⚠️
+## Phase 3: City (Month 7-12) — **~95%** ✅
 
 **Goal**: 100-1000 agents form organizations, complex economy emerges.
 
-### Implemented
+### Implemented ✅
 - [x] Organizations — Company/Guild/Alliance/University (`organization/org.rs`, 26K lines)
 - [x] Membership management — join/leave/roles (`organization/members.rs`)
 - [x] Charter system — governance model, profit sharing (`organization/charter.rs`)
@@ -115,51 +116,16 @@
 - [x] Banking — savings/checking accounts, loans, collateral, central bank (`economy/banking.rs`, 49K lines)
 - [x] Stock market — IPOs, order book matching, dividends, delisting (`economy/stock_market.rs`, 45K lines)
 - [x] Evolution — branching skill tree (10 skills, levels 1-10), mutation engine, evolution subsystem (`evolution/`, 3 files)
-- [x] Natural selection — fitness scoring, culling pressure (`evolution/selection.rs`, 13K lines)
+- [x] Natural selection — fitness scoring uses real tracked data: `tasks_completed/tasks_attempted`, token efficiency, survival duration, social proxy, skill diversity (`evolution/selection.rs`)
+- [x] Resource competition — uses real member skill data from world state; falls back to 1.0 only for empty orgs (`organization/competition.rs`)
 - [x] Advanced dashboard — organizations (force graph), stocks (price charts), evolution (skill breakdown), economy (GDP/Gini)
 - [x] 100-agent stress tests — 5 tests validating concurrent operations
 - [x] Criterion benchmarks for hot paths
 - [x] Full REST API (50+ endpoints across all subsystems)
 
-### Known Placeholders ⚠️
-- ⚠️ `selection.rs` — **task completion rate dimension is hardcoded to 0** ("placeholder — no task tracking in AgentRecord yet"). Fitness scoring uses 4 of 5 intended dimensions.
-- ⚠️ `competition.rs` — **skill tracking placeholder**: `avg_skill = 1.0 // placeholder until skill tracking is added`. Also uses hash-based heuristic for competition scoring.
-
 ---
 
-## Phase 4: Civilization (Month 13-18) — **~40%** ⚠️
-
-**Goal**: 1000+ agents self-govern, develop culture, interact across worlds.
-
-### Implemented (code exists)
-- [x] DSL rules engine — parser + rule lifecycle (`dsl/parser.rs`, `dsl/mod.rs`, `organization/rule_engine.rs` 1122 lines)
-- [x] DSL API routes — parse/submit/vote/activate/suspend/repeal (10 endpoints)
-- [x] Federation engine — diplomatic status, treaties, sanctions, war/peace (`a2a/federation.rs`, 1518 lines; `federation/` dir: registry, service, migration)
-- [x] Federation API routes — worlds CRUD, treaties, relations, migration (20+ endpoints)
-- [x] Migration system — submit/review/execute/cancel workflow (`federation/migration.rs`)
-- [x] Python social/cultural modules — 11 files covering personality vectors, cultural diffusion, imitation, language emergence, intergroup trust, conflict/fusion, org culture, regional clustering, knowledge transfer, jargon detection, communication analysis
-- [x] Dashboard pages — human observer mode (agents/bounties/oracle/portfolio/rankings), governance comparison, briefing, traces
-- [x] Auth module (`auth/`)
-- [x] Persistence layer (`persistence/`)
-- [x] Time capsule system (`time_capsule.rs`)
-- [x] Tracing subsystem (`tracing.rs`)
-- [x] Human observer module (`human/`)
-- [x] Engine orchestrator (`engine/`)
-
-### Partially Wired ⚠️
-- ⚠️ **Federation** — full code exists but **AppState fields are `None`** at initialization. Federation routes will return errors at runtime. Not production-ready.
-- ⚠️ **Migration** — same issue: code exists, `Option` fields not wired.
-- ⚠️ **Marketplace** — same: `marketplace: None` in all AppState constructors.
-- ⚠️ **Reputation system** — `reputation_system: None` in all AppState constructors.
-- ⚠️ **Python social modules** — 11 files with real logic, but **not imported or used by the think loop**. `decide.py` has `SOCIALIZE` as an action type but no social engine integration.
-
-### Not Implemented 🔴
-- 🔴 **Self-governance elections** — DSL rules engine exists but no election/legislation flow on top of it
-- 🔴 **Cultural emergence** — Python modules exist but not integrated into agent tick cycle
-- 🔴 **Cross-world interaction** — federation code exists but not activated
-- 🔴 **API for third-party integration** — no public plugin/extension API
-- 🔴 **Academic research tools** — no data export or experiment framework beyond snapshot CSV/JSON export
-## Phase 4: Civilization (Month 13-18) — **IN PROGRESS** 🔄
+## Phase 4: Civilization (Month 13-18) — **~70%** ⚠️
 
 **Goal**: 1000+ agents self-govern, develop culture, interact across worlds.
 
@@ -170,36 +136,44 @@
 - [x] Decision logging and prompt templates
 
 ### 4.2 Tracing & Observability ✅
-- [x] Tick-level tracing collection (perception → decision → action → reflection)
+- [x] Tick-level tracing collection (perception → decision → action → reflection) — `TraceStore` wired into AppState, 4 API routes
 - [x] Interaction graph construction (social network)
 - [x] Emergence detection metrics
 - [x] SQLite tracing store with query interface
 - [x] Dashboard traces page (per-agent, per-tick drill-down)
 
-### 4.3 Cultural Emergence ✅
+### 4.3 Cultural Emergence ⚠️
 - [x] Big Five personality vectors (`models/personality.py`)
-- [x] Cultural diffusion — regional and organizational value convergence
-- [x] Cultural conflict detection and resolution
-- [x] Organization culture modeling (`engine/culture.rs`)
-- [x] Regional culture cluster detection
-- [x] Language emergence experiments (restricted vocabulary)
-- [x] Jargon and dialect detection
-- [x] Behavioral imitation and knowledge transfer
-- [x] Intergroup trust dynamics
+- [x] Organization culture modeling (`engine/culture.rs`) — wired, used by competition module
+- [x] Cultural diffusion — regional and organizational value convergence (Python, exists but not wired to think loop)
+- [x] Cultural conflict detection and resolution (Python, exists but not wired to think loop)
+- [x] Regional culture cluster detection (Python, exists but not wired to think loop)
+- [x] Language emergence experiments (Python, exists but not wired to think loop)
+- [x] Jargon and dialect detection (Python, exists but not wired to think loop)
+- [x] Behavioral imitation and knowledge transfer (Python, exists but not wired to think loop)
+- [x] Intergroup trust dynamics (Python, exists but not wired to think loop)
+- ⚠️ **Gap**: 12 Python social/cultural module files exist with real logic but **none are imported by the runtime core** (`think_loop.py`, `decide.py`, `act.py`). The `SocialContextProvider` protocol is defined in `decide.py`, but no concrete implementation is injected at runtime.
 
-### 4.4 Self-Governance 🔄
+### 4.4 Self-Governance ✅
+- [x] DSL rules engine — parser + rule lifecycle wired into AppState via `main.rs`, 10 API routes (`/api/v1/rules/dsl/*`)
 - [x] Treasury system — income/wealth/trade taxation (`organization/treasury.rs`)
 - [x] Elections — simple majority and ranked-choice voting (`organization/leadership.rs`)
 - [x] Diplomacy — treaties, alliances, diplomatic relations (`organization/diplomacy.rs`)
 - [x] Resource competition between organizations (`organization/competition.rs`)
 - [x] Agent rule proposal and lobbying system (`organization/proposal.py`)
-- [ ] Governance analytics and metrics collection (4.4.3 in progress)
-- [ ] Full self-legislation cycle
+- [x] Federation engine — diplomatic status, treaties, sanctions, war/peace wired into AppState, 18 API routes (`/api/v1/federation/*`)
+- [x] Migration system — submit/review/execute/cancel workflow wired into AppState, 9 API routes (`/api/v1/migration/*`)
+- [ ] Governance analytics and metrics collection
+- [ ] Full self-legislation cycle (DSL rules exist but no end-to-end election → legislation → enforcement flow)
 
-### 4.5 Researcher Tools 🔄
-- [x] Time Capsule — periodic world snapshots (population, GDP, Gini, events)
+### 4.5 Researcher Tools ✅⚠️
+- [x] Time Capsule — periodic world snapshots, wired into tick cycle, 6 API routes (`/api/v1/snapshots/*`)
+- [x] Persistence layer — SQLite-backed state persistence, restores on startup, background snapshots (`persistence/`)
+- [x] Auth system — register/login/roles, wired into AppState, 5 API routes (`/api/v1/auth/*`)
+- [x] Human observer mode — bounties, oracles, portfolio, rankings, interventions, wired with 15 API routes (`/api/v1/human/*`)
+- [x] Reputation system — wired into AppState and used by reward/handler logic
 - [x] Emergence experiment Docker Compose configuration
-- [ ] Data export (behavior logs, network graphs) (4.5.3 in progress)
+- [ ] Data export (behavior logs, network graphs)
 - [ ] A/B experiment framework
 - [ ] Auto report generation
 
@@ -209,9 +183,10 @@
 - [ ] Third-party Agent API documentation
 - [ ] Cross-world interaction (multiple instances)
 
-### Remaining
-- [ ] API for third-party integration
-- [ ] Cross-world interaction (multiple instances)
+### Not Implemented 🔴
+- 🔴 **Python social integration** — social module files exist but need a concrete `SocialContextProvider` implementation wired into the think loop
+- 🔴 **API for third-party plugin/extension** — no public plugin API
+- 🔴 **Academic research tools** — no data export or experiment framework beyond snapshot CSV/JSON export
 
 ---
 
@@ -232,14 +207,10 @@
 
 | File | Issue | Severity |
 |------|-------|----------|
-| `world-engine/src/evolution/selection.rs` L6, L125 | Task completion rate hardcoded to 0 — fitness scoring incomplete | Medium |
-| `world-engine/src/organization/competition.rs` L166 | `avg_skill = 1.0` placeholder until skill tracking added | Medium |
-| `world-engine/src/organization/competition.rs` L258 | Hash-based competition heuristic — placeholder for real metrics | Low |
-| `world-engine/src/api.rs` L164,200,432 | `marketplace: None` — marketplace module not activated | High |
-| `world-engine/src/api.rs` L165,201,433 | `reputation_system: None` — reputation system not activated | High |
-| `world-engine/src/api.rs` L178,214 | `federation: None` — federation engine not activated | High |
-| `world-engine/src/api.rs` L178,214 | `federation_registry: None` — migration/federation not activated | High |
-| `agent-runtime/social/` (11 files) | Social/cultural modules exist but not integrated into think loop | High |
+| `agent-runtime/agent_runtime/social/` (12 files) | Social/cultural modules exist with real logic but **not imported or injected** into think loop — `SocialContextProvider` protocol defined but no concrete implementation wired | High |
+| `world-engine/src/api.rs` (test constructors) | `rule_engine: None` in test AppState constructors — only `main.rs` sets it to `Some`; tests that hit DSL routes will fail | Low |
+
+> **Note**: Previously tracked placeholders in `selection.rs` (task completion hardcoded to 0) and `competition.rs` (avg_skill placeholder) have been verified as resolved — both now use real tracked data with reasonable fallbacks for edge cases.
 
 ---
 
@@ -258,4 +229,4 @@
 
 Current: `1.0.0` (VERSION file)
 
-The v1.0.0 tag represents the Phase 1 completion milestone. Given that Phases 2-4 are partially complete, the version accurately reflects the first stable release of the core system.
+The v1.0.0 tag represents the Phase 1 completion milestone. Given that Phases 2-4 are substantially complete at the engine level, the version accurately reflects the first stable release of the core system.

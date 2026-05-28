@@ -1,3 +1,12 @@
+//! # World Core
+//!
+//! Simulation kernel: agents, hex map, event bus, tick scheduler,
+//! subsystem registry, seeder, genesis, and intervention guard.
+//!
+//! Key types: WorldState, EventBus, Agent, AgentRegistry, WorldMap,
+//!            HexPos, Scheduler, GenesisConfig, SubsystemRegistry
+//! Depends on: economy, organization, engine, rules, lifecycle
+//!
 pub mod agent;
 pub mod discovery;
 pub mod engine;

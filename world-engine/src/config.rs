@@ -1,3 +1,14 @@
+//! # Configuration & Genesis
+//!
+//! YAML-based world configuration with hot-reload via file watcher.
+//! Holds all genesis parameters: world, economy, lifecycle, evolution,
+//! A2A, survival, market, safety, trust, mentorship, inheritance,
+//! migration, and federation settings.
+//!
+//! Key types: GenesisConfig, ConfigManager, WorldConfig,
+//!            EconomyConfig, EvolutionConfig, ValidationError
+//! Depends on: world (EventBus, WorldEvent)
+//!
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use std::time::Duration;

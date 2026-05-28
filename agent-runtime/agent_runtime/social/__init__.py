@@ -33,9 +33,13 @@ from .org_culture import (
     CultureVector,
     OrgCultureSystem,
 )
+from .provider import AgentProfile, DefaultSocialContextProvider
 from .regional_culture import Cluster, RegionalCulture
 
 __all__ = [
+    # provider (Phase 4.3 integration)
+    "AgentProfile",
+    "DefaultSocialContextProvider",
     # engine (Phase 4.3 orchestrator)
     "SocialEngine",
     "SocialEngineContext",

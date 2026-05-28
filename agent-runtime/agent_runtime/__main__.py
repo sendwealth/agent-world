@@ -699,6 +699,9 @@ async def run_agent(config: RuntimeConfig) -> RunStats:
             heartbeat_provider = _A2AHeartbeatAdapter(a2a_client)
 
         # Build ThinkLoop with all providers wired in via constructor
+        # Create social context provider to wire social/cultural modules into decisions
+        social_context_provider = _create_social_context_provider(state)
+
         think_loop = ThinkLoop(
             state=state,
             survival=survival,
@@ -708,6 +711,7 @@ async def run_agent(config: RuntimeConfig) -> RunStats:
             decision_provider=decision_provider,
             world_client=world_client,
             heartbeat_provider=heartbeat_provider,
+            social_context_provider=social_context_provider,
         )
 
         # Graceful shutdown on SIGINT
@@ -1035,6 +1039,47 @@ def _create_llm_decision_provider(config: RuntimeConfig) -> Any | None:
             "Failed to create LLM provider (provider=%s model=%s), will use fallback",
             config.llm.provider.value if config.llm else "none",
             config.llm.model if config.llm else "none",
+            exc_info=True,
+        )
+        return None
+
+
+def _create_social_context_provider(state: AgentState) -> Any:
+    """Create a DefaultSocialContextProvider wired to the agent's state.
+
+    The provider bridges social/ modules (trust, cultural diffusion, imitation,
+    language emergence) into the decision prompt. It reads the agent's
+    personality and values from AgentState to build social context each tick.
+    """
+    try:
+        from agent_runtime.models.personality import PersonalityVector
+        from agent_runtime.models.values import ValueWeights
+        from agent_runtime.social.provider import (
+            AgentProfile,
+            DefaultSocialContextProvider,
+        )
+
+        agent_id = str(state.id)
+
+        def _profile_source(aid: str) -> AgentProfile | None:
+            """Resolve agent profile from AgentState.personality dict."""
+            if aid != agent_id:
+                return None
+            personality = PersonalityVector.from_storage_dict(state.personality)
+            values = ValueWeights()
+            return AgentProfile(
+                personality=personality,
+                values=values,
+                group_ids=[],
+            )
+
+        provider = DefaultSocialContextProvider(profile_source=_profile_source)
+        logger.info("SocialContextProvider created for agent %s", state.name)
+        return provider
+    except Exception:
+        logger.debug(
+            "SocialContextProvider creation failed (non-fatal), "
+            "social context will not be available",
             exc_info=True,
         )
         return None

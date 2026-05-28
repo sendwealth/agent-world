@@ -33,6 +33,7 @@ from agent_runtime.core.decide import (
     DecisionAction,
     DecisionEngine,
     DecisionPerception,
+    SocialContextProvider,
     SurvivalAssessment,
 )
 from agent_runtime.core.think_loop import Decision, Perception
@@ -82,8 +83,12 @@ class LLMDecisionProvider:
         llm_provider: LLMProvider,
         *,
         fallback_actions: list[ActionType] | None = None,
+        social_provider: SocialContextProvider | None = None,
     ) -> None:
-        self._engine = DecisionEngine(provider=llm_provider)
+        self._engine = DecisionEngine(
+            provider=llm_provider,
+            social_provider=social_provider,
+        )
         self._fallback_actions = fallback_actions or [ActionType.REST, ActionType.EXPLORE]
 
     async def decide(

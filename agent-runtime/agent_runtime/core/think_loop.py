@@ -42,6 +42,7 @@ from agent_runtime.core.act import (
     ActionStatus,
     ActionType,
 )
+from agent_runtime.core.decide import SocialContextProvider
 from agent_runtime.models.agent_state import AgentState
 from agent_runtime.models.phase_abilities import get_phase_abilities, is_terminal
 from agent_runtime.observability import log_tick, metrics, trace_phase
@@ -329,6 +330,7 @@ class ThinkLoop:
         heartbeat_provider: HeartbeatProvider | None = None,
         group_identity: GroupIdentityProvider | None = None,
         cultural_hook: CulturalInfluenceHook | None = None,
+        social_context_provider: SocialContextProvider | None = None,
     ) -> None:
         self.state = state
         self.survival = survival
@@ -345,6 +347,13 @@ class ThinkLoop:
 
         # Heartbeat provider — optional, sends heartbeat each tick
         self._heartbeat = heartbeat_provider
+
+        # Social context provider — optional, injects social/cultural context
+        # into the decision layer. If provided and the decision_provider has
+        # a settable social_provider attribute, inject it automatically.
+        self._social_context_provider = social_context_provider
+        if social_context_provider is not None:
+            self._inject_social_provider(social_context_provider)
 
         # Group identity provider — optional, injects cultural influence
         self._group_identity = group_identity
@@ -385,6 +394,44 @@ class ThinkLoop:
     def total_errors(self) -> int:
         """Total errors encountered during the run."""
         return self._total_errors
+
+    @property
+    def social_context_provider(self) -> SocialContextProvider | None:
+        """The social context provider, if configured."""
+        return self._social_context_provider
+
+    # ------------------------------------------------------------------
+    # Social provider injection
+    # ------------------------------------------------------------------
+
+    def _inject_social_provider(self, provider: SocialContextProvider) -> None:
+        """Inject the social context provider into the decision provider.
+
+        Handles two patterns:
+        1. If the decision_provider wraps a DecisionEngine (e.g. LLMDecisionProvider),
+           set the social_provider on the inner engine.
+        2. If the decision_provider is wrapped in an async adapter, unwrap first.
+        """
+        target = self._decision
+
+        # Unwrap AsyncDecisionProvider if present
+        if hasattr(target, "inner"):
+            target = target.inner
+
+        # If the decision provider has a settable _engine with social_provider
+        if hasattr(target, "_engine"):
+            engine = target._engine
+            if hasattr(engine, "_social_provider"):
+                object.__setattr__(engine, "_social_provider", provider)
+                logger.info(
+                    "Injected SocialContextProvider into DecisionEngine"
+                )
+                return
+
+        logger.debug(
+            "SocialContextProvider provided but decision_provider does not "
+            "support injection — social context will not influence decisions"
+        )
 
     # ------------------------------------------------------------------
     # Main entry point

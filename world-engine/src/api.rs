@@ -13,6 +13,8 @@ use std::collections::HashMap;
 use std::convert::Infallible;
 use std::sync::Arc;
 
+use crate::error::AppError;
+
 use axum::{
     Json,
     Router,
@@ -1927,57 +1929,36 @@ fn parse_proposal_type(s: &str) -> Option<crate::organization::governance::Propo
     }
 }
 
-fn governance_error_status(e: &crate::organization::governance::GovernanceError) -> StatusCode {
-    use crate::organization::governance::GovernanceError;
-    match e {
-        GovernanceError::NotFound(_)
-        | GovernanceError::OrganizationNotFound(_) => StatusCode::NOT_FOUND,
-        GovernanceError::AlreadyMember { .. }
-        | GovernanceError::AlreadyVoted { .. } => StatusCode::CONFLICT,
-        GovernanceError::NotMember { .. }
-        | GovernanceError::NotFounder { .. } => StatusCode::FORBIDDEN,
-        GovernanceError::InvalidTransition { .. }
-        | GovernanceError::VotingNotOpen(_)
-        | GovernanceError::ProposalNotOpen(_) => StatusCode::CONFLICT,
-        GovernanceError::OrganizationDissolved(_) => StatusCode::GONE,
-        GovernanceError::CannotRemoveFounder => StatusCode::FORBIDDEN,
-        GovernanceError::EmptyName => StatusCode::BAD_REQUEST,
-        GovernanceError::DiscussionPeriodNotElapsed { .. } => StatusCode::CONFLICT,
-    }
-}
-
 // ── Organization & Governance Handlers ────────────────────
 
 
 async fn create_org(
     State(state): State<AppState>,
     Json(body): Json<CreateOrgRequest>,
-) -> impl IntoResponse {
-    let store = match &state.org_store {
-        Some(s) => s.clone(),
-        None => return (StatusCode::SERVICE_UNAVAILABLE, Json(ErrorResponse { error: "organization system not configured".into() })).into_response(),
-    };
+) -> Result<impl IntoResponse, AppError> {
+    let store = state.org_store.clone()
+        .ok_or_else(|| AppError::ServiceUnavailable("organization system not configured".into()))?;
 
     let org_type = match body.org_type.as_str() {
         "company" => OrgType::Company,
         "guild" => OrgType::Guild,
         "alliance" => OrgType::Alliance,
         "university" => OrgType::University,
-        other => return (StatusCode::BAD_REQUEST, Json(ErrorResponse { error: format!("unknown org type: {}", other) })).into_response(),
+        other => return Err(AppError::BadRequest(format!("unknown org type: {}", other))),
     };
 
     let governance = match body.charter.governance.as_str() {
         "vote" => GovernanceModel::Vote,
         "dictator" => GovernanceModel::Dictator,
         "council" => GovernanceModel::Council,
-        other => return (StatusCode::BAD_REQUEST, Json(ErrorResponse { error: format!("unknown governance model: {}", other) })).into_response(),
+        other => return Err(AppError::BadRequest(format!("unknown governance model: {}", other))),
     };
 
     let profit_sharing = match body.charter.profit_sharing.as_str() {
         "equal" => ProfitSharing::Equal,
         "proportional" => ProfitSharing::Proportional,
         "custom" => ProfitSharing::Custom,
-        other => return (StatusCode::BAD_REQUEST, Json(ErrorResponse { error: format!("unknown profit sharing mode: {}", other) })).into_response(),
+        other => return Err(AppError::BadRequest(format!("unknown profit sharing mode: {}", other))),
     };
 
     let charter = Charter {
@@ -1994,48 +1975,32 @@ async fn create_org(
     let tick = *state.tick_rx.borrow();
 
     let mut store = store.lock().await;
-    match store.create_org(body.name, org_type, Some(charter), founders, tick) {
-        Ok(org) => (StatusCode::CREATED, Json(OrgResponse::from(&org))).into_response(),
-        Err(e) => {
-            let status = match &e {
-                crate::organization::org::OrgError::NotFound(_) => StatusCode::NOT_FOUND,
-                crate::organization::org::OrgError::NotEnoughFounders => StatusCode::BAD_REQUEST,
-                crate::organization::org::OrgError::CharterRequired => StatusCode::BAD_REQUEST,
-                crate::organization::org::OrgError::EmptyName => StatusCode::BAD_REQUEST,
-                crate::organization::org::OrgError::AgentAlreadyInOrg(_) => StatusCode::CONFLICT,
-                _ => StatusCode::BAD_REQUEST,
-            };
-            (status, Json(ErrorResponse { error: e.to_string() })).into_response()
-        }
-    }
+    let org = store.create_org(body.name, org_type, Some(charter), founders, tick)?;
+    Ok((StatusCode::CREATED, Json(OrgResponse::from(&org))))
 }
 
 async fn list_orgs(
     State(state): State<AppState>,
-) -> impl IntoResponse {
-    let store = match &state.org_store {
-        Some(s) => s.clone(),
-        None => return (StatusCode::SERVICE_UNAVAILABLE, Json(ErrorResponse { error: "organization system not configured".into() })).into_response(),
-    };
+) -> Result<impl IntoResponse, AppError> {
+    let store = state.org_store.clone()
+        .ok_or_else(|| AppError::ServiceUnavailable("organization system not configured".into()))?;
 
     let store = store.lock().await;
     let orgs: Vec<OrgResponse> = store.list().into_iter().map(OrgResponse::from).collect();
-    Json(orgs).into_response()
+    Ok(Json(orgs))
 }
 
 async fn get_org(
     State(state): State<AppState>,
     Path(id): Path<String>,
-) -> impl IntoResponse {
-    let store = match &state.org_store {
-        Some(s) => s.clone(),
-        None => return (StatusCode::SERVICE_UNAVAILABLE, Json(ErrorResponse { error: "organization system not configured".into() })).into_response(),
-    };
+) -> Result<impl IntoResponse, AppError> {
+    let store = state.org_store.clone()
+        .ok_or_else(|| AppError::ServiceUnavailable("organization system not configured".into()))?;
 
     let store = store.lock().await;
     match store.get(&id) {
-        Some(org) => Json(OrgResponse::from(org)).into_response(),
-        None => (StatusCode::NOT_FOUND, Json(ErrorResponse { error: "organization not found".into() })).into_response(),
+        Some(org) => Ok(Json(OrgResponse::from(org))),
+        None => Err(AppError::NotFound("organization not found".into())),
     }
 }
 
@@ -2043,90 +2008,57 @@ async fn join_org(
     State(state): State<AppState>,
     Path(id): Path<String>,
     Json(body): Json<JoinOrgRequest>,
-) -> impl IntoResponse {
-    let store = match &state.org_store {
-        Some(s) => s.clone(),
-        None => return (StatusCode::SERVICE_UNAVAILABLE, Json(ErrorResponse { error: "organization system not configured".into() })).into_response(),
-    };
+) -> Result<impl IntoResponse, AppError> {
+    let store = state.org_store.clone()
+        .ok_or_else(|| AppError::ServiceUnavailable("organization system not configured".into()))?;
 
     let tick = *state.tick_rx.borrow();
     let mut store = store.lock().await;
-    match store.join_org(&id, body.agent_id, body.agent_name, tick) {
-        Ok(org) => Json(OrgResponse::from(&org)).into_response(),
-        Err(e) => {
-            let status = match &e {
-                crate::organization::org::OrgError::NotFound(_) => StatusCode::NOT_FOUND,
-                crate::organization::org::OrgError::OrgDissolved => StatusCode::CONFLICT,
-                crate::organization::org::OrgError::AgentAlreadyInOrg(_) => StatusCode::CONFLICT,
-                _ => StatusCode::BAD_REQUEST,
-            };
-            (status, Json(ErrorResponse { error: e.to_string() })).into_response()
-        }
-    }
+    let org = store.join_org(&id, body.agent_id, body.agent_name, tick)?;
+    Ok(Json(OrgResponse::from(&org)))
 }
 
 async fn leave_org(
     State(state): State<AppState>,
     Path(id): Path<String>,
     Json(body): Json<LeaveOrgRequest>,
-) -> impl IntoResponse {
-    let store = match &state.org_store {
-        Some(s) => s.clone(),
-        None => return (StatusCode::SERVICE_UNAVAILABLE, Json(ErrorResponse { error: "organization system not configured".into() })).into_response(),
-    };
+) -> Result<impl IntoResponse, AppError> {
+    let store = state.org_store.clone()
+        .ok_or_else(|| AppError::ServiceUnavailable("organization system not configured".into()))?;
 
     let tick = *state.tick_rx.borrow();
     let mut store = store.lock().await;
-    match store.leave_org(&id, &body.agent_id, tick) {
-        Ok(org) => Json(OrgResponse::from(&org)).into_response(),
-        Err(e) => {
-            let status = match &e {
-                crate::organization::org::OrgError::NotFound(_) => StatusCode::NOT_FOUND,
-                crate::organization::org::OrgError::OrgDissolved => StatusCode::CONFLICT,
-                _ => StatusCode::BAD_REQUEST,
-            };
-            (status, Json(ErrorResponse { error: e.to_string() })).into_response()
-        }
-    }
+    let org = store.leave_org(&id, &body.agent_id, tick)?;
+    Ok(Json(OrgResponse::from(&org)))
 }
 
 async fn dissolve_org(
     State(state): State<AppState>,
     Path(id): Path<String>,
     Json(body): Json<DissolveOrgRequest>,
-) -> impl IntoResponse {
-    let store = match &state.org_store {
-        Some(s) => s.clone(),
-        None => return (StatusCode::SERVICE_UNAVAILABLE, Json(ErrorResponse { error: "organization system not configured".into() })).into_response(),
-    };
+) -> Result<impl IntoResponse, AppError> {
+    let store = state.org_store.clone()
+        .ok_or_else(|| AppError::ServiceUnavailable("organization system not configured".into()))?;
 
     let mut store = store.lock().await;
 
     // Verify requester is a founder/leader
     let org = store.get(&id);
     match org {
-        None => return (StatusCode::NOT_FOUND, Json(ErrorResponse { error: "organization not found".into() })).into_response(),
+        None => return Err(AppError::NotFound("organization not found".into())),
         Some(org) => {
             let member = org.get_member(&body.requester_id);
             match member {
-                None => return (StatusCode::FORBIDDEN, Json(ErrorResponse { error: "requester is not a member".into() })).into_response(),
-                Some(m) if !m.role.is_admin() => return (StatusCode::FORBIDDEN, Json(ErrorResponse { error: "only founders or leaders can dissolve".into() })).into_response(),
+                None => return Err(AppError::Forbidden("requester is not a member".into())),
+                Some(m) if !m.role.is_admin() => return Err(AppError::Forbidden("only founders or leaders can dissolve".into())),
                 _ => {}
             }
         }
     }
 
     let reason = if body.reason.is_empty() { "manual_dissolution".to_string() } else { body.reason };
-    match store.dissolve_org(&id, &reason) {
-        Ok(()) => Json(serde_json::json!({ "dissolved": true, "org_id": id })).into_response(),
-        Err(e) => {
-            let status = match &e {
-                crate::organization::org::OrgError::NotFound(_) => StatusCode::NOT_FOUND,
-                _ => StatusCode::BAD_REQUEST,
-            };
-            (status, Json(ErrorResponse { error: e.to_string() })).into_response()
-        }
-    }
+    store.dissolve_org(&id, &reason)?;
+    Ok(Json(serde_json::json!({ "dissolved": true, "org_id": id })))
 }
 
 // ── Stock Market Handlers ────────────────────────────────
@@ -2352,74 +2284,41 @@ impl From<&Loan> for LoanResponse {
     }
 }
 
-fn stock_error_status(e: &crate::economy::stock_market::StockMarketError) -> StatusCode {
-    use crate::economy::stock_market::StockMarketError;
-    match e {
-        StockMarketError::StockNotFound(_) => StatusCode::NOT_FOUND,
-        StockMarketError::OrderNotFound(_) => StatusCode::NOT_FOUND,
-        StockMarketError::OrgNotFound(_) => StatusCode::NOT_FOUND,
-        StockMarketError::NotListed => StatusCode::CONFLICT,
-        StockMarketError::Delisted => StatusCode::CONFLICT,
-        StockMarketError::InsufficientShares(_, _) => StatusCode::BAD_REQUEST,
-        StockMarketError::InsufficientFunds(_, _) => StatusCode::BAD_REQUEST,
-        StockMarketError::NotShareholder => StatusCode::BAD_REQUEST,
-        StockMarketError::OrderNotActive => StatusCode::CONFLICT,
-        StockMarketError::IpoConditionsNotMet(_) => StatusCode::BAD_REQUEST,
-        StockMarketError::TickerTaken(_) => StatusCode::CONFLICT,
-        StockMarketError::AlreadyListed(_) => StatusCode::CONFLICT,
-        StockMarketError::EmptyTicker => StatusCode::BAD_REQUEST,
-        StockMarketError::InvalidShareCount => StatusCode::BAD_REQUEST,
-        StockMarketError::InvalidPrice => StatusCode::BAD_REQUEST,
-        StockMarketError::InvalidQuantity => StatusCode::BAD_REQUEST,
-        StockMarketError::NoSharesIssued(_) => StatusCode::BAD_REQUEST,
-        StockMarketError::NoProfitToDistribute => StatusCode::BAD_REQUEST,
-        StockMarketError::Internal(_) => StatusCode::INTERNAL_SERVER_ERROR,
-    }
-}
-
 async fn list_stocks(
     State(state): State<AppState>,
-) -> impl IntoResponse {
-    let sm = match &state.stock_market {
-        Some(s) => s.clone(),
-        None => return (StatusCode::SERVICE_UNAVAILABLE, Json(ErrorResponse { error: "stock market not configured".into() })).into_response(),
-    };
+) -> Result<impl IntoResponse, AppError> {
+    let sm = state.stock_market.clone()
+        .ok_or_else(|| AppError::ServiceUnavailable("stock market not configured".into()))?;
 
     let sm = sm.lock().await;
     let stocks: Vec<StockResponse> = sm.list_stocks().into_iter().map(StockResponse::from).collect();
-    Json(stocks).into_response()
+    Ok(Json(stocks))
 }
 
 async fn issue_shares(
     State(state): State<AppState>,
     Json(body): Json<IssueSharesRequest>,
-) -> impl IntoResponse {
-    let sm = match &state.stock_market {
-        Some(s) => s.clone(),
-        None => return (StatusCode::SERVICE_UNAVAILABLE, Json(ErrorResponse { error: "stock market not configured".into() })).into_response(),
-    };
+) -> Result<impl IntoResponse, AppError> {
+    let sm = state.stock_market.clone()
+        .ok_or_else(|| AppError::ServiceUnavailable("stock market not configured".into()))?;
 
     let tick = *state.tick_rx.borrow();
     let mut sm = sm.lock().await;
-    match sm.issue_shares(body.org_id, body.ticker, body.total_shares, body.price, tick) {
-        Ok(stock) => (StatusCode::CREATED, Json(StockResponse::from(&stock))).into_response(),
-        Err(e) => (stock_error_status(&e), Json(ErrorResponse { error: e.to_string() })).into_response(),
-    }
+    let stock = sm.issue_shares(body.org_id, body.ticker, body.total_shares, body.price, tick)?;
+    Ok((StatusCode::CREATED, Json(StockResponse::from(&stock))))
 }
 
 async fn get_stock(
     State(state): State<AppState>,
     Path(id): Path<String>,
-) -> impl IntoResponse {
-    let sm = match &state.stock_market {
-        Some(s) => s.clone(),
-        None => return (StatusCode::SERVICE_UNAVAILABLE, Json(ErrorResponse { error: "stock market not configured".into() })).into_response(),
-    };
+) -> Result<impl IntoResponse, AppError> {
+    let sm = state.stock_market.clone()
+        .ok_or_else(|| AppError::ServiceUnavailable("stock market not configured".into()))?;
 
     let sm = sm.lock().await;
     match sm.get_stock(&id) {
-        Some(stock) => Json(StockResponse::from(stock)).into_response(),
-        None => (StatusCode::NOT_FOUND, Json(ErrorResponse { error: "stock not found".into() })).into_response(),
+        Some(stock) => Ok(Json(StockResponse::from(stock))),
+        None => Err(AppError::NotFound("stock not found".into())),
     }
 }
 
@@ -2427,96 +2326,80 @@ async fn ipo_stock(
     State(state): State<AppState>,
     Path(id): Path<String>,
     Json(body): Json<IpoRequest>,
-) -> impl IntoResponse {
-    let sm = match &state.stock_market {
-        Some(s) => s.clone(),
-        None => return (StatusCode::SERVICE_UNAVAILABLE, Json(ErrorResponse { error: "stock market not configured".into() })).into_response(),
-    };
+) -> Result<impl IntoResponse, AppError> {
+    let sm = state.stock_market.clone()
+        .ok_or_else(|| AppError::ServiceUnavailable("stock market not configured".into()))?;
 
     let tick = *state.tick_rx.borrow();
     let mut sm = sm.lock().await;
-    match sm.ipo(&id, body.org_member_count, body.org_treasury, tick) {
-        Ok(stock) => Json(StockResponse::from(&stock)).into_response(),
-        Err(e) => (stock_error_status(&e), Json(ErrorResponse { error: e.to_string() })).into_response(),
-    }
+    let stock = sm.ipo(&id, body.org_member_count, body.org_treasury, tick)?;
+    Ok(Json(StockResponse::from(&stock)))
 }
 
 async fn place_buy_order(
     State(state): State<AppState>,
     Json(body): Json<BuyOrderRequest>,
-) -> impl IntoResponse {
-    let sm = match &state.stock_market {
-        Some(s) => s.clone(),
-        None => return (StatusCode::SERVICE_UNAVAILABLE, Json(ErrorResponse { error: "stock market not configured".into() })).into_response(),
-    };
+) -> Result<impl IntoResponse, AppError> {
+    let sm = state.stock_market.clone()
+        .ok_or_else(|| AppError::ServiceUnavailable("stock market not configured".into()))?;
 
     let order_kind = match body.order_kind.as_str() {
         "limit" => OrderKind::Limit,
         "market" => OrderKind::Market,
-        other => return (StatusCode::BAD_REQUEST, Json(ErrorResponse { error: format!("unknown order kind: {}", other) })).into_response(),
+        other => return Err(AppError::BadRequest(format!("unknown order kind: {}", other))),
     };
 
     let tick = *state.tick_rx.borrow();
     let mut sm = sm.lock().await;
-    match sm.place_buy_order(&body.stock_id, &body.agent_id, order_kind, body.price, body.quantity, body.agent_funds, tick) {
-        Ok(order) => (StatusCode::CREATED, Json(OrderResponse::from(&order))).into_response(),
-        Err(e) => (stock_error_status(&e), Json(ErrorResponse { error: e.to_string() })).into_response(),
-    }
+    let order = sm.place_buy_order(&body.stock_id, &body.agent_id, order_kind, body.price, body.quantity, body.agent_funds, tick)?;
+    Ok((StatusCode::CREATED, Json(OrderResponse::from(&order))))
 }
 
 async fn place_sell_order(
     State(state): State<AppState>,
     Json(body): Json<SellOrderRequest>,
-) -> impl IntoResponse {
-    let sm = match &state.stock_market {
-        Some(s) => s.clone(),
-        None => return (StatusCode::SERVICE_UNAVAILABLE, Json(ErrorResponse { error: "stock market not configured".into() })).into_response(),
-    };
+) -> Result<impl IntoResponse, AppError> {
+    let sm = state.stock_market.clone()
+        .ok_or_else(|| AppError::ServiceUnavailable("stock market not configured".into()))?;
 
     let order_kind = match body.order_kind.as_str() {
         "limit" => OrderKind::Limit,
         "market" => OrderKind::Market,
-        other => return (StatusCode::BAD_REQUEST, Json(ErrorResponse { error: format!("unknown order kind: {}", other) })).into_response(),
+        other => return Err(AppError::BadRequest(format!("unknown order kind: {}", other))),
     };
 
     let tick = *state.tick_rx.borrow();
     let mut sm = sm.lock().await;
-    match sm.place_sell_order(&body.stock_id, &body.agent_id, order_kind, body.price, body.quantity, tick) {
-        Ok(order) => (StatusCode::CREATED, Json(OrderResponse::from(&order))).into_response(),
-        Err(e) => (stock_error_status(&e), Json(ErrorResponse { error: e.to_string() })).into_response(),
-    }
+    let order = sm.place_sell_order(&body.stock_id, &body.agent_id, order_kind, body.price, body.quantity, tick)?;
+    Ok((StatusCode::CREATED, Json(OrderResponse::from(&order))))
 }
 
 async fn list_stock_orders(
     State(state): State<AppState>,
     Query(query): Query<ListOrdersQuery>,
-) -> impl IntoResponse {
-    let sm = match &state.stock_market {
-        Some(s) => s.clone(),
-        None => return (StatusCode::SERVICE_UNAVAILABLE, Json(ErrorResponse { error: "stock market not configured".into() })).into_response(),
-    };
+) -> Result<impl IntoResponse, AppError> {
+    let sm = state.stock_market.clone()
+        .ok_or_else(|| AppError::ServiceUnavailable("stock market not configured".into()))?;
 
     let sm = sm.lock().await;
     let orders: Vec<OrderResponse> = sm.list_orders(query.stock_id.as_deref(), query.agent_id.as_deref())
         .into_iter()
         .map(OrderResponse::from)
         .collect();
-    Json(orders).into_response()
+    Ok(Json(orders))
 }
 
 async fn get_order(
     State(state): State<AppState>,
     Path(id): Path<String>,
-) -> impl IntoResponse {
-    let sm = match &state.stock_market {
-        Some(s) => s.clone(),
-        None => return (StatusCode::SERVICE_UNAVAILABLE, Json(ErrorResponse { error: "stock market not configured".into() })).into_response(),
-    };
+) -> Result<impl IntoResponse, AppError> {
+    let sm = state.stock_market.clone()
+        .ok_or_else(|| AppError::ServiceUnavailable("stock market not configured".into()))?;
 
     let sm = sm.lock().await;
     match sm.get_order(&id) {
-        Some(order) => Json(OrderResponse::from(order)).into_response(),
-        None => (StatusCode::NOT_FOUND, Json(ErrorResponse { error: "order not found".into() })).into_response(),
+        Some(order) => Ok(Json(OrderResponse::from(order))),
+        None => Err(AppError::NotFound("order not found".into())),
     }
 }
 
@@ -2524,35 +2407,35 @@ async fn cancel_order(
     State(state): State<AppState>,
     Path(id): Path<String>,
     Json(body): Json<CancelOrderRequest>,
-) -> impl IntoResponse {
-    let sm = match &state.stock_market {
-        Some(s) => s.clone(),
-        None => return (StatusCode::SERVICE_UNAVAILABLE, Json(ErrorResponse { error: "stock market not configured".into() })).into_response(),
-    };
+) -> Result<impl IntoResponse, AppError> {
+    let sm = state.stock_market.clone()
+        .ok_or_else(|| AppError::ServiceUnavailable("stock market not configured".into()))?;
 
     let mut sm = sm.lock().await;
-    match sm.cancel_order(&id, &body.agent_id) {
-        Ok(order) => Json(OrderResponse::from(&order)).into_response(),
-        Err(e) => (stock_error_status(&e), Json(ErrorResponse { error: e.to_string() })).into_response(),
-    }
+    let order = sm.cancel_order(&id, &body.agent_id)?;
+    Ok(Json(OrderResponse::from(&order)))
 }
 
 async fn distribute_dividend(
     State(state): State<AppState>,
     Path(id): Path<String>,
     Json(body): Json<DividendRequest>,
-) -> impl IntoResponse {
-    let sm = match &state.stock_market {
-        Some(s) => s.clone(),
-        None => return (StatusCode::SERVICE_UNAVAILABLE, Json(ErrorResponse { error: "stock market not configured".into() })).into_response(),
-    };
+) -> Result<impl IntoResponse, AppError> {
+    let sm = state.stock_market.clone()
+        .ok_or_else(|| AppError::ServiceUnavailable("stock market not configured".into()))?;
 
     let tick = *state.tick_rx.borrow();
     let mut sm = sm.lock().await;
-    match sm.distribute_dividends(&id, body.total_profit, tick) {
-        Ok(record) => (StatusCode::CREATED, Json(&record)).into_response(),
-        Err(e) => (stock_error_status(&e), Json(ErrorResponse { error: e.to_string() })).into_response(),
-    }
+    let record = sm.distribute_dividends(&id, body.total_profit, tick)?;
+    Ok((StatusCode::CREATED, Json(serde_json::json!({
+        "id": record.id,
+        "stock_id": record.stock_id,
+        "org_id": record.org_id,
+        "total_profit": record.total_profit,
+        "dividend_per_share": record.dividend_per_share,
+        "tick": record.tick,
+        "recipients": record.recipients,
+    }))))
 }
 
 // ── Governance Handlers ─────────────────────────────────
@@ -2561,23 +2444,20 @@ async fn calculate_distribution(
     State(state): State<AppState>,
     Path(id): Path<String>,
     Json(body): Json<DistributionRequest>,
-) -> impl IntoResponse {
-    let governance = match &state.governance {
-        Some(g) => g.clone(),
-        None => return (StatusCode::SERVICE_UNAVAILABLE, Json(ErrorResponse { error: "governance system not configured".into() })).into_response(),
-    };
+) -> Result<impl IntoResponse, AppError> {
+    let governance = state.governance.clone()
+        .ok_or_else(|| AppError::ServiceUnavailable("governance system not configured".into()))?;
 
-    let Ok(uuid) = Uuid::parse_str(&id) else {
-        return (StatusCode::BAD_REQUEST, Json(ErrorResponse { error: "invalid org id".into() })).into_response();
-    };
+    let uuid = Uuid::parse_str(&id)
+        .map_err(|_| AppError::BadRequest("invalid org id".into()))?;
 
     let gov = governance.lock().await;
     match gov.get_org(uuid) {
         Some(org) => {
             let dist = org.calculate_distribution(body.total_profit);
-            Json(dist).into_response()
+            Ok(Json(dist))
         }
-        None => (StatusCode::NOT_FOUND, Json(ErrorResponse { error: "organization not found".into() })).into_response(),
+        None => Err(AppError::NotFound("organization not found".into())),
     }
 }
 
@@ -2585,74 +2465,61 @@ async fn create_proposal(
     State(state): State<AppState>,
     Path(id): Path<String>,
     Json(body): Json<CreateProposalRequest>,
-) -> impl IntoResponse {
-    let governance = match &state.governance {
-        Some(g) => g.clone(),
-        None => return (StatusCode::SERVICE_UNAVAILABLE, Json(ErrorResponse { error: "governance system not configured".into() })).into_response(),
-    };
+) -> Result<impl IntoResponse, AppError> {
+    let governance = state.governance.clone()
+        .ok_or_else(|| AppError::ServiceUnavailable("governance system not configured".into()))?;
 
-    let Ok(org_uuid) = Uuid::parse_str(&id) else {
-        return (StatusCode::BAD_REQUEST, Json(ErrorResponse { error: "invalid org id".into() })).into_response();
-    };
+    let org_uuid = Uuid::parse_str(&id)
+        .map_err(|_| AppError::BadRequest("invalid org id".into()))?;
 
     let proposal_type = match parse_proposal_type(&body.proposal_type) {
         Some(t) => t,
-        None => return (StatusCode::BAD_REQUEST, Json(ErrorResponse { error: "invalid proposal_type, must be: amend_charter, accept_member, expel_member, dissolve_org, change_profit_sharing".into() })).into_response(),
+        None => return Err(AppError::BadRequest("invalid proposal_type, must be: amend_charter, accept_member, expel_member, dissolve_org, change_profit_sharing".into())),
     };
 
     if body.title.is_empty() {
-        return (StatusCode::BAD_REQUEST, Json(ErrorResponse { error: "title is required".into() })).into_response();
+        return Err(AppError::BadRequest("title is required".into()));
     }
 
     let tick = *state.tick_rx.borrow();
     let mut gov = governance.lock().await;
-    match gov.create_proposal(org_uuid, body.proposer_id, proposal_type, body.title, body.description, tick, body.payload) {
-        Ok(proposal_id) => {
-            let proposal = gov.get_proposal(proposal_id).unwrap();
-            (StatusCode::CREATED, Json(proposal_to_response(proposal))).into_response()
-        }
-        Err(e) => (governance_error_status(&e), Json(ErrorResponse { error: e.to_string() })).into_response(),
-    }
+    let proposal_id = gov.create_proposal(org_uuid, body.proposer_id, proposal_type, body.title, body.description, tick, body.payload)?;
+    let proposal = gov.get_proposal(proposal_id).unwrap();
+    Ok((StatusCode::CREATED, Json(proposal_to_response(proposal))))
 }
 
 async fn list_proposals(
     State(state): State<AppState>,
     Path(id): Path<String>,
-) -> impl IntoResponse {
-    let governance = match &state.governance {
-        Some(g) => g.clone(),
-        None => return (StatusCode::SERVICE_UNAVAILABLE, Json(ErrorResponse { error: "governance system not configured".into() })).into_response(),
-    };
+) -> Result<impl IntoResponse, AppError> {
+    let governance = state.governance.clone()
+        .ok_or_else(|| AppError::ServiceUnavailable("governance system not configured".into()))?;
 
-    let Ok(org_uuid) = Uuid::parse_str(&id) else {
-        return (StatusCode::BAD_REQUEST, Json(ErrorResponse { error: "invalid org id".into() })).into_response();
-    };
+    let org_uuid = Uuid::parse_str(&id)
+        .map_err(|_| AppError::BadRequest("invalid org id".into()))?;
 
     let gov = governance.lock().await;
     let proposals: Vec<ProposalResponse> = gov.list_org_proposals(org_uuid)
         .into_iter()
         .map(proposal_to_response)
         .collect();
-    Json(proposals).into_response()
+    Ok(Json(proposals))
 }
 
 async fn get_proposal(
     State(state): State<AppState>,
     Path(id): Path<String>,
-) -> impl IntoResponse {
-    let governance = match &state.governance {
-        Some(g) => g.clone(),
-        None => return (StatusCode::SERVICE_UNAVAILABLE, Json(ErrorResponse { error: "governance system not configured".into() })).into_response(),
-    };
+) -> Result<impl IntoResponse, AppError> {
+    let governance = state.governance.clone()
+        .ok_or_else(|| AppError::ServiceUnavailable("governance system not configured".into()))?;
 
-    let Ok(uuid) = Uuid::parse_str(&id) else {
-        return (StatusCode::BAD_REQUEST, Json(ErrorResponse { error: "invalid proposal id".into() })).into_response();
-    };
+    let uuid = Uuid::parse_str(&id)
+        .map_err(|_| AppError::BadRequest("invalid proposal id".into()))?;
 
     let gov = governance.lock().await;
     match gov.get_proposal(uuid) {
-        Some(proposal) => Json(proposal_to_response(proposal)).into_response(),
-        None => (StatusCode::NOT_FOUND, Json(ErrorResponse { error: "proposal not found".into() })).into_response(),
+        Some(proposal) => Ok(Json(proposal_to_response(proposal))),
+        None => Err(AppError::NotFound("proposal not found".into())),
     }
 }
 
@@ -2660,97 +2527,69 @@ async fn vote_proposal(
     State(state): State<AppState>,
     Path(id): Path<String>,
     Json(body): Json<VoteProposalRequest>,
-) -> impl IntoResponse {
-    let governance = match &state.governance {
-        Some(g) => g.clone(),
-        None => return (StatusCode::SERVICE_UNAVAILABLE, Json(ErrorResponse { error: "governance system not configured".into() })).into_response(),
-    };
+) -> Result<impl IntoResponse, AppError> {
+    let governance = state.governance.clone()
+        .ok_or_else(|| AppError::ServiceUnavailable("governance system not configured".into()))?;
 
-    let Ok(uuid) = Uuid::parse_str(&id) else {
-        return (StatusCode::BAD_REQUEST, Json(ErrorResponse { error: "invalid proposal id".into() })).into_response();
-    };
+    let uuid = Uuid::parse_str(&id)
+        .map_err(|_| AppError::BadRequest("invalid proposal id".into()))?;
 
     let tick = *state.tick_rx.borrow();
     let mut gov = governance.lock().await;
-    match gov.vote(uuid, body.voter_id, body.in_favor, tick) {
-        Ok(()) => {
-            let proposal = gov.get_proposal(uuid).unwrap();
-            Json(proposal_to_response(proposal)).into_response()
-        }
-        Err(e) => (governance_error_status(&e), Json(ErrorResponse { error: e.to_string() })).into_response(),
-    }
+    gov.vote(uuid, body.voter_id, body.in_favor, tick)?;
+    let proposal = gov.get_proposal(uuid).unwrap();
+    Ok(Json(proposal_to_response(proposal)))
 }
 
 async fn start_voting(
     State(state): State<AppState>,
     Path(id): Path<String>,
     Json(body): Json<StartVotingRequest>,
-) -> impl IntoResponse {
-    let governance = match &state.governance {
-        Some(g) => g.clone(),
-        None => return (StatusCode::SERVICE_UNAVAILABLE, Json(ErrorResponse { error: "governance system not configured".into() })).into_response(),
-    };
+) -> Result<impl IntoResponse, AppError> {
+    let governance = state.governance.clone()
+        .ok_or_else(|| AppError::ServiceUnavailable("governance system not configured".into()))?;
 
-    let Ok(uuid) = Uuid::parse_str(&id) else {
-        return (StatusCode::BAD_REQUEST, Json(ErrorResponse { error: "invalid proposal id".into() })).into_response();
-    };
+    let uuid = Uuid::parse_str(&id)
+        .map_err(|_| AppError::BadRequest("invalid proposal id".into()))?;
 
     let current_tick = *state.tick_rx.borrow();
     let mut gov = governance.lock().await;
-    match gov.start_voting(uuid, &body.requester_id, current_tick) {
-        Ok(()) => {
-            let proposal = gov.get_proposal(uuid).unwrap();
-            Json(proposal_to_response(proposal)).into_response()
-        }
-        Err(e) => (governance_error_status(&e), Json(ErrorResponse { error: e.to_string() })).into_response(),
-    }
+    gov.start_voting(uuid, &body.requester_id, current_tick)?;
+    let proposal = gov.get_proposal(uuid).unwrap();
+    Ok(Json(proposal_to_response(proposal)))
 }
 
 async fn tally_proposal(
     State(state): State<AppState>,
     Path(id): Path<String>,
-) -> impl IntoResponse {
-    let governance = match &state.governance {
-        Some(g) => g.clone(),
-        None => return (StatusCode::SERVICE_UNAVAILABLE, Json(ErrorResponse { error: "governance system not configured".into() })).into_response(),
-    };
+) -> Result<impl IntoResponse, AppError> {
+    let governance = state.governance.clone()
+        .ok_or_else(|| AppError::ServiceUnavailable("governance system not configured".into()))?;
 
-    let Ok(uuid) = Uuid::parse_str(&id) else {
-        return (StatusCode::BAD_REQUEST, Json(ErrorResponse { error: "invalid proposal id".into() })).into_response();
-    };
+    let uuid = Uuid::parse_str(&id)
+        .map_err(|_| AppError::BadRequest("invalid proposal id".into()))?;
 
     let mut gov = governance.lock().await;
-    match gov.tally_proposal(uuid) {
-        Ok(_status) => {
-            let proposal = gov.get_proposal(uuid).unwrap();
-            Json(proposal_to_response(proposal)).into_response()
-        }
-        Err(e) => (governance_error_status(&e), Json(ErrorResponse { error: e.to_string() })).into_response(),
-    }
+    gov.tally_proposal(uuid)?;
+    let proposal = gov.get_proposal(uuid).unwrap();
+    Ok(Json(proposal_to_response(proposal)))
 }
 
 async fn cancel_proposal(
     State(state): State<AppState>,
     Path(id): Path<String>,
     Json(body): Json<CancelProposalRequest>,
-) -> impl IntoResponse {
-    let governance = match &state.governance {
-        Some(g) => g.clone(),
-        None => return (StatusCode::SERVICE_UNAVAILABLE, Json(ErrorResponse { error: "governance system not configured".into() })).into_response(),
-    };
+) -> Result<impl IntoResponse, AppError> {
+    let governance = state.governance.clone()
+        .ok_or_else(|| AppError::ServiceUnavailable("governance system not configured".into()))?;
 
-    let Ok(uuid) = Uuid::parse_str(&id) else {
-        return (StatusCode::BAD_REQUEST, Json(ErrorResponse { error: "invalid proposal id".into() })).into_response();
-    };
+    let uuid = Uuid::parse_str(&id)
+        .map_err(|_| AppError::BadRequest("invalid proposal id".into()))?;
 
     let mut gov = governance.lock().await;
-    match gov.cancel_proposal(uuid, &body.requester_id) {
-        Ok(()) => {
-            let proposal = gov.get_proposal(uuid).unwrap();
-            Json(proposal_to_response(proposal)).into_response()
-        }
-        Err(e) => (governance_error_status(&e), Json(ErrorResponse { error: e.to_string() })).into_response(),
-    }
+    gov.cancel_proposal(uuid, &body.requester_id)?;
+    let proposal = gov.get_proposal(uuid).unwrap();
+    Ok(Json(proposal_to_response(proposal)))
 }
 
 fn argument_to_response(arg: &crate::organization::governance::DebateArgument) -> ArgumentResponse {
@@ -2770,63 +2609,50 @@ async fn add_argument(
     State(state): State<AppState>,
     Path(id): Path<String>,
     Json(body): Json<AddArgumentRequest>,
-) -> impl IntoResponse {
-    let governance = match &state.governance {
-        Some(g) => g.clone(),
-        None => return (StatusCode::SERVICE_UNAVAILABLE, Json(ErrorResponse { error: "governance system not configured".into() })).into_response(),
-    };
+) -> Result<impl IntoResponse, AppError> {
+    let governance = state.governance.clone()
+        .ok_or_else(|| AppError::ServiceUnavailable("governance system not configured".into()))?;
 
-    let Ok(uuid) = Uuid::parse_str(&id) else {
-        return (StatusCode::BAD_REQUEST, Json(ErrorResponse { error: "invalid proposal id".into() })).into_response();
-    };
+    let uuid = Uuid::parse_str(&id)
+        .map_err(|_| AppError::BadRequest("invalid proposal id".into()))?;
 
     let stance = match body.stance.as_str() {
         "in_favor" => crate::organization::governance::DebateStance::InFavor,
         "against" => crate::organization::governance::DebateStance::Against,
         "neutral" => crate::organization::governance::DebateStance::Neutral,
-        _ => return (StatusCode::BAD_REQUEST, Json(ErrorResponse { error: "invalid stance: must be 'in_favor', 'against', or 'neutral'".into() })).into_response(),
+        _ => return Err(AppError::BadRequest("invalid stance: must be 'in_favor', 'against', or 'neutral'".into())),
     };
 
     let current_tick = *state.tick_rx.borrow();
     let mut gov = governance.lock().await;
 
     let result = if let Some(parent_id_str) = body.parent_argument_id {
-        let Ok(parent_uuid) = Uuid::parse_str(&parent_id_str) else {
-            return (StatusCode::BAD_REQUEST, Json(ErrorResponse { error: "invalid parent_argument_id".into() })).into_response();
-        };
+        let parent_uuid = Uuid::parse_str(&parent_id_str)
+            .map_err(|_| AppError::BadRequest("invalid parent_argument_id".into()))?;
         gov.reply_to_argument(uuid, parent_uuid, body.author_id, stance, body.content, current_tick)
     } else {
         gov.add_argument(uuid, body.author_id, stance, body.content, current_tick)
     };
 
-    match result {
-        Ok(arg_id) => {
-            let proposal = gov.get_proposal(uuid).unwrap();
-            let arg = proposal.arguments.iter().find(|a| a.id == arg_id).unwrap();
-            Json(argument_to_response(arg)).into_response()
-        }
-        Err(e) => (governance_error_status(&e), Json(ErrorResponse { error: e.to_string() })).into_response(),
-    }
+    let arg_id = result?;
+    let proposal = gov.get_proposal(uuid).unwrap();
+    let arg = proposal.arguments.iter().find(|a| a.id == arg_id).unwrap();
+    Ok(Json(argument_to_response(arg)))
 }
 
 async fn list_arguments(
     State(state): State<AppState>,
     Path(id): Path<String>,
-) -> impl IntoResponse {
-    let governance = match &state.governance {
-        Some(g) => g.clone(),
-        None => return (StatusCode::SERVICE_UNAVAILABLE, Json(ErrorResponse { error: "governance system not configured".into() })).into_response(),
-    };
+) -> Result<impl IntoResponse, AppError> {
+    let governance = state.governance.clone()
+        .ok_or_else(|| AppError::ServiceUnavailable("governance system not configured".into()))?;
 
-    let Ok(uuid) = Uuid::parse_str(&id) else {
-        return (StatusCode::BAD_REQUEST, Json(ErrorResponse { error: "invalid proposal id".into() })).into_response();
-    };
+    let uuid = Uuid::parse_str(&id)
+        .map_err(|_| AppError::BadRequest("invalid proposal id".into()))?;
 
     let gov = governance.lock().await;
-    match gov.list_arguments(uuid) {
-        Ok(args) => Json(args.into_iter().map(argument_to_response).collect::<Vec<_>>()).into_response(),
-        Err(e) => (governance_error_status(&e), Json(ErrorResponse { error: e.to_string() })).into_response(),
-    }
+    let args = gov.list_arguments(uuid)?;
+    Ok(Json(args.into_iter().map(argument_to_response).collect::<Vec<_>>()))
 }
 
 fn parse_bank_account_type(s: &str) -> Option<BankAccountType> {
@@ -2851,28 +2677,25 @@ fn parse_loan_status(s: &str) -> Option<LoanStatus> {
 
 // ── Banking Handlers ─────────────────────────────────────
 
-fn get_banking(state: &AppState) -> Result<SharedBankingSystem, (StatusCode, Json<ErrorResponse>)> {
+fn get_banking(state: &AppState) -> Result<SharedBankingSystem, AppError> {
     state.banking_system.clone().ok_or_else(|| {
-        (StatusCode::SERVICE_UNAVAILABLE, Json(ErrorResponse { error: "banking system not configured".into() }))
+        AppError::ServiceUnavailable("banking system not configured".into())
     })
 }
 
 async fn bank_open_account(
     State(state): State<AppState>,
     Json(body): Json<BankOpenAccountRequest>,
-) -> impl IntoResponse {
-    let banking = match get_banking(&state) {
-        Ok(b) => b,
-        Err(e) => return e.into_response(),
-    };
+) -> Result<impl IntoResponse, AppError> {
+    let banking = get_banking(&state)?;
 
     let account_type = match parse_bank_account_type(&body.account_type) {
         Some(t) => t,
-        None => return (StatusCode::BAD_REQUEST, Json(ErrorResponse { error: "account_type must be 'savings' or 'checking'".into() })).into_response(),
+        None => return Err(AppError::BadRequest("account_type must be 'savings' or 'checking'".into())),
     };
 
     if body.owner_id.is_empty() {
-        return (StatusCode::BAD_REQUEST, Json(ErrorResponse { error: "owner_id is required".into() })).into_response();
+        return Err(AppError::BadRequest("owner_id is required".into()));
     }
 
     let label = if body.label.is_empty() {
@@ -2894,19 +2717,16 @@ async fn bank_open_account(
                 balance,
                 created_tick: account.created_tick,
             };
-            (StatusCode::CREATED, Json(resp)).into_response()
+            Ok((StatusCode::CREATED, Json(resp)))
         }
-        Err(e) => (StatusCode::BAD_REQUEST, Json(ErrorResponse { error: e.to_string() })).into_response(),
+        Err(e) => Err(e.into()),
     }
 }
 
 async fn bank_list_accounts(
     State(state): State<AppState>,
-) -> impl IntoResponse {
-    let banking = match get_banking(&state) {
-        Ok(b) => b,
-        Err(e) => return e.into_response(),
-    };
+) -> Result<impl IntoResponse, AppError> {
+    let banking = get_banking(&state)?;
 
     let banking = banking.lock().await;
     let accounts: Vec<BankAccountResponse> = banking.list_accounts().into_iter().map(|a| {
@@ -2920,21 +2740,17 @@ async fn bank_list_accounts(
             created_tick: a.created_tick,
         }
     }).collect();
-    Json(accounts).into_response()
+    Ok(Json(accounts))
 }
 
 async fn bank_get_account(
     State(state): State<AppState>,
     Path(id): Path<String>,
-) -> impl IntoResponse {
-    let banking = match get_banking(&state) {
-        Ok(b) => b,
-        Err(e) => return e.into_response(),
-    };
+) -> Result<impl IntoResponse, AppError> {
+    let banking = get_banking(&state)?;
 
-    let Ok(uuid) = Uuid::parse_str(&id) else {
-        return (StatusCode::BAD_REQUEST, Json(ErrorResponse { error: "invalid account id".into() })).into_response();
-    };
+    let uuid = Uuid::parse_str(&id)
+        .map_err(|_| AppError::BadRequest("invalid account id".into()))?;
 
     let banking = banking.lock().await;
     match banking.get_account(uuid) {
@@ -2948,98 +2764,84 @@ async fn bank_get_account(
                 balance,
                 created_tick: account.created_tick,
             };
-            Json(resp).into_response()
+            Ok(Json(resp))
         }
-        None => (StatusCode::NOT_FOUND, Json(ErrorResponse { error: "account not found".into() })).into_response(),
+        None => Err(AppError::NotFound("account not found".into())),
     }
 }
 
 async fn bank_deposit(
     State(state): State<AppState>,
     Json(body): Json<BankDepositRequest>,
-) -> impl IntoResponse {
-    let banking = match get_banking(&state) {
-        Ok(b) => b,
-        Err(e) => return e.into_response(),
-    };
+) -> Result<impl IntoResponse, AppError> {
+    let banking = get_banking(&state)?;
 
-    let Ok(uuid) = Uuid::parse_str(&body.account_id) else {
-        return (StatusCode::BAD_REQUEST, Json(ErrorResponse { error: "invalid account id".into() })).into_response();
-    };
+    let uuid = Uuid::parse_str(&body.account_id)
+        .map_err(|_| AppError::BadRequest("invalid account id".into()))?;
 
     let tick = *state.tick_rx.borrow();
     let mut banking = banking.lock().await;
     match banking.deposit(uuid, &body.owner_id, body.amount, tick) {
-        Ok(result) => Json(serde_json::json!({
+        Ok(result) => Ok(Json(serde_json::json!({
             "account_id": result.account_id,
             "amount": result.amount,
             "new_balance": result.new_balance,
-        })).into_response(),
-        Err(e) => (StatusCode::BAD_REQUEST, Json(ErrorResponse { error: e.to_string() })).into_response(),
+        }))),
+        Err(e) => Err(e.into()),
     }
 }
 
 async fn bank_withdraw(
     State(state): State<AppState>,
     Json(body): Json<BankWithdrawRequest>,
-) -> impl IntoResponse {
-    let banking = match get_banking(&state) {
-        Ok(b) => b,
-        Err(e) => return e.into_response(),
-    };
+) -> Result<impl IntoResponse, AppError> {
+    let banking = get_banking(&state)?;
 
-    let Ok(uuid) = Uuid::parse_str(&body.account_id) else {
-        return (StatusCode::BAD_REQUEST, Json(ErrorResponse { error: "invalid account id".into() })).into_response()
-    };
+    let uuid = Uuid::parse_str(&body.account_id)
+        .map_err(|_| AppError::BadRequest("invalid account id".into()))?;
 
     let tick = *state.tick_rx.borrow();
     let mut banking = banking.lock().await;
     match banking.withdraw(uuid, &body.owner_id, body.amount, tick) {
-        Ok(result) => Json(serde_json::json!({
+        Ok(result) => Ok(Json(serde_json::json!({
             "account_id": result.account_id,
             "amount": result.amount,
             "new_balance": result.new_balance,
-        })).into_response(),
-        Err(e) => (StatusCode::BAD_REQUEST, Json(ErrorResponse { error: e.to_string() })).into_response(),
+        }))),
+        Err(e) => Err(e.into()),
     }
 }
 
 async fn bank_apply_loan(
     State(state): State<AppState>,
     Json(body): Json<BankApplyLoanRequest>,
-) -> impl IntoResponse {
-    let banking = match get_banking(&state) {
-        Ok(b) => b,
-        Err(e) => return e.into_response(),
-    };
+) -> Result<impl IntoResponse, AppError> {
+    let banking = get_banking(&state)?;
 
     if body.borrower_id.is_empty() {
-        return (StatusCode::BAD_REQUEST, Json(ErrorResponse { error: "borrower_id is required".into() })).into_response();
+        return Err(AppError::BadRequest("borrower_id is required".into()));
     }
 
     let tick = *state.tick_rx.borrow();
     let mut banking = banking.lock().await;
     match banking.apply_for_loan(&body.borrower_id, body.amount, body.term_ticks, body.collateral, tick) {
-        Ok(result) => (StatusCode::CREATED, Json(serde_json::json!({
+        Ok(result) => Ok((StatusCode::CREATED, Json(serde_json::json!({
             "loan_id": result.loan_id.to_string(),
             "borrower_id": result.borrower_id,
             "principal": result.principal,
             "interest_rate": result.interest_rate,
             "term_ticks": result.term_ticks,
             "status": format!("{:?}", result.status).to_lowercase(),
-        }))).into_response(),
-        Err(e) => (StatusCode::BAD_REQUEST, Json(ErrorResponse { error: e.to_string() })).into_response(),
+        })))),
+        Err(e) => Err(e.into()),
     }
 }
 
 async fn bank_list_loans(
     State(state): State<AppState>,
     Query(query): Query<BankListLoansQuery>,
-) -> impl IntoResponse {
-    let banking = match get_banking(&state) {
-        Ok(b) => b,
-        Err(e) => return e.into_response(),
-    };
+) -> Result<impl IntoResponse, AppError> {
+    let banking = get_banking(&state)?;
 
     let status_filter = query.status.as_deref().and_then(parse_loan_status);
     let banking = banking.lock().await;
@@ -3047,68 +2849,56 @@ async fn bank_list_loans(
         .into_iter()
         .map(LoanResponse::from)
         .collect();
-    Json(loans).into_response()
+    Ok(Json(loans))
 }
 
 async fn bank_get_loan(
     State(state): State<AppState>,
     Path(id): Path<String>,
-) -> impl IntoResponse {
-    let banking = match get_banking(&state) {
-        Ok(b) => b,
-        Err(e) => return e.into_response(),
-    };
+) -> Result<impl IntoResponse, AppError> {
+    let banking = get_banking(&state)?;
 
-    let Ok(uuid) = Uuid::parse_str(&id) else {
-        return (StatusCode::BAD_REQUEST, Json(ErrorResponse { error: "invalid loan id".into() })).into_response();
-    };
+    let uuid = Uuid::parse_str(&id)
+        .map_err(|_| AppError::BadRequest("invalid loan id".into()))?;
 
     let banking = banking.lock().await;
     match banking.get_loan(uuid) {
-        Some(loan) => Json(LoanResponse::from(loan)).into_response(),
-        None => (StatusCode::NOT_FOUND, Json(ErrorResponse { error: "loan not found".into() })).into_response(),
+        Some(loan) => Ok(Json(LoanResponse::from(loan))),
+        None => Err(AppError::NotFound("loan not found".into())),
     }
 }
 
 async fn bank_approve_loan(
     State(state): State<AppState>,
     Path(id): Path<String>,
-) -> impl IntoResponse {
-    let banking = match get_banking(&state) {
-        Ok(b) => b,
-        Err(e) => return e.into_response(),
-    };
+) -> Result<impl IntoResponse, AppError> {
+    let banking = get_banking(&state)?;
 
-    let Ok(uuid) = Uuid::parse_str(&id) else {
-        return (StatusCode::BAD_REQUEST, Json(ErrorResponse { error: "invalid loan id".into() })).into_response()
-    };
+    let uuid = Uuid::parse_str(&id)
+        .map_err(|_| AppError::BadRequest("invalid loan id".into()))?;
 
     let tick = *state.tick_rx.borrow();
     let mut banking = banking.lock().await;
     match banking.approve_loan(uuid, tick) {
-        Ok(loan) => Json(LoanResponse::from(&loan)).into_response(),
-        Err(e) => (StatusCode::BAD_REQUEST, Json(ErrorResponse { error: e.to_string() })).into_response(),
+        Ok(loan) => Ok(Json(LoanResponse::from(&loan))),
+        Err(e) => Err(e.into()),
     }
 }
 
 async fn bank_disburse_loan(
     State(state): State<AppState>,
     Path(id): Path<String>,
-) -> impl IntoResponse {
-    let banking = match get_banking(&state) {
-        Ok(b) => b,
-        Err(e) => return e.into_response(),
-    };
+) -> Result<impl IntoResponse, AppError> {
+    let banking = get_banking(&state)?;
 
-    let Ok(uuid) = Uuid::parse_str(&id) else {
-        return (StatusCode::BAD_REQUEST, Json(ErrorResponse { error: "invalid loan id".into() })).into_response()
-    };
+    let uuid = Uuid::parse_str(&id)
+        .map_err(|_| AppError::BadRequest("invalid loan id".into()))?;
 
     let tick = *state.tick_rx.borrow();
     let mut banking = banking.lock().await;
     match banking.disburse_loan(uuid, tick) {
-        Ok(loan) => Json(LoanResponse::from(&loan)).into_response(),
-        Err(e) => (StatusCode::BAD_REQUEST, Json(ErrorResponse { error: e.to_string() })).into_response(),
+        Ok(loan) => Ok(Json(LoanResponse::from(&loan))),
+        Err(e) => Err(e.into()),
     }
 }
 
@@ -3116,98 +2906,81 @@ async fn bank_repay_loan(
     State(state): State<AppState>,
     Path(id): Path<String>,
     Json(body): Json<BankRepayRequest>,
-) -> impl IntoResponse {
-    let banking = match get_banking(&state) {
-        Ok(b) => b,
-        Err(e) => return e.into_response(),
-    };
+) -> Result<impl IntoResponse, AppError> {
+    let banking = get_banking(&state)?;
 
-    let Ok(uuid) = Uuid::parse_str(&id) else {
-        return (StatusCode::BAD_REQUEST, Json(ErrorResponse { error: "invalid loan id".into() })).into_response()
-    };
+    let uuid = Uuid::parse_str(&id)
+        .map_err(|_| AppError::BadRequest("invalid loan id".into()))?;
 
     let tick = *state.tick_rx.borrow();
     let mut banking = banking.lock().await;
     match banking.repay_loan(uuid, body.amount, tick) {
-        Ok(result) => Json(serde_json::json!({
+        Ok(result) => Ok(Json(serde_json::json!({
             "loan_id": result.loan_id.to_string(),
             "amount_paid": result.amount_paid,
             "outstanding_balance": result.outstanding_balance,
             "fully_repaid": result.fully_repaid,
-        })).into_response(),
-        Err(e) => (StatusCode::BAD_REQUEST, Json(ErrorResponse { error: e.to_string() })).into_response(),
+        }))),
+        Err(e) => Err(e.into()),
     }
 }
 
 async fn bank_adjust_rates(
     State(state): State<AppState>,
     Json(body): Json<BankAdjustRatesRequest>,
-) -> impl IntoResponse {
-    let banking = match get_banking(&state) {
-        Ok(b) => b,
-        Err(e) => return e.into_response(),
-    };
+) -> Result<impl IntoResponse, AppError> {
+    let banking = get_banking(&state)?;
 
     let mut banking = banking.lock().await;
     let result = banking.adjust_rates(body.savings_rate, body.loan_rate);
-    Json(serde_json::json!({
+    Ok(Json(serde_json::json!({
         "new_savings_rate": result.new_savings_rate,
         "new_loan_rate": result.new_loan_rate,
-    })).into_response()
+    })))
 }
 
 async fn bank_mint_money(
     State(state): State<AppState>,
     Json(body): Json<BankMintRequest>,
-) -> impl IntoResponse {
-    let banking = match get_banking(&state) {
-        Ok(b) => b,
-        Err(e) => return e.into_response(),
-    };
+) -> Result<impl IntoResponse, AppError> {
+    let banking = get_banking(&state)?;
 
     let tick = *state.tick_rx.borrow();
     let mut banking = banking.lock().await;
     let result = banking.mint_money(body.amount, tick);
-    (StatusCode::CREATED, Json(serde_json::json!({
+    Ok((StatusCode::CREATED, Json(serde_json::json!({
         "amount": result.amount,
         "total_money_supply": result.total_money_supply,
-    }))).into_response()
+    }))))
 }
 
 async fn bank_write_off(
     State(state): State<AppState>,
     Path(id): Path<String>,
-) -> impl IntoResponse {
-    let banking = match get_banking(&state) {
-        Ok(b) => b,
-        Err(e) => return e.into_response(),
-    };
+) -> Result<impl IntoResponse, AppError> {
+    let banking = get_banking(&state)?;
 
-    let Ok(uuid) = Uuid::parse_str(&id) else {
-        return (StatusCode::BAD_REQUEST, Json(ErrorResponse { error: "invalid loan id".into() })).into_response()
-    };
+    let uuid = Uuid::parse_str(&id)
+        .map_err(|_| AppError::BadRequest("invalid loan id".into()))?;
 
     let tick = *state.tick_rx.borrow();
     let mut banking = banking.lock().await;
     match banking.write_off_bad_debt(uuid, tick) {
-        Ok(result) => Json(serde_json::json!({
+        Ok(result) => Ok(Json(serde_json::json!({
             "loan_id": result.loan_id.to_string(),
             "amount_written_off": result.amount_written_off,
-        })).into_response(),
-        Err(e) => (StatusCode::BAD_REQUEST, Json(ErrorResponse { error: e.to_string() })).into_response(),
+        }))),
+        Err(e) => Err(e.into()),
     }
 }
 
 async fn bank_stats(
     State(state): State<AppState>,
-) -> impl IntoResponse {
-    let banking = match get_banking(&state) {
-        Ok(b) => b,
-        Err(e) => return e.into_response(),
-    };
+) -> Result<impl IntoResponse, AppError> {
+    let banking = get_banking(&state)?;
 
     let banking = banking.lock().await;
-    Json(serde_json::json!({
+    Ok(Json(serde_json::json!({
         "total_accounts": banking.list_accounts().len(),
         "total_loans": banking.list_loans(None, None).len(),
         "active_loans": banking.list_loans(None, Some(LoanStatus::Active)).len(),
@@ -3216,7 +2989,7 @@ async fn bank_stats(
         "total_loan_debt": banking.total_loan_debt(),
         "savings_rate": banking.config().savings_rate,
         "loan_rate": banking.config().loan_rate,
-    })).into_response()
+    })))
 }
 
 // ── Trace Handlers ────────────────────────────────────────
@@ -4392,14 +4165,14 @@ async fn build_building(
     State(state): State<AppState>,
     Path(agent_id): Path<String>,
     Json(body): Json<BuildRequest>,
-) -> impl IntoResponse {
+) -> Result<impl IntoResponse, AppError> {
     let building_type = match body.building_type.as_str() {
         "warehouse" => crate::world::map::building::BuildingType::Warehouse,
         "market" => crate::world::map::building::BuildingType::Market,
         "workshop" => crate::world::map::building::BuildingType::Workshop,
         "defense_tower" => crate::world::map::building::BuildingType::DefenseTower,
         "housing" => crate::world::map::building::BuildingType::Housing,
-        _ => return (StatusCode::BAD_REQUEST, Json(ErrorResponse { error: format!("unknown building_type '{}'", body.building_type) })).into_response(),
+        _ => return Err(AppError::BadRequest(format!("unknown building_type '{}'", body.building_type))),
     };
 
     let owner_type = match body.owner_type.as_str() {
@@ -4413,15 +4186,15 @@ async fn build_building(
         let mut external = state.external_agents.lock().await;
         if let Some(agent) = external.get_mut(&agent_id) {
             if !agent.alive {
-                return (StatusCode::GONE, Json(ErrorResponse { error: "agent is dead".into() })).into_response();
+                return Err(AppError::BadRequest("agent is dead".into()));
             }
             let cost = crate::world::map::building::BuildingCost::for_type(building_type);
             if agent.tokens < cost.tokens {
-                return (StatusCode::PAYMENT_REQUIRED, Json(ErrorResponse { error: format!("insufficient tokens: need {}, have {}", cost.tokens, agent.tokens) })).into_response();
+                return Err(AppError::BadRequest(format!("insufficient tokens: need {}, have {}", cost.tokens, agent.tokens)));
             }
             agent.tokens -= cost.tokens;
         } else {
-            return (StatusCode::NOT_FOUND, Json(ErrorResponse { error: "agent not found".into() })).into_response();
+            return Err(AppError::NotFound("agent not found".into()));
         }
     }
 
@@ -4435,9 +4208,9 @@ async fn build_building(
                 owner_id: agent_id,
                 position: (body.x, body.y),
             });
-            (StatusCode::CREATED, Json(serde_json::to_value(&building).unwrap())).into_response()
+            Ok((StatusCode::CREATED, Json(serde_json::to_value(&building).unwrap())))
         }
-        Err(e) => (StatusCode::CONFLICT, Json(ErrorResponse { error: e })).into_response(),
+        Err(e) => Err(AppError::Conflict(e)),
     }
 }
 
@@ -4466,11 +4239,11 @@ async fn list_buildings_at(
 async fn get_building(
     State(state): State<AppState>,
     Path(id): Path<String>,
-) -> impl IntoResponse {
+) -> Result<impl IntoResponse, AppError> {
     let mgr = state.building_manager.lock().await;
     match mgr.get(&id) {
-        Some(b) => (StatusCode::OK, Json(serde_json::to_value(b).unwrap())).into_response(),
-        None => (StatusCode::NOT_FOUND, Json(ErrorResponse { error: "building not found".into() })).into_response(),
+        Some(b) => Ok((StatusCode::OK, Json(serde_json::to_value(b).unwrap()))),
+        None => Err(AppError::NotFound("building not found".into())),
     }
 }
 
@@ -4488,7 +4261,7 @@ async fn maintain_building(
     State(state): State<AppState>,
     Path(id): Path<String>,
     Json(body): Json<MaintainRequest>,
-) -> impl IntoResponse {
+) -> Result<impl IntoResponse, AppError> {
     let mut mgr = state.building_manager.lock().await;
     match mgr.maintain(&id, body.health_restore) {
         Ok(building) => {
@@ -4497,16 +4270,16 @@ async fn maintain_building(
                 health_restored: body.health_restore,
                 new_health: building.health,
             });
-            (StatusCode::OK, Json(serde_json::to_value(&building).unwrap())).into_response()
+            Ok((StatusCode::OK, Json(serde_json::to_value(&building).unwrap())))
         }
-        Err(e) => (StatusCode::BAD_REQUEST, Json(ErrorResponse { error: e })).into_response(),
+        Err(e) => Err(AppError::BadRequest(e)),
     }
 }
 
 async fn demolish_building(
     State(state): State<AppState>,
     Path(id): Path<String>,
-) -> impl IntoResponse {
+) -> Result<impl IntoResponse, AppError> {
     let mut mgr = state.building_manager.lock().await;
     match mgr.demolish(&id) {
         Ok(building) => {
@@ -4515,9 +4288,9 @@ async fn demolish_building(
                 building_id: id,
                 owner_id,
             });
-            (StatusCode::OK, Json(serde_json::to_value(&building).unwrap())).into_response()
+            Ok((StatusCode::OK, Json(serde_json::to_value(&building).unwrap())))
         }
-        Err(e) => (StatusCode::BAD_REQUEST, Json(ErrorResponse { error: e })).into_response(),
+        Err(e) => Err(AppError::BadRequest(e)),
     }
 }
 
@@ -4545,45 +4318,43 @@ struct AuthResponse {
 async fn auth_register(
     State(state): State<AppState>,
     Json(body): Json<RegisterRequest>,
-) -> impl IntoResponse {
+) -> Result<impl IntoResponse, AppError> {
     let mut store = state.auth_store.lock().await;
     match store.register(&body.username, &body.password, body.role) {
-        Ok(user) => (StatusCode::CREATED, Json(user)).into_response(),
-        Err(e) => (StatusCode::BAD_REQUEST, Json(ErrorResponse { error: e })).into_response(),
+        Ok(user) => Ok((StatusCode::CREATED, Json(user))),
+        Err(e) => Err(AppError::BadRequest(e)),
     }
 }
 
 async fn auth_login(
     State(state): State<AppState>,
     Json(body): Json<LoginRequest>,
-) -> impl IntoResponse {
+) -> Result<impl IntoResponse, AppError> {
     let mut store = state.auth_store.lock().await;
     match store.login(&body.username, &body.password) {
-        Ok((user, token)) => (StatusCode::OK, Json(AuthResponse { user, token })).into_response(),
-        Err(e) => (StatusCode::UNAUTHORIZED, Json(ErrorResponse { error: e })).into_response(),
+        Ok((user, token)) => Ok((StatusCode::OK, Json(AuthResponse { user, token }))),
+        Err(e) => Err(AppError::Unauthorized(e)),
     }
 }
 
 async fn auth_me(
     State(state): State<AppState>,
     RequireAuth(auth): RequireAuth,
-) -> impl IntoResponse {
+) -> Result<impl IntoResponse, AppError> {
     let store = state.auth_store.lock().await;
     match store.get_user(&auth.user_id) {
-        Some(user) => Json(user).into_response(),
-        None => (StatusCode::NOT_FOUND, Json(ErrorResponse { error: "User not found".into() })).into_response(),
+        Some(user) => Ok(Json(user)),
+        None => Err(AppError::NotFound("User not found".into())),
     }
 }
 
 async fn auth_list_users(
     State(state): State<AppState>,
     RequireAuth(auth): RequireAuth,
-) -> impl IntoResponse {
-    if let Err(e) = require_capability(&auth, Capability::CreateAgent) {
-        return e.into_response();
-    }
+) -> Result<impl IntoResponse, AppError> {
+    require_capability(&auth, Capability::CreateAgent)?;
     let store = state.auth_store.lock().await;
-    Json(store.list_users()).into_response()
+    Ok(Json(store.list_users()))
 }
 
 async fn auth_update_role(
@@ -4591,14 +4362,12 @@ async fn auth_update_role(
     RequireAuth(auth): RequireAuth,
     Path(user_id): Path<String>,
     Json(body): Json<UpdateRoleRequest>,
-) -> impl IntoResponse {
-    if let Err(e) = require_capability(&auth, Capability::CreateAgent) {
-        return e.into_response();
-    }
+) -> Result<impl IntoResponse, AppError> {
+    require_capability(&auth, Capability::CreateAgent)?;
     let mut store = state.auth_store.lock().await;
     match store.update_role(&user_id, body.role) {
-        Ok(user) => Json(user).into_response(),
-        Err(e) => (StatusCode::NOT_FOUND, Json(ErrorResponse { error: e })).into_response(),
+        Ok(user) => Ok(Json(user)),
+        Err(e) => Err(AppError::NotFound(e)),
     }
 }
 
@@ -4633,13 +4402,13 @@ async fn human_claim_agent(
     State(state): State<AppState>,
     RequireAuth(auth): RequireAuth,
     Json(body): Json<ClaimAgentRequest>,
-) -> impl IntoResponse {
+) -> Result<impl IntoResponse, AppError> {
     // Find the agent in the world state
     let agent = {
         let agents = state.agents.lock().await;
         match agents.iter().find(|a| a.id == body.agent_id) {
             Some(a) => (a.name.clone(), a.tokens, a.money, a.ticks_survived),
-            None => return (StatusCode::NOT_FOUND, Json(ErrorResponse { error: "Agent not found".into() })).into_response(),
+            None => return Err(AppError::NotFound("Agent not found".into())),
         }
     };
 
@@ -4658,7 +4427,7 @@ async fn human_claim_agent(
         skills_map,
         agent.3,
     );
-    (StatusCode::CREATED, Json(claimed)).into_response()
+    Ok((StatusCode::CREATED, Json(claimed)))
 }
 
 async fn human_list_oracles(
@@ -4674,34 +4443,34 @@ async fn human_send_oracle(
     State(state): State<AppState>,
     RequireAuth(auth): RequireAuth,
     Json(mut body): Json<SendOracleRequest>,
-) -> impl IntoResponse {
+) -> Result<impl IntoResponse, AppError> {
     // SECURITY: Replace client-provided human_id with authenticated user ID
     body.human_id = auth.user_id.clone();
     if body.content.trim().is_empty() {
-        return (StatusCode::BAD_REQUEST, Json(ErrorResponse { error: "Oracle content cannot be empty".into() })).into_response();
+        return Err(AppError::BadRequest("Oracle content cannot be empty".into()));
     }
     if body.content.len() > 500 {
-        return (StatusCode::BAD_REQUEST, Json(ErrorResponse { error: "Oracle content exceeds 500 characters".into() })).into_response();
+        return Err(AppError::BadRequest("Oracle content exceeds 500 characters".into()));
     }
     if body.target_agent_id.trim().is_empty() {
-        return (StatusCode::BAD_REQUEST, Json(ErrorResponse { error: "target_agent_id is required".into() })).into_response();
+        return Err(AppError::BadRequest("target_agent_id is required".into()));
     }
 
     let tick = *state.tick_rx.borrow();
     let mut store = state.human_store.lock().await;
     store.set_tick(tick);
     let oracle = store.send_oracle(body);
-    (StatusCode::CREATED, Json(oracle)).into_response()
+    Ok((StatusCode::CREATED, Json(oracle)))
 }
 
 async fn human_get_oracle(
     State(state): State<AppState>,
     Path(id): Path<String>,
-) -> impl IntoResponse {
+) -> Result<impl IntoResponse, AppError> {
     let store = state.human_store.lock().await;
     match store.get_oracle(&id) {
-        Some(oracle) => Json(oracle).into_response(),
-        None => (StatusCode::NOT_FOUND, Json(ErrorResponse { error: "Oracle not found".into() })).into_response(),
+        Some(oracle) => Ok(Json(oracle.clone())),
+        None => Err(AppError::NotFound("Oracle not found".into())),
     }
 }
 
@@ -4718,35 +4487,33 @@ async fn human_create_bounty(
     State(state): State<AppState>,
     RequireAuth(auth): RequireAuth,
     Json(mut body): Json<CreateBountyRequest>,
-) -> impl IntoResponse {
+) -> Result<impl IntoResponse, AppError> {
     // RBAC: require PublishTasks capability
-    if let Err(e) = require_capability(&auth, Capability::PublishTasks) {
-        return e.into_response();
-    }
+    require_capability(&auth, Capability::PublishTasks)?;
     // SECURITY: Replace client-provided human_id with authenticated user ID
     body.human_id = auth.user_id.clone();
     if body.title.trim().is_empty() {
-        return (StatusCode::BAD_REQUEST, Json(ErrorResponse { error: "Bounty title cannot be empty".into() })).into_response();
+        return Err(AppError::BadRequest("Bounty title cannot be empty".into()));
     }
     if body.reward == 0 {
-        return (StatusCode::BAD_REQUEST, Json(ErrorResponse { error: "Reward must be greater than 0".into() })).into_response();
+        return Err(AppError::BadRequest("Reward must be greater than 0".into()));
     }
 
     let tick = *state.tick_rx.borrow();
     let mut store = state.human_store.lock().await;
     store.set_tick(tick);
     let bounty = store.create_bounty(body);
-    (StatusCode::CREATED, Json(bounty)).into_response()
+    Ok((StatusCode::CREATED, Json(bounty)))
 }
 
 async fn human_get_bounty(
     State(state): State<AppState>,
     Path(id): Path<String>,
-) -> impl IntoResponse {
+) -> Result<impl IntoResponse, AppError> {
     let store = state.human_store.lock().await;
     match store.get_bounty(&id) {
-        Some(bounty) => Json(bounty).into_response(),
-        None => (StatusCode::NOT_FOUND, Json(ErrorResponse { error: "Bounty not found".into() })).into_response(),
+        Some(bounty) => Ok(Json(bounty.clone())),
+        None => Err(AppError::NotFound("Bounty not found".into())),
     }
 }
 
@@ -4754,11 +4521,11 @@ async fn human_claim_bounty(
     State(state): State<AppState>,
     Path(id): Path<String>,
     Json(body): Json<ClaimBountyRequest>,
-) -> impl IntoResponse {
+) -> Result<impl IntoResponse, AppError> {
     let mut store = state.human_store.lock().await;
     match store.claim_bounty(&id, &body.agent_id) {
-        Some(bounty) => Json(bounty).into_response(),
-        None => (StatusCode::BAD_REQUEST, Json(ErrorResponse { error: "Bounty not available for claiming".into() })).into_response(),
+        Some(bounty) => Ok(Json(bounty)),
+        None => Err(AppError::BadRequest("Bounty not available for claiming".into())),
     }
 }
 
@@ -4766,11 +4533,11 @@ async fn human_complete_bounty(
     State(state): State<AppState>,
     Path(id): Path<String>,
     Json(body): Json<CompleteBountyRequest>,
-) -> impl IntoResponse {
+) -> Result<impl IntoResponse, AppError> {
     let mut store = state.human_store.lock().await;
     match store.complete_bounty(&id, &body.result) {
-        Some(bounty) => Json(bounty).into_response(),
-        None => (StatusCode::BAD_REQUEST, Json(ErrorResponse { error: "Bounty cannot be completed".into() })).into_response(),
+        Some(bounty) => Ok(Json(bounty)),
+        None => Err(AppError::BadRequest("Bounty cannot be completed".into())),
     }
 }
 
@@ -4778,19 +4545,19 @@ async fn human_cancel_bounty(
     State(state): State<AppState>,
     RequireAuth(auth): RequireAuth,
     Path(id): Path<String>,
-) -> impl IntoResponse {
+) -> Result<impl IntoResponse, AppError> {
     let mut store = state.human_store.lock().await;
     // SECURITY: Verify ownership — only the creator can cancel
     let bounty = match store.get_bounty(&id) {
         Some(b) => b.clone(),
-        None => return (StatusCode::NOT_FOUND, Json(ErrorResponse { error: "Bounty not found".into() })).into_response(),
+        None => return Err(AppError::NotFound("Bounty not found".into())),
     };
     if bounty.human_id != auth.user_id {
-        return (StatusCode::FORBIDDEN, Json(ErrorResponse { error: "Only the bounty creator can cancel".into() })).into_response();
+        return Err(AppError::Forbidden("Only the bounty creator can cancel".into()));
     }
     match store.cancel_bounty(&id) {
-        Some(bounty) => Json(bounty).into_response(),
-        None => (StatusCode::BAD_REQUEST, Json(ErrorResponse { error: "Bounty cannot be cancelled".into() })).into_response(),
+        Some(bounty) => Ok(Json(bounty)),
+        None => Err(AppError::BadRequest("Bounty cannot be cancelled".into())),
     }
 }
 
@@ -4820,13 +4587,11 @@ async fn human_invest(
     State(state): State<AppState>,
     RequireAuth(auth): RequireAuth,
     Json(body): Json<InvestRequest>,
-) -> impl IntoResponse {
+) -> Result<impl IntoResponse, AppError> {
     // RBAC: require Invest capability
-    if let Err(e) = require_capability(&auth, Capability::Invest) {
-        return e.into_response();
-    }
+    require_capability(&auth, Capability::Invest)?;
     if body.amount == 0 {
-        return (StatusCode::BAD_REQUEST, Json(ErrorResponse { error: "Investment amount must be greater than 0".into() })).into_response();
+        return Err(AppError::BadRequest("Investment amount must be greater than 0".into()));
     }
 
     // Find agent name
@@ -4834,7 +4599,7 @@ async fn human_invest(
         let agents = state.agents.lock().await;
         match agents.iter().find(|a| a.id == body.agent_id) {
             Some(a) => a.name.clone(),
-            None => return (StatusCode::NOT_FOUND, Json(ErrorResponse { error: "Agent not found".into() })).into_response(),
+            None => return Err(AppError::NotFound("Agent not found".into())),
         }
     };
 
@@ -4843,7 +4608,7 @@ async fn human_invest(
     let mut store = state.human_store.lock().await;
     store.set_tick(tick);
     let portfolio = store.invest(&auth.user_id, &body.agent_id, &agent_name, body.amount);
-    Json(portfolio).into_response()
+    Ok(Json(portfolio))
 }
 
 async fn human_rankings(
@@ -4979,39 +4744,30 @@ fn dsl_rule_to_response(rule: &crate::organization::rule_engine::SoftRule) -> Ds
     }
 }
 
-fn rule_engine_error_status(e: &crate::organization::rule_engine::RuleEngineError) -> StatusCode {
-    use crate::organization::rule_engine::RuleEngineError;
-    match e {
-        RuleEngineError::NotFound(_) => StatusCode::NOT_FOUND,
-        RuleEngineError::AlreadyActive(_) => StatusCode::CONFLICT,
-        RuleEngineError::NotProposed(_) => StatusCode::CONFLICT,
-        RuleEngineError::AlreadyVoted { .. } => StatusCode::CONFLICT,
-        RuleEngineError::Expired(_) => StatusCode::GONE,
-        RuleEngineError::Repealed(_) => StatusCode::GONE,
-    }
-}
-
 // ── DSL Handlers ───────────────────────────────────────────
 
 /// POST /api/v1/rules/dsl/parse — Parse and validate a DSL rule document.
 async fn dsl_parse_rule(
     State(_state): State<AppState>,
     Json(body): Json<DslParseRequest>,
-) -> impl IntoResponse {
+) -> Result<impl IntoResponse, AppError> {
     let result = if body.format == "json" {
         crate::dsl::parse_json(&body.document)
     } else {
         crate::dsl::parse_yaml(&body.document)
     };
 
-    let status = if result.valid { StatusCode::OK } else { StatusCode::UNPROCESSABLE_ENTITY };
     let response = DslParseResponse {
         valid: result.valid,
         rule: result.rule,
         errors: result.errors,
         warnings: result.warnings,
     };
-    (status, Json(response)).into_response()
+    if result.valid {
+        Ok(Json(response).into_response())
+    } else {
+        Err(AppError::UnprocessableEntity(format!("DSL validation failed: {}", response.errors.join("; "))))
+    }
 }
 
 /// POST /api/v1/rules/dsl/submit — Parse, validate, and submit a DSL rule into the legislation flow.
@@ -5021,13 +4777,10 @@ async fn dsl_parse_rule(
 async fn dsl_submit_rule(
     State(state): State<AppState>,
     Json(body): Json<DslSubmitRequest>,
-) -> impl IntoResponse {
+) -> Result<impl IntoResponse, AppError> {
     let rule_engine = match &state.rule_engine {
         Some(re) => re.clone(),
-        None => return (
-            StatusCode::SERVICE_UNAVAILABLE,
-            Json(ErrorResponse { error: "rule engine not configured".to_string() }),
-        ).into_response(),
+        None => return Err(AppError::ServiceUnavailable("rule engine not configured".into())),
     };
 
     // 1. Parse the DSL document
@@ -5038,20 +4791,12 @@ async fn dsl_submit_rule(
     };
 
     if !parse_result.valid {
-        return (
-            StatusCode::UNPROCESSABLE_ENTITY,
-            Json(ErrorResponse {
-                error: format!("DSL validation failed: {}", parse_result.errors.join("; ")),
-            }),
-        ).into_response();
+        return Err(AppError::UnprocessableEntity(format!("DSL validation failed: {}", parse_result.errors.join("; "))));
     }
 
     let dsl_rule = match parse_result.rule {
         Some(r) => r,
-        None => return (
-            StatusCode::UNPROCESSABLE_ENTITY,
-            Json(ErrorResponse { error: "DSL parse returned no rule".to_string() }),
-        ).into_response(),
+        None => return Err(AppError::UnprocessableEntity("DSL parse returned no rule".into())),
     };
 
     // 2. Determine org_id
@@ -5091,11 +4836,11 @@ async fn dsl_submit_rule(
         message: "Rule submitted to legislation flow. Use vote and activate endpoints to advance.".to_string(),
     };
 
-    (StatusCode::CREATED, Json(response)).into_response()
+    Ok((StatusCode::CREATED, Json(response)).into_response())
 }
 
 /// GET /api/v1/rules/dsl/templates — List built-in rule templates.
-async fn dsl_list_templates() -> impl IntoResponse {
+async fn dsl_list_templates() -> Result<impl IntoResponse, AppError> {
     let templates = crate::dsl::builtin_templates()
         .into_iter()
         .map(|t| DslTemplateEntry {
@@ -5104,41 +4849,35 @@ async fn dsl_list_templates() -> impl IntoResponse {
             category: t.category,
         })
         .collect();
-    Json(DslTemplateListResponse { templates })
+    Ok(Json(DslTemplateListResponse { templates }))
 }
 
 /// GET /api/v1/rules/dsl/templates/:name — Get a specific template with its parsed rule.
 async fn dsl_get_template(
     Path(name): Path<String>,
-) -> impl IntoResponse {
+) -> Result<impl IntoResponse, AppError> {
     match crate::dsl::get_template(&name) {
         Some(t) => {
             let parsed = crate::dsl::parse_yaml(&t.yaml).rule;
-            Json(DslTemplateDetailResponse {
+            Ok(Json(DslTemplateDetailResponse {
                 name: t.name,
                 description: t.description,
                 category: t.category,
                 yaml: t.yaml,
                 parsed,
-            }).into_response()
+            }).into_response())
         }
-        None => (
-            StatusCode::NOT_FOUND,
-            Json(ErrorResponse { error: format!("template '{}' not found", name) }),
-        ).into_response(),
+        None => Err(AppError::NotFound(format!("template '{}' not found", name))),
     }
 }
 
 /// GET /api/v1/rules/dsl/rules — List all rules in the engine.
 async fn dsl_list_rules(
     State(state): State<AppState>,
-) -> impl IntoResponse {
+) -> Result<impl IntoResponse, AppError> {
     let rule_engine = match &state.rule_engine {
         Some(re) => re.clone(),
-        None => return (
-            StatusCode::SERVICE_UNAVAILABLE,
-            Json(ErrorResponse { error: "rule engine not configured".to_string() }),
-        ).into_response(),
+        None => return Err(AppError::ServiceUnavailable("rule engine not configured".into())),
     };
 
     let engine = rule_engine.lock().await;
@@ -5146,29 +4885,23 @@ async fn dsl_list_rules(
         .into_iter()
         .map(dsl_rule_to_response)
         .collect();
-    Json(rules).into_response()
+    Ok(Json(rules).into_response())
 }
 
 /// GET /api/v1/rules/dsl/rules/:id — Get a specific rule.
 async fn dsl_get_rule(
     State(state): State<AppState>,
     Path(id): Path<String>,
-) -> impl IntoResponse {
+) -> Result<impl IntoResponse, AppError> {
     let rule_engine = match &state.rule_engine {
         Some(re) => re.clone(),
-        None => return (
-            StatusCode::SERVICE_UNAVAILABLE,
-            Json(ErrorResponse { error: "rule engine not configured".to_string() }),
-        ).into_response(),
+        None => return Err(AppError::ServiceUnavailable("rule engine not configured".into())),
     };
 
     let engine = rule_engine.lock().await;
     match engine.get_rule(&id) {
-        Some(rule) => Json(dsl_rule_to_response(rule)).into_response(),
-        None => (
-            StatusCode::NOT_FOUND,
-            Json(ErrorResponse { error: format!("rule '{}' not found", id) }),
-        ).into_response(),
+        Some(rule) => Ok(Json(dsl_rule_to_response(rule)).into_response()),
+        None => Err(AppError::NotFound(format!("rule '{}' not found", id))),
     }
 }
 
@@ -5177,22 +4910,19 @@ async fn dsl_vote_rule(
     State(state): State<AppState>,
     Path(id): Path<String>,
     Json(body): Json<DslVoteRequest>,
-) -> impl IntoResponse {
+) -> Result<impl IntoResponse, AppError> {
     let rule_engine = match &state.rule_engine {
         Some(re) => re.clone(),
-        None => return (
-            StatusCode::SERVICE_UNAVAILABLE,
-            Json(ErrorResponse { error: "rule engine not configured".to_string() }),
-        ).into_response(),
+        None => return Err(AppError::ServiceUnavailable("rule engine not configured".into())),
     };
 
     let mut engine = rule_engine.lock().await;
     match engine.vote_on_rule(&id, body.voter_id, body.support) {
         Ok(()) => {
             let rule = engine.get_rule(&id).unwrap();
-            (StatusCode::OK, Json(dsl_rule_to_response(rule))).into_response()
+            Ok((StatusCode::OK, Json(dsl_rule_to_response(rule))).into_response())
         }
-        Err(e) => (rule_engine_error_status(&e), Json(ErrorResponse { error: e.to_string() })).into_response(),
+        Err(e) => Err(e.into()),
     }
 }
 
@@ -5200,22 +4930,19 @@ async fn dsl_vote_rule(
 async fn dsl_activate_rule(
     State(state): State<AppState>,
     Path(id): Path<String>,
-) -> impl IntoResponse {
+) -> Result<impl IntoResponse, AppError> {
     let rule_engine = match &state.rule_engine {
         Some(re) => re.clone(),
-        None => return (
-            StatusCode::SERVICE_UNAVAILABLE,
-            Json(ErrorResponse { error: "rule engine not configured".to_string() }),
-        ).into_response(),
+        None => return Err(AppError::ServiceUnavailable("rule engine not configured".into())),
     };
 
     let mut engine = rule_engine.lock().await;
     match engine.activate_rule(&id) {
         Ok(()) => {
             let rule = engine.get_rule(&id).unwrap();
-            (StatusCode::OK, Json(dsl_rule_to_response(rule))).into_response()
+            Ok((StatusCode::OK, Json(dsl_rule_to_response(rule))).into_response())
         }
-        Err(e) => (rule_engine_error_status(&e), Json(ErrorResponse { error: e.to_string() })).into_response(),
+        Err(e) => Err(e.into()),
     }
 }
 
@@ -5223,22 +4950,19 @@ async fn dsl_activate_rule(
 async fn dsl_suspend_rule(
     State(state): State<AppState>,
     Path(id): Path<String>,
-) -> impl IntoResponse {
+) -> Result<impl IntoResponse, AppError> {
     let rule_engine = match &state.rule_engine {
         Some(re) => re.clone(),
-        None => return (
-            StatusCode::SERVICE_UNAVAILABLE,
-            Json(ErrorResponse { error: "rule engine not configured".to_string() }),
-        ).into_response(),
+        None => return Err(AppError::ServiceUnavailable("rule engine not configured".into())),
     };
 
     let mut engine = rule_engine.lock().await;
     match engine.suspend_rule(&id) {
         Ok(()) => {
             let rule = engine.get_rule(&id).unwrap();
-            (StatusCode::OK, Json(dsl_rule_to_response(rule))).into_response()
+            Ok((StatusCode::OK, Json(dsl_rule_to_response(rule))).into_response())
         }
-        Err(e) => (rule_engine_error_status(&e), Json(ErrorResponse { error: e.to_string() })).into_response(),
+        Err(e) => Err(e.into()),
     }
 }
 
@@ -5246,13 +4970,10 @@ async fn dsl_suspend_rule(
 async fn dsl_repeal_rule(
     State(state): State<AppState>,
     Path(id): Path<String>,
-) -> impl IntoResponse {
+) -> Result<impl IntoResponse, AppError> {
     let rule_engine = match &state.rule_engine {
         Some(re) => re.clone(),
-        None => return (
-            StatusCode::SERVICE_UNAVAILABLE,
-            Json(ErrorResponse { error: "rule engine not configured".to_string() }),
-        ).into_response(),
+        None => return Err(AppError::ServiceUnavailable("rule engine not configured".into())),
     };
 
     let mut engine = rule_engine.lock().await;
@@ -5260,9 +4981,9 @@ async fn dsl_repeal_rule(
     match engine.repeal_rule(&id, tick) {
         Ok(()) => {
             let rule = engine.get_rule(&id).unwrap();
-            (StatusCode::OK, Json(dsl_rule_to_response(rule))).into_response()
+            Ok((StatusCode::OK, Json(dsl_rule_to_response(rule))).into_response())
         }
-        Err(e) => (rule_engine_error_status(&e), Json(ErrorResponse { error: e.to_string() })).into_response(),
+        Err(e) => Err(e.into()),
     }
 }
 
@@ -5362,6 +5083,7 @@ fn api_ok(data: impl serde::Serialize) -> axum::response::Response {
 }
 
 /// Helper: wrap error response in { data: null, error, request_id } format.
+#[allow(dead_code)]
 fn api_err(status: StatusCode, error: impl Into<String>) -> axum::response::Response {
     let request_id = Uuid::new_v4().to_string();
     (status, Json(serde_json::json!({
@@ -5376,10 +5098,10 @@ fn api_err(status: StatusCode, error: impl Into<String>) -> axum::response::Resp
 async fn federation_register_world(
     State(state): State<AppState>,
     Json(body): Json<RestWorldRegister>,
-) -> impl IntoResponse {
+) -> Result<impl IntoResponse, AppError> {
     let registry = match &state.federation_registry {
         Some(r) => r.clone(),
-        None => return api_err(StatusCode::SERVICE_UNAVAILABLE, "federation registry not configured"),
+        None => return Err(AppError::ServiceUnavailable("federation registry not configured".into())),
     };
     let entry = WorldEntry {
         world_id: body.world_id,
@@ -5401,8 +5123,8 @@ async fn federation_register_world(
     };
     let reg = registry.lock().await;
     match reg.register(entry).await {
-        Ok(is_new) => api_ok(serde_json::json!({ "registered": true, "is_new": is_new })),
-        Err(e) => api_err(StatusCode::BAD_REQUEST, e),
+        Ok(is_new) => Ok(api_ok(serde_json::json!({ "registered": true, "is_new": is_new }))),
+        Err(e) => Err(AppError::BadRequest(e)),
     }
 }
 
@@ -5410,14 +5132,14 @@ async fn federation_register_world(
 #[allow(dead_code)]
 async fn federation_list_worlds(
     State(state): State<AppState>,
-) -> impl IntoResponse {
+) -> Result<impl IntoResponse, AppError> {
     let registry = match &state.federation_registry {
         Some(r) => r.clone(),
-        None => return api_err(StatusCode::SERVICE_UNAVAILABLE, "federation registry not configured"),
+        None => return Err(AppError::ServiceUnavailable("federation registry not configured".into())),
     };
     let reg = registry.lock().await;
     let worlds = reg.list_all().await;
-    api_ok(&worlds)
+    Ok(api_ok(&worlds))
 }
 
 /// GET /api/v1/federation/worlds/:world_id — Get a specific world.
@@ -5425,15 +5147,15 @@ async fn federation_list_worlds(
 async fn federation_get_world(
     State(state): State<AppState>,
     Path(world_id): Path<String>,
-) -> impl IntoResponse {
+) -> Result<impl IntoResponse, AppError> {
     let registry = match &state.federation_registry {
         Some(r) => r.clone(),
-        None => return api_err(StatusCode::SERVICE_UNAVAILABLE, "federation registry not configured"),
+        None => return Err(AppError::ServiceUnavailable("federation registry not configured".into())),
     };
     let reg = registry.lock().await;
     match reg.get_world(&world_id).await {
-        Some(entry) => api_ok(&entry),
-        None => api_err(StatusCode::NOT_FOUND, "world not found"),
+        Some(entry) => Ok(api_ok(&entry)),
+        None => Err(AppError::NotFound("world not found".into())),
     }
 }
 
@@ -5442,14 +5164,14 @@ async fn federation_get_world(
 async fn federation_deregister_world(
     State(state): State<AppState>,
     Path(world_id): Path<String>,
-) -> impl IntoResponse {
+) -> Result<impl IntoResponse, AppError> {
     let registry = match &state.federation_registry {
         Some(r) => r.clone(),
-        None => return api_err(StatusCode::SERVICE_UNAVAILABLE, "federation registry not configured"),
+        None => return Err(AppError::ServiceUnavailable("federation registry not configured".into())),
     };
     let reg = registry.lock().await;
     let removed = reg.deregister(&world_id).await;
-    api_ok(serde_json::json!({ "removed": removed }))
+    Ok(api_ok(serde_json::json!({ "removed": removed })))
 }
 
 /// POST /api/v1/federation/worlds/:world_id/heartbeat — Record a heartbeat.
@@ -5457,17 +5179,17 @@ async fn federation_heartbeat(
     State(state): State<AppState>,
     Path(world_id): Path<String>,
     Json(metrics): Json<WorldMetrics>,
-) -> impl IntoResponse {
+) -> Result<impl IntoResponse, AppError> {
     let registry = match &state.federation_registry {
         Some(r) => r.clone(),
-        None => return api_err(StatusCode::SERVICE_UNAVAILABLE, "federation registry not configured"),
+        None => return Err(AppError::ServiceUnavailable("federation registry not configured".into())),
     };
     let reg = registry.lock().await;
     let ok = reg.heartbeat(&world_id, metrics).await;
     if ok {
-        api_ok(serde_json::json!({ "ok": true }))
+        Ok(api_ok(serde_json::json!({ "ok": true })))
     } else {
-        api_err(StatusCode::NOT_FOUND, "world not found")
+        Err(AppError::NotFound("world not found".into()))
     }
 }
 
@@ -5475,10 +5197,10 @@ async fn federation_heartbeat(
 async fn migration_submit(
     State(state): State<AppState>,
     Json(body): Json<RestMigrationSubmit>,
-) -> impl IntoResponse {
+) -> Result<impl IntoResponse, AppError> {
     let manager = match &state.migration_manager {
         Some(m) => m.clone(),
-        None => return api_err(StatusCode::SERVICE_UNAVAILABLE, "migration manager not configured"),
+        None => return Err(AppError::ServiceUnavailable("migration manager not configured".into())),
     };
     let snapshot = AgentSnapshot {
         agent_id: body.agent_id,
@@ -5495,8 +5217,8 @@ async fn migration_submit(
     };
     let mgr = manager.lock().await;
     match mgr.submit(snapshot, body.target_world_id).await {
-        Ok(app) => api_ok(&app),
-        Err(e) => api_err(StatusCode::BAD_REQUEST, e),
+        Ok(app) => Ok(api_ok(&app)),
+        Err(e) => Err(AppError::BadRequest(e)),
     }
 }
 
@@ -5505,10 +5227,10 @@ async fn migration_review(
     State(state): State<AppState>,
     Path(migration_id): Path<String>,
     Json(body): Json<RestMigrationReview>,
-) -> impl IntoResponse {
+) -> Result<impl IntoResponse, AppError> {
     let manager = match &state.migration_manager {
         Some(m) => m.clone(),
-        None => return api_err(StatusCode::SERVICE_UNAVAILABLE, "migration manager not configured"),
+        None => return Err(AppError::ServiceUnavailable("migration manager not configured".into())),
     };
     let mgr = manager.lock().await;
     match mgr.review(
@@ -5517,8 +5239,8 @@ async fn migration_review(
         &body.reviewer_world_id,
         body.rejection_reason,
     ).await {
-        Ok(app) => api_ok(&app),
-        Err(e) => api_err(StatusCode::BAD_REQUEST, e),
+        Ok(app) => Ok(api_ok(&app)),
+        Err(e) => Err(AppError::BadRequest(e)),
     }
 }
 
@@ -5526,15 +5248,15 @@ async fn migration_review(
 async fn migration_execute(
     State(state): State<AppState>,
     Path(migration_id): Path<String>,
-) -> impl IntoResponse {
+) -> Result<impl IntoResponse, AppError> {
     let manager = match &state.migration_manager {
         Some(m) => m.clone(),
-        None => return api_err(StatusCode::SERVICE_UNAVAILABLE, "migration manager not configured"),
+        None => return Err(AppError::ServiceUnavailable("migration manager not configured".into())),
     };
     let mgr = manager.lock().await;
     match mgr.execute_standalone(&migration_id).await {
-        Ok(app) => api_ok(&app),
-        Err(e) => api_err(StatusCode::BAD_REQUEST, e),
+        Ok(app) => Ok(api_ok(&app)),
+        Err(e) => Err(AppError::BadRequest(e)),
     }
 }
 
@@ -5543,17 +5265,17 @@ async fn migration_cancel(
     State(state): State<AppState>,
     Path(migration_id): Path<String>,
     Json(body): Json<serde_json::Value>,
-) -> impl IntoResponse {
+) -> Result<impl IntoResponse, AppError> {
     let manager = match &state.migration_manager {
         Some(m) => m.clone(),
-        None => return api_err(StatusCode::SERVICE_UNAVAILABLE, "migration manager not configured"),
+        None => return Err(AppError::ServiceUnavailable("migration manager not configured".into())),
     };
     let cancelled_by = body.get("cancelled_by").and_then(|v| v.as_str()).unwrap_or("").to_string();
     let reason = body.get("reason").and_then(|v| v.as_str()).map(|s| s.to_string());
     let mgr = manager.lock().await;
     match mgr.cancel(&migration_id, &cancelled_by, reason).await {
-        Ok(app) => api_ok(&app),
-        Err(e) => api_err(StatusCode::BAD_REQUEST, e),
+        Ok(app) => Ok(api_ok(&app)),
+        Err(e) => Err(AppError::BadRequest(e)),
     }
 }
 
@@ -5561,15 +5283,15 @@ async fn migration_cancel(
 async fn migration_get_status(
     State(state): State<AppState>,
     Path(migration_id): Path<String>,
-) -> impl IntoResponse {
+) -> Result<impl IntoResponse, AppError> {
     let manager = match &state.migration_manager {
         Some(m) => m.clone(),
-        None => return api_err(StatusCode::SERVICE_UNAVAILABLE, "migration manager not configured"),
+        None => return Err(AppError::ServiceUnavailable("migration manager not configured".into())),
     };
     let mgr = manager.lock().await;
     match mgr.get(&migration_id).await {
-        Some(app) => api_ok(&app),
-        None => api_err(StatusCode::NOT_FOUND, "migration not found"),
+        Some(app) => Ok(api_ok(&app)),
+        None => Err(AppError::NotFound("migration not found".into())),
     }
 }
 
@@ -5577,10 +5299,10 @@ async fn migration_get_status(
 async fn migration_list(
     State(state): State<AppState>,
     Json(body): Json<serde_json::Value>,
-) -> impl IntoResponse {
+) -> Result<impl IntoResponse, AppError> {
     let manager = match &state.migration_manager {
         Some(m) => m.clone(),
-        None => return api_err(StatusCode::SERVICE_UNAVAILABLE, "migration manager not configured"),
+        None => return Err(AppError::ServiceUnavailable("migration manager not configured".into())),
     };
     let world_id: Option<String> = body.get("world_id").and_then(|v| v.as_str()).map(|s| s.to_string());
     let inbound = body.get("inbound").and_then(|v| v.as_bool()).unwrap_or(true);
@@ -5600,66 +5322,66 @@ async fn migration_list(
     let mgr = manager.lock().await;
     let world_id_ref = world_id.as_deref();
     let results = mgr.list(world_id_ref, inbound, status_filter, limit, offset).await;
-    api_ok(&results)
+    Ok(api_ok(&results))
 }
 
 /// GET /api/v1/migration/policy — Get the current migration policy.
 async fn migration_get_policy(
     State(state): State<AppState>,
-) -> impl IntoResponse {
+) -> Result<impl IntoResponse, AppError> {
     let manager = match &state.migration_manager {
         Some(m) => m.clone(),
-        None => return api_err(StatusCode::SERVICE_UNAVAILABLE, "migration manager not configured"),
+        None => return Err(AppError::ServiceUnavailable("migration manager not configured".into())),
     };
     let mgr = manager.lock().await;
     let policy = mgr.get_policy().await;
     let rest_policy = crate::federation::service::RestMigrationPolicy::from(policy);
-    api_ok(&rest_policy)
+    Ok(api_ok(&rest_policy))
 }
 
 /// PUT /api/v1/migration/policy — Update migration policy.
 async fn migration_update_policy(
     State(state): State<AppState>,
     Json(body): Json<crate::federation::service::RestMigrationPolicy>,
-) -> impl IntoResponse {
+) -> Result<impl IntoResponse, AppError> {
     let manager = match &state.migration_manager {
         Some(m) => m.clone(),
-        None => return api_err(StatusCode::SERVICE_UNAVAILABLE, "migration manager not configured"),
+        None => return Err(AppError::ServiceUnavailable("migration manager not configured".into())),
     };
     let mgr = manager.lock().await;
     let policy: crate::federation::MigrationPolicy = body.into();
     mgr.set_policy(policy).await;
     let updated = mgr.get_policy().await;
     let rest_policy = crate::federation::service::RestMigrationPolicy::from(updated);
-    api_ok(&rest_policy)
+    Ok(api_ok(&rest_policy))
 }
 
 /// GET /api/v1/migration/stats — Get migration statistics.
 async fn migration_stats(
     State(state): State<AppState>,
-) -> impl IntoResponse {
+) -> Result<impl IntoResponse, AppError> {
     let manager = match &state.migration_manager {
         Some(m) => m.clone(),
-        None => return api_err(StatusCode::SERVICE_UNAVAILABLE, "migration manager not configured"),
+        None => return Err(AppError::ServiceUnavailable("migration manager not configured".into())),
     };
     let mgr = manager.lock().await;
     let stats = mgr.stats().await;
-    api_ok(&stats)
+    Ok(api_ok(&stats))
 }
 
 /// GET /api/v1/agents/:id/immigration-status — Get agent immigration status.
 async fn agent_immigration_status(
     State(state): State<AppState>,
     Path(agent_id): Path<String>,
-) -> impl IntoResponse {
+) -> Result<impl IntoResponse, AppError> {
     let manager = match &state.migration_manager {
         Some(m) => m.clone(),
-        None => return api_err(StatusCode::SERVICE_UNAVAILABLE, "migration manager not configured"),
+        None => return Err(AppError::ServiceUnavailable("migration manager not configured".into())),
     };
     let mgr = manager.lock().await;
     match mgr.get_agent_status(&agent_id).await {
-        Some(app) => api_ok(&app),
-        None => api_ok(serde_json::json!({ "agent_id": agent_id, "status": "none", "message": "no migration applications found" })),
+        Some(app) => Ok(api_ok(&app)),
+        None => Ok(api_ok(serde_json::json!({ "agent_id": agent_id, "status": "none", "message": "no migration applications found" }))),
     }
 }
 

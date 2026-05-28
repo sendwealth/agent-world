@@ -14,7 +14,7 @@ use std::sync::Arc;
 
 use tokio::sync::Mutex;
 
-use agent_world_engine::api::AppState;
+use agent_world_engine::api::{AppState, TestOverrides};
 use agent_world_engine::economy::reputation::{ReputationConfig, ReputationSystem};
 use agent_world_engine::economy::task::TaskBoard;
 use agent_world_engine::wal::WAL;
@@ -35,43 +35,17 @@ fn build_app_with_reputation() -> (
     let event_bus = Arc::new(EventBus::new(256));
     let board = Arc::new(Mutex::new(TaskBoard::with_event_bus((*event_bus).clone())));
     let wal = Arc::new(Mutex::new(WAL::new(dir.path())));
-    let (tick_tx, tick_rx) = tokio::sync::watch::channel(0u64);
 
     let reputation_system = Arc::new(Mutex::new(ReputationSystem::with_event_bus(
         ReputationConfig::default(),
         event_bus.as_ref().clone(),
     )));
 
-    let state = AppState {
-        board: board.clone(),
-        wal,
-        event_bus: event_bus.clone(),
-        agents: Arc::new(Mutex::new(Vec::new())),
-        messages: Arc::new(Mutex::new(Vec::new())),
-        tick_tx,
-        tick_rx,
-        snapshot_store: None,
-        marketplace: None,
+    let state = AppState::for_test_with(board.clone(), wal, TestOverrides {
+        event_bus: Some(event_bus.clone()),
         reputation_system: Some(reputation_system.clone()),
-        org_store: None,
-        stock_market: None,
-        governance: None,
-        banking_system: None,
-        trace_store: None,
-        external_agents: Arc::new(Mutex::new(std::collections::HashMap::new())),
-        governance_metrics: None,
-        building_manager: Arc::new(Mutex::new(agent_world_engine::world::map::building::BuildingManager::new())),
-        human_store: Arc::new(Mutex::new(agent_world_engine::human::store::HumanParticipationStore::new())),
-        auth_store: Arc::new(Mutex::new(agent_world_engine::auth::AuthStore::new("test-secret"))),
-        investment_system: None,
-        rule_engine: None,
-        tool_marketplace: None,
-        federation_registry: None,
-        migration_manager: None,
-        federation: None,
-        api_key_store: None,
-        experiment_store: Arc::new(Mutex::new(Vec::new())),
-    };
+        ..TestOverrides::default()
+    });
 
     let app = agent_world_engine::api::build_full_router(state);
     (event_bus, board, reputation_system, app)
@@ -82,38 +56,11 @@ fn build_app_without_reputation() -> axum::Router {
     let event_bus = Arc::new(EventBus::new(256));
     let board = Arc::new(Mutex::new(TaskBoard::with_event_bus((*event_bus).clone())));
     let wal = Arc::new(Mutex::new(WAL::new(dir.path())));
-    let (tick_tx, tick_rx) = tokio::sync::watch::channel(0u64);
 
-    let state = AppState {
-        board,
-        wal,
-        event_bus,
-        agents: Arc::new(Mutex::new(Vec::new())),
-        messages: Arc::new(Mutex::new(Vec::new())),
-        tick_tx,
-        tick_rx,
-        snapshot_store: None,
-        marketplace: None,
-        reputation_system: None,
-        org_store: None,
-        stock_market: None,
-        governance: None,
-        banking_system: None,
-        trace_store: None,
-        external_agents: Arc::new(Mutex::new(std::collections::HashMap::new())),
-        governance_metrics: None,
-        building_manager: Arc::new(Mutex::new(agent_world_engine::world::map::building::BuildingManager::new())),
-        human_store: Arc::new(Mutex::new(agent_world_engine::human::store::HumanParticipationStore::new())),
-        auth_store: Arc::new(Mutex::new(agent_world_engine::auth::AuthStore::new("test-secret"))),
-        investment_system: None,
-        rule_engine: None,
-        tool_marketplace: None,
-        federation_registry: None,
-        migration_manager: None,
-        federation: None,
-        api_key_store: None,
-        experiment_store: Arc::new(Mutex::new(Vec::new())),
-    };
+    let state = AppState::for_test_with(board, wal, TestOverrides {
+        event_bus: Some(event_bus),
+        ..TestOverrides::default()
+    });
 
     agent_world_engine::api::build_full_router(state)
 }

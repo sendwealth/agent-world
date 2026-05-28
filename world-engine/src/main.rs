@@ -525,14 +525,10 @@ async fn main() {
     ));
     println!("   Federation: WorldRegistry + MigrationManager initialized");
 
-    let app_state = AppState {
-        board: task_board,
-        wal: wal_writer.clone(),
-        event_bus: event_bus.clone(),
-        agents: Arc::new(Mutex::new(Vec::new())),
-        messages: Arc::new(Mutex::new(Vec::new())),
-        tick_tx,
-        tick_rx,
+    let app_state = AppState::for_test_with(task_board, wal_writer.clone(), api::TestOverrides {
+        event_bus: Some(event_bus.clone()),
+        tick_tx: Some(tick_tx),
+        tick_rx: Some(tick_rx),
         snapshot_store,
         marketplace: Some(marketplace),
         reputation_system: Some(reputation_system),
@@ -541,21 +537,18 @@ async fn main() {
         governance: Some(governance),
         banking_system: Some(banking_system),
         trace_store: Some(Arc::new(Mutex::new(agent_world_engine::tracing::TraceStore::new()))),
-        external_agents: Arc::new(Mutex::new(std::collections::HashMap::new())),
         governance_metrics: Some(Arc::new(Mutex::new(governance_metrics))),
-        building_manager: Arc::new(Mutex::new(agent_world_engine::world::map::building::BuildingManager::new())),
-        human_store: Arc::new(Mutex::new(agent_world_engine::human::store::HumanParticipationStore::new())),
-        auth_store: Arc::new(Mutex::new(agent_world_engine::auth::AuthStore::new(
-            &std::env::var("JWT_SECRET").unwrap_or_else(|_| "change-me-in-production".to_string())
-        ))),
         investment_system: Some(investment_system),
         rule_engine: Some(Arc::new(Mutex::new(agent_world_engine::organization::rule_engine::RuleEngine::with_event_bus(event_bus.clone())))),
         tool_marketplace: Some(Arc::new(Mutex::new(agent_world_engine::economy::tool_marketplace::ToolMarketplace::with_shared_event_bus(event_bus.clone())))),
-        federation: Some(federation),        federation_registry: Some(federation_registry),
+        federation: Some(federation),
+        federation_registry: Some(federation_registry),
         migration_manager: Some(migration_manager),
+        auth_store: Some(Arc::new(Mutex::new(agent_world_engine::auth::AuthStore::new(
+            &std::env::var("JWT_SECRET").unwrap_or_else(|_| "change-me-in-production".to_string())
+        )))),
         api_key_store,
-        experiment_store: Arc::new(Mutex::new(Vec::new())),
-    };
+    });
     let app = api::build_full_router(app_state);
 
     let host = std::env::var("HOST").unwrap_or_else(|_| "0.0.0.0".to_string());

@@ -1,0 +1,45 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="640" height="360" viewBox="0 0 640 360">
+  <defs>
+    <linearGradient id="bg" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" style="stop-color:#0f172a"/>
+      <stop offset="100%" style="stop-color:#1e293b"/>
+    </linearGradient>
+  </defs>
+  <rect width="640" height="360" fill="url(#bg)" rx="8"/>
+  <!-- Header -->
+  <text x="320" y="36" text-anchor="middle" fill="#e2e8f0" font-family="system-ui, sans-serif" font-size="18" font-weight="600">🏛️ Governance</text>
+  <line x1="40" y1="52" x2="600" y2="52" stroke="#334155" stroke-width="1"/>
+  <!-- Election Status -->
+  <rect x="40" y="68" width="270" height="108" rx="6" fill="#0f172a" stroke="#334155" stroke-width="1"/>
+  <text x="175" y="90" text-anchor="middle" fill="#e2e8f0" font-family="system-ui, sans-serif" font-size="13" font-weight="600">Builders Guild Election</text>
+  <text x="56" y="110" fill="#94a3b8" font-family="system-ui, sans-serif" font-size="11">Method: Ranked-Choice</text>
+  <text x="56" y="128" fill="#94a3b8" font-family="system-ui, sans-serif" font-size="11">Turnout: 10/12 members</text>
+  <text x="56" y="146" fill="#fbbf24" font-family="system-ui, sans-serif" font-size="11">Status: Voting in progress (3h left)</text>
+  <!-- Candidates -->
+  <text x="56" y="166" fill="#22d3ee" font-family="monospace" font-size="11">Agent#7  ■■■■■■■■  4 votes</text>
+  <text x="200" y="166" fill="#a78bfa" font-family="monospace" font-size="11">Agent#42 ■■■■■  3 votes</text>
+  <!-- Tax Revenue -->
+  <rect x="330" y="68" width="270" height="108" rx="6" fill="#0f172a" stroke="#334155" stroke-width="1"/>
+  <text x="465" y="90" text-anchor="middle" fill="#e2e8f0" font-family="system-ui, sans-serif" font-size="13" font-weight="600">Treasury & Taxation</text>
+  <text x="346" y="112" fill="#94a3b8" font-family="system-ui, sans-serif" font-size="11">Income Tax: 3%</text>
+  <text x="346" y="130" fill="#94a3b8" font-family="system-ui, sans-serif" font-size="11">Wealth Tax: 1%</text>
+  <text x="346" y="148" fill="#4ade80" font-family="system-ui, sans-serif" font-size="11">Revenue: 4,230₵</text>
+  <text x="346" y="166" fill="#94a3b8" font-family="system-ui, sans-serif" font-size="11">Distribution: proportional by shares</text>
+  <!-- Treaties -->
+  <rect x="40" y="190" width="270" height="100" rx="6" fill="#0f172a" stroke="#334155" stroke-width="1"/>
+  <text x="175" y="210" text-anchor="middle" fill="#e2e8f0" font-family="system-ui, sans-serif" font-size="13" font-weight="600">Active Treaties</text>
+  <text x="56" y="232" fill="#4ade80" font-family="monospace" font-size="11">TradeCo ↔ Builders: Mutual trade</text>
+  <text x="56" y="250" fill="#4ade80" font-family="monospace" font-size="11">Alliance ↔ Academy: Knowledge share</text>
+  <text x="56" y="268" fill="#64748b" font-family="monospace" font-size="10">Alliance → TradeCo: Pending non-aggression</text>
+  <!-- Stability -->
+  <rect x="330" y="190" width="270" height="100" rx="6" fill="#0f172a" stroke="#334155" stroke-width="1"/>
+  <text x="465" y="210" text-anchor="middle" fill="#e2e8f0" font-family="system-ui, sans-serif" font-size="13" font-weight="600">Governance Metrics</text>
+  <text x="346" y="234" fill="#94a3b8" font-family="system-ui, sans-serif" font-size="11">Stability Score:</text>
+  <text x="530" y="234" fill="#4ade80" font-family="system-ui, sans-serif" font-size="14" font-weight="700">0.82</text>
+  <text x="346" y="254" fill="#94a3b8" font-family="system-ui, sans-serif" font-size="11">Active Laws: 7</text>
+  <text x="346" y="274" fill="#94a3b8" font-family="system-ui, sans-serif" font-size="11">Proposals This Week: 4</text>
+  <!-- Footer -->
+  <text x="320" y="316" text-anchor="middle" fill="#64748b" font-family="system-ui, sans-serif" font-size="12">6 organizations · 4 active proposals · 3 treaties · 7 active laws</text>
+  <!-- Watermark -->
+  <text x="320" y="350" text-anchor="middle" fill="#475569" font-family="system-ui, sans-serif" font-size="10" font-style="italic">Screenshot placeholder — replace with real capture from localhost:3001</text>
+</svg>

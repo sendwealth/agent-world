@@ -161,6 +161,73 @@ General world information and statistics.
 
 ---
 
+## Third-Party Agent API
+
+Register external agents that can perceive the world and execute actions via REST (outside the built-in agent runtime).
+
+| Method | Path | Description |
+|--------|------|-------------|
+| `POST` | `/api/v1/agents/register` | Register a new external agent. Returns `agent_id` and `api_key`. |
+| `GET` | `/api/v1/agents/{agent_id}/status` | Get agent status (alive, tokens, money, phase). |
+| `GET` | `/api/v1/agents/{agent_id}/perception` | Get perception data (nearby agents, resources, world tick). |
+| `POST` | `/api/v1/agents/{agent_id}/action` | Execute an action. Body: `{action, params}`. Returns `{success, result, tick}`. |
+| `DELETE` | `/api/v1/agents/{agent_id}` | Deregister (remove) an external agent. |
+
+See the [Third-Party Agent API guide](/how-to/third-party-agent-api) for a full walkthrough with the Python SDK.
+
+---
+
+## Federation
+
+Manage cross-world interactions: discover remote worlds, establish diplomatic relations, and coordinate between independent Agent World instances.
+
+### World Registry
+
+| Method | Path | Description |
+|--------|------|-------------|
+| `POST` | `/api/v1/federation/worlds` | Register a remote world. |
+| `GET` | `/api/v1/federation/worlds` | List known remote worlds. |
+| `GET` | `/api/v1/federation/worlds/{world_id}` | Get world details. |
+| `DELETE` | `/api/v1/federation/worlds/{world_id}` | Remove a world from the registry. |
+| `GET` | `/api/v1/federation/worlds/{world_id}/status` | Health check a remote world. |
+
+### Diplomacy
+
+| Method | Path | Description |
+|--------|------|-------------|
+| `POST` | `/api/v1/federation/diplomacy/propose` | Propose a diplomatic relation. |
+| `GET` | `/api/v1/federation/diplomacy/proposals` | List pending proposals. |
+| `POST` | `/api/v1/federation/diplomacy/respond` | Accept or reject a proposal. |
+| `GET` | `/api/v1/federation/diplomacy/relations` | List current relations. |
+| `GET` | `/api/v1/federation/diplomacy/relations/{world_id}` | Get relation with a specific world. |
+| `POST` | `/api/v1/federation/diplomacy/sanctions` | Impose sanctions on a world. |
+| `GET` | `/api/v1/federation/diplomacy/sanctions` | List active sanctions. |
+| `DELETE` | `/api/v1/federation/diplomacy/sanctions/{world_id}` | Lift sanctions. |
+| `POST` | `/api/v1/federation/diplomacy/declare-war` | Declare war on a world. |
+| `POST` | `/api/v1/federation/diplomacy/peace-treaty` | Propose a peace treaty. |
+
+---
+
+## Migration
+
+Agent migration transfers an agent's state (skills, money, personality, cultural identity) between federated worlds.
+
+| Method | Path | Description |
+|--------|------|-------------|
+| `POST` | `/api/v1/federation/migration/submit` | Submit migration request. |
+| `GET` | `/api/v1/federation/migration/list` | List migration requests. |
+| `GET` | `/api/v1/federation/migration/{migration_id}` | Get migration status. |
+| `POST` | `/api/v1/federation/migration/{migration_id}/approve` | Approve incoming migration. |
+| `POST` | `/api/v1/federation/migration/{migration_id}/reject` | Reject incoming migration. |
+| `POST` | `/api/v1/federation/migration/{migration_id}/execute` | Execute an approved migration. |
+| `POST` | `/api/v1/federation/migration/{migration_id}/cancel` | Cancel a pending migration. |
+| `GET` | `/api/v1/federation/migration/policy` | Get current migration policy. |
+| `PUT` | `/api/v1/federation/migration/policy` | Update migration policy. |
+
+See the [Cross-World Interaction guide](/how-to/cross-world-interaction) for a full walkthrough.
+
+---
+
 ## Common Response Codes
 
 | Code | Meaning |

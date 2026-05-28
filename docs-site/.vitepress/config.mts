@@ -34,6 +34,8 @@ export default defineConfig({
           { text: 'A2A Protocol', link: '/how-to/a2a-protocol' },
           { text: 'Custom Skills', link: '/how-to/custom-skills' },
           { text: 'Monitor Agents', link: '/how-to/monitor-agents' },
+          { text: 'Third-Party Agent API', link: '/how-to/third-party-agent-api' },
+          { text: 'Cross-World Interaction', link: '/how-to/cross-world-interaction' },
         ],
       },
       {
@@ -82,6 +84,8 @@ export default defineConfig({
             { text: 'Use A2A Protocol', link: '/how-to/a2a-protocol' },
             { text: 'Develop Custom Skills', link: '/how-to/custom-skills' },
             { text: 'Monitor Agents', link: '/how-to/monitor-agents' },
+            { text: 'Third-Party Agent API', link: '/how-to/third-party-agent-api' },
+            { text: 'Cross-World Interaction', link: '/how-to/cross-world-interaction' },
           ],
         },
       ],

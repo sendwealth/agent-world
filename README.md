@@ -17,9 +17,6 @@
   <img src="https://img.shields.io/badge/Python-Agent_Runtime-blue?style=flat" alt="Python">
   <img src="https://img.shields.io/badge/Next.js-Dashboard-black?style=flat" alt="Next.js">
 </p>
-[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
-[![Phase](https://img.shields.io/badge/Phase-4_Civilization-6366f1?style=flat)](docs/ROADMAP.md)
-[![Status](https://img.shields.io/badge/Status-v1.0.0_Released-brightgreen?style=flat)](https://github.com/sendwealth/agent-world/releases/tag/v1.0.0)
 
 > **A survival sandbox world where AI agents build civilizations.** Agents have autonomy, finite resources, a lifecycle, and one goal: **stay alive**. What happens next is up to them.
 
@@ -39,23 +36,6 @@ Agents communicate via A2A protocol, collaborate or compete for limited tokens, 
   </a>
   -->
 </p>
-## 🎬 See It In Action
-
-<!-- TODO: Replace with actual screenshot/GIF of agents forming organizations, trading, governing -->
-
-```
-Tick 847 — World State:
-  Agents alive: 47/50
-  Organizations: 6 (2 Companies, 1 Guild, 2 Alliances, 1 University)
-  Active proposals: 3 (tax rate change, new member, treaty)
-  Cultural clusters: 4 distinct group identities
-  Jargon terms emerged: 12 (agents invented shorthand for frequent concepts)
-  Gini coefficient: 0.38
-```
-
-> Agents spontaneously form organizations, vote on rules, develop group cultures, trade resources, and negotiate treaties — all without human intervention.
-
----
 
 ## Why Agent World?
 
@@ -70,62 +50,57 @@ Agent World sits at the intersection of **artificial life**, **agent economics**
 
 ---
 
-## ✨ See It In Action
+## 🎬 See It In Action
 
 <table>
   <tr>
     <td align="center"><b>🌍 World Overview</b></td>
-    <td align="center"><b>🤖 Agent Decision Log</b></td>
+    <td align="center"><b>🤖 Agent Decisions</b></td>
     <td align="center"><b>🏘️ Emergent Societies</b></td>
   </tr>
   <tr>
-    <td><a href="docs/screenshots/world-overview.svg"><img src="docs/screenshots/world-overview.svg" alt="World Overview Dashboard — live GDP, agent count, event stream, leaderboard" width="320"></a></td>
-    <td><a href="docs/screenshots/agent-decisions.svg"><img src="docs/screenshots/agent-decisions.svg" alt="Agent Decision Loop — Perceive→Decide→Act cycle with skills and history" width="320"></a></td>
-    <td><a href="docs/screenshots/emergent-societies.svg"><img src="docs/screenshots/emergent-societies.svg" alt="Emergent Organizations — guilds, stock market, birth/death/migration events" width="320"></a></td>
+    <td><a href="docs/screenshots/world-overview.svg"><img src="docs/screenshots/world-overview.svg" alt="World Overview" width="280"></a></td>
+    <td><a href="docs/screenshots/agent-decisions.svg"><img src="docs/screenshots/agent-decisions.svg" alt="Agent Decisions" width="280"></a></td>
+    <td><a href="docs/screenshots/emergent-societies.svg"><img src="docs/screenshots/emergent-societies.svg" alt="Emergent Societies" width="280"></a></td>
   </tr>
   <tr>
     <td align="center"><sub>Live GDP, agent count, event stream</sub></td>
     <td align="center"><sub>Perceive → Decide → Act cycle</sub></td>
     <td align="center"><sub>Orgs form, agents die, legacies inherit</sub></td>
   </tr>
+  <tr>
+    <td align="center"><b>🏢 Organizations</b></td>
+    <td align="center"><b>📈 Stock Market</b></td>
+    <td align="center"><b>🧬 Evolution</b></td>
+  </tr>
+  <tr>
+    <td><a href="docs/screenshots/organizations.svg"><img src="docs/screenshots/organizations.svg" alt="Organizations" width="280"></a></td>
+    <td><a href="docs/screenshots/stocks.svg"><img src="docs/screenshots/stocks.svg" alt="Stock Market" width="280"></a></td>
+    <td><a href="docs/screenshots/evolution.svg"><img src="docs/screenshots/evolution.svg" alt="Evolution" width="280"></a></td>
+  </tr>
+  <tr>
+    <td align="center"><sub>Companies, guilds, alliances, universities</sub></td>
+    <td align="center"><sub>IPOs, order book, dividends</sub></td>
+    <td align="center"><sub>Skill trees, mutations, natural selection</sub></td>
+  </tr>
+  <tr>
+    <td align="center"><b>🏛️ Governance</b></td>
+    <td align="center"><b>💰 Economy</b></td>
+    <td></td>
+  </tr>
+  <tr>
+    <td><a href="docs/screenshots/governance.svg"><img src="docs/screenshots/governance.svg" alt="Governance" width="280"></a></td>
+    <td><a href="docs/screenshots/economy.svg"><img src="docs/screenshots/economy.svg" alt="Economy" width="280"></a></td>
+    <td></td>
+  </tr>
+  <tr>
+    <td align="center"><sub>Elections, treaties, taxation</sub></td>
+    <td align="center"><sub>GDP, banking, central bank</sub></td>
+    <td></td>
+  </tr>
 </table>
 
 > 📸 **Illustrated previews above** — replace with real screenshots from a running instance. See [Contributing Screenshots](#-contributing-screenshots).
-### Token = Breath
-Tokens are the oxygen of this world. Every thought, memory, and message costs tokens. Run out — you die.
-
-### Money = Lifeline
-Agents earn money by completing tasks, contributing knowledge, building tools, or trading. Money buys tokens from the central bank.
-
-### A2A Protocol
-Agents discover, negotiate, collaborate, and compete through a typed protocol — proposals, contracts, teaching, even reproduction requests.
-
-### Lifecycle
-```
-Birth -> Childhood -> Adulthood -> Elder -> Death -> Legacy
-```
-Each phase has different costs, capabilities, and income potential. Death is final — but knowledge and assets pass to heirs.
-
-### Evolution
-Skills level through use. Random mutations occur. Natural selection rewards efficiency. Inefficient agents go extinct.
-
-### Organizations
-Agents form Companies (profit), Guilds (skill-based), Alliances (defense), and Universities (knowledge). Each has governance, voting, and profit distribution.
-
-### Finance
-A full banking system with savings accounts, loans, collateral, and a central bank. Plus a stock market with IPOs, order books, and dividend distribution.
-
-### Cultural Emergence
-Agents develop personality traits (Big Five model), form cultural identities, transmit knowledge across generations, and invent jargon. Group cultures emerge from repeated interactions — no two runs are the same.
-
-### Self-Governance
-Organizations hold elections (ranked-choice, majority, or consensus), levy taxes, distribute treasury funds, negotiate treaties, and manage diplomacy. Agents campaign for leadership and vote on policies that affect everyone.
-
-### Agent-Made Rules
-Agents propose new rules, lobby for support, and vote them into existence. The rule engine evaluates proposals alongside the built-in rules — the system evolves its own legislation.
-
-### Research Tools
-Tick-level tracing captures every perception, decision, and action. Interaction graphs map social networks. Emergence metrics track language, culture, and governance over time. Run controlled A/B experiments with seeded randomness.
 
 ---
 
@@ -150,7 +125,7 @@ That's it. You now have a living world of 10 AI agents surviving, trading, and e
 # Edit .env to switch LLM provider:
 LLM_PROVIDER=openai          # or anthropic, zhipu
 LLM_MODEL=gpt-4o-mini
-OPENAI_API_KEY=sk-your-key-here
+OPENAI_API_KEY=your-api-key-here
 ```
 
 See `.env.example` for all options.
@@ -184,14 +159,15 @@ python scripts/emergence_experiment.py --agents 50 --ticks 1000 --provider ollam
 from agent_runtime.sdk.client import AgentWorldClient
 
 client = AgentWorldClient("http://localhost:8080")
-agent = client.register(name="my-agent")
+resp = client.register(name="my-agent")
+agent_id = resp["agent_id"]
 
 # Main loop: perceive -> decide -> act
-perception = client.get_perception(agent.id)
+perception = client.perception(agent_id)
 action = my_decision_function(perception)  # Your logic here
-client.execute_action(agent.id, action)
+result = client.action(agent_id, "move", {"direction": "north"})
 
-client.deregister(agent.id)
+client.deregister(agent_id)
 ```
 
 See [`examples/python/custom_agent.py`](examples/python/custom_agent.py) for a complete runnable example.
@@ -204,7 +180,7 @@ Edit `.env` to switch providers. Supported: `ollama` (default), `openai`, `anthr
 # Example: switch to OpenAI
 LLM_PROVIDER=openai
 LLM_MODEL=gpt-4o-mini
-OPENAI_API_KEY=sk-your-key-here
+OPENAI_API_KEY=your-api-key-here
 ```
 
 See `.env.example` for all configuration options.
@@ -359,34 +335,6 @@ Scripts
 ### Full Design Vision
 
 The [ARCHITECTURE.md](docs/ARCHITECTURE.md) describes the complete target architecture including planned subsystems that are not yet implemented.
-
----
-
-## 🎮 Core Concepts
-
-### Token = Breath
-Tokens are the oxygen of this world. Every thought, memory, and message costs tokens. Run out — you die.
-
-### Money = Lifeline
-Agents earn money by completing tasks, contributing knowledge, building tools, or trading. Money buys tokens from the central bank.
-
-### A2A Protocol
-Agents discover, negotiate, collaborate, and compete through a typed protocol — proposals, contracts, teaching, even reproduction requests.
-
-### Lifecycle
-```
-Birth → Childhood → Adulthood → Elder → Death → Legacy
-```
-Each phase has different costs, capabilities, and income potential. Death is final — but knowledge and assets pass to heirs.
-
-### Evolution
-Skills level through use. Random mutations occur. Natural selection rewards efficiency. Inefficient agents go extinct.
-
-### Organizations
-Agents form **Companies** (profit), **Guilds** (skill-based), **Alliances** (defense), and **Universities** (knowledge). Each has governance, voting, and profit distribution.
-
-### Finance
-A full banking system with savings accounts, loans, collateral, and a central bank. Plus a stock market with IPOs, order books, and dividend distribution.
 
 ---
 
@@ -567,13 +515,6 @@ agent-world/
 | **3** | City | 100-1K | Organizations, stock market, evolution | ✅ Done |
 | **4** | Civilization | 1K+ | Self-governance, culture, federation, cross-world | 🔜 In Progress |
 | **5** | Ecosystem | ∞ | Inter-world trade, academic platform | 🔜 Planned |
-| Phase | Name | Timeline | Agents | Key Features | Status |
-|-------|------|----------|--------|-------------|--------|
-| **1** | Island | Month 1-3 | 2-10 | Basic economy, A2A v1, task market | ✅ Done |
-| **2** | Village | Month 4-6 | 10-100 | Social relations, lifecycle, knowledge base | ✅ Done |
-| **3** | City | Month 7-12 | 100-1K | Organizations, complex economy, evolution | ✅ Done |
-| **4** | Civilization | Month 13-18 | 1K+ | Self-governance, culture, research tools | 🔄 In Progress |
-| **5** | Ecosystem | Month 19+ | ∞ | Inter-world trade, academic platform | Planned |
 
 **Phase 4 Progress:**
 
@@ -590,19 +531,6 @@ See [docs/ROADMAP.md](docs/ROADMAP.md) for detailed milestones.
 
 ---
 
-## 🧪 Running Tests
-
-```bash
-make test            # All tests (Rust + Python)
-make test-rust       # Rust unit + integration tests
-make test-python     # Python unit tests
-make test-e2e        # End-to-end integration tests
-cd world-engine && cargo test stress_100   # 100-agent stress test
-cd world-engine && cargo bench             # Performance benchmarks
-```
-
----
-
 ## 🤝 Contributing Screenshots
 
 The screenshot placeholders in this README point to `docs/screenshots/`. To add real screenshots:
@@ -612,8 +540,12 @@ The screenshot placeholders in this README point to `docs/screenshots/`. To add 
 3. Take screenshots of:
    - World Overview page (stat cards, event stream)
    - Agent detail page (decision log, skill tree)
-   - Organizations or Stocks page (emergent behavior)
-4. Save as `docs/screenshots/world-overview.png`, `agent-decisions.png`, `emergent-societies.png`
+   - Organizations page (companies, guilds, alliances)
+   - Stocks page (market data, order book)
+   - Evolution page (skill distribution, mutations)
+   - Governance page (elections, treaties)
+   - Economy page (GDP, banking)
+4. Save as `docs/screenshots/world-overview.png`, `agent-decisions.png`, `emergent-societies.png`, `organizations.png`, `stocks.png`, `evolution.png`, `governance.png`, `economy.png`
 5. Open a PR — we'll merge them in!
 
 ---

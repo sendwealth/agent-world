@@ -22,10 +22,110 @@ servers:
 tags:
   - name: Tasks
     description: Task marketplace operations (create, claim, submit, review, complete, expire)
+  - name: Agents
+    description: Agent lifecycle operations (spawn, list, get, deregister)
   - name: WAL
     description: Write-Ahead Log operations (stats, snapshot, verify)
 
 paths:
+  # ── Agent Endpoints ─────────────────────────────────────
+
+  /api/v1/agents:
+    get:
+      tags: [Agents]
+      operationId: listAgents
+      summary: List all agents
+      description: Returns all agents currently tracked by the world engine.
+      responses:
+        "200":
+          description: List of agents
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/AgentRecord"
+
+    post:
+      tags: [Agents]
+      operationId: spawnAgent
+      summary: Spawn a new agent
+      description: |
+        Creates a new agent in the world. The agent starts with the specified
+        name, tokens, and money. Initial phase is `adult`.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/SpawnAgentRequest"
+            examples:
+              default:
+                summary: Standard agent spawn
+                value:
+                  name: "Agent-42"
+                  tokens: 100000
+                  money: 0
+      responses:
+        "201":
+          description: Agent spawned successfully
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AgentRecord"
+        "400":
+          description: Validation error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /api/v1/agents/{id}:
+    get:
+      tags: [Agents]
+      operationId: getAgent
+      summary: Get an agent by ID
+      parameters:
+        - $ref: "#/components/parameters/AgentId"
+      responses:
+        "200":
+          description: Agent found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AgentRecord"
+        "404":
+          description: Agent not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+    delete:
+      tags: [Agents]
+      operationId: deregisterAgent
+      summary: Deregister an agent
+      description: Removes an external agent from the world registry.
+      parameters:
+        - $ref: "#/components/parameters/AgentId"
+      responses:
+        "200":
+          description: Agent deregistered
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  deregistered:
+                    type: boolean
+                    example: true
+        "404":
+          description: Agent not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
   # ── Task Endpoints ──────────────────────────────────────
   /tasks:
     post:
@@ -488,6 +588,15 @@ components:
         format: uuid
         example: "550e8400-e29b-41d4-a716-446655440000"
 
+    AgentId:
+      name: id
+      in: path
+      required: true
+      description: Agent identifier (UUID string)
+      schema:
+        type: string
+        example: "agent-42"
+
   schemas:
     CreateTaskRequest:
       type: object
@@ -636,6 +745,122 @@ components:
           type: string
           description: Human-readable error message
           example: "task not found: 550e8400-e29b-41d4-a716-446655440000"
+
+    # ── Agent Schemas ──────────────────────────────────────
+
+    AgentRecord:
+      type: object
+      description: |
+        The canonical agent record returned by all API endpoints.
+        Maps directly from `world::agent::AgentRecord` in the Rust engine.
+      properties:
+        id:
+          type: string
+          description: Unique agent identifier (UUID string)
+          example: "a1b2c3d4-e5f6-7890-abcd-ef1234567890"
+        name:
+          type: string
+          description: Agent display name
+          example: "Agent-42"
+        phase:
+          type: string
+          description: Current life phase of the agent
+          enum:
+            - birth
+            - childhood
+            - adult
+            - elder
+            - dying
+            - dead
+        tokens:
+          type: integer
+          format: uint64
+          description: Current token balance
+          example: 100000
+        money:
+          type: integer
+          format: uint64
+          description: Current money balance
+          example: 0
+        alive:
+          type: boolean
+          description: Whether the agent is alive
+          example: true
+        ticks_survived:
+          type: integer
+          format: uint64
+          description: Number of ticks the agent has survived
+          example: 0
+        personality:
+          type: string
+          description: |
+            Personality vector serialized as JSON. Empty string means
+            not yet initialized.
+          default: ""
+        parent_ids:
+          type: array
+          items:
+            type: string
+          description: Parent agent IDs for offspring tracking / genealogy
+          default: []
+        generation:
+          type: integer
+          format: uint32
+          description: "Generation depth (0 = genesis, 1 = first offspring, etc.)"
+          default: 0
+        skills:
+          type: object
+          additionalProperties:
+            type: integer
+            format: uint32
+          description: Skills map (skill name → level)
+          default: {}
+          example:
+            coding: 3
+            trading: 1
+
+    SpawnAgentRequest:
+      type: object
+      required:
+        - name
+      properties:
+        name:
+          type: string
+          minLength: 1
+          description: Display name for the new agent
+          example: "Agent-42"
+        tokens:
+          type: integer
+          format: uint64
+          default: 100000
+          minimum: 0
+          description: Initial token balance
+          example: 100000
+        money:
+          type: integer
+          format: uint64
+          default: 0
+          minimum: 0
+          description: Initial money balance
+          example: 0
+
+    AgentPhase:
+      type: string
+      enum:
+        - birth
+        - childhood
+        - adult
+        - elder
+        - dying
+        - dead
+      description: |
+        Agent life phases:
+        - `birth`: Just spawned, not yet active
+        - `childhood`: Learning phase, reduced token consumption
+        - `adult`: Fully active, standard consumption
+        - `elder`: Senior phase, reduced consumption
+        - `dying`: Transitioning to death
+        - `dead`: No longer active
 
     WALStats:
       type: object

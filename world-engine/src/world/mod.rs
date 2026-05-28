@@ -22,7 +22,7 @@ pub mod subsystem;
 pub mod subsystems;
 pub mod tick_profiler;
 
-pub use agent::{Agent, AgentRegistry};
+pub use agent::{Agent, AgentRecord, AgentRegistry, SkillRecord};
 pub use event::{EventType, WorldEvent, TrustInteractionType};
 pub use genesis::GenesisConfig;
 pub use intervention::{InterventionCheckerSubsystem, InterventionConfig as InterventionSubsystemConfig, MessageInterventionGuard};

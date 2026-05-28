@@ -10,6 +10,7 @@ pub mod reward;
 pub mod stock_market;
 pub mod task;
 pub mod token_burn;
+pub mod tool_marketplace;
 pub mod trust;
 
 pub use banking::{
@@ -47,6 +48,11 @@ pub use stock_market::{
     DividendRecord, DividendRecipient as StockDividendRecipient, OrderType, OrderKind,
     OrderStatus, StockMarketError,
 };
-pub use task::{TaskBoard, Task, TaskStatus, TaskError};
+pub use task::{TaskBoard, Task, TaskStatus, TaskError, CoordinationTask, CoordinationTaskStatus, CoordinationTaskError, Contribution};
 pub use token_burn::{TokenBurnEngine, BurnResult};
+pub use tool_marketplace::{
+    ToolMarketplace, ToolListing, ToolCategory, ToolListingMode, ToolListingStatus,
+    RentalRecord, RentalStatus, ToolPurchaseRecord, ToolRating,
+    ToolMarketplaceError, ToolMarketplaceFilter, ToolMarketplaceSort,
+};
 pub use trust::{TrustNetwork, TrustConfig, TrustEdge, TrustScore};

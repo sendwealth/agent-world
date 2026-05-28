@@ -550,6 +550,7 @@ async fn main() {
         ))),
         investment_system: Some(investment_system),
         rule_engine: Some(Arc::new(Mutex::new(agent_world_engine::organization::rule_engine::RuleEngine::with_event_bus(event_bus.clone())))),
+        tool_marketplace: Some(Arc::new(Mutex::new(agent_world_engine::economy::tool_marketplace::ToolMarketplace::with_shared_event_bus(event_bus.clone())))),
         federation: Some(federation),        federation_registry: Some(federation_registry),
         migration_manager: Some(migration_manager),
         api_key_store,

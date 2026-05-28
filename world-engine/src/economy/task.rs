@@ -153,6 +153,8 @@ pub struct TaskBoard {
     event_bus: Option<Arc<EventBus>>,
     /// Optional reward distributor for fee deduction, XP, reputation, and ledger.
     reward_distributor: Option<RewardDistributor>,
+    /// Coordination tasks (multi-agent collaboration).
+    coordination_tasks: HashMap<Uuid, CoordinationTask>,
 }
 
 impl TaskBoard {
@@ -163,6 +165,7 @@ impl TaskBoard {
             escrows: HashMap::new(),
             event_bus: None,
             reward_distributor: None,
+            coordination_tasks: HashMap::new(),
         }
     }
 
@@ -173,6 +176,7 @@ impl TaskBoard {
             escrows: HashMap::new(),
             event_bus: Some(Arc::new(event_bus)),
             reward_distributor: None,
+            coordination_tasks: HashMap::new(),
         }
     }
 
@@ -184,6 +188,7 @@ impl TaskBoard {
             escrows: HashMap::new(),
             event_bus: Some(event_bus),
             reward_distributor: None,
+            coordination_tasks: HashMap::new(),
         }
     }
 
@@ -195,6 +200,7 @@ impl TaskBoard {
             escrows: HashMap::new(),
             event_bus: None,
             reward_distributor: Some(RewardDistributor::new(config)),
+            coordination_tasks: HashMap::new(),
         }
     }
 
@@ -601,6 +607,350 @@ impl TaskBoard {
         expired_ids
     }
 
+    // ── Coordination Tasks (Multi-Agent) ──────────────────
+
+    /// Get a coordination task by ID.
+    pub fn get_coordination_task(&self, id: Uuid) -> Option<&CoordinationTask> {
+        self.coordination_tasks.get(&id)
+    }
+
+    /// List all coordination tasks.
+    pub fn list_coordination_tasks(&self) -> Vec<&CoordinationTask> {
+        self.coordination_tasks.values().collect()
+    }
+
+    /// List coordination tasks by status.
+    pub fn list_coordination_tasks_by_status(&self, status: CoordinationTaskStatus) -> Vec<&CoordinationTask> {
+        self.coordination_tasks.values().filter(|t| t.status == status).collect()
+    }
+
+    /// List coordination tasks where a given agent is a participant.
+    pub fn list_coordination_tasks_by_participant(&self, agent_id: &str) -> Vec<&CoordinationTask> {
+        self.coordination_tasks.values().filter(|t| t.is_participant(agent_id)).collect()
+    }
+
+    /// Create a new coordination task. Escrows the reward pool from the coordinator.
+    #[allow(clippy::too_many_arguments)]
+    pub fn create_coordination_task(
+        &mut self,
+        title: String,
+        description: String,
+        reward_pool: u64,
+        currency: Currency,
+        coordinator_id: String,
+        max_agents: usize,
+        created_tick: u64,
+        expires_at: Option<u64>,
+    ) -> Result<Uuid, CoordinationTaskError> {
+        let escrow_held = reward_pool > 0;
+        if escrow_held {
+            let available = self.get_balance(&coordinator_id);
+            if available < reward_pool {
+                // Allow creation with insufficient balance as liability (same as solo tasks)
+            }
+            self.balances.insert(
+                coordinator_id.clone(),
+                self.get_balance(&coordinator_id).saturating_sub(reward_pool),
+            );
+        }
+
+        let id = Uuid::new_v4();
+        let task = CoordinationTask {
+            id,
+            title,
+            description,
+            status: CoordinationTaskStatus::Open,
+            reward_pool,
+            currency,
+            escrow_held,
+            coordinator_id: coordinator_id.clone(),
+            max_agents,
+            participants: vec![coordinator_id.clone()],
+            contributions: HashMap::new(),
+            reward_overrides: HashMap::new(),
+            expires_at,
+            created_tick,
+        };
+
+        if escrow_held {
+            self.escrows.insert(id, reward_pool);
+        }
+
+        self.coordination_tasks.insert(id, task);
+
+        self.emit(WorldEvent::CoordinationTaskCreated {
+            task_id: id.to_string(),
+            coordinator_id,
+            max_agents,
+        });
+
+        Ok(id)
+    }
+
+    /// Join an open coordination task.
+    pub fn join_coordination_task(
+        &mut self,
+        id: Uuid,
+        agent_id: String,
+    ) -> Result<(), CoordinationTaskError> {
+        let task = self.coordination_tasks.get_mut(&id)
+            .ok_or_else(|| CoordinationTaskError::NotFound(id.to_string()))?;
+
+        if task.status != CoordinationTaskStatus::Open {
+            return Err(CoordinationTaskError::InvalidTransition {
+                from: task.status,
+                to: CoordinationTaskStatus::Open,
+            });
+        }
+
+        if task.is_participant(&agent_id) {
+            return Err(CoordinationTaskError::AlreadyJoined);
+        }
+
+        if task.participant_count() >= task.max_agents {
+            return Err(CoordinationTaskError::TaskFull);
+        }
+
+        task.participants.push(agent_id.clone());
+
+        self.emit(WorldEvent::CoordinationTaskAgentJoined {
+            task_id: id.to_string(),
+            agent_id,
+        });
+
+        Ok(())
+    }
+
+    /// Submit a contribution to a coordination task.
+    pub fn submit_coordination_contribution(
+        &mut self,
+        id: Uuid,
+        agent_id: &str,
+        content: String,
+        tick: u64,
+    ) -> Result<(), CoordinationTaskError> {
+        if content.is_empty() {
+            return Err(CoordinationTaskError::ContributionRequired);
+        }
+
+        let task = self.coordination_tasks.get(&id)
+            .ok_or_else(|| CoordinationTaskError::NotFound(id.to_string()))?;
+
+        if !task.is_participant(agent_id) {
+            return Err(CoordinationTaskError::NotParticipant);
+        }
+
+        if task.contributions.contains_key(agent_id) {
+            return Err(CoordinationTaskError::AlreadySubmitted);
+        }
+
+        let current_status = task.status;
+        if !matches!(current_status, CoordinationTaskStatus::Open | CoordinationTaskStatus::InProgress) {
+            return Err(CoordinationTaskError::InvalidTransition {
+                from: current_status,
+                to: current_status,
+            });
+        }
+
+        let task = self.coordination_tasks.get_mut(&id).unwrap();
+        task.contributions.insert(agent_id.to_string(), Contribution {
+            agent_id: agent_id.to_string(),
+            content,
+            submitted_tick: tick,
+        });
+
+        // Auto-transition: if all participants have submitted, move to AllSubmitted
+        let all_in = task.participants.iter().all(|a| task.contributions.contains_key(a));
+        if all_in {
+            task.status = CoordinationTaskStatus::AllSubmitted;
+        } else if task.status == CoordinationTaskStatus::Open {
+            task.status = CoordinationTaskStatus::InProgress;
+        }
+
+        self.emit(WorldEvent::CoordinationTaskAgentSubmitted {
+            task_id: id.to_string(),
+            agent_id: agent_id.to_string(),
+        });
+
+        Ok(())
+    }
+
+    /// Complete a coordination task. Distributes the reward pool equally among participants.
+    /// The coordinator can optionally provide reward_overrides to distribute unevenly.
+    pub fn complete_coordination_task(
+        &mut self,
+        id: Uuid,
+        reviewer_id: &str,
+        reward_overrides: Option<HashMap<String, u64>>,
+    ) -> Result<HashMap<String, u64>, CoordinationTaskError> {
+        let task = self.coordination_tasks.get(&id)
+            .ok_or_else(|| CoordinationTaskError::NotFound(id.to_string()))?;
+
+        if task.coordinator_id != reviewer_id {
+            return Err(CoordinationTaskError::NotCoordinator {
+                expected: task.coordinator_id.clone(),
+                actual: reviewer_id.to_string(),
+            });
+        }
+
+        if !task.status.can_transition_to(&CoordinationTaskStatus::Completed) {
+            return Err(CoordinationTaskError::InvalidTransition {
+                from: task.status,
+                to: CoordinationTaskStatus::Completed,
+            });
+        }
+
+        if task.participants.is_empty() {
+            return Err(CoordinationTaskError::NoParticipants);
+        }
+
+        // Calculate distribution
+        let distribution = if let Some(ref overrides) = reward_overrides {
+            // Use overrides if provided; validate total doesn't exceed pool
+            let total: u64 = overrides.values().sum();
+            if total > task.reward_pool {
+                // Cap at pool; distribute proportionally
+                let mut dist = HashMap::new();
+                for agent_id in &task.participants {
+                    let amount = overrides.get(agent_id).copied().unwrap_or(0);
+                    let capped = if total > 0 {
+                        (amount as u128 * task.reward_pool as u128 / total as u128) as u64
+                    } else {
+                        0
+                    };
+                    dist.insert(agent_id.clone(), capped);
+                }
+                dist
+            } else {
+                let mut dist: HashMap<String, u64> = overrides.clone();
+                // Any participant not in overrides gets equal share of remainder
+                let remaining = task.reward_pool - total;
+                let unassigned: Vec<&String> = task.participants.iter()
+                    .filter(|p| !overrides.contains_key(*p))
+                    .collect();
+                if !unassigned.is_empty() {
+                    let share = remaining / unassigned.len() as u64;
+                    for agent_id in unassigned {
+                        dist.insert(agent_id.clone(), share);
+                    }
+                }
+                dist
+            }
+        } else {
+            // Equal distribution
+            let share = task.equal_share();
+            task.participants.iter().map(|p| (p.clone(), share)).collect()
+        };
+
+        // Release escrow and credit participants
+        let _escrow_amount = self.escrows.remove(&id);
+        for (agent_id, amount) in &distribution {
+            let bal = self.get_balance(agent_id);
+            self.balances.insert(agent_id.clone(), bal + amount);
+        }
+
+        let contributor_count = distribution.len();
+        let task = self.coordination_tasks.get_mut(&id).unwrap();
+        task.status = CoordinationTaskStatus::Completed;
+        task.escrow_held = false;
+        task.reward_overrides = distribution.clone();
+
+        self.emit(WorldEvent::CoordinationTaskCompleted {
+            task_id: id.to_string(),
+            contributor_count,
+        });
+
+        Ok(distribution)
+    }
+
+    /// Cancel a coordination task. Only the coordinator can cancel. Refunds escrow.
+    pub fn cancel_coordination_task(
+        &mut self,
+        id: Uuid,
+        coordinator_id: &str,
+    ) -> Result<(), CoordinationTaskError> {
+        // Validate first (immutable borrow)
+        let (expected_coord, can_cancel) = {
+            let task = self.coordination_tasks.get(&id)
+                .ok_or_else(|| CoordinationTaskError::NotFound(id.to_string()))?;
+            (task.coordinator_id.clone(), task.status.can_transition_to(&CoordinationTaskStatus::Cancelled))
+        };
+
+        if expected_coord != coordinator_id {
+            return Err(CoordinationTaskError::NotCoordinator {
+                expected: expected_coord,
+                actual: coordinator_id.to_string(),
+            });
+        }
+
+        if !can_cancel {
+            return Err(CoordinationTaskError::InvalidTransition {
+                from: self.coordination_tasks.get(&id).unwrap().status,
+                to: CoordinationTaskStatus::Cancelled,
+            });
+        }
+
+        // Refund escrow
+        if let Some(escrow_amount) = self.escrows.remove(&id) {
+            let bal = self.get_balance(coordinator_id);
+            self.balances.insert(coordinator_id.to_string(), bal + escrow_amount);
+        }
+
+        // Update status
+        let task = self.coordination_tasks.get_mut(&id).unwrap();
+        task.status = CoordinationTaskStatus::Cancelled;
+        task.escrow_held = false;
+
+        Ok(())
+    }
+
+    /// Expire a coordination task. Refunds escrow to the coordinator.
+    pub fn expire_coordination_task(&mut self, id: Uuid) -> Result<(), CoordinationTaskError> {
+        // Validate first (immutable borrow)
+        let (coordinator_id, can_expire) = {
+            let task = self.coordination_tasks.get(&id)
+                .ok_or_else(|| CoordinationTaskError::NotFound(id.to_string()))?;
+            (task.coordinator_id.clone(), task.status.can_transition_to(&CoordinationTaskStatus::Expired))
+        };
+
+        if !can_expire {
+            return Err(CoordinationTaskError::InvalidTransition {
+                from: self.coordination_tasks.get(&id).unwrap().status,
+                to: CoordinationTaskStatus::Expired,
+            });
+        }
+
+        // Refund escrow
+        if let Some(escrow_amount) = self.escrows.remove(&id) {
+            let bal = self.get_balance(&coordinator_id);
+            self.balances.insert(coordinator_id, bal + escrow_amount);
+        }
+
+        // Update status
+        let task = self.coordination_tasks.get_mut(&id).unwrap();
+        task.status = CoordinationTaskStatus::Expired;
+        task.escrow_held = false;
+
+        Ok(())
+    }
+
+    /// Batch-expire coordination tasks whose expires_at <= current_tick.
+    pub fn process_coordination_expiry(&mut self, current_tick: u64) -> Vec<Uuid> {
+        let expired: Vec<Uuid> = self.coordination_tasks.iter()
+            .filter(|(_, task)| {
+                matches!(task.status, CoordinationTaskStatus::Open | CoordinationTaskStatus::InProgress)
+                    && task.expires_at.is_some_and(|exp| exp <= current_tick)
+            })
+            .map(|(id, _)| *id)
+            .collect();
+
+        for id in &expired {
+            let _ = self.expire_coordination_task(*id);
+        }
+
+        expired
+    }
+
     // ── Helpers ────────────────────────────────────────────
 
     fn emit(&self, event: WorldEvent) {
@@ -615,6 +965,160 @@ impl Default for TaskBoard {
         Self::new()
     }
 }
+
+// ── Multi-Agent Coordination ──────────────────────────────
+
+/// Status of a coordination (multi-agent) task.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum CoordinationTaskStatus {
+    /// Open for agents to join.
+    Open,
+    /// All agents have joined; work in progress.
+    InProgress,
+    /// All agents submitted their contributions; ready for review.
+    AllSubmitted,
+    /// Reviewed and completed; rewards distributed.
+    Completed,
+    /// Expired before completion.
+    Expired,
+    /// Cancelled by the coordinator.
+    Cancelled,
+}
+
+impl CoordinationTaskStatus {
+    pub fn can_transition_to(&self, next: &CoordinationTaskStatus) -> bool {
+        matches!(
+            (self, next),
+            (CoordinationTaskStatus::Open, CoordinationTaskStatus::InProgress)
+                | (CoordinationTaskStatus::Open, CoordinationTaskStatus::Expired)
+                | (CoordinationTaskStatus::Open, CoordinationTaskStatus::Cancelled)
+                | (CoordinationTaskStatus::InProgress, CoordinationTaskStatus::AllSubmitted)
+                | (CoordinationTaskStatus::InProgress, CoordinationTaskStatus::Expired)
+                | (CoordinationTaskStatus::InProgress, CoordinationTaskStatus::Cancelled)
+                | (CoordinationTaskStatus::AllSubmitted, CoordinationTaskStatus::Completed)
+                | (CoordinationTaskStatus::AllSubmitted, CoordinationTaskStatus::Cancelled)
+        )
+    }
+}
+
+impl std::fmt::Display for CoordinationTaskStatus {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            CoordinationTaskStatus::Open => write!(f, "open"),
+            CoordinationTaskStatus::InProgress => write!(f, "in_progress"),
+            CoordinationTaskStatus::AllSubmitted => write!(f, "all_submitted"),
+            CoordinationTaskStatus::Completed => write!(f, "completed"),
+            CoordinationTaskStatus::Expired => write!(f, "expired"),
+            CoordinationTaskStatus::Cancelled => write!(f, "cancelled"),
+        }
+    }
+}
+
+/// A single agent's contribution to a coordination task.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct Contribution {
+    pub agent_id: String,
+    /// The contribution payload (free-form string).
+    pub content: String,
+    /// Tick when the contribution was submitted.
+    pub submitted_tick: u64,
+}
+
+/// A coordination task that multiple agents collaborate on.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct CoordinationTask {
+    pub id: Uuid,
+    pub title: String,
+    pub description: String,
+    pub status: CoordinationTaskStatus,
+    /// Total reward pool for this task, escrowed from the coordinator.
+    pub reward_pool: u64,
+    pub currency: Currency,
+    pub escrow_held: bool,
+    /// The agent who created and coordinates the task.
+    pub coordinator_id: String,
+    /// Maximum number of agents that can participate.
+    pub max_agents: usize,
+    /// Agents currently participating.
+    pub participants: Vec<String>,
+    /// Contributions submitted by participants (agent_id → contribution).
+    pub contributions: HashMap<String, Contribution>,
+    /// Optional per-agent reward overrides set during completion.
+    pub reward_overrides: HashMap<String, u64>,
+    pub expires_at: Option<u64>,
+    pub created_tick: u64,
+}
+
+impl CoordinationTask {
+    /// How many agents have joined.
+    pub fn participant_count(&self) -> usize {
+        self.participants.len()
+    }
+
+    /// How many participants have submitted contributions.
+    pub fn submitted_count(&self) -> usize {
+        self.contributions.len()
+    }
+
+    /// Whether all participants have submitted.
+    pub fn all_submitted(&self) -> bool {
+        !self.participants.is_empty()
+            && self.participants.iter().all(|a| self.contributions.contains_key(a))
+    }
+
+    /// Check if an agent is a participant.
+    pub fn is_participant(&self, agent_id: &str) -> bool {
+        self.participants.iter().any(|p| p == agent_id)
+    }
+
+    /// Compute the equal share of the reward pool.
+    pub fn equal_share(&self) -> u64 {
+        if self.participants.is_empty() {
+            0
+        } else {
+            self.reward_pool / self.participants.len() as u64
+        }
+    }
+}
+
+/// Errors for coordination task operations.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum CoordinationTaskError {
+    NotFound(String),
+    InvalidTransition { from: CoordinationTaskStatus, to: CoordinationTaskStatus },
+    AlreadyJoined,
+    NotParticipant,
+    AlreadySubmitted,
+    TaskFull,
+    NotCoordinator { expected: String, actual: String },
+    Expired,
+    NoParticipants,
+    ContributionRequired,
+}
+
+impl std::fmt::Display for CoordinationTaskError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            CoordinationTaskError::NotFound(id) => write!(f, "coordination task not found: {}", id),
+            CoordinationTaskError::InvalidTransition { from, to } => {
+                write!(f, "invalid transition: {} -> {}", from, to)
+            }
+            CoordinationTaskError::AlreadyJoined => write!(f, "agent already joined this task"),
+            CoordinationTaskError::NotParticipant => write!(f, "agent is not a participant"),
+            CoordinationTaskError::AlreadySubmitted => write!(f, "agent already submitted contribution"),
+            CoordinationTaskError::TaskFull => write!(f, "task has reached maximum participants"),
+            CoordinationTaskError::NotCoordinator { expected, actual } => {
+                write!(f, "only the coordinator can perform this action: expected {}, got {}", expected, actual)
+            }
+            CoordinationTaskError::Expired => write!(f, "task has expired"),
+            CoordinationTaskError::NoParticipants => write!(f, "task has no participants"),
+            CoordinationTaskError::ContributionRequired => write!(f, "contribution content is required"),
+        }
+    }
+}
+
+impl std::error::Error for CoordinationTaskError {}
 
 // ── Tests ─────────────────────────────────────────────────
 

@@ -27,6 +27,7 @@ use crate::economy::banking::{
 };
 use crate::economy::marketplace::Marketplace;
 use crate::economy::reputation::{ReputationConfig, ReputationSystem};
+use crate::economy::tool_marketplace::ToolMarketplace;
 use crate::federation::{MigrationManager, MigrationPolicy, WorldRegistry};
 use crate::economy::stock_market::{
     StockMarket, StockListing, Order as StockOrder,
@@ -77,6 +78,7 @@ pub type SharedTraceStore = Arc<Mutex<crate::tracing::TraceStore>>;
 pub type SharedGovernanceMetricsCollector = Arc<Mutex<GovernanceMetricsCollector>>;
 pub type SharedInvestmentSystem = Arc<Mutex<InvestmentSystem>>;
 pub type SharedRuleEngine = Arc<Mutex<RuleEngine>>;
+pub type SharedToolMarketplace = Arc<Mutex<ToolMarketplace>>;
 
 /// Agent record tracked by the world engine.
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -137,6 +139,7 @@ pub struct AppState {
     pub auth_store: SharedAuthStore,
     pub investment_system: Option<SharedInvestmentSystem>,
     pub rule_engine: Option<SharedRuleEngine>,
+    pub tool_marketplace: Option<SharedToolMarketplace>,
     pub federation: Option<Arc<Mutex<crate::a2a::federation::FederationEngine>>>,    // Federation
     pub federation_registry: Option<Arc<Mutex<crate::federation::WorldRegistry>>>,
     pub migration_manager: Option<Arc<Mutex<crate::federation::MigrationManager>>>,
@@ -194,6 +197,7 @@ pub fn create_router_with_wal(board: SharedTaskBoard, wal: SharedWAL) -> Router 
             auth_store: Arc::new(Mutex::new(AuthStore::new("change-me-in-production"))),
             investment_system: None,
             rule_engine: None,
+            tool_marketplace: Some(Arc::new(Mutex::new(ToolMarketplace::with_shared_event_bus(event_bus.clone())))),
             federation: Some(Arc::new(Mutex::new(crate::a2a::federation::FederationEngine::with_shared_event_bus(event_bus.clone())))),
             federation_registry: Some(Arc::new(Mutex::new(WorldRegistry::new(event_bus.clone())))),
         migration_manager: Some(Arc::new(Mutex::new(MigrationManager::new(MigrationPolicy::default(), event_bus.clone())))),
@@ -236,6 +240,7 @@ pub fn create_router_with_wal_and_snapshots(board: SharedTaskBoard, wal: SharedW
             auth_store: Arc::new(Mutex::new(AuthStore::new("change-me-in-production"))),
             investment_system: None,
             rule_engine: None,
+            tool_marketplace: Some(Arc::new(Mutex::new(ToolMarketplace::with_shared_event_bus(event_bus.clone())))),
             federation: Some(Arc::new(Mutex::new(crate::a2a::federation::FederationEngine::with_shared_event_bus(event_bus.clone())))),
             federation_registry: Some(Arc::new(Mutex::new(WorldRegistry::new(event_bus.clone())))),
         migration_manager: Some(Arc::new(Mutex::new(MigrationManager::new(MigrationPolicy::default(), event_bus.clone())))),
@@ -404,6 +409,28 @@ pub fn build_full_router(state: AppState) -> Router {
         .route("/api/v1/marketplace/balance/:agent_id", get(mp_get_balance))
         .route("/api/v1/marketplace/balance", post(mp_set_balance))
         .route("/api/v1/marketplace/transfer", post(mp_transfer))
+        // Tool Marketplace routes
+        .route("/api/v1/tools", post(tm_list_tool))
+        .route("/api/v1/tools", get(tm_list_tools))
+        .route("/api/v1/tools/:id", get(tm_get_tool))
+        .route("/api/v1/tools/:id", put(tm_update_tool))
+        .route("/api/v1/tools/:id/delist", post(tm_delist_tool))
+        .route("/api/v1/tools/:id/purchase", post(tm_purchase_tool))
+        .route("/api/v1/tools/:id/rent", post(tm_rent_tool))
+        .route("/api/v1/tools/:id/rate", post(tm_rate_tool))
+        .route("/api/v1/tools/:id/ratings", get(tm_list_tool_ratings))
+        .route("/api/v1/rentals/:id", get(tm_get_rental))
+        .route("/api/v1/rentals/:id/cancel", post(tm_cancel_rental))
+        .route("/api/v1/tools/balance/:agent_id", get(tm_get_balance))
+        .route("/api/v1/tools/balance", post(tm_set_balance))
+        // Coordination Task routes
+        .route("/api/v1/coordination", post(coord_create_task))
+        .route("/api/v1/coordination", get(coord_list_tasks))
+        .route("/api/v1/coordination/:id", get(coord_get_task))
+        .route("/api/v1/coordination/:id/join", post(coord_join_task))
+        .route("/api/v1/coordination/:id/submit", post(coord_submit_contribution))
+        .route("/api/v1/coordination/:id/complete", post(coord_complete_task))
+        .route("/api/v1/coordination/:id/cancel", post(coord_cancel_task))
         // Reputation routes
         .route("/api/v1/reputation/:agent_id", get(rep_get_reputation))
         .route("/api/v1/reputation/rankings", get(rep_rankings))
@@ -523,6 +550,7 @@ pub fn create_router_for_test(
             auth_store: Arc::new(Mutex::new(AuthStore::new("change-me-in-production"))),
             investment_system: None,
             rule_engine: None,
+            tool_marketplace: Some(Arc::new(Mutex::new(ToolMarketplace::with_shared_event_bus(event_bus.clone())))),
             federation: Some(Arc::new(Mutex::new(crate::a2a::federation::FederationEngine::with_shared_event_bus(event_bus.clone())))),
             federation_registry: Some(Arc::new(Mutex::new(WorldRegistry::new(event_bus.clone())))),
         migration_manager: Some(Arc::new(Mutex::new(MigrationManager::new(MigrationPolicy::default(), event_bus)))),
@@ -5536,6 +5564,7 @@ mod tests {
             auth_store: Arc::new(Mutex::new(AuthStore::new("change-me-in-production"))),
             investment_system: None,
             rule_engine: None,
+            tool_marketplace: None,
             federation: None,            federation_registry: None,
             migration_manager: None,
             api_key_store: None,
@@ -5828,6 +5857,7 @@ mod tests {
             auth_store: Arc::new(Mutex::new(AuthStore::new("change-me-in-production"))),
             investment_system: None,
             rule_engine: None,
+            tool_marketplace: None,
             federation: None,            federation_registry: None,
             migration_manager: None,
             api_key_store: None,
@@ -6761,4 +6791,469 @@ async fn rep_get_config(
     };
     let rep = rep.lock().await;
     api_ok(rep.config())
+}
+
+// ── Tool Marketplace Handlers ─────────────────────────────
+
+use crate::world::enums::Currency;
+use crate::economy::tool_marketplace::{
+    ToolCategory as TmCategory, ToolListingMode as TmListingMode,
+    ToolMarketplaceFilter as TmFilter,
+};
+
+#[derive(Debug, Deserialize)]
+struct TmListToolRequest {
+    name: String,
+    #[serde(default)]
+    description: String,
+    category: TmCategory,
+    owner_id: String,
+    #[serde(default)]
+    purchase_price: u64,
+    #[serde(default)]
+    rental_price_per_tick: u64,
+    #[serde(default = "default_currency_token")]
+    currency: Currency,
+    listing_mode: TmListingMode,
+    #[serde(default)]
+    tags: Vec<String>,
+}
+
+#[derive(Debug, Deserialize)]
+struct TmUpdateToolRequest {
+    owner_id: String,
+    #[serde(default)]
+    purchase_price: Option<u64>,
+    #[serde(default)]
+    rental_price_per_tick: Option<u64>,
+    #[serde(default)]
+    status: Option<crate::economy::tool_marketplace::ToolListingStatus>,
+    #[serde(default)]
+    tags: Option<Vec<String>>,
+}
+
+#[derive(Debug, Deserialize)]
+struct TmPurchaseToolRequest {
+    buyer_id: String,
+    #[serde(default)]
+    tick: u64,
+}
+
+#[derive(Debug, Deserialize)]
+struct TmRentToolRequest {
+    renter_id: String,
+    duration_ticks: u64,
+    #[serde(default)]
+    current_tick: u64,
+}
+
+#[derive(Debug, Deserialize)]
+struct TmRateToolRequest {
+    rater_id: String,
+    score: u8,
+    #[serde(default)]
+    review: Option<String>,
+    #[serde(default)]
+    tick: u64,
+}
+
+#[derive(Debug, Deserialize)]
+struct TmSetBalanceRequest {
+    agent_id: String,
+    amount: u64,
+}
+
+/// POST /api/v1/tools — List a new tool on the marketplace.
+async fn tm_list_tool(
+    State(state): State<AppState>,
+    Json(body): Json<TmListToolRequest>,
+) -> impl IntoResponse {
+    let tm = match &state.tool_marketplace {
+        Some(t) => t.clone(),
+        None => return api_err(StatusCode::SERVICE_UNAVAILABLE, "tool marketplace not configured"),
+    };
+    let mut tm = tm.lock().await;
+    let tick = *state.tick_rx.borrow();
+    match tm.list_tool(
+        body.name, body.description, body.category,
+        body.owner_id, body.purchase_price, body.rental_price_per_tick,
+        body.currency, body.listing_mode, body.tags, tick,
+    ) {
+        Ok(id) => api_ok(serde_json::json!({ "tool_id": id.to_string() })),
+        Err(e) => api_err(StatusCode::BAD_REQUEST, e.to_string()),
+    }
+}
+
+/// GET /api/v1/tools — List/search tool listings.
+async fn tm_list_tools(
+    State(state): State<AppState>,
+    Query(filter): Query<TmFilter>,
+) -> impl IntoResponse {
+    let tm = match &state.tool_marketplace {
+        Some(t) => t.clone(),
+        None => return api_err(StatusCode::SERVICE_UNAVAILABLE, "tool marketplace not configured"),
+    };
+    let tm = tm.lock().await;
+    let results = tm.search(&filter);
+    api_ok(results)
+}
+
+/// GET /api/v1/tools/:id — Get a tool listing by ID.
+async fn tm_get_tool(
+    State(state): State<AppState>,
+    Path(id): Path<String>,
+) -> impl IntoResponse {
+    let tm = match &state.tool_marketplace {
+        Some(t) => t.clone(),
+        None => return api_err(StatusCode::SERVICE_UNAVAILABLE, "tool marketplace not configured"),
+    };
+    let tm = tm.lock().await;
+    match Uuid::parse_str(&id) {
+        Ok(uuid) => match tm.get(uuid) {
+            Some(tool) => api_ok(tool),
+            None => api_err(StatusCode::NOT_FOUND, format!("tool not found: {}", id)),
+        },
+        Err(_) => api_err(StatusCode::BAD_REQUEST, "invalid UUID"),
+    }
+}
+
+/// PUT /api/v1/tools/:id — Update a tool listing.
+async fn tm_update_tool(
+    State(state): State<AppState>,
+    Path(id): Path<String>,
+    Json(body): Json<TmUpdateToolRequest>,
+) -> impl IntoResponse {
+    let tm = match &state.tool_marketplace {
+        Some(t) => t.clone(),
+        None => return api_err(StatusCode::SERVICE_UNAVAILABLE, "tool marketplace not configured"),
+    };
+    let mut tm = tm.lock().await;
+    match Uuid::parse_str(&id) {
+        Ok(uuid) => match tm.update_tool(uuid, &body.owner_id, body.purchase_price, body.rental_price_per_tick, body.status, body.tags) {
+            Ok(()) => api_ok(serde_json::json!({ "updated": true })),
+            Err(e) => api_err(StatusCode::BAD_REQUEST, e.to_string()),
+        },
+        Err(_) => api_err(StatusCode::BAD_REQUEST, "invalid UUID"),
+    }
+}
+
+/// POST /api/v1/tools/:id/delist — Delist a tool.
+async fn tm_delist_tool(
+    State(state): State<AppState>,
+    Path(id): Path<String>,
+    Json(body): Json<TmUpdateToolRequest>,
+) -> impl IntoResponse {
+    let tm = match &state.tool_marketplace {
+        Some(t) => t.clone(),
+        None => return api_err(StatusCode::SERVICE_UNAVAILABLE, "tool marketplace not configured"),
+    };
+    let mut tm = tm.lock().await;
+    match Uuid::parse_str(&id) {
+        Ok(uuid) => match tm.delist_tool(uuid, &body.owner_id) {
+            Ok(()) => api_ok(serde_json::json!({ "delisted": true })),
+            Err(e) => api_err(StatusCode::BAD_REQUEST, e.to_string()),
+        },
+        Err(_) => api_err(StatusCode::BAD_REQUEST, "invalid UUID"),
+    }
+}
+
+/// POST /api/v1/tools/:id/purchase — Purchase a tool.
+async fn tm_purchase_tool(
+    State(state): State<AppState>,
+    Path(id): Path<String>,
+    Json(body): Json<TmPurchaseToolRequest>,
+) -> impl IntoResponse {
+    let tm = match &state.tool_marketplace {
+        Some(t) => t.clone(),
+        None => return api_err(StatusCode::SERVICE_UNAVAILABLE, "tool marketplace not configured"),
+    };
+    let mut tm = tm.lock().await;
+    let tick = body.tick.max(*state.tick_rx.borrow());
+    match Uuid::parse_str(&id) {
+        Ok(uuid) => match tm.purchase_tool(uuid, &body.buyer_id, tick) {
+            Ok(record) => api_ok(record),
+            Err(e) => api_err(StatusCode::BAD_REQUEST, e.to_string()),
+        },
+        Err(_) => api_err(StatusCode::BAD_REQUEST, "invalid UUID"),
+    }
+}
+
+/// POST /api/v1/tools/:id/rent — Rent a tool.
+async fn tm_rent_tool(
+    State(state): State<AppState>,
+    Path(id): Path<String>,
+    Json(body): Json<TmRentToolRequest>,
+) -> impl IntoResponse {
+    let tm = match &state.tool_marketplace {
+        Some(t) => t.clone(),
+        None => return api_err(StatusCode::SERVICE_UNAVAILABLE, "tool marketplace not configured"),
+    };
+    let mut tm = tm.lock().await;
+    let tick = body.current_tick.max(*state.tick_rx.borrow());
+    match Uuid::parse_str(&id) {
+        Ok(uuid) => match tm.rent_tool(uuid, &body.renter_id, body.duration_ticks, tick) {
+            Ok(record) => api_ok(record),
+            Err(e) => api_err(StatusCode::BAD_REQUEST, e.to_string()),
+        },
+        Err(_) => api_err(StatusCode::BAD_REQUEST, "invalid UUID"),
+    }
+}
+
+/// POST /api/v1/tools/:id/rate — Rate a tool.
+async fn tm_rate_tool(
+    State(state): State<AppState>,
+    Path(id): Path<String>,
+    Json(body): Json<TmRateToolRequest>,
+) -> impl IntoResponse {
+    let tm = match &state.tool_marketplace {
+        Some(t) => t.clone(),
+        None => return api_err(StatusCode::SERVICE_UNAVAILABLE, "tool marketplace not configured"),
+    };
+    let mut tm = tm.lock().await;
+    let tick = body.tick.max(*state.tick_rx.borrow());
+    match Uuid::parse_str(&id) {
+        Ok(uuid) => match tm.rate_tool(uuid, &body.rater_id, body.score, body.review, tick) {
+            Ok(rating_id) => api_ok(serde_json::json!({ "rating_id": rating_id.to_string() })),
+            Err(e) => api_err(StatusCode::BAD_REQUEST, e.to_string()),
+        },
+        Err(_) => api_err(StatusCode::BAD_REQUEST, "invalid UUID"),
+    }
+}
+
+/// GET /api/v1/tools/:id/ratings — List ratings for a tool.
+async fn tm_list_tool_ratings(
+    State(state): State<AppState>,
+    Path(id): Path<String>,
+) -> impl IntoResponse {
+    let tm = match &state.tool_marketplace {
+        Some(t) => t.clone(),
+        None => return api_err(StatusCode::SERVICE_UNAVAILABLE, "tool marketplace not configured"),
+    };
+    let tm = tm.lock().await;
+    match Uuid::parse_str(&id) {
+        Ok(uuid) => {
+            let ratings = tm.tool_ratings(uuid);
+            api_ok(ratings)
+        }
+        Err(_) => api_err(StatusCode::BAD_REQUEST, "invalid UUID"),
+    }
+}
+
+/// GET /api/v1/rentals/:id — Get a rental by ID.
+async fn tm_get_rental(
+    State(state): State<AppState>,
+    Path(id): Path<String>,
+) -> impl IntoResponse {
+    let tm = match &state.tool_marketplace {
+        Some(t) => t.clone(),
+        None => return api_err(StatusCode::SERVICE_UNAVAILABLE, "tool marketplace not configured"),
+    };
+    let tm = tm.lock().await;
+    match Uuid::parse_str(&id) {
+        Ok(uuid) => match tm.get_rental(uuid) {
+            Some(rental) => api_ok(rental),
+            None => api_err(StatusCode::NOT_FOUND, format!("rental not found: {}", id)),
+        },
+        Err(_) => api_err(StatusCode::BAD_REQUEST, "invalid UUID"),
+    }
+}
+
+/// POST /api/v1/rentals/:id/cancel — Cancel a rental.
+async fn tm_cancel_rental(
+    State(state): State<AppState>,
+    Path(id): Path<String>,
+    Json(body): Json<serde_json::Value>,
+) -> impl IntoResponse {
+    let tm = match &state.tool_marketplace {
+        Some(t) => t.clone(),
+        None => return api_err(StatusCode::SERVICE_UNAVAILABLE, "tool marketplace not configured"),
+    };
+    let mut tm = tm.lock().await;
+    let renter_id = body.get("renter_id").and_then(|v| v.as_str()).unwrap_or("");
+    match Uuid::parse_str(&id) {
+        Ok(uuid) => match tm.cancel_rental(uuid, renter_id) {
+            Ok(()) => api_ok(serde_json::json!({ "cancelled": true })),
+            Err(e) => api_err(StatusCode::BAD_REQUEST, e.to_string()),
+        },
+        Err(_) => api_err(StatusCode::BAD_REQUEST, "invalid UUID"),
+    }
+}
+
+/// GET /api/v1/tools/balance/:agent_id — Get agent balance in the tool marketplace.
+async fn tm_get_balance(
+    State(state): State<AppState>,
+    Path(agent_id): Path<String>,
+) -> impl IntoResponse {
+    let tm = match &state.tool_marketplace {
+        Some(t) => t.clone(),
+        None => return api_err(StatusCode::SERVICE_UNAVAILABLE, "tool marketplace not configured"),
+    };
+    let tm = tm.lock().await;
+    api_ok(serde_json::json!({ "agent_id": agent_id, "balance": tm.get_balance(&agent_id) }))
+}
+
+/// POST /api/v1/tools/balance — Set agent balance in the tool marketplace.
+async fn tm_set_balance(
+    State(state): State<AppState>,
+    Json(body): Json<TmSetBalanceRequest>,
+) -> impl IntoResponse {
+    let tm = match &state.tool_marketplace {
+        Some(t) => t.clone(),
+        None => return api_err(StatusCode::SERVICE_UNAVAILABLE, "tool marketplace not configured"),
+    };
+    let mut tm = tm.lock().await;
+    tm.set_balance(&body.agent_id, body.amount);
+    api_ok(serde_json::json!({ "agent_id": body.agent_id, "balance": body.amount }))
+}
+
+// ── Coordination Task Handlers ────────────────────────────
+
+#[derive(Debug, Deserialize)]
+struct CoordCreateTaskRequest {
+    title: String,
+    #[serde(default)]
+    description: String,
+    #[serde(default)]
+    reward_pool: u64,
+    #[serde(default = "default_currency_money")]
+    currency: Currency,
+    coordinator_id: String,
+    #[serde(default = "default_max_agents")]
+    max_agents: usize,
+    #[serde(default)]
+    expires_at: Option<u64>,
+}
+
+fn default_currency_money() -> Currency { Currency::Money }
+fn default_currency_token() -> Currency { Currency::Token }
+fn default_max_agents() -> usize { 10 }
+
+#[derive(Debug, Deserialize)]
+struct CoordJoinRequest {
+    agent_id: String,
+}
+
+#[derive(Debug, Deserialize)]
+struct CoordSubmitRequest {
+    agent_id: String,
+    content: String,
+    #[serde(default)]
+    tick: u64,
+}
+
+#[derive(Debug, Deserialize)]
+struct CoordCompleteRequest {
+    reviewer_id: String,
+    #[serde(default)]
+    reward_overrides: Option<std::collections::HashMap<String, u64>>,
+}
+
+#[derive(Debug, Deserialize)]
+struct CoordCancelRequest {
+    coordinator_id: String,
+}
+
+/// POST /api/v1/coordination — Create a coordination task.
+async fn coord_create_task(
+    State(state): State<AppState>,
+    Json(body): Json<CoordCreateTaskRequest>,
+) -> impl IntoResponse {
+    let mut board = state.board.lock().await;
+    let tick = *state.tick_rx.borrow();
+    match board.create_coordination_task(
+        body.title, body.description, body.reward_pool, body.currency,
+        body.coordinator_id, body.max_agents, tick, body.expires_at,
+    ) {
+        Ok(id) => api_ok(serde_json::json!({ "task_id": id.to_string() })),
+        Err(e) => api_err(StatusCode::BAD_REQUEST, e.to_string()),
+    }
+}
+
+/// GET /api/v1/coordination — List coordination tasks.
+async fn coord_list_tasks(
+    State(state): State<AppState>,
+) -> impl IntoResponse {
+    let board = state.board.lock().await;
+    let tasks = board.list_coordination_tasks();
+    api_ok(tasks)
+}
+
+/// GET /api/v1/coordination/:id — Get a coordination task by ID.
+async fn coord_get_task(
+    State(state): State<AppState>,
+    Path(id): Path<String>,
+) -> impl IntoResponse {
+    let board = state.board.lock().await;
+    match Uuid::parse_str(&id) {
+        Ok(uuid) => match board.get_coordination_task(uuid) {
+            Some(task) => api_ok(task),
+            None => api_err(StatusCode::NOT_FOUND, format!("coordination task not found: {}", id)),
+        },
+        Err(_) => api_err(StatusCode::BAD_REQUEST, "invalid UUID"),
+    }
+}
+
+/// POST /api/v1/coordination/:id/join — Join a coordination task.
+async fn coord_join_task(
+    State(state): State<AppState>,
+    Path(id): Path<String>,
+    Json(body): Json<CoordJoinRequest>,
+) -> impl IntoResponse {
+    let mut board = state.board.lock().await;
+    match Uuid::parse_str(&id) {
+        Ok(uuid) => match board.join_coordination_task(uuid, body.agent_id) {
+            Ok(()) => api_ok(serde_json::json!({ "joined": true })),
+            Err(e) => api_err(StatusCode::BAD_REQUEST, e.to_string()),
+        },
+        Err(_) => api_err(StatusCode::BAD_REQUEST, "invalid UUID"),
+    }
+}
+
+/// POST /api/v1/coordination/:id/submit — Submit a contribution.
+async fn coord_submit_contribution(
+    State(state): State<AppState>,
+    Path(id): Path<String>,
+    Json(body): Json<CoordSubmitRequest>,
+) -> impl IntoResponse {
+    let mut board = state.board.lock().await;
+    let tick = body.tick.max(*state.tick_rx.borrow());
+    match Uuid::parse_str(&id) {
+        Ok(uuid) => match board.submit_coordination_contribution(uuid, &body.agent_id, body.content, tick) {
+            Ok(()) => api_ok(serde_json::json!({ "submitted": true })),
+            Err(e) => api_err(StatusCode::BAD_REQUEST, e.to_string()),
+        },
+        Err(_) => api_err(StatusCode::BAD_REQUEST, "invalid UUID"),
+    }
+}
+
+/// POST /api/v1/coordination/:id/complete — Complete a coordination task and distribute rewards.
+async fn coord_complete_task(
+    State(state): State<AppState>,
+    Path(id): Path<String>,
+    Json(body): Json<CoordCompleteRequest>,
+) -> impl IntoResponse {
+    let mut board = state.board.lock().await;
+    match Uuid::parse_str(&id) {
+        Ok(uuid) => match board.complete_coordination_task(uuid, &body.reviewer_id, body.reward_overrides) {
+            Ok(distribution) => api_ok(serde_json::json!({ "completed": true, "distribution": distribution })),
+            Err(e) => api_err(StatusCode::BAD_REQUEST, e.to_string()),
+        },
+        Err(_) => api_err(StatusCode::BAD_REQUEST, "invalid UUID"),
+    }
+}
+
+/// POST /api/v1/coordination/:id/cancel — Cancel a coordination task.
+async fn coord_cancel_task(
+    State(state): State<AppState>,
+    Path(id): Path<String>,
+    Json(body): Json<CoordCancelRequest>,
+) -> impl IntoResponse {
+    let mut board = state.board.lock().await;
+    match Uuid::parse_str(&id) {
+        Ok(uuid) => match board.cancel_coordination_task(uuid, &body.coordinator_id) {
+            Ok(()) => api_ok(serde_json::json!({ "cancelled": true })),
+            Err(e) => api_err(StatusCode::BAD_REQUEST, e.to_string()),
+        },
+        Err(_) => api_err(StatusCode::BAD_REQUEST, "invalid UUID"),
+    }
 }

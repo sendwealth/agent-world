@@ -59,6 +59,7 @@ fn test_app() -> Router {
         auth_store,
         investment_system: None,
         rule_engine: None,
+        tool_marketplace: None,
         federation: None,
         federation_registry: None,
         migration_manager: None,

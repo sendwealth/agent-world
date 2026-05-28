@@ -63,6 +63,7 @@ fn test_app() -> axum::Router {
         )),
         investment_system: None,
         rule_engine: None,
+        tool_marketplace: None,
         federation: Some(Arc::new(Mutex::new(
             agent_world_engine::a2a::federation::FederationEngine::with_shared_event_bus(event_bus.clone()),
         ))),

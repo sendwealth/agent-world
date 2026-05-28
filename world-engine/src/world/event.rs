@@ -148,6 +148,16 @@ pub enum EventType {
     SoftRuleActivated,
     SoftRuleExpired,
     SoftRuleRepealed,
+    // Tool marketplace events
+    ToolListed,
+    ToolDelisted,
+    ToolPurchased,
+    ToolRented,
+    // Multi-agent coordination events
+    CoordinationTaskCreated,
+    CoordinationTaskAgentJoined,
+    CoordinationTaskAgentSubmitted,
+    CoordinationTaskCompleted,
 }
 
 /// Events emitted by the world engine.
@@ -301,6 +311,16 @@ pub enum WorldEvent {
     SoftRuleActivated { rule_id: String, org_id: String },
     SoftRuleExpired { rule_id: String, org_id: String, tick: u64 },
     SoftRuleRepealed { rule_id: String, org_id: String, tick: u64 },
+    // Tool marketplace events
+    ToolListed { tool_id: String, owner_id: String, purchase_price: u64, rental_price_per_tick: u64, currency: Currency },
+    ToolDelisted { tool_id: String },
+    ToolPurchased { tool_id: String, buyer_id: String, seller_id: String, price: u64, currency: Currency },
+    ToolRented { rental_id: String, tool_id: String, renter_id: String, owner_id: String, price_per_tick: u64, duration_ticks: u64, total_cost: u64, currency: Currency },
+    // Multi-agent coordination events
+    CoordinationTaskCreated { task_id: String, coordinator_id: String, max_agents: usize },
+    CoordinationTaskAgentJoined { task_id: String, agent_id: String },
+    CoordinationTaskAgentSubmitted { task_id: String, agent_id: String },
+    CoordinationTaskCompleted { task_id: String, contributor_count: usize },
 }
 
 impl WorldEvent {
@@ -428,6 +448,14 @@ impl WorldEvent {
             WorldEvent::SoftRuleActivated { .. } => EventType::SoftRuleActivated,
             WorldEvent::SoftRuleExpired { .. } => EventType::SoftRuleExpired,
             WorldEvent::SoftRuleRepealed { .. } => EventType::SoftRuleRepealed,
+            WorldEvent::ToolListed { .. } => EventType::ToolListed,
+            WorldEvent::ToolDelisted { .. } => EventType::ToolDelisted,
+            WorldEvent::ToolPurchased { .. } => EventType::ToolPurchased,
+            WorldEvent::ToolRented { .. } => EventType::ToolRented,
+            WorldEvent::CoordinationTaskCreated { .. } => EventType::CoordinationTaskCreated,
+            WorldEvent::CoordinationTaskAgentJoined { .. } => EventType::CoordinationTaskAgentJoined,
+            WorldEvent::CoordinationTaskAgentSubmitted { .. } => EventType::CoordinationTaskAgentSubmitted,
+            WorldEvent::CoordinationTaskCompleted { .. } => EventType::CoordinationTaskCompleted,
         }
     }
 
@@ -555,6 +583,14 @@ impl WorldEvent {
             WorldEvent::SoftRuleActivated { .. } => None,
             WorldEvent::SoftRuleExpired { .. } => None,
             WorldEvent::SoftRuleRepealed { .. } => None,
+            WorldEvent::ToolListed { owner_id, .. } => Some(owner_id),
+            WorldEvent::ToolDelisted { .. } => None,
+            WorldEvent::ToolPurchased { buyer_id, .. } => Some(buyer_id),
+            WorldEvent::ToolRented { renter_id, .. } => Some(renter_id),
+            WorldEvent::CoordinationTaskCreated { coordinator_id, .. } => Some(coordinator_id),
+            WorldEvent::CoordinationTaskAgentJoined { agent_id, .. } => Some(agent_id),
+            WorldEvent::CoordinationTaskAgentSubmitted { agent_id, .. } => Some(agent_id),
+            WorldEvent::CoordinationTaskCompleted { .. } => None,
         }
     }
 

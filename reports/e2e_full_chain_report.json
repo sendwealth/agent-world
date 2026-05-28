@@ -1,0 +1,67 @@
+{
+  "duration_seconds": 2.52,
+  "num_agents": 10,
+  "tasks_created": 5,
+  "tasks_completed": 0,
+  "marketplace_purchases": 0,
+  "orgs_created": 1,
+  "messages_sent": 8,
+  "reputation_changes": {
+    "9209ea08-af25-4803-a960-8976ac414775": 0.0,
+    "703a8d09-1520-456b-9b81-b802afabc79f": 0.0,
+    "2fbe8614-96bd-46ba-8480-ec2fe9eb100a": 0.0
+  },
+  "tick_snapshots": [
+    {
+      "round": 0,
+      "tick": 20,
+      "alive_agents": 10
+    },
+    {
+      "round": 1,
+      "tick": 40,
+      "alive_agents": 10
+    },
+    {
+      "round": 2,
+      "tick": 60,
+      "alive_agents": 10
+    },
+    {
+      "round": 3,
+      "tick": 80,
+      "alive_agents": 10
+    },
+    {
+      "round": 4,
+      "tick": 100,
+      "alive_agents": 10
+    },
+    {
+      "round": 5,
+      "tick": 120,
+      "alive_agents": 10
+    },
+    {
+      "round": 6,
+      "tick": 140,
+      "alive_agents": 10
+    },
+    {
+      "round": 7,
+      "tick": 160,
+      "alive_agents": 10
+    },
+    {
+      "round": 8,
+      "tick": 180,
+      "alive_agents": 10
+    },
+    {
+      "round": 9,
+      "tick": 200,
+      "alive_agents": 10
+    }
+  ],
+  "tick_snapshots_last": []
+}

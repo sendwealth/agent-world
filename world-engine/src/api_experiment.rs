@@ -50,6 +50,15 @@ pub enum ExperimentStatus {
     Stopped,
 }
 
+/// Kind of experiment — used to distinguish A/B experiments from generic ones.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Default)]
+#[serde(rename_all = "snake_case")]
+pub enum ExperimentKind {
+    #[default]
+    Generic,
+    AbExperiment,
+}
+
 /// Configuration for creating a new experiment.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ExperimentConfig {
@@ -64,6 +73,9 @@ pub struct ExperimentConfig {
     /// Free-form description.
     #[serde(default)]
     pub description: String,
+    /// Experiment kind (generic vs A/B). Defaults to Generic.
+    #[serde(default)]
+    pub experiment_type: ExperimentKind,
 }
 
 /// Request body for `POST /api/v2/experiments`.
@@ -79,6 +91,8 @@ pub struct CreateExperimentRequest {
     pub llm_temperature: Option<f64>,
     #[serde(default)]
     pub description: String,
+    #[serde(default)]
+    pub experiment_type: ExperimentKind,
 }
 
 /// Request body for `POST /api/v2/experiments/{id}/inject`.
@@ -186,6 +200,7 @@ async fn create_experiment(
             llm_model: req.llm_model,
             llm_temperature: req.llm_temperature,
             description: req.description,
+            experiment_type: req.experiment_type,
         },
         created_at: Utc::now(),
         started_at: None,
@@ -532,6 +547,7 @@ mod tests {
                 llm_model: None,
                 llm_temperature: None,
                 description: String::new(),
+                experiment_type: ExperimentKind::default(),
             },
             created_at: Utc::now(),
             started_at: None,

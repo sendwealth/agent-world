@@ -35,6 +35,7 @@ use uuid::Uuid;
 
 use crate::api_auth::SharedApiKeyStore;
 use crate::api_experiment::SharedExperimentStore;
+use crate::api_ab_experiment::SharedABExperimentStore;
 use crate::economy::banking::{
     BankingSystem, BankAccountType, Loan, LoanStatus, Collateral,
 };
@@ -170,6 +171,7 @@ pub struct TestOverrides {
     pub migration_manager: Option<Arc<Mutex<crate::federation::MigrationManager>>>,
     pub api_key_store: Option<SharedApiKeyStore>,
     pub auth_store: Option<SharedAuthStore>,
+    pub ab_experiment_store: Option<SharedABExperimentStore>,
 }
 
 /// Combined state for the API with WAL + EventBus + agents + messages + snapshot store.
@@ -206,6 +208,8 @@ pub struct AppState {
     pub api_key_store: Option<SharedApiKeyStore>,
     /// Experiment store for `/api/v2/experiments/*` endpoints.
     pub experiment_store: SharedExperimentStore,
+    /// A/B experiment store for `/api/v2/experiments/ab/*` endpoints.
+    pub ab_experiment_store: SharedABExperimentStore,
 }
 
 impl AppState {
@@ -261,6 +265,7 @@ impl AppState {
             migration_manager: overrides.migration_manager,
             api_key_store: overrides.api_key_store,
             experiment_store: Arc::new(Mutex::new(Vec::new())),
+            ab_experiment_store: overrides.ab_experiment_store.unwrap_or_else(|| Arc::new(Mutex::new(Vec::new()))),
         }
     }
 }

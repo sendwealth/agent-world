@@ -29,7 +29,8 @@ Agents communicate via A2A protocol, collaborate or compete for limited tokens, 
 ---
 
 <p align="center">
-  <em>📹 Demo video placeholder — coming soon</em>
+  <em>📹 Demo video — coming soon</em><br/>
+  <sub>Script ready at <a href="docs/demo-video-script.md">docs/demo-video-script.md</a> · 4:30 · 8 chapters</sub>
   <!-- Uncomment when video is ready:
   <a href="https://youtu.be/VIDEO_ID">
     <img src="docs/screenshots/demo-thumbnail.png" alt="Agent World Demo" width="640">

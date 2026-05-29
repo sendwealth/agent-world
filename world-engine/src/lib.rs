@@ -28,6 +28,7 @@ pub mod api_marketplace;
 pub mod api_network_graph;
 pub mod api_org;
 pub mod api_population;
+pub mod api_plugins;
 pub mod api_report;
 pub mod api_reputation;
 pub mod api_research;
@@ -49,6 +50,7 @@ pub mod lifecycle;
 pub mod observability;
 pub mod organization;
 pub mod persistence;
+pub mod plugin;
 pub mod rules;
 pub mod snapshot;
 pub mod time_capsule;
@@ -106,4 +108,11 @@ pub use snapshot::{
     AgentSnapshot, CompressionStats, SnapshotConfig, SnapshotDelta, SnapshotEngine,
     SnapshotEngineHandle, SnapshotKind, SnapshotRecord, SnapshotRequest, SnapshotStorage,
     WorldSnapshot,
+};
+
+pub use plugin::{
+    HookResult, OnAgentAction, OnAgentSpawn, OnEvent, OnShutdown, OnStartup, OnTickEnd,
+    OnTickStart, OnTransaction, PluginContext, PluginError, PluginHooks, PluginInfo,
+    PluginManager, PluginMetadata, PluginRegistry, PluginState, PluginSubsystemBridge,
+    Permission, PermissionSet, SharedPluginManager, TransactionContext,
 };

@@ -90,3 +90,15 @@ mentorship:
 inheritance:
   inheritance_ratio: 0.5        # 死亡时Token转移比例（50%）
   skill_transfer_ratio: 0.3     # 技能等级转移比例（30%）
+
+# 插件系统配置
+# plugins:
+#   enabled:
+#     - com.agent-world.tax-plugin
+#     - com.agent-world.data-collector
+#   config:
+#     com.agent-world.tax-plugin:
+#       rate: 0.05
+#       threshold: 100
+#     com.agent-world.data-collector:
+#       log_interval: 100

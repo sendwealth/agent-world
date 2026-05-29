@@ -54,6 +54,10 @@ pub struct GenesisConfig {
     pub federation: FederationConfigSection,
     #[serde(default)]
     pub snapshot: crate::snapshot::SnapshotConfig,
+    /// Plugin configuration: map of plugin-id -> config key-values.
+    /// Loaded from genesis.yaml under the `plugins` key.
+    #[serde(default)]
+    pub plugins: PluginConfigSection,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
@@ -584,6 +588,35 @@ fn default_heartbeat_timeout() -> u64 {
 }
 fn default_world_id() -> String {
     uuid::Uuid::new_v4().to_string()
+}
+
+// ── Plugin Configuration ──────────────────────────────────
+
+/// Plugin configuration section in genesis.yaml.
+///
+/// Each key is a plugin ID, and the value is a map of config parameters.
+///
+/// Example genesis.yaml:
+/// ```yaml
+/// plugins:
+///   enabled:
+///     - com.agent-world.tax-plugin
+///     - com.agent-world.data-collector
+///   config:
+///     com.agent-world.tax-plugin:
+///       rate: 0.05
+///       threshold: 100
+///     com.agent-world.data-collector:
+///       log_interval: 100
+/// ```
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Default)]
+pub struct PluginConfigSection {
+    /// List of plugin IDs to auto-load on startup.
+    #[serde(default)]
+    pub enabled: Vec<String>,
+    /// Per-plugin configuration (plugin-id -> config params).
+    #[serde(default)]
+    pub config: std::collections::HashMap<String, std::collections::HashMap<String, serde_yaml::Value>>,
 }
 
 // ── Validation ────────────────────────────────────────────

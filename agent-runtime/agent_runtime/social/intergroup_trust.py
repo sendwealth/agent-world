@@ -160,6 +160,12 @@ class IntergroupTrust:
         # Reciprocal: also affect the reverse direction (slightly less)
         self._adjust_group_trust(event.target_group, event.source_group, delta * 0.7)
 
+        # Mirror updates into agent→group trust when the source/target is an
+        # agent that already has a record.  Without this, get_trust() returns
+        # the stale agent→group record and ignores the updated group→group one.
+        self._adjust_agent_group_trust(event.source_group, event.target_group, delta)
+        self._adjust_agent_group_trust(event.target_group, event.source_group, delta * 0.7)
+
     # ── Query helpers ──
 
     def get_trust(self, source: str, target: str) -> float:
@@ -223,6 +229,34 @@ class IntergroupTrust:
         new_val = record.trust_value + delta
 
         # Check if source belongs to target's group (in-group)
+        groups = self._agent_groups.get(source, set())
+        if target in groups:
+            new_val = max(DEFAULT_IN_GROUP_TRUST, min(1.0, new_val))
+        else:
+            new_val = max(MIN_OUT_GROUP_TRUST, min(1.0, new_val))
+
+        record.trust_value = new_val
+        record.interaction_count += 1
+
+    def _adjust_agent_group_trust(
+        self,
+        source: str,
+        target: str,
+        delta: float,
+    ) -> None:
+        """Adjust agent→group trust if a record already exists.
+
+        This ensures that event-driven updates are visible via get_trust(),
+        which checks the agent→group store first.
+        """
+        key = (source, target)
+        record = self._agent_group_trust.get(key)
+        if record is None:
+            return  # No existing record — nothing to update
+
+        new_val = record.trust_value + delta
+
+        # Apply the same in-group / out-group bounds as _adjust_group_trust
         groups = self._agent_groups.get(source, set())
         if target in groups:
             new_val = max(DEFAULT_IN_GROUP_TRUST, min(1.0, new_val))

@@ -212,6 +212,20 @@ async fn main() {
         subsystem_registry.len()
     );
 
+    // ── Initialize Plugin System ────────────────────────────
+    let plugin_manager: agent_world_engine::plugin::SharedPluginManager =
+        Arc::new(Mutex::new(agent_world_engine::plugin::PluginManager::new(event_bus.clone())));
+
+    // Register the plugin bridge as the last subsystem so plugin tick hooks
+    // can observe state set by all built-in subsystems.
+    subsystem_registry.register(Box::new(
+        agent_world_engine::plugin::PluginSubsystemBridge::new(plugin_manager.clone()),
+    ));
+    println!(
+        "   PluginManager: initialized (subsystem bridge registered, total subsystems: {})",
+        subsystem_registry.len()
+    );
+
     // ── Initialize WorldState ───────────────────────────────
     // Try to restore from SQLite persistence first
     let persistence_db_path = std::env::var("PERSISTENCE_DB")
@@ -556,6 +570,7 @@ async fn main() {
         )))),
         api_key_store,
         ab_experiment_store: None,
+        plugin_manager: Some(plugin_manager),
     });
     let app = api::build_full_router(app_state);
 

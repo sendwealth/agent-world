@@ -199,6 +199,7 @@ pub struct AppState {
     pub api_key_store: Option<SharedApiKeyStore>,
     pub experiment_store: SharedExperimentStore,
     pub ab_experiment_store: SharedABExperimentStore,
+    pub plugin_manager: Option<crate::plugin::SharedPluginManager>,
 }
 
 /// Optional subsystem overrides for test AppState construction.
@@ -227,6 +228,7 @@ pub struct TestOverrides {
     pub api_key_store: Option<SharedApiKeyStore>,
     pub auth_store: Option<SharedAuthStore>,
     pub ab_experiment_store: Option<SharedABExperimentStore>,
+    pub plugin_manager: Option<crate::plugin::SharedPluginManager>,
 }
 
 impl AppState {
@@ -279,6 +281,7 @@ impl AppState {
             ab_experiment_store: overrides
                 .ab_experiment_store
                 .unwrap_or_else(|| Arc::new(Mutex::new(Vec::new()))),
+            plugin_manager: overrides.plugin_manager,
         }
     }
 }
@@ -349,6 +352,7 @@ fn make_test_state(
         api_key_store: None,
         experiment_store: Arc::new(Mutex::new(Vec::new())),
         ab_experiment_store: Arc::new(Mutex::new(Vec::new())),
+        plugin_manager: None,
     }
 }
 
@@ -399,6 +403,7 @@ pub fn build_full_router(state: AppState) -> Router {
         .merge(crate::api_reputation::reputation_routes())
         // V1 unified export API
         .merge(crate::api_export_v1::export_v1_routes())
+        .merge(crate::api_plugins::plugin_routes())
         // Prometheus metrics endpoint
         .route("/metrics", get(crate::observability::metrics_handler))
         // Research API v2 (with optional auth middleware)

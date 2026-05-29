@@ -791,6 +791,92 @@ pub async fn governance_comparison(
     Json(comparison).into_response()
 }
 
+// ── Legislation History Handler ──────────────────────────────
+
+/// Query parameters for the legislation history endpoint.
+#[derive(Debug, Default, Deserialize)]
+#[serde(default)]
+pub struct LegislationHistoryQuery {
+    /// Filter by rule status: "proposed", "active", "suspended", "repealed".
+    pub status: Option<String>,
+    /// Filter by rule type: "tax", "behavior", "trade", "diplomacy", "custom".
+    pub rule_type: Option<String>,
+}
+
+/// A single legislation history entry.
+#[derive(Debug, Serialize)]
+pub struct LegislationHistoryEntry {
+    pub rule_id: String,
+    pub proposer_id: String,
+    pub org_id: String,
+    pub title: String,
+    pub description: String,
+    pub rule_type: String,
+    pub status: String,
+    pub votes_for: u32,
+    pub votes_against: u32,
+    pub created_tick: u64,
+    pub expires_tick: Option<u64>,
+}
+
+/// GET /api/v1/governance/orgs/:org_id/legislation — Query legislation history for an org.
+pub async fn governance_org_legislation(
+    State(state): State<AppState>,
+    Path(org_id): Path<String>,
+    Query(query): Query<LegislationHistoryQuery>,
+) -> impl IntoResponse {
+    let rule_engine = match &state.rule_engine {
+        Some(re) => re.clone(),
+        None => {
+            return (
+                StatusCode::SERVICE_UNAVAILABLE,
+                Json(ErrorResponse {
+                    error: "rule engine not configured".into(),
+                }),
+            )
+                .into_response()
+        }
+    };
+
+    let engine = rule_engine.lock().await;
+    let rules = engine.list_rules_for_org(&org_id);
+
+    let status_filter = query.status.as_deref();
+    let rule_type_filter = query.rule_type.as_deref();
+
+    let entries: Vec<LegislationHistoryEntry> = rules
+        .into_iter()
+        .filter(|r| {
+            if let Some(sf) = status_filter {
+                if r.status.to_string() != sf {
+                    return false;
+                }
+            }
+            if let Some(rtf) = rule_type_filter {
+                if r.rule_type.to_string() != rtf {
+                    return false;
+                }
+            }
+            true
+        })
+        .map(|r| LegislationHistoryEntry {
+            rule_id: r.id.clone(),
+            proposer_id: r.proposer_id.clone(),
+            org_id: r.org_id.clone(),
+            title: r.title.clone(),
+            description: r.description.clone(),
+            rule_type: r.rule_type.to_string(),
+            status: r.status.to_string(),
+            votes_for: r.votes_for,
+            votes_against: r.votes_against,
+            created_tick: r.created_tick,
+            expires_tick: r.expires_tick,
+        })
+        .collect();
+
+    Json(entries).into_response()
+}
+
 /// Governance + proposals + metrics routes.
 pub fn governance_routes() -> axum::Router<AppState> {
     axum::Router::new()
@@ -817,4 +903,8 @@ pub fn governance_routes() -> axum::Router<AppState> {
             get(governance_org_timeline),
         )
         .route("/api/v1/governance/comparison", get(governance_comparison))
+        .route(
+            "/api/v1/governance/orgs/:org_id/legislation",
+            get(governance_org_legislation),
+        )
 }

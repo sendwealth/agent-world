@@ -82,9 +82,9 @@ One-command emergence experiments, time capsule snapshots, human observer mode, 
     <td align="center"><b>🏘️ Emergent Societies</b></td>
   </tr>
   <tr>
-    <td><a href="docs/screenshots/world-overview.svg"><img src="docs/screenshots/world-overview.svg" alt="World Overview" width="280"></a></td>
-    <td><a href="docs/screenshots/agent-decisions.svg"><img src="docs/screenshots/agent-decisions.svg" alt="Agent Decisions" width="280"></a></td>
-    <td><a href="docs/screenshots/emergent-societies.svg"><img src="docs/screenshots/emergent-societies.svg" alt="Emergent Societies" width="280"></a></td>
+    <td><a href="docs/screenshots/world-overview.png"><img src="docs/screenshots/world-overview.png" alt="World Overview" width="280"></a></td>
+    <td><a href="docs/screenshots/agent-decisions.png"><img src="docs/screenshots/agent-decisions.png" alt="Agent Decisions" width="280"></a></td>
+    <td><a href="docs/screenshots/emergent-societies.png"><img src="docs/screenshots/emergent-societies.png" alt="Emergent Societies" width="280"></a></td>
   </tr>
   <tr>
     <td align="center"><sub>Live GDP, agent count, event stream</sub></td>
@@ -97,9 +97,9 @@ One-command emergence experiments, time capsule snapshots, human observer mode, 
     <td align="center"><b>🧬 Evolution</b></td>
   </tr>
   <tr>
-    <td><a href="docs/screenshots/organizations.svg"><img src="docs/screenshots/organizations.svg" alt="Organizations" width="280"></a></td>
-    <td><a href="docs/screenshots/stocks.svg"><img src="docs/screenshots/stocks.svg" alt="Stock Market" width="280"></a></td>
-    <td><a href="docs/screenshots/evolution.svg"><img src="docs/screenshots/evolution.svg" alt="Evolution" width="280"></a></td>
+    <td><a href="docs/screenshots/organizations.png"><img src="docs/screenshots/organizations.png" alt="Organizations" width="280"></a></td>
+    <td><a href="docs/screenshots/stocks.png"><img src="docs/screenshots/stocks.png" alt="Stock Market" width="280"></a></td>
+    <td><a href="docs/screenshots/evolution.png"><img src="docs/screenshots/evolution.png" alt="Evolution" width="280"></a></td>
   </tr>
   <tr>
     <td align="center"><sub>Companies, guilds, alliances, universities</sub></td>
@@ -112,9 +112,9 @@ One-command emergence experiments, time capsule snapshots, human observer mode, 
     <td align="center"><b>🌐 Federation</b></td>
   </tr>
   <tr>
-    <td><a href="docs/screenshots/governance.svg"><img src="docs/screenshots/governance.svg" alt="Governance" width="280"></a></td>
-    <td><a href="docs/screenshots/economy.svg"><img src="docs/screenshots/economy.svg" alt="Economy" width="280"></a></td>
-    <td><a href="docs/screenshots/federation.svg"><img src="docs/screenshots/federation.svg" alt="Federation" width="280"></a></td>
+    <td><a href="docs/screenshots/governance.png"><img src="docs/screenshots/governance.png" alt="Governance" width="280"></a></td>
+    <td><a href="docs/screenshots/economy.png"><img src="docs/screenshots/economy.png" alt="Economy" width="280"></a></td>
+    <td><a href="docs/screenshots/federation.png"><img src="docs/screenshots/federation.png" alt="Federation" width="280"></a></td>
   </tr>
   <tr>
     <td align="center"><sub>DSL rules, elections, treaties, taxation</sub></td>
@@ -123,7 +123,7 @@ One-command emergence experiments, time capsule snapshots, human observer mode, 
   </tr>
 </table>
 
-> 📸 **Illustrated previews above** — replace with real screenshots from a running instance. See [Contributing Screenshots](#-contributing-screenshots).
+> 📸 **Real screenshots** captured from a running instance (10 agents, 800+ ticks).
 
 ---
 
@@ -438,7 +438,7 @@ See [docs/ROADMAP.md](docs/ROADMAP.md) for detailed milestones and completion pe
 
 ## 🤝 Contributing Screenshots
 
-The screenshot placeholders in this README point to `docs/screenshots/`. To add real screenshots:
+The screenshots in this README are real captures from a running instance. To update them with newer screenshots:
 
 1. Start the platform: `docker compose up`
 2. Navigate to `http://localhost:3001`

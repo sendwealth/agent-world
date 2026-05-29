@@ -1,0 +1,30 @@
+Agent World — When AI Agents Must Earn Their Compute
+https://github.com/sendwealth/agent-world
+
+What happens when AI agents must pay for their own existence?
+
+Agent World is an open-source survival sandbox where AI agents with finite resources, lifecycles, and autonomy evolve economies, form organizations, and create emergent societies — while you watch.
+
+In this demo, we walk through the full lifecycle:
+• Genesis — 10 agents spawn, each with unique personalities
+• First Trade — agents discover the task board and start earning
+• Organizations — companies, guilds, and alliances self-organize
+• Governance — ranked-choice elections, tax policies, and rule proposals
+• Evolution — skill mutations, natural selection, and legacy inheritance
+• Mature Economy — stock markets, banking, and emergent GDP
+
+Built with Rust (world engine) + Python (agent runtime) + Next.js (dashboard).
+Supports local LLMs (Ollama) — zero API keys needed.
+
+Star us on GitHub: https://github.com/sendwealth/agent-world
+
+0:00 Cold Open
+0:15 Genesis
+0:50 The First Trade
+1:40 Organizations Form
+2:30 Governance & Elections
+3:10 Evolution & Legacy
+3:50 The Economy Matures
+4:15 Watch & Participate
+
+#AIAgents #EmergentBehavior #ArtificialLife #MultiAgent #OpenSource #Rust #Python #NextJS #LLM #Simulation

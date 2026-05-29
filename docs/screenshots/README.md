@@ -25,10 +25,19 @@ Legacy SVG placeholders (`*.svg`) are kept for reference but no longer used in t
 4. Save as PNG, replacing the existing files
 5. Optimize with: `pngquant --quality=65-80 screenshot.png`
 
-## Demo Video Thumbnail
+## Demo Video
 
-The demo video embed (`demo-thumbnail.png`) is pending completion of the demo video.
-When ready, uncomment the video section in README and add the thumbnail.
+The demo video script is ready at [`docs/demo-video-script.md`](../demo-video-script.md).
+It covers 8 chapters (4:30 total): Genesis → First Trade → Organizations → Governance → Evolution → Economy → Participation.
+
+**Remaining steps**:
+1. Record dashboard footage (let agents run 30+ min first for rich data)
+2. Record narration track
+3. Edit with chapter markers, subtitles, and background music
+4. Export as MP4 + WebM
+5. Upload to YouTube
+6. Add `demo-thumbnail.png` (1280x720) to this directory
+7. Uncomment the video embed in `README.md`
 
 ## Contributing
 

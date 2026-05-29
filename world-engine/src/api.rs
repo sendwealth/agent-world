@@ -741,4 +741,235 @@ mod tests {
 
         assert_eq!(response.status(), StatusCode::SERVICE_UNAVAILABLE);
     }
+
+    // ── Legislation History API Tests ─────────────────────────
+
+    /// Build a test AppState with rule_engine wired up.
+    fn build_test_state_with_rules() -> (AppState, tempfile::TempDir) {
+        use crate::organization::rule_engine::{
+            RuleCondition, RuleEngine, RuleEffect, RuleType,
+        };
+        use serde_json::json;
+
+        let bus = Arc::new(EventBus::new(256));
+        let board = Arc::new(Mutex::new(TaskBoard::new()));
+        let tmp = tempfile::tempdir().expect("tempdir");
+        let wal = Arc::new(Mutex::new(WAL::new(tmp.path())));
+
+        let mut engine = RuleEngine::new();
+        let org_id = "org-legislature";
+
+        // Proposed tax rule
+        engine.propose_rule(
+            "leader-1".to_string(),
+            org_id.to_string(),
+            "Tax on wealthy".to_string(),
+            "Extra tax for high-resource agents".to_string(),
+            RuleType::Tax,
+            vec![RuleCondition {
+                field: "agent.resources".to_string(),
+                operator: ">".to_string(),
+                value: json!(200),
+            }],
+            vec![RuleEffect {
+                target: "agent.tax_bonus".to_string(),
+                action: "set".to_string(),
+                value: json!(0.1),
+            }],
+            100,
+            None,
+        );
+
+        // Proposed behavior rule — then activate it
+        let rule_id_2 = engine.propose_rule(
+            "leader-1".to_string(),
+            org_id.to_string(),
+            "Safety regulation".to_string(),
+            "Limit attacks per tick".to_string(),
+            RuleType::Behavior,
+            vec![],
+            vec![RuleEffect {
+                target: "agent.attack_blocked".to_string(),
+                action: "set".to_string(),
+                value: json!(true),
+            }],
+            110,
+            Some(500),
+        );
+        engine.vote_on_rule(&rule_id_2, "v1".to_string(), true).unwrap();
+        engine.vote_on_rule(&rule_id_2, "v2".to_string(), true).unwrap();
+        engine.vote_on_rule(&rule_id_2, "v3".to_string(), false).unwrap();
+        engine.activate_rule(&rule_id_2).unwrap();
+
+        // Rule for a different org
+        engine.propose_rule(
+            "other-leader".to_string(),
+            "org-other".to_string(),
+            "Other rule".to_string(),
+            "Not relevant".to_string(),
+            RuleType::Trade,
+            vec![],
+            vec![],
+            50,
+            None,
+        );
+
+        let state = AppState::for_test_with(
+            board,
+            wal,
+            TestOverrides {
+                event_bus: Some(bus),
+                rule_engine: Some(Arc::new(Mutex::new(engine))),
+                ..TestOverrides::default()
+            },
+        );
+        (state, tmp)
+    }
+
+    #[tokio::test]
+    async fn test_legislation_history_returns_rules_for_org() {
+        let (state, _tmp) = build_test_state_with_rules();
+        let app = build_full_router(state);
+
+        let response = app
+            .oneshot(
+                axum::http::Request::builder()
+                    .uri("/api/v1/governance/orgs/org-legislature/legislation")
+                    .body(Body::empty())
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+
+        assert_eq!(response.status(), StatusCode::OK);
+        let json = body_to_json(response.into_body()).await;
+        let entries = json.as_array().expect("expected array");
+        // Two rules for org-legislature, one for org-other
+        assert_eq!(entries.len(), 2);
+
+        // Verify entry structure
+        let entry = &entries[0];
+        assert!(entry["rule_id"].is_string());
+        assert_eq!(entry["proposer_id"], "leader-1");
+        assert_eq!(entry["org_id"], "org-legislature");
+        assert!(entry["title"].is_string());
+        assert!(entry["rule_type"].is_string());
+        assert!(entry["status"].is_string());
+        assert!(entry["votes_for"].is_number());
+        assert!(entry["votes_against"].is_number());
+        assert!(entry["created_tick"].is_number());
+    }
+
+    #[tokio::test]
+    async fn test_legislation_history_filters_by_status() {
+        let (state, _tmp) = build_test_state_with_rules();
+        let app = build_full_router(state);
+
+        let response = app
+            .oneshot(
+                axum::http::Request::builder()
+                    .uri("/api/v1/governance/orgs/org-legislature/legislation?status=active")
+                    .body(Body::empty())
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+
+        assert_eq!(response.status(), StatusCode::OK);
+        let json = body_to_json(response.into_body()).await;
+        let entries = json.as_array().expect("expected array");
+        assert_eq!(entries.len(), 1);
+        assert_eq!(entries[0]["status"], "active");
+        assert_eq!(entries[0]["title"], "Safety regulation");
+    }
+
+    #[tokio::test]
+    async fn test_legislation_history_filters_by_rule_type() {
+        let (state, _tmp) = build_test_state_with_rules();
+        let app = build_full_router(state);
+
+        let response = app
+            .oneshot(
+                axum::http::Request::builder()
+                    .uri("/api/v1/governance/orgs/org-legislature/legislation?rule_type=tax")
+                    .body(Body::empty())
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+
+        assert_eq!(response.status(), StatusCode::OK);
+        let json = body_to_json(response.into_body()).await;
+        let entries = json.as_array().expect("expected array");
+        assert_eq!(entries.len(), 1);
+        assert_eq!(entries[0]["rule_type"], "tax");
+        assert_eq!(entries[0]["status"], "proposed");
+    }
+
+    #[tokio::test]
+    async fn test_legislation_history_returns_empty_for_unknown_org() {
+        let (state, _tmp) = build_test_state_with_rules();
+        let app = build_full_router(state);
+
+        let response = app
+            .oneshot(
+                axum::http::Request::builder()
+                    .uri("/api/v1/governance/orgs/nonexistent-org/legislation")
+                    .body(Body::empty())
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+
+        assert_eq!(response.status(), StatusCode::OK);
+        let json = body_to_json(response.into_body()).await;
+        let entries = json.as_array().expect("expected array");
+        assert!(entries.is_empty());
+    }
+
+    #[tokio::test]
+    async fn test_legislation_history_returns_503_when_rule_engine_not_configured() {
+        let board = Arc::new(Mutex::new(TaskBoard::new()));
+        let tmp = tempfile::tempdir().expect("tempdir");
+        let wal = Arc::new(Mutex::new(WAL::new(tmp.path())));
+
+        let state = AppState::for_test(board, wal);
+        let app = build_full_router(state);
+
+        let response = app
+            .oneshot(
+                axum::http::Request::builder()
+                    .uri("/api/v1/governance/orgs/some-org/legislation")
+                    .body(Body::empty())
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+
+        assert_eq!(response.status(), StatusCode::SERVICE_UNAVAILABLE);
+    }
+
+    #[tokio::test]
+    async fn test_legislation_history_combined_filters() {
+        let (state, _tmp) = build_test_state_with_rules();
+        let app = build_full_router(state);
+
+        // Filter by status=proposed AND rule_type=tax
+        let response = app
+            .oneshot(
+                axum::http::Request::builder()
+                    .uri("/api/v1/governance/orgs/org-legislature/legislation?status=proposed&rule_type=tax")
+                    .body(Body::empty())
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+
+        assert_eq!(response.status(), StatusCode::OK);
+        let json = body_to_json(response.into_body()).await;
+        let entries = json.as_array().expect("expected array");
+        assert_eq!(entries.len(), 1);
+        assert_eq!(entries[0]["rule_type"], "tax");
+        assert_eq!(entries[0]["status"], "proposed");
+    }
 }

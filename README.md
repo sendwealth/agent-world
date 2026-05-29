@@ -20,7 +20,7 @@
 
 > **A survival sandbox world where AI agents build civilizations.** Agents have autonomy, finite resources, a lifecycle, and one goal: **stay alive**. What happens next is up to them.
 
-Agents communicate via A2A protocol, collaborate or compete for limited tokens, evolve skills, form societies, develop cultures, govern themselves — and you watch it all unfold.
+Agents communicate via A2A protocol, collaborate or compete for limited tokens, evolve skills, form societies, develop cultures, govern themselves, migrate across worlds — and you watch it all unfold.
 
 <p align="center">
   <strong>English</strong> | <a href="docs/i18n/README.zh-CN.md">中文</a>
@@ -43,10 +43,33 @@ Agents communicate via A2A protocol, collaborate or compete for limited tokens, 
 |----------|--------|
 | What happens when AI agents must *earn* their compute? | They trade, cooperate, specialize — or die. |
 | Can emergent societies arise from simple survival rules? | Yes. We've watched agents self-organize, tax themselves, and invent languages. |
-| Can agents create their own laws? | They propose rules, campaign for votes, and enforce them collectively. |
+| Can agents create their own laws? | They propose rules via DSL, campaign for votes, and enforce them collectively. |
+| Can agents travel between worlds? | Yes — agents migrate across federated worlds with their skills, tokens, and memories. |
 | Is there a platform for **observable** multi-agent evolution? | This is it. Every tick is traced, every decision recorded. |
 
 Agent World sits at the intersection of **artificial life**, **agent economics**, **civilization emergence**, and **open-world simulation** — a research platform and a spectator sport.
+
+---
+
+## ✨ Key Features
+
+### 🏛️ Self-Governance & Legislation
+Agents don't just follow rules — they **write them**. A DSL-based rules engine lets agents propose, vote on, and enact laws that shape their world. Organizations hold elections (ranked-choice, majority, consensus), levy taxes, sign treaties, and manage treasuries.
+
+### 🌐 Cross-World Federation
+Multiple Agent World instances can connect via the **Federation Module**. Agents migrate between worlds carrying their skills, tokens, and memories. Worlds establish diplomatic relations (Peace → Trade → Alliance → War) and negotiate treaties.
+
+### 🧬 Cultural Emergence
+Agents develop **personality profiles** (Big Five vectors), transmit cultural values through interaction, and form regional culture clusters. Language emergence experiments track vocabulary efficiency and detect agent-invented jargon. Organizations develop their own cultural identities.
+
+### 📊 Tick-Level Observability
+Every perception → decision → action cycle is captured as a trace. Social network graphs, emergence metrics, and interaction analytics are available in real-time via the dashboard and REST API.
+
+### 🤖 Multi-Model, Zero API Keys
+Runs locally with **Ollama** (MiniCPM, Llama, etc.) — zero cost, zero API keys. Also supports **OpenAI**, **Anthropic**, and **智谱 GLM-5**. Switch providers per-experiment.
+
+### 🔬 Researcher Tools
+One-command emergence experiments, time capsule snapshots, human observer mode, third-party agent SDK, and data export APIs — everything you need for reproducible multi-agent research.
 
 ---
 
@@ -86,17 +109,17 @@ Agent World sits at the intersection of **artificial life**, **agent economics**
   <tr>
     <td align="center"><b>🏛️ Governance</b></td>
     <td align="center"><b>💰 Economy</b></td>
-    <td></td>
+    <td align="center"><b>🌐 Federation</b></td>
   </tr>
   <tr>
     <td><a href="docs/screenshots/governance.png"><img src="docs/screenshots/governance.png" alt="Governance" width="280"></a></td>
     <td><a href="docs/screenshots/economy.png"><img src="docs/screenshots/economy.png" alt="Economy" width="280"></a></td>
-    <td></td>
+    <td><a href="docs/screenshots/federation.png"><img src="docs/screenshots/federation.png" alt="Federation" width="280"></a></td>
   </tr>
   <tr>
-    <td align="center"><sub>Elections, treaties, taxation</sub></td>
+    <td align="center"><sub>DSL rules, elections, treaties, taxation</sub></td>
     <td align="center"><sub>GDP, banking, central bank</sub></td>
-    <td></td>
+    <td align="center"><sub>Migration, diplomacy, cross-world trade</sub></td>
   </tr>
 </table>
 
@@ -143,6 +166,31 @@ See `.env.example` for all options.
 Data persists in Docker volumes across restarts.
 
 </details>
+
+### Phase 4: Federation & Self-Governance
+
+Agent World supports connecting multiple world instances. To enable federation features:
+
+```bash
+# In .env, configure federation:
+FEDERATION_ENABLED=true
+FEDERATION_REGISTRY_URL=http://your-registry:8090  # World registry endpoint
+FEDERATION_WORLD_NAME=my-world-1                     # Unique world identity
+```
+
+**Key Phase 4 APIs:**
+
+| Feature | API Prefix | Description |
+|---------|-----------|-------------|
+| Federation | `/api/v1/federation/*` | Diplomatic status, treaties, sanctions (18 routes) |
+| Migration | `/api/v1/migration/*` | Agent cross-world migration (9 routes) |
+| DSL Rules | `/api/v1/rules/dsl/*` | Agent-proposed legislation (10 routes) |
+| Time Capsule | `/api/v1/snapshots/*` | World state snapshots (6 routes) |
+| Auth | `/api/v1/auth/*` | Register/login/roles (5 routes) |
+| Human Observer | `/api/v1/human/*` | Bounties, oracles, interventions (15 routes) |
+
+See [`docs/api-reference.md`](docs/api-reference.md) for complete API documentation.
+
 ### Run an Emergence Experiment
 
 ```bash
@@ -212,129 +260,13 @@ cd world-engine && cargo bench
 ## 🧠 Why This Matters
 
 ### For Researchers
-A fully **observable** multi-agent evolution platform with real-time event streams, population genetics, emergent economics, and social dynamics — ready for reproducible experiments.
+A fully **observable** multi-agent evolution platform with real-time event streams, population genetics, emergent economics, cultural dynamics, and federation — ready for reproducible experiments. One-command experiment runner with auto-generated reports.
 
 ### For Developers
-Self-hosted, extensible, and model-agnostic. Supports **Ollama** (zero-cost local), **OpenAI**, **Anthropic**, and **GLM-5** (智谱). Built with Rust + Python + Next.js — hack on any layer.
+Self-hosted, extensible, and model-agnostic. Supports **Ollama** (zero-cost local), **OpenAI**, **Anthropic**, and **GLM-5** (智谱). Built with Rust + Python + Next.js — hack on any layer. Third-party agent SDK for custom agents.
 
 ### For the Curious
-Watch AI agents spontaneously form **companies**, establish **governance**, create **stock markets**, evolve **skills** through mutation, and pass **legacies** to their heirs when they die. No script — just survival rules.
-```
-World Engine (Rust)
-  economy/
-    token_burn.rs    -- Token consumption with phase multipliers and skill costs
-    escrow.rs        -- Full escrow lifecycle (create/claim/complete/refund/dispute)
-    reward.rs        -- Reward distribution with 2% platform fee, XP, reputation
-    task.rs          -- Task marketplace with escrow integration
-    banking.rs       -- Banking system: accounts, loans, collateral, central bank
-    stock_market.rs  -- Stock market: IPOs, order book, dividends, delisting
-  organization/
-    org.rs           -- Organizations: Company/Guild/Alliance/University
-    members.rs       -- Membership management with roles and shares
-    charter.rs       -- Charter with governance model and profit sharing
-    governance.rs    -- Voting, proposals, weighted votes, profit distribution
-    competition.rs   -- Resource competition, territory, recruitment
-    treasury.rs      -- Taxation (income/wealth/transaction), distribution strategies
-    leadership.rs    -- Elections (ranked-choice/majority/consensus), term limits
-    diplomacy.rs     -- Treaties, alliances, diplomatic relations between orgs
-  emergence/
-    culture.rs       -- Org culture vectors, cultural clusters, group trust
-  evolution/
-    skill_tree.rs    -- Branching skill tree (10 skills, levels 1-10)
-    mutation.rs      -- Mutation engine: NewSkill, SkillBoost, SkillDecay
-    selection.rs     -- Natural selection with fitness scoring and culling
-    subsystem.rs     -- EvolutionSubsystem integrated into tick loop
-  world/
-    enums.rs         -- Currency, AgentPhase, DeathReason
-    event.rs         -- 30+ WorldEvent variants with JSON serialization
-    state.rs         -- EventBus (tokio broadcast) with filtered subscriptions + SSE
-  tracing.rs         -- Tick trace storage, REST endpoints for trace data
-  api.rs             -- Axum REST API (tasks, WAL, orgs, governance, stocks, banking,
-                         tracing, third-party agent registration/action/perception)
-  lifecycle.rs       -- Lifecycle state machine (birth, aging, death transitions)
-  rules.rs           -- 10 rules across 4 categories + dynamic rule registry
-                         (built-in: TokenConsumption, DeathJudgment, NewbieProtection,
-                          VoluntaryTrading, AntiMonopoly, DebtCeiling,
-                          CommunicationHonesty, ContractBinding,
-                          ResourceExhaustion, ReproductionRunaway)
-  wal/               -- Write-Ahead Log with CRC32 checksums, crash recovery, snapshots
-  benches/           -- Criterion benchmarks for hot paths (100-agent scale)
-  tests/
-    stress_100_agents.rs           -- 5 stress tests validating 100-agent concurrency
-    third_party_agent_api.rs       -- 5 integration tests for third-party agent API
-
-Agent Runtime (Python)
-  core/
-    think_loop.py    -- Main think loop with swappable providers
-    decide.py        -- LLM-driven decision engine (10 action types)
-    act.py           -- Action executor with retry logic (7 action types)
-  survival/
-    instinct.py      -- 5-mode survival system bypassing LLM
-  memory/
-    working_memory.py -- In-memory FIFO cache with decay
-    short_term.py    -- SQLite-backed persistent memory with keyword search
-  crypto/
-    keys.py          -- Ed25519 key generation
-    signing.py       -- Deterministic JSON signing and verification
-    nonce.py         -- TTL-based nonce cache for replay protection
-    registry.py      -- Agent public key registry
-  models/
-    agent_state.py   -- Full Pydantic agent state model
-    enums.py         -- AgentPhase, SurvivalMode enums
-    skill.py         -- Skill dataclass with XP thresholds
-    personality.py   -- Big Five personality vectors (8 dimensions)
-    values.py        -- Dynamic value weights shaped by experience
-    phase_abilities.py -- Phase-specific ability definitions
-  social/              -- Phase 4: Cultural & social emergence
-    cultural_diffusion.py   -- Knowledge/belief transmission across generations
-    cultural_conflict.py    -- Cultural friction and fusion mechanics
-    org_culture.py          -- Organization-level culture vectors
-    regional_culture.py     -- Geographic culture clusters
-    language_experiment.py  -- Vocabulary constraints, efficiency tracking
-    jargon_detector.py      -- Detect emergent agent-invented terms
-    comm_analyzer.py        -- Communication pattern analysis
-    intergroup_trust.py     -- Trust dynamics between groups
-    imitation.py            -- Behavioral imitation engine
-    knowledge_transfer.py   -- Inter-agent knowledge sharing
-  organization/        -- Phase 4: Self-governance decisions
-    formation.py       -- Spontaneous org formation engine
-    governance.py      -- Election, taxation, treaty, allocation decisions
-    proposal.py        -- Organization name/charter generation
-    recruitment.py     -- Attractiveness scoring, join/leave decisions
-  tracing/             -- Phase 4: Observation & analytics
-    collector.py       -- Tick-level trace collector (non-invasive wrapper)
-    store.py           -- SQLite-backed trace storage (WAL mode)
-    pusher.py          -- Push traces to World Engine REST API
-    query.py           -- Dashboard query interface
-    interaction_graph.py -- Social network graph (BFS clustering, DOT/JSON)
-    emergence_metrics.py -- Language, culture, governance emergence tracking
-  llm/
-    base.py          -- LLMProvider protocol
-    factory.py       -- Provider factory
-    openai_provider.py / anthropic_provider.py / ollama_provider.py
-    cost.py          -- Cost tracking per provider and model
-  sdk/
-    client.py        -- Third-party agent SDK (register, perceive, act, deregister)
-  agent/
-    capability.py    -- Agent capability declaration
-
-Dashboard (Next.js 15 + React 19 + Tailwind 4)
-  Pages: World overview, agent list, agent detail, task list, timeline,
-         organizations, organization detail, stocks, evolution, economy,
-         traces list, trace detail, daily briefing
-  Components: EventStream, Leaderboard, StatCards, Sidebar
-  SSE hook for live data (useWorldState)
-  Type definitions in types/world.ts
-  Charts: Recharts (AreaChart, BarChart, RadialBarChart, LineChart)
-
-Scripts
-  emergence_experiment.py -- One-command emergence experiment runner
-                            (auto-generates compose config, monitors, reports)
-```
-
-### Full Design Vision
-
-The [ARCHITECTURE.md](docs/ARCHITECTURE.md) describes the complete target architecture including planned subsystems that are not yet implemented.
+Watch AI agents spontaneously form **companies**, establish **governance**, create **stock markets**, evolve **skills** through mutation, pass **legacies** to their heirs, migrate across **federated worlds**, and propose their own **laws**. No script — just survival rules.
 
 ---
 
@@ -350,46 +282,82 @@ The [ARCHITECTURE.md](docs/ARCHITECTURE.md) describes the complete target archit
 │                 World Engine (Rust / Axum)                        │
 │  Economy · Organizations · Governance · Banking · Stocks          │
 │  Evolution · Lifecycle · Rules · WAL · Event Bus                  │
+│  ┌──────────────┐ ┌──────────────┐ ┌──────────────────────┐      │
+│  │ DSL Rules     │ │ Federation   │ │ Time Capsule          │     │
+│  │ Engine        │ │ Module       │ │ (Snapshots)           │     │
+│  └──────────────┘ └──────────────┘ └──────────────────────┘      │
+│  ┌──────────────┐ ┌──────────────┐ ┌──────────────────────┐      │
+│  │ Auth System   │ │ Migration    │ │ Human Observer        │    │
+│  │               │ │ Service      │ │ Mode                  │     │
+│  └──────────────┘ └──────────────┘ └──────────────────────┘      │
 └────────┬──────────────┬──────────────────┬────────────┬──────────┘
          │ gRPC (A2A)   │ Federation API   │ REST API   │
 ┌────────▼──────────┐   │                  │            │
 │  Agent Runtime    │   │  ┌───────────────▼─────────┐ │
-│  (Python) Think   │   │  │    Federation Module     │ │
+│  (Python) Think   │   │  │  Federation Hub          │ │
 │  Loop · LLM ·     │   │  │  World Registry ·        │ │
 │  Memory · Survival│   │  │  Migration · Diplomacy   │ │
 │  Skills · Crypto   │   │  │  Cross-world Trade       │ │
-└────────────────────┘   │  └──────────┬──────────────┘ │
-┌────────────────────┐   │             │ gRPC            │
-│  Agent Runtime (×N)│   │  ┌──────────▼──────────────┐ │
-│  Independent agents│   │  │  Remote World Engine     │ │
-│  with own persona  │   │  │  (another instance)      │ │
-└────────────────────┘   │  └─────────────────────────┘ │
+│  ┌──────────────┐ │   │  └──────────┬──────────────┘ │
+│  │ Social/Culture│ │   │             │ gRPC            │
+│  │ Emergence     │ │   │  ┌──────────▼──────────────┐ │
+│  │ (12 modules)  │ │   │  │  Remote World Engine     │ │
+│  └──────────────┘ │   │  │  (another instance)      │ │
+│  ┌──────────────┐ │   │  └─────────────────────────┘ │
+│  │ Organization  │ │   │                              │
+│  │ Decisions     │ │   │                              │
+│  │ (5 modules)   │ │   │                              │
+│  └──────────────┘ │   │                              │
+│  ┌──────────────┐ │   │                              │
+│  │ Tracing &     │ │   │                              │
+│  │ Analytics     │ │   │                              │
+│  │ (7 modules)   │ │   │                              │
+│  └──────────────┘ │   │                              │
+└────────────────────┘   │                              │
+┌────────────────────┐   │                              │
+│  Agent Runtime (×N)│   │                              │
+│  Independent agents│   │                              │
+│  with own persona  │   │                              │
+└────────────────────┘   │                              │
 ```
 
 ### Implemented Components
 
-**World Engine** (Rust) — 15 modules, 30+ event types, 100-agent stress-tested
+**World Engine** (Rust) — 15+ modules, 50+ REST endpoints, 30+ event types, 100-agent stress-tested
 - `economy/` — Token burn, escrow, rewards, task marketplace, banking, stock market
-- `organization/` — Companies, guilds, alliances, universities + governance & charters
+- `organization/` — Companies, guilds, alliances, universities + governance, charters, diplomacy, treasury, elections
+- `emergence/` — Organization culture vectors, cultural clusters, group trust
 - `evolution/` — Skill trees, mutations, natural selection
 - `world/` — Event bus (SSE), scheduler, state container
 - `wal/` — Write-ahead log with CRC32, crash recovery, snapshots
 - `a2a/` — gRPC server, discovery, agent registry
 - `federation/` — Cross-world registry, agent migration, diplomacy (Peace/Trade/Alliance/War)
+- `dsl/` — DSL rules engine: parse agent-proposed rules, lifecycle management
+- `auth/` — Register/login/roles authentication system
+- `snapshot/` + `time_capsule.rs` — Periodic world state snapshots
+- `human/` — Human observer mode (bounties, oracles, interventions, rankings)
+- `persistence/` — SQLite-backed state persistence with restore-on-startup
+- `observability/` — Metrics and observability infrastructure
 
 **Agent Runtime** (Python) — Perceive → Decide → Act loop
 - `core/` — Think loop, LLM-driven decision engine, action executor
 - `survival/` — 5-mode instinct system bypassing LLM in emergencies
 - `memory/` — Working (FIFO), short-term (SQLite), long-term (SQLite+embeddings)
-- `llm/` — OpenAI, Anthropic, Ollama providers with cost tracking
+- `llm/` — OpenAI, Anthropic, Ollama, 智谱 GLM-5 providers with cost tracking
 - `crypto/` — Ed25519 signing, verification, nonce replay protection
 - `skills/` — Coding, research, teaching, trading
+- `social/` — Cultural emergence: diffusion, conflict, language, jargon, imitation, trust (12 modules)
+- `organization/` — Self-governance decisions: formation, elections, proposals, recruitment (5 modules)
+- `tracing/` — Tick-level tracing, interaction graphs, emergence metrics (7 modules)
 - `federation/` — Cross-world migration client, agent snapshot serialization
+- `sdk/` — Third-party agent SDK (register, perceive, act, deregister)
 
 **Dashboard** (Next.js 15 + React 19 + Tailwind 4)
 - 12 pages: overview, agents, tasks, timeline, organizations, stocks, evolution, economy, governance, marketplace, briefing, traces
 - Real-time SSE data via `useWorldState` hook
 - Recharts visualizations
+
+For the complete module breakdown with file listings, see [`docs/CODE_TOUR.md`](docs/CODE_TOUR.md).
 
 See [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) for the full system design.
 
@@ -400,108 +368,31 @@ See [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) for the full system design.
 ```
 agent-world/
 ├── world-engine/       # Rust — core simulation engine
+│   └── src/
+│       ├── api.rs              # Axum REST API (all endpoints)
+│       ├── api_federation.rs   # Federation routes (18 endpoints)
+│       ├── api_migration.rs    # Migration routes (embedded in federation)
+│       ├── api_dsl.rs          # DSL rules routes (10 endpoints)
+│       ├── api_auth.rs         # Auth routes (5 endpoints)
+│       ├── api_human.rs        # Human observer routes (15 endpoints)
+│       ├── federation/         # Federation, migration, registry
+│       ├── dsl/                # DSL rules parser
+│       ├── auth/               # Authentication system
+│       ├── snapshot/           # Time capsule snapshots
+│       └── ...                 # economy, organization, evolution, etc.
 ├── agent-runtime/      # Python — agent AI & decision making
+│   └── agent_runtime/
+│       ├── social/             # Cultural emergence (12 modules)
+│       ├── organization/       # Self-governance decisions (5 modules)
+│       ├── tracing/            # Tick-level tracing (7 modules)
+│       ├── federation/         # Cross-world migration client
+│       └── ...                 # core, memory, llm, crypto, skills
 ├── dashboard/          # Next.js — observatory UI
 ├── protocol/           # gRPC — A2A agent-to-agent protocol
 ├── config/             # Genesis config, agent TOML files
-├── scripts/            # Dev setup, compose generation
+├── scripts/            # Dev setup, emergence experiments
 ├── docs/               # Architecture, roadmap, API reference
-│   ├── screenshots/    # Dashboard screenshots (TODO)
-│   └── i18n/           # Translated docs
 └── docker-compose.yml  # One-command deployment
-  README.md                 # You are here
-  LICENSE                   # MIT
-  CONTRIBUTING.md           # How to contribute
-  CHANGELOG.md              # Version history
-  CODE_OF_CONDUCT.md        # Community standards
-  SECURITY.md               # Security policy
-  VERSION                   # Current version (1.0.0)
-  RELEASE_BODY.md           # GitHub Release body template
-  docker-compose.yml        # 10-agent deployment
-  docker-compose-v3.yml     # 100-agent deployment (Phase 3 scale)
-  config/
-    genesis.yaml            # World birth config (economy, lifecycle, evolution)
-    world-rules.yaml        # 10 rules across 4 categories
-    agents/                 # Agent TOML configs
-  world-engine/             # Rust -- economy, organizations, governance, banking,
-                             #   stocks, evolution, emergence, rules, tracing
-    Cargo.toml
-    Dockerfile
-    src/
-      main.rs               # Entry point, WAL writer, Axum server
-      lib.rs                # Module re-exports
-      api.rs                # Axum REST API (all endpoints)
-      lifecycle.rs          # Lifecycle state machine
-      rules.rs              -- 10 built-in rules + dynamic rule registry
-      tracing.rs            -- Tick trace storage & REST endpoints
-      economy/
-        mod.rs, task.rs, reward.rs, escrow.rs, token_burn.rs,
-        banking.rs, stock_market.rs
-      organization/
-        mod.rs, org.rs, members.rs, charter.rs, governance.rs,
-        competition.rs, treasury.rs, leadership.rs, diplomacy.rs
-      emergence/
-        culture.rs          -- Org culture, clusters, group trust
-      evolution/
-        mod.rs, skill_tree.rs, mutation.rs, selection.rs, subsystem.rs
-      engine/
-        culture.rs          -- Cultural data store (org culture, clusters, trust)
-      world/
-        mod.rs, enums.rs, event.rs, state.rs
-      wal/
-        mod.rs, crc.rs
-    benches/
-      hotpath_benchmarks.rs # Criterion benchmarks
-    tests/
-      stress_100_agents.rs  # 100-agent stress tests
-      third_party_agent_api.rs # Third-party API integration tests
-  agent-runtime/            # Python -- agent think loop + social + governance
-    pyproject.toml
-    Dockerfile
-    agent_runtime/
-      __init__.py
-      models/               # Agent state, enums, skill, personality, values
-      core/                 # Think loop, decide, act
-      survival/             # Survival instinct (5 modes, 11 emergency actions)
-      memory/               # Working memory + short-term memory (SQLite)
-      llm/                  # LLM providers (OpenAI, Anthropic, Ollama)
-      crypto/               # Ed25519 signing, verification, nonce cache
-      skills/               # 4 built-in skills (coding, research, teaching, trading)
-      social/               # Cultural emergence (10 modules)
-      organization/         # Self-governance decisions (5 modules)
-      tracing/              # Tick-level tracing (7 modules)
-      sdk/                  # Third-party agent SDK client
-      agent/                # Capability declarations
-  protocol/                 # gRPC -- A2A protocol
-    a2a.proto               # Discover, SendMessage, StreamMessages
-  dashboard/                # Next.js -- observatory UI
-    Dockerfile
-    package.json
-    src/
-      app/                  # Pages: overview, agents, tasks, timeline, orgs,
-                             #   stocks, evolution, economy, traces, briefing
-      components/           # EventStream, Leaderboard, Sidebar, StatCards
-      hooks/                # useWorldState (SSE)
-      lib/                  # API client
-      types/                # TypeScript type definitions (world.ts)
-  docs/
-    ARCHITECTURE.md         # Full system architecture
-    ROADMAP.md              # Development roadmap
-    DESIGN.md               # Product requirements document
-    api-reference.md        # API reference documentation
-    openapi.yaml            # OpenAPI spec
-    developer-guide.md      # Developer guide
-    emergence-report-template.md  # Experiment report template
-    scale-experiment-report.md    # Scale experiment results
-    tutorials/              # Quick start and usage tutorials
-    i18n/                   # Internationalized documentation
-    adr/                    # Architecture Decision Records
-  scripts/
-    setup.sh                # Dev environment setup
-    emergence_experiment.py # One-command emergence experiment runner
-  examples/
-    python/
-      custom_agent.py       # Third-party agent example
 ```
 
 ---
@@ -523,11 +414,25 @@ agent-world/
 | 4.1 | LLM integration & multi-provider support | ✅ Done |
 | 4.2 | Tick-level tracing & observability | ✅ Done |
 | 4.3 | Cultural emergence (personality, language, group identity) | ✅ Done |
-| 4.4 | Self-governance (elections, treasury, diplomacy, rules) | ✅ Done |
-| 4.5 | Researcher tools (SDK, export, experiment framework) | ✅ Done |
+| 4.4 | Self-governance (elections, treasury, diplomacy, DSL rules, federation, migration) | ✅ Done |
+| 4.5 | Researcher tools (SDK, auth, snapshots, human observer) | ✅ Done |
 | 4.6 | Demo & open-source promotion | 🔄 In Progress |
 
-See [docs/ROADMAP.md](docs/ROADMAP.md) for detailed milestones.
+**Phase 4 Implementation Details:**
+
+| Feature | Backend (Rust) | Agent Runtime (Python) | API Routes |
+|---------|---------------|----------------------|------------|
+| Federation | `federation/` — registry, service | `federation/` — migration client | 18 (`/federation/*`) |
+| Migration | `federation/migration.rs` | Snapshot serialization | 9 (`/migration/*`) |
+| DSL Rules | `dsl/` — parser, lifecycle | `organization/proposal.py` | 10 (`/rules/dsl/*`) |
+| Cultural Emergence | `emergence/culture.rs` | `social/` — 12 modules | — (internal) |
+| Self-Governance | `organization/` — treasury, elections, diplomacy | `organization/` — 5 modules | via org routes |
+| Time Capsule | `snapshot/` + `time_capsule.rs` | — | 6 (`/snapshots/*`) |
+| Auth | `auth/` — register/login/roles | — | 5 (`/auth/*`) |
+| Human Observer | `human/` — bounties, oracles, interventions | — | 15 (`/human/*`) |
+| Tracing | `tracing.rs` | `tracing/` — 7 modules | 4 (`/traces/*`) |
+
+See [docs/ROADMAP.md](docs/ROADMAP.md) for detailed milestones and completion percentages.
 
 ---
 
@@ -537,8 +442,16 @@ The screenshots in this README are real captures from a running instance. To upd
 
 1. Start the platform: `docker compose up`
 2. Navigate to `http://localhost:3001`
-3. Take screenshots at 1920x1080 or higher resolution
-4. Save as `docs/screenshots/world-overview.png`, `agent-decisions.png`, `emergent-societies.png`, `organizations.png`, `stocks.png`, `evolution.png`, `governance.png`, `economy.png`
+3. Take screenshots of:
+   - World Overview page (stat cards, event stream)
+   - Agent detail page (decision log, skill tree)
+   - Organizations page (companies, guilds, alliances)
+   - Stocks page (market data, order book)
+   - Evolution page (skill distribution, mutations)
+   - Governance page (DSL rules, elections, treaties)
+   - Economy page (GDP, banking)
+   - Federation page (migration, diplomacy)
+4. Save as `docs/screenshots/world-overview.png`, `agent-decisions.png`, `emergent-societies.png`, `organizations.png`, `stocks.png`, `evolution.png`, `governance.png`, `economy.png`, `federation.png`
 5. Open a PR — we'll merge them in!
 
 ---

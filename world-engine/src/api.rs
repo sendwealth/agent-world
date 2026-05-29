@@ -397,6 +397,8 @@ pub fn build_full_router(state: AppState) -> Router {
         .merge(crate::api_diplomacy::diplomacy_routes())
         .merge(crate::api_marketplace::marketplace_routes())
         .merge(crate::api_reputation::reputation_routes())
+        // V1 unified export API
+        .merge(crate::api_export_v1::export_v1_routes())
         // Prometheus metrics endpoint
         .route("/metrics", get(crate::observability::metrics_handler))
         // Research API v2 (with optional auth middleware)

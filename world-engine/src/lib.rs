@@ -19,6 +19,7 @@ pub mod api_diplomacy;
 pub mod api_dsl;
 pub mod api_experiment;
 pub mod api_export;
+pub mod api_export_v1;
 pub mod api_federation;
 pub mod api_governance;
 pub mod api_human;

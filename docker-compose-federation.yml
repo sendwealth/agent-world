@@ -1,0 +1,80 @@
+# ── Agent World — Federation Multi-Instance Docker Compose ──────────
+#
+# Runs two independent World Engine instances for cross-world
+# federation and migration testing.
+#
+# Usage:
+#   docker compose -f docker-compose-federation.yml up --build
+#
+# After both instances are healthy, run the E2E test:
+#   bash scripts/federation-e2e-test.sh
+#
+# Tear down:
+#   docker compose -f docker-compose-federation.yml down -v
+#
+# ────────────────────────────────────────────────────────────────────
+
+services:
+  # ── World Engine Alpha (Instance A) ────────────────────────
+  world-engine-alpha:
+    build:
+      context: .
+      dockerfile: world-engine/Dockerfile
+    container_name: world-engine-alpha
+    ports:
+      - "8081:8080"    # REST API
+      - "50051:50051"  # gRPC
+    volumes:
+      - alpha-data:/app/data
+      - ./config:/app/config:ro
+    environment:
+      - HOST=0.0.0.0
+      - PORT=8080
+      - GRPC_ADDR=0.0.0.0:50051
+      - RUST_LOG=${RUST_LOG:-info}
+      - GENESIS_PATH=config/genesis.yaml
+      - WORLD_ID=world-alpha
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8080/tasks"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 30s
+    networks:
+      - federation-net
+
+  # ── World Engine Beta (Instance B) ─────────────────────────
+  world-engine-beta:
+    build:
+      context: .
+      dockerfile: world-engine/Dockerfile
+    container_name: world-engine-beta
+    ports:
+      - "8082:8080"    # REST API
+      - "50052:50051"  # gRPC
+    volumes:
+      - beta-data:/app/data
+      - ./config:/app/config:ro
+    environment:
+      - HOST=0.0.0.0
+      - PORT=8080
+      - GRPC_ADDR=0.0.0.0:50051
+      - RUST_LOG=${RUST_LOG:-info}
+      - GENESIS_PATH=config/genesis.yaml
+      - WORLD_ID=world-beta
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8080/tasks"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 30s
+    networks:
+      - federation-net
+
+volumes:
+  alpha-data:
+  beta-data:
+
+networks:
+  federation-net:
+    driver: bridge

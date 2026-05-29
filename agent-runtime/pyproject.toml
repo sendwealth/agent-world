@@ -24,6 +24,11 @@ dev = [
     "ruff>=0.4",
     "mypy>=1.10",
 ]
+experiment = [
+    "fastapi>=0.110",
+    "uvicorn>=0.29",
+    "fpdf2>=2.8",
+]
 otel = [
     "opentelemetry-api>=1.20",
     "opentelemetry-sdk>=1.20",

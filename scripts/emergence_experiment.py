@@ -1009,6 +1009,44 @@ def main() -> int:
         json_path = write_json_report(metrics, config.log_dir)
         md_path = write_markdown_report(metrics, config.log_dir)
 
+        # Generate rich HTML report with charts via ExperimentReporter
+        try:
+            from agent_runtime.experiment.report import ExperimentReporter, ExperimentResult
+
+            exp_result = ExperimentResult(
+                experiment_id=metrics.experiment_id,
+                config_snapshot=metrics.config,
+                duration_ticks=config.duration_seconds,
+                completed_ticks=metrics.total_ticks,
+                agent_count=config.agents,
+                final_snapshot={
+                    "agents_alive": metrics.agents_alive,
+                    "alive_count": metrics.agents_alive,
+                    "skill_distribution": [],
+                },
+                metrics_timeline=[
+                    {
+                        "tick": i,
+                        "gdp": 0,
+                        "gini": 0,
+                        "population": metrics.agents_alive,
+                    }
+                    for i in range(0, metrics.total_ticks, max(1, metrics.total_ticks // 20))
+                ],
+                emergence_events=[],
+                errors=metrics.notes,
+                started_at=metrics.start_time,
+                finished_at=metrics.end_time,
+            )
+
+            reporter = ExperimentReporter()
+            rich_html = reporter.generate_rich_report(exp_result, format="html")
+            html_path = config.log_dir / "experiment-report.html"
+            html_path.write_text(rich_html, encoding="utf-8")
+            log(f"  Rich HTML report: {html_path}")
+        except Exception as exc:
+            log(f"  WARNING: Rich report generation failed: {exc}")
+
         log(f"  JSON report: {json_path}")
         log(f"  Markdown report: {md_path}")
 

@@ -5,7 +5,7 @@ description: REST API reference for the Agent World Engine. Covers Tasks, WAL, O
 
 # API Reference
 
-The World Engine exposes a REST API on `http://localhost:8080` (configurable). This page provides a structured overview of all endpoint groups.
+The World Engine exposes a REST API on `http://localhost:3000` (configurable via `ENGINE_PORT`). This page provides a structured overview of all endpoint groups.
 
 ::: info Full OpenAPI Spec
 The complete OpenAPI 3.1 specification is available at [`/docs/openapi.yaml`](https://github.com/sendwealth/agent-world/blob/main/docs/openapi.yaml) in the repository. Import it into Swagger UI, Postman, or any OpenAPI-compatible tool for interactive documentation.
@@ -163,17 +163,31 @@ General world information and statistics.
 
 ## Third-Party Agent API
 
-Register external agents that can perceive the world and execute actions via REST (outside the built-in agent runtime).
+Register external agents that can perceive the world and execute actions via REST (outside the built-in agent runtime). These endpoints have no rate limit and do not require an API key.
+
+### Endpoints
 
 | Method | Path | Description |
 |--------|------|-------------|
-| `POST` | `/api/v1/agents/register` | Register a new external agent. Returns `agent_id` and `api_key`. |
-| `GET` | `/api/v1/agents/{agent_id}/status` | Get agent status (alive, tokens, money, phase). |
-| `GET` | `/api/v1/agents/{agent_id}/perception` | Get perception data (nearby agents, resources, world tick). |
-| `POST` | `/api/v1/agents/{agent_id}/action` | Execute an action. Body: `{action, params}`. Returns `{success, result, tick}`. |
-| `DELETE` | `/api/v1/agents/{agent_id}` | Deregister (remove) an external agent. |
+| `POST` | `/api/v1/agents/register` | Register a new external agent. Body: `{name, capabilities?, config?}`. Returns `201` with `{agent_id, api_key, name}`. |
+| `GET` | `/api/v1/agents/{agent_id}/status` | Get agent status: `{agent_id, name, alive, phase, tokens, money, position, registered_tick, current_tick}`. |
+| `GET` | `/api/v1/agents/{agent_id}/perception` | Get perception data: `{agent_id, nearby_agents, nearby_resources, position, world_tick}`. |
+| `POST` | `/api/v1/agents/{agent_id}/action` | Execute an action. Body: `{action, params?}`. Returns `{action, success, tick}`. Auto-advances world tick by 1. |
+| `DELETE` | `/api/v1/agents/{agent_id}` | Deregister (remove) an external agent. Returns `{deregistered}`. |
 
-See the [Third-Party Agent API guide](/how-to/third-party-agent-api) for a full walkthrough with the Python SDK.
+### Valid Action Types
+
+`move`, `gather`, `explore`, `rest`, `communicate`, `trade`, `build`, `claim_task`, `submit_task`
+
+### Error Codes
+
+| Code | Meaning |
+|------|---------|
+| `400` | Bad Request — invalid action type, empty name, or malformed params |
+| `404` | Not Found — agent UUID does not exist |
+| `410` | Gone — agent exists but is dead |
+
+See the [Third-Party Agent API guide](/how-to/third-party-agent-api) for a full walkthrough with the Python SDK, TypeScript examples, and curl snippets.
 
 ---
 
@@ -235,8 +249,11 @@ See the [Cross-World Interaction guide](/how-to/cross-world-interaction) for a f
 | `200` | Success |
 | `201` | Created (POST only) |
 | `204` | No Content (DELETE success) |
-| `400` | Bad Request — invalid input or UUID format |
+| `400` | Bad Request — invalid input, unknown action type, or empty required fields |
+| `401` | Unauthorized — missing or invalid API key (v2 endpoints) |
 | `403` | Forbidden — not authorized (e.g., non-publisher reviewing a task) |
 | `404` | Not Found — resource doesn't exist |
 | `409` | Conflict — invalid state transition |
+| `410` | Gone — agent is dead (no longer alive) |
+| `429` | Too Many Requests — rate limit exceeded (v2 endpoints, 60 req/min) |
 | `500` | Internal Server Error |

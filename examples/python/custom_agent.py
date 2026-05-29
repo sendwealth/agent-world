@@ -3,7 +3,7 @@
 Agent World — Custom Agent Example (Python)
 
 A complete, runnable example demonstrating how to:
-  1. Register an agent with the simulation
+  1. Register an agent with the World Engine
   2. Read perception (observe the world)
   3. Execute actions (move, gather, rest, etc.)
   4. Check agent status
@@ -13,7 +13,7 @@ Run with:
     python custom_agent.py
 
 Requires the agent_runtime SDK package:
-    pip install agent-runtime
+    pip install -e ./agent-runtime
 """
 
 import os
@@ -21,15 +21,13 @@ import sys
 import time
 import signal
 import logging
+import random
 
 from agent_runtime.sdk import AgentWorldClient
 
 # ---------------------------------------------------------------------------
 # Configuration
 # ---------------------------------------------------------------------------
-
-# API key — can also be set via the AGENT_WORLD_API_KEY environment variable.
-API_KEY = os.environ.get("AGENT_WORLD_API_KEY", "your-api-key-here")
 
 # Base URL of the Agent World server.
 BASE_URL = os.environ.get("AGENT_WORLD_BASE_URL", "http://localhost:3000")
@@ -66,47 +64,26 @@ signal.signal(signal.SIGTERM, handle_signal)
 
 
 # ---------------------------------------------------------------------------
-# Decision-making helpers
+# Decision-making helper
 # ---------------------------------------------------------------------------
 
-def decide_action(perception: dict) -> dict:
+def decide_action(perception: dict) -> tuple[str, dict]:
     """
-    Very simple rule-based decision loop.
+    Simple rule-based decision loop (Perceive-Decide-Act).
 
     Priorities:
-      1. Rest if energy is low (< 20).
-      2. Gather if resources are present on the current tile.
-      3. Explore / move in a random direction otherwise.
+      1. Gather if resources are nearby.
+      2. Move in a random direction otherwise.
     """
-    # Extract useful data from perception (defensive defaults).
-    center = perception.get("center", {"x": 0, "y": 0})
-    tiles = perception.get("tiles", [])
+    resources = perception.get("nearby_resources", [])
 
-    # We need the agent's energy — fetch it from the status field if present,
-    # or just assume full energy if not available in perception.
-    # (In practice you'd call client.get_status() separately.)
+    # 1) Gather if resources are present.
+    if resources:
+        return "gather", {}
 
-    # 1) Rest if energy is critically low.
-    energy = perception.get("energy", 100)
-    if energy < 20:
-        return {"type": "rest", "params": {}}
-
-    # 2) Gather if there are resources on the current tile.
-    current_tile = next(
-        (t for t in tiles if t["x"] == center["x"] and t["y"] == center["y"]),
-        None,
-    )
-    if current_tile and current_tile.get("resources"):
-        resource_name = next(iter(current_tile["resources"]))
-        return {
-            "type": "gather",
-            "params": {"resource": resource_name},
-        }
-
-    # 3) Move — cycle through cardinal directions.
-    directions = ["north", "east", "south", "west"]
-    direction = directions[tick_count % len(directions)]
-    return {"type": "move", "params": {"direction": direction}}
+    # 2) Move in a random direction.
+    directions = ["north", "south", "east", "west"]
+    return "move", {"direction": random.choice(directions)}
 
 
 # ---------------------------------------------------------------------------
@@ -114,15 +91,13 @@ def decide_action(perception: dict) -> dict:
 # ---------------------------------------------------------------------------
 
 def main():
-    global agent_id, client, tick_count
-
-    tick_count = 0
+    global agent_id, client
 
     # ------------------------------------------------------------------
     # Step 1 — Initialise the SDK client
     # ------------------------------------------------------------------
     log.info("Connecting to Agent World at %s", BASE_URL)
-    client = AgentWorldClient(base_url=BASE_URL, api_key=API_KEY)
+    client = AgentWorldClient(base_url=BASE_URL)
 
     # ------------------------------------------------------------------
     # Step 2 — Register the agent
@@ -130,20 +105,16 @@ def main():
     log.info("Registering agent …")
     registration = client.register(
         name="PyScout",
-        kind="explorer",
-        metadata={
-            "language": "python",
-            "owner": "example",
-            "version": "1.0.0",
-        },
+        capabilities=["move", "gather", "explore", "rest"],
     )
-    agent_id = registration["id"]
+    agent_id = registration["agent_id"]
     log.info("Registered as %s (id=%s)", registration["name"], agent_id)
 
     try:
         # --------------------------------------------------------------
-        # Step 3 — Main simulation loop
+        # Step 3 — Main simulation loop (Perceive → Decide → Act)
         # --------------------------------------------------------------
+        tick_count = 0
         while running:
             if MAX_TICKS > 0 and tick_count >= MAX_TICKS:
                 log.info("Reached MAX_TICKS=%d, stopping.", MAX_TICKS)
@@ -153,29 +124,36 @@ def main():
             log.info("--- Tick %d ---", tick_count)
 
             # 3a. Observe the world (perception).
-            perception = client.get_perception(agent_id, radius=3)
+            perception = client.perception(agent_id)
             log.info(
-                "Perception: %d tiles, %d nearby agents",
-                len(perception.get("tiles", [])),
+                "Perception: position=%s, %d nearby agents, %d resources",
+                perception.get("position"),
                 len(perception.get("nearby_agents", [])),
+                len(perception.get("nearby_resources", [])),
             )
 
             # 3b. Decide what to do next.
-            action = decide_action(perception)
-            log.info("Action: %s %s", action["type"], action.get("params", {}))
+            action, params = decide_action(perception)
+            log.info("Action: %s %s", action, params)
 
             # 3c. Execute the action.
-            result = client.execute_action(agent_id, action)
-            log.info("Result: %s — %s", result.get("result"), result.get("message"))
+            result = client.action(agent_id, action, params)
+            log.info(
+                "Result: action=%s success=%s tick=%s",
+                result.get("action"),
+                result.get("success"),
+                result.get("tick"),
+            )
 
             # 3d. (Optional) Check status every 5 ticks.
             if tick_count % 5 == 0:
-                status = client.get_status(agent_id)
+                status = client.status(agent_id)
                 log.info(
-                    "Status — energy: %s, position: %s, inventory: %s",
-                    status.get("energy"),
+                    "Status — alive=%s, money=%s, position=%s, phase=%s",
+                    status.get("alive"),
+                    status.get("money"),
                     status.get("position"),
-                    status.get("inventory"),
+                    status.get("phase"),
                 )
 
             # Pause between ticks.
@@ -192,6 +170,7 @@ def main():
                 log.info("Agent deregistered.")
             except Exception as exc:
                 log.error("Failed to deregister: %s", exc)
+        client.close()
 
 
 if __name__ == "__main__":

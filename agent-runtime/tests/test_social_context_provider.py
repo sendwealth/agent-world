@@ -11,24 +11,21 @@ Covers:
 
 from __future__ import annotations
 
-from dataclasses import dataclass
-from typing import Any
 from unittest.mock import AsyncMock
 
 import pytest
 
-from agent_runtime.core.act import ActionExecutor, ActionType
+from agent_runtime.core.act import ActionExecutor
 from agent_runtime.core.decide import (
     DecisionAction,
     DecisionEngine,
     DecisionPerception,
     SocialContext,
-    SocialContextProvider,
     SurvivalAssessment,
     build_prompt,
 )
 from agent_runtime.core.llm_decide import LLMDecisionProvider
-from agent_runtime.core.think_loop import ThinkLoop, ThinkLoopConfig
+from agent_runtime.core.think_loop import ThinkLoop
 from agent_runtime.llm.base import LLMResponse, TokenUsage
 from agent_runtime.models.agent_state import AgentState
 from agent_runtime.models.enums import AgentPhase
@@ -38,7 +35,6 @@ from agent_runtime.social.provider import (
     AgentProfile,
     DefaultSocialContextProvider,
 )
-
 
 # ---------------------------------------------------------------------------
 # Fixtures
@@ -279,7 +275,10 @@ class TestDecisionEngineWithSocialProvider:
         """DecisionEngine uses injected social provider in prompt building."""
         mock_llm = AsyncMock()
         mock_llm.chat.return_value = LLMResponse(
-            content='{"action": "explore", "parameters": {}, "reasoning": "test", "confidence": 50}',
+            content=(
+                '{"action": "explore", "parameters": {},'
+                ' "reasoning": "test", "confidence": 50}'
+            ),
             model="test-model",
             usage=TokenUsage(prompt_tokens=10, completion_tokens=5),
         )
@@ -311,7 +310,12 @@ class TestDecisionEngineWithSocialProvider:
         """DecisionEngine produces a decision using social context from provider."""
         mock_llm = AsyncMock()
         mock_llm.chat.return_value = LLMResponse(
-            content='{"action": "socialize", "parameters": {"target_agent_id": "agent-b"}, "reasoning": "high social propensity", "confidence": 80}',
+            content=(
+                '{"action": "socialize",'
+                ' "parameters": {"target_agent_id": "agent-b"},'
+                ' "reasoning": "high social propensity",'
+                ' "confidence": 80}'
+            ),
             model="test-model",
             usage=TokenUsage(prompt_tokens=100, completion_tokens=20),
         )

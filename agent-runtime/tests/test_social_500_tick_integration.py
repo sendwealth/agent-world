@@ -27,14 +27,12 @@ from agent_runtime.core.experience import Experience
 from agent_runtime.models.personality import PersonalityVector
 from agent_runtime.models.skill import Skill
 from agent_runtime.models.values import ValueWeights
-
 from agent_runtime.social import (
     CommunicationAnalyzer,
     CulturalConflictAndFusion,
     CulturalDiffusion,
     DefaultSocialContextProvider,
     ImitationEngine,
-    IntergroupTrust,
     JargonDetector,
     KnowledgeTransfer,
     LanguageExperiment,
@@ -43,7 +41,6 @@ from agent_runtime.social import (
     SocialEngine,
 )
 from agent_runtime.social.provider import AgentProfile
-
 
 # ---------------------------------------------------------------------------
 # Helpers — simulated world state
@@ -81,8 +78,14 @@ class SimAgent:
         self.region_id = region_id
         self.group_ids = group_ids or []
         self.skills: Dict[str, Skill] = {
-            "trading": Skill(name="trading", max_level=10, level=1, experience=0, next_level_exp=100),
-            "farming": Skill(name="farming", max_level=10, level=1, experience=0, next_level_exp=100),
+            "trading": Skill(
+                name="trading", max_level=10, level=1,
+                experience=0, next_level_exp=100,
+            ),
+            "farming": Skill(
+                name="farming", max_level=10, level=1,
+                experience=0, next_level_exp=100,
+            ),
         }
         self.messages: List[str] = []
 
@@ -209,7 +212,7 @@ def run_simulation(agents: List[SimAgent], rng: random.Random) -> Dict[str, Any]
     """
     engine = SocialEngine()
     cultural_diffusion = CulturalDiffusion()
-    imitation = ImitationEngine()
+    ImitationEngine()
     knowledge_transfer = KnowledgeTransfer()
     org_culture = OrgCultureSystem()
     regional_culture = RegionalCulture(n_clusters=3)
@@ -323,7 +326,9 @@ def run_simulation(agents: List[SimAgent], rng: random.Random) -> Dict[str, Any]
 
             # 5. Generate messages for language analysis
             if rng.random() < 0.3:  # 30% chance to speak per tick
-                template_list = message_templates.get(agent.region_id, message_templates["region_0"])
+                template_list = message_templates.get(
+                    agent.region_id, message_templates["region_0"],
+                )
                 base_msg = rng.choice(template_list)
                 # Add some variation
                 agent.messages.append(base_msg)
@@ -440,7 +445,9 @@ def run_simulation(agents: List[SimAgent], rng: random.Random) -> Dict[str, Any]
     # Language efficiency
     before_msgs = agents[0].messages[:len(agents[0].messages) // 2] if agents[0].messages else []
     after_msgs = agents[0].messages[len(agents[0].messages) // 2:] if agents[0].messages else []
-    efficiency = language_exp.measure_communication_efficiency(before_msgs, after_msgs, "restricted")
+    efficiency = language_exp.measure_communication_efficiency(
+        before_msgs, after_msgs, "restricted",
+    )
 
     # Dialect emergence
     dialect_data = []
@@ -451,7 +458,7 @@ def run_simulation(agents: List[SimAgent], rng: random.Random) -> Dict[str, Any]
         for w in range(4):
             period_msgs: Dict[str, List[str]] = {}
             for gid in groups_list[:2]:
-                all_group_msgs = group_messages[gid]
+                group_messages[gid]
                 start = w * window_size
                 end = start + window_size
                 # Distribute messages per agent per group
@@ -467,7 +474,9 @@ def run_simulation(agents: List[SimAgent], rng: random.Random) -> Dict[str, Any]
     # Cultural distance between regions
     region_0_values = [a.values for a in agents if a.region_id == "region_0"]
     region_1_values = [a.values for a in agents if a.region_id == "region_1"]
-    cultural_distance = cultural_diffusion.compute_cultural_distance(region_0_values, region_1_values)
+    cultural_distance = cultural_diffusion.compute_cultural_distance(
+        region_0_values, region_1_values,
+    )
 
     # Final trust matrix
     final_trust: Dict[str, float] = {}
@@ -583,7 +592,8 @@ class Test500TickSimulation:
         """In-group trust should be higher than out-group trust."""
         final = self.results["final_trust"]
         assert final["in_group"] >= final["out_group"], (
-            f"In-group trust ({final['in_group']:.3f}) should be >= out-group ({final['out_group']:.3f})"
+            f"In-group trust ({final['in_group']:.3f}) "
+            f">= out-group ({final['out_group']:.3f})"
         )
 
     def test_in_group_trust_above_default(self) -> None:
@@ -602,7 +612,7 @@ class Test500TickSimulation:
         if len(history) >= 2:
             # Agent-to-agent trust should have increased (cooperation events)
             # Note: starts at default 0.3, cooperation adds +0.05 per event
-            first_agent_trust = history[0].get("agent_0_to_1", 0.3)
+            history[0].get("agent_0_to_1", 0.3)
             last_agent_trust = history[-1].get("agent_0_to_1", 0.3)
             # Trust may have increased; if no events happened, it stays at default
             assert last_agent_trust >= 0.1  # at least the floor
@@ -783,7 +793,8 @@ class TestCulturalDiffusionIntegration:
             final_std = _std(final_vals)
             # Values should have converged (std decreased)
             assert final_std <= initial_std + 0.01, (
-                f"Dimension {dim}: std did not decrease (initial={initial_std:.4f}, final={final_std:.4f})"
+                f"Dimension {dim}: std did not decrease "
+                f"(initial={initial_std:.4f}, final={final_std:.4f})"
             )
 
     def test_organizational_culture_convergence(self) -> None:
@@ -989,14 +1000,18 @@ class TestKnowledgeTransferIntegration:
             )
 
         assert student_v.cooperation_weight > initial_coop, (
-            f"Teaching did not increase cooperation: {initial_coop:.4f} -> {student_v.cooperation_weight:.4f}"
+            f"Teaching did not increase cooperation: "
+            f"{initial_coop:.4f} -> {student_v.cooperation_weight:.4f}"
         )
 
     def test_skill_transfer_levels_up_over_500_sessions(self) -> None:
         """500 skill transfers should level up student skills."""
         kt = KnowledgeTransfer()
 
-        teacher_skill = Skill(name="crafting", max_level=10, level=8, experience=0, next_level_exp=100)
+        teacher_skill = Skill(
+            name="crafting", max_level=10, level=8,
+            experience=0, next_level_exp=100,
+        )
         student_skills: Dict[str, Skill] = {}
         student_p = PersonalityVector(openness=0.9)
 
@@ -1068,7 +1083,7 @@ class TestRegionalCultureIntegration:
 
     def test_cluster_detection_with_10_agents(self) -> None:
         """Should detect meaningful clusters in 10 diverse agents."""
-        rng = random.Random(303)
+        random.Random(303)
         rc = RegionalCulture(n_clusters=3)
 
         # Create 3 distinct groups

@@ -21,7 +21,7 @@ from __future__ import annotations
 
 import logging
 from dataclasses import dataclass
-from typing import Any, Callable, Dict, List, Optional, Protocol
+from typing import Any, Dict, List, Optional, Protocol
 
 from agent_runtime.core.decide import SocialContext
 from agent_runtime.models.personality import PersonalityVector

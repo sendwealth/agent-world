@@ -421,8 +421,8 @@ fn compare_variant_snapshots(
     ];
 
     for (name, extractor) in &metric_fns {
-        let values_a: Vec<f64> = a.snapshots.iter().map(|s| extractor(s)).collect();
-        let values_b: Vec<f64> = b.snapshots.iter().map(|s| extractor(s)).collect();
+        let values_a: Vec<f64> = a.snapshots.iter().map(extractor).collect();
+        let values_b: Vec<f64> = b.snapshots.iter().map(extractor).collect();
 
         let mean_a = compute_mean(&a.snapshots, *extractor);
         let mean_b = compute_mean(&b.snapshots, *extractor);

@@ -6,23 +6,14 @@ Also verifies governance metrics collection and leader election influence on leg
 
 from __future__ import annotations
 
-import uuid
 from typing import Any
 
-import pytest
-
 from agent_runtime.organization.governance_analysis import (
-    GovernanceAnalyzer,
     GovernanceEventData,
     OrgGovernanceSnapshot,
-    StabilityReport,
 )
 from agent_runtime.organization.rule_proposal import (
     RuleCategory,
-    RuleCondition,
-    RuleEffect,
-    RuleProposal,
-    RuleProposalEngine,
 )
 from agent_runtime.organization.self_legislation import (
     InMemoryRuleEngineClient,
@@ -30,7 +21,6 @@ from agent_runtime.organization.self_legislation import (
     LegislationStatus,
     SelfLegislationCycleEngine,
 )
-
 
 # ═══════════════════════════════════════════════════════════════
 # Test Helpers
@@ -295,7 +285,7 @@ class TestDuplicateVoting:
     def test_duplicate_vote_ignored(self) -> None:
         """Duplicate votes from the same voter are ignored."""
         engine = SelfLegislationCycleEngine(quorum=3)
-        client = InMemoryRuleEngineClient()
+        InMemoryRuleEngineClient()
 
         context = _inequality_context()
 

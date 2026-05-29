@@ -112,6 +112,10 @@ class DefaultSocialContextProvider:
         Returns:
             A ``decide.SocialContext`` for prompt injection, or ``None``.
         """
+        # Defensive: callers (e.g. DecisionEngine) may pass state.id (UUID).
+        # Coerce once at the entry point so all downstream code sees a plain str.
+        agent_id = str(agent_id)
+
         # 1. Get agent profile (personality + values + groups)
         profile = self._get_profile(agent_id)
         if profile is None:

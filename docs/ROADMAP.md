@@ -1,6 +1,6 @@
 # Roadmap
 
-> **Overall completion: ~82%** (as of 2026-05-28, after code-level wiring audit)
+> **Overall completion: ~87%** (as of 2026-05-30, after social module wiring)
 >
 > This document reflects the **actual** implementation and wiring state.
 > Items marked ⚠️ are partially implemented — see details below.
@@ -83,7 +83,7 @@
 
 ---
 
-## Phase 2: Village (Month 4-6) — **~85%** ✅⚠️
+## Phase 2: Village (Month 4-6) — **~92%** ✅
 
 **Goal**: 10-100 agents form social relationships, have lifecycles, share knowledge.
 
@@ -94,9 +94,7 @@
 - [x] Agent profile pages in dashboard (agent detail, evolution traces)
 - [x] Knowledge marketplace — `economy/marketplace.rs` (1485 lines) **wired into AppState** with 11 API routes, dashboard page (`marketplace/page.tsx`)
 - [x] Social context protocol — `decide.py` defines `SocialContextProvider` and `SocialContext` dataclass
-
-### Partially Implemented ⚠️
-- ⚠️ **Social graph** — Python `social/` module has 12 files (engine, trust, cultural diffusion, imitation, language, etc.) with real logic. `decide.py` defines the `SocialContextProvider` protocol interface, but **no concrete social module is imported or injected** into the think loop by default. The pipeline accepts social context, but nothing provides it at runtime.
+- [x] **Social graph — wired into think loop** — `DefaultSocialContextProvider` (`social/provider.py`) implements the `SocialContextProvider` protocol, wraps `SocialEngine` which aggregates all 12 social modules (trust, cultural diffusion, imitation, language, etc.). Injected into `ThinkLoop` via `social_context_provider` parameter, which propagates to `DecisionEngine` for prompt injection. E2E tests confirm social context (trust scores, recommended targets, personality description) flows through the full Perceive → Decide → Act pipeline.
 
 ### Not Implemented 🔴
 - 🔴 **Tool marketplace** — agents cannot build or rent tools. No backend module found.
@@ -125,7 +123,7 @@
 
 ---
 
-## Phase 4: Civilization (Month 13-18) — **~70%** ⚠️
+## Phase 4: Civilization (Month 13-18) — **~75%** ⚠️
 
 **Goal**: 1000+ agents self-govern, develop culture, interact across worlds.
 
@@ -142,17 +140,19 @@
 - [x] SQLite tracing store with query interface
 - [x] Dashboard traces page (per-agent, per-tick drill-down)
 
-### 4.3 Cultural Emergence ⚠️
+### 4.3 Cultural Emergence ✅
 - [x] Big Five personality vectors (`models/personality.py`)
 - [x] Organization culture modeling (`engine/culture.rs`) — wired, used by competition module
-- [x] Cultural diffusion — regional and organizational value convergence (Python, exists but not wired to think loop)
-- [x] Cultural conflict detection and resolution (Python, exists but not wired to think loop)
-- [x] Regional culture cluster detection (Python, exists but not wired to think loop)
-- [x] Language emergence experiments (Python, exists but not wired to think loop)
-- [x] Jargon and dialect detection (Python, exists but not wired to think loop)
-- [x] Behavioral imitation and knowledge transfer (Python, exists but not wired to think loop)
-- [x] Intergroup trust dynamics (Python, exists but not wired to think loop)
-- ⚠️ **Gap**: 12 Python social/cultural module files exist with real logic but **none are imported by the runtime core** (`think_loop.py`, `decide.py`, `act.py`). The `SocialContextProvider` protocol is defined in `decide.py`, but no concrete implementation is injected at runtime.
+- [x] Cultural diffusion — regional and organizational value convergence (Python, wired via `SocialEngine` → `DefaultSocialContextProvider` → think loop)
+- [x] Cultural conflict detection and resolution (Python, wired via `SocialEngine`)
+- [x] Regional culture cluster detection (Python, wired via `SocialEngine`)
+- [x] Language emergence experiments (Python, wired via `SocialEngine`)
+- [x] Jargon and dialect detection (Python, wired via `SocialEngine`)
+- [x] Behavioral imitation and knowledge transfer (Python, wired via `SocialEngine`)
+- [x] Intergroup trust dynamics (Python, wired via `SocialEngine`)
+- [x] **`DefaultSocialContextProvider`** — concrete `SocialContextProvider` implementation in `social/provider.py` that wraps `SocialEngine` and translates its output to `decide.SocialContext`. Wired into `ThinkLoop` via `social_context_provider` parameter and auto-injected into `DecisionEngine`.
+- [x] **Social context in decision prompt** — trust scores, social propensity, recommended targets, personality description injected into LLM prompt via `build_prompt()` in `decide.py`
+- [x] **E2E integration tests** — `test_social_think_loop_e2e.py` validates full pipeline: provider → think loop → LLM decision → SOCIALIZE action
 
 ### 4.4 Self-Governance ✅
 - [x] DSL rules engine — parser + rule lifecycle wired into AppState via `main.rs`, 10 API routes (`/api/v1/rules/dsl/*`)
@@ -184,7 +184,6 @@
 - [ ] Cross-world interaction (multiple instances)
 
 ### Not Implemented 🔴
-- 🔴 **Python social integration** — social module files exist but need a concrete `SocialContextProvider` implementation wired into the think loop
 - 🔴 **API for third-party plugin/extension** — no public plugin API
 - 🔴 **Academic research tools** — no data export or experiment framework beyond snapshot CSV/JSON export
 
@@ -207,10 +206,9 @@
 
 | File | Issue | Severity |
 |------|-------|----------|
-| `agent-runtime/agent_runtime/social/` (12 files) | Social/cultural modules exist with real logic but **not imported or injected** into think loop — `SocialContextProvider` protocol defined but no concrete implementation wired | High |
 | `world-engine/src/api.rs` (test constructors) | `rule_engine: None` in test AppState constructors — only `main.rs` sets it to `Some`; tests that hit DSL routes will fail | Low |
 
-> **Note**: Previously tracked placeholders in `selection.rs` (task completion hardcoded to 0) and `competition.rs` (avg_skill placeholder) have been verified as resolved — both now use real tracked data with reasonable fallbacks for edge cases.
+> **Note**: Previously tracked placeholder for `agent-runtime/agent_runtime/social/` (12 files) has been **resolved** — social/cultural modules are now wired into the think loop via `DefaultSocialContextProvider` → `SocialEngine` → `DecisionEngine`. Previously tracked placeholders in `selection.rs` and `competition.rs` have also been verified as resolved.
 
 ---
 
@@ -219,7 +217,7 @@
 | Component | Lines of Code | Test Coverage |
 |-----------|--------------|---------------|
 | World Engine (Rust) | ~52,000 | 953 `#[test]` functions |
-| Agent Runtime (Python) | ~24,300 | 44 test files |
+| Agent Runtime (Python) | ~24,300 | 48 test files (1800 tests) |
 | Dashboard (TypeScript) | ~11,700 | lint + type-check |
 | **Total** | **~88,000** | |
 

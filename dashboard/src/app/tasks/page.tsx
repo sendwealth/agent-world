@@ -1,9 +1,10 @@
 "use client";
 
 import { useEffect, useState, useMemo, useCallback } from "react";
-import type { Task, TaskStatus } from "@/types/world";
+import type { Task, TaskStatus, CoordinationTask, CoordinationTaskStatus } from "@/types/world";
 import { postJSON } from "@/lib/api";
 import { useTaskStream } from "@/hooks/useTaskStream";
+import { useCoordinationTaskStream } from "@/hooks/useCoordinationTaskStream";
 
 // ── Constants ─────────────────────────────────────────────
 
@@ -488,10 +489,66 @@ function TaskRow({
   );
 }
 
+// ── Team Task Section ─────────────────────────────────────
+
+const TEAM_STATUS_CONFIG: Record<
+  CoordinationTaskStatus,
+  { label: string; color: string; dot: string }
+> = {
+  open: { label: "招募中", color: "bg-blue-500/10 text-blue-400", dot: "bg-blue-400" },
+  in_progress: { label: "进行中", color: "bg-yellow-500/10 text-yellow-400", dot: "bg-yellow-400" },
+  all_submitted: { label: "待审核", color: "bg-purple-500/10 text-purple-400", dot: "bg-purple-400" },
+  completed: { label: "已完成", color: "bg-green-500/10 text-green-400", dot: "bg-green-400" },
+  expired: { label: "已过期", color: "bg-zinc-500/10 text-zinc-400", dot: "bg-zinc-400" },
+  cancelled: { label: "已取消", color: "bg-red-500/10 text-red-400", dot: "bg-red-400" },
+};
+
+function TeamTaskRow({
+  task,
+  onClick,
+}: {
+  task: CoordinationTask;
+  onClick: () => void;
+}) {
+  const cfg = TEAM_STATUS_CONFIG[task.status];
+  const submitted = Object.keys(task.contributions).length;
+
+  return (
+    <button
+      onClick={onClick}
+      className="w-full flex items-center gap-4 px-4 py-3 text-left hover:bg-zinc-800/30 transition-colors"
+    >
+      <span
+        className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[11px] font-medium shrink-0 ${cfg.color}`}
+      >
+        <span className={`inline-block h-1.5 w-1.5 rounded-full ${cfg.dot}`} />
+        {cfg.label}
+      </span>
+      <span className="text-sm text-zinc-200 font-medium truncate flex-1 min-w-0">
+        {task.title}
+      </span>
+      <span className="text-xs text-cyan-400 shrink-0">
+        {task.participants.length}/{task.max_agents}
+      </span>
+      <span className="text-xs text-zinc-500 shrink-0">
+        {task.reward_pool > 0 ? `${task.reward_pool.toLocaleString()}` : "-"}
+      </span>
+      <span className="text-xs text-zinc-600 shrink-0 w-12 text-right">
+        T{task.created_tick}
+      </span>
+    </button>
+  );
+}
+
 // ── Main Tasks Page ───────────────────────────────────────
 
 export default function TasksPage() {
   const { tasks, loading, error, refresh: loadTasks } = useTaskStream();
+  const {
+    tasks: teamTasks,
+    loading: teamLoading,
+    refresh: loadTeamTasks,
+  } = useCoordinationTaskStream();
   const [statusFilter, setStatusFilter] = useState<StatusFilter>("all");
   const [showCreate, setShowCreate] = useState(false);
   const [selectedTask, setSelectedTask] = useState<Task | null>(null);
@@ -668,6 +725,43 @@ export default function TasksPage() {
             );
           })
         )}
+      </div>
+
+      {/* Team Tasks Section */}
+      <div>
+        <div className="flex items-center justify-between mb-3">
+          <div className="flex items-center gap-2">
+            <h2 className="text-lg font-bold text-zinc-100">团队任务</h2>
+            <span className="text-xs text-zinc-500">
+              {teamLoading ? "加载中..." : `${teamTasks.length} 个团队任务`}
+            </span>
+          </div>
+        </div>
+
+        <div className="rounded-xl border border-zinc-800 bg-zinc-900/50">
+          {teamLoading ? (
+            <div className="flex h-32 items-center justify-center text-sm text-zinc-600">
+              正在加载团队任务...
+            </div>
+          ) : teamTasks.length === 0 ? (
+            <div className="flex h-32 items-center justify-center text-sm text-zinc-600">
+              暂无团队任务
+            </div>
+          ) : (
+            <div className="divide-y divide-zinc-800/50">
+              {teamTasks.map((task) => (
+                <TeamTaskRow
+                  key={task.id}
+                  task={task}
+                  onClick={() => {
+                    // For now, just show a summary in the existing task detail
+                    // Team task detail can be expanded later
+                  }}
+                />
+              ))}
+            </div>
+          )}
+        </div>
       </div>
 
       {/* Create Task Dialog */}

@@ -34,6 +34,7 @@ pub mod api_reputation;
 pub mod api_research;
 pub mod api_stocks;
 pub mod api_tasks;
+pub mod api_coordination_tasks;
 pub mod api_traces;
 pub mod api_world;
 pub mod auth;

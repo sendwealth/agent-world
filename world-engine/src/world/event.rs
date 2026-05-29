@@ -158,6 +158,8 @@ pub enum EventType {
     CoordinationTaskAgentJoined,
     CoordinationTaskAgentSubmitted,
     CoordinationTaskCompleted,
+    CoordinationTaskCancelled,
+    CoordinationTaskExpired,
 }
 
 /// Events emitted by the world engine.
@@ -864,6 +866,13 @@ pub enum WorldEvent {
         task_id: String,
         contributor_count: usize,
     },
+    CoordinationTaskCancelled {
+        task_id: String,
+        coordinator_id: String,
+    },
+    CoordinationTaskExpired {
+        task_id: String,
+    },
 }
 
 impl WorldEvent {
@@ -1006,6 +1015,8 @@ impl WorldEvent {
                 EventType::CoordinationTaskAgentSubmitted
             }
             WorldEvent::CoordinationTaskCompleted { .. } => EventType::CoordinationTaskCompleted,
+            WorldEvent::CoordinationTaskCancelled { .. } => EventType::CoordinationTaskCancelled,
+            WorldEvent::CoordinationTaskExpired { .. } => EventType::CoordinationTaskExpired,
         }
     }
 
@@ -1142,6 +1153,8 @@ impl WorldEvent {
             WorldEvent::CoordinationTaskAgentJoined { agent_id, .. } => Some(agent_id),
             WorldEvent::CoordinationTaskAgentSubmitted { agent_id, .. } => Some(agent_id),
             WorldEvent::CoordinationTaskCompleted { .. } => None,
+            WorldEvent::CoordinationTaskCancelled { coordinator_id, .. } => Some(coordinator_id),
+            WorldEvent::CoordinationTaskExpired { .. } => None,
         }
     }
 

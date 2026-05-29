@@ -99,6 +99,40 @@ export interface Task {
   created_tick: number;
 }
 
+// Coordination (team) task types
+
+export type CoordinationTaskStatus =
+  | "open"
+  | "in_progress"
+  | "all_submitted"
+  | "completed"
+  | "expired"
+  | "cancelled";
+
+export interface CoordinationContribution {
+  agent_id: string;
+  content: string;
+  submitted_tick: number;
+}
+
+export interface CoordinationTask {
+  id: string;
+  title: string;
+  description: string;
+  status: CoordinationTaskStatus;
+  reward_pool: number;
+  currency: string;
+  escrow_held: boolean;
+  coordinator_id: string;
+  max_agents: number;
+  participants: string[];
+  contributions: Record<string, CoordinationContribution>;
+  reward_overrides: Record<string, number>;
+  org_id: string | null;
+  expires_at: number | null;
+  created_tick: number;
+}
+
 // Reputation types
 
 export interface ReputationRankingEntry {

@@ -668,6 +668,7 @@ impl TaskBoard {
     }
 
     /// Create a new coordination task. Escrows the reward pool from the coordinator.
+    /// If `org_id` is set, only members of that organization may join.
     #[allow(clippy::too_many_arguments)]
     pub fn create_coordination_task(
         &mut self,
@@ -679,6 +680,7 @@ impl TaskBoard {
         max_agents: usize,
         created_tick: u64,
         expires_at: Option<u64>,
+        org_id: Option<String>,
     ) -> Result<Uuid, CoordinationTaskError> {
         let escrow_held = reward_pool > 0;
         if escrow_held {
@@ -707,6 +709,7 @@ impl TaskBoard {
             participants: vec![coordinator_id.clone()],
             contributions: HashMap::new(),
             reward_overrides: HashMap::new(),
+            org_id,
             expires_at,
             created_tick,
         };
@@ -727,31 +730,52 @@ impl TaskBoard {
     }
 
     /// Join an open coordination task.
-    pub fn join_coordination_task(
+    /// `is_org_member` is an optional closure that checks org membership.
+    /// If the task has an `org_id`, the closure must return `true` for the agent to join.
+    pub fn join_coordination_task<F>(
         &mut self,
         id: Uuid,
         agent_id: String,
-    ) -> Result<(), CoordinationTaskError> {
-        let task = self
-            .coordination_tasks
-            .get_mut(&id)
-            .ok_or_else(|| CoordinationTaskError::NotFound(id.to_string()))?;
+        is_org_member: F,
+    ) -> Result<(), CoordinationTaskError>
+    where
+        F: Fn(&str, &str) -> bool,
+    {
+        // Validate (immutable borrow scope)
+        {
+            let task = self
+                .coordination_tasks
+                .get(&id)
+                .ok_or_else(|| CoordinationTaskError::NotFound(id.to_string()))?;
 
-        if task.status != CoordinationTaskStatus::Open {
-            return Err(CoordinationTaskError::InvalidTransition {
-                from: task.status,
-                to: CoordinationTaskStatus::Open,
-            });
+            if task.status != CoordinationTaskStatus::Open {
+                return Err(CoordinationTaskError::InvalidTransition {
+                    from: task.status,
+                    to: CoordinationTaskStatus::Open,
+                });
+            }
+
+            if task.is_participant(&agent_id) {
+                return Err(CoordinationTaskError::AlreadyJoined);
+            }
+
+            if task.participant_count() >= task.max_agents {
+                return Err(CoordinationTaskError::TaskFull);
+            }
+
+            // Check org membership if this task is org-scoped
+            if let Some(ref org_id) = task.org_id {
+                if !is_org_member(&agent_id, org_id) {
+                    return Err(CoordinationTaskError::NotOrgMember {
+                        agent_id,
+                        org_id: org_id.clone(),
+                    });
+                }
+            }
         }
 
-        if task.is_participant(&agent_id) {
-            return Err(CoordinationTaskError::AlreadyJoined);
-        }
-
-        if task.participant_count() >= task.max_agents {
-            return Err(CoordinationTaskError::TaskFull);
-        }
-
+        // Mutate
+        let task = self.coordination_tasks.get_mut(&id).unwrap();
         task.participants.push(agent_id.clone());
 
         self.emit(WorldEvent::CoordinationTaskAgentJoined {
@@ -970,6 +994,11 @@ impl TaskBoard {
         task.status = CoordinationTaskStatus::Cancelled;
         task.escrow_held = false;
 
+        self.emit(WorldEvent::CoordinationTaskCancelled {
+            task_id: id.to_string(),
+            coordinator_id: coordinator_id.to_string(),
+        });
+
         Ok(())
     }
 
@@ -1005,6 +1034,10 @@ impl TaskBoard {
         let task = self.coordination_tasks.get_mut(&id).unwrap();
         task.status = CoordinationTaskStatus::Expired;
         task.escrow_held = false;
+
+        self.emit(WorldEvent::CoordinationTaskExpired {
+            task_id: id.to_string(),
+        });
 
         Ok(())
     }
@@ -1142,6 +1175,8 @@ pub struct CoordinationTask {
     pub contributions: HashMap<String, Contribution>,
     /// Optional per-agent reward overrides set during completion.
     pub reward_overrides: HashMap<String, u64>,
+    /// If set, only members of this organization can join the task.
+    pub org_id: Option<String>,
     pub expires_at: Option<u64>,
     pub created_tick: u64,
 }
@@ -1200,6 +1235,11 @@ pub enum CoordinationTaskError {
     Expired,
     NoParticipants,
     ContributionRequired,
+    /// Agent is not a member of the organization that owns this task.
+    NotOrgMember {
+        agent_id: String,
+        org_id: String,
+    },
 }
 
 impl std::fmt::Display for CoordinationTaskError {
@@ -1226,6 +1266,13 @@ impl std::fmt::Display for CoordinationTaskError {
             CoordinationTaskError::NoParticipants => write!(f, "task has no participants"),
             CoordinationTaskError::ContributionRequired => {
                 write!(f, "contribution content is required")
+            }
+            CoordinationTaskError::NotOrgMember { agent_id, org_id } => {
+                write!(
+                    f,
+                    "agent {} is not a member of organization {}",
+                    agent_id, org_id
+                )
             }
         }
     }
@@ -1785,5 +1832,254 @@ mod tests {
         // No distributor → returns None, full escrow released
         assert!(result.is_none());
         assert_eq!(board.get_balance("worker"), 100);
+    }
+
+    // ── Coordination Task Integration Tests ────────────────
+
+    #[test]
+    fn test_coordination_task_full_lifecycle_with_reward_distribution() {
+        // Integration test: 3 agents collaborate on a team task,
+        // submit contributions, coordinator completes with reward overrides.
+        let mut board = make_board();
+        board.set_balance("coordinator", 10_000);
+        board.set_balance("agent_a", 1_000);
+        board.set_balance("agent_b", 1_000);
+
+        // 1. Create coordination task with 1000 reward pool, max 3 agents
+        let id = board
+            .create_coordination_task(
+                "Build Bridge".into(),
+                "Collaborative bridge building".into(),
+                1000,
+                Currency::Money,
+                "coordinator".into(),
+                3,
+                1,
+                None,
+                None,
+            )
+            .unwrap();
+
+        // Verify initial state
+        let task = board.get_coordination_task(id).unwrap();
+        assert_eq!(task.status, CoordinationTaskStatus::Open);
+        assert_eq!(task.reward_pool, 1000);
+        assert!(task.escrow_held);
+        assert_eq!(task.participant_count(), 1); // coordinator auto-joins
+        assert_eq!(board.get_balance("coordinator"), 9_000); // 1000 escrowed
+
+        // 2. Two more agents join
+        board
+            .join_coordination_task(id, "agent_a".into(), |_, _| true)
+            .unwrap();
+        board
+            .join_coordination_task(id, "agent_b".into(), |_, _| true)
+            .unwrap();
+
+        let task = board.get_coordination_task(id).unwrap();
+        assert_eq!(task.participant_count(), 3);
+
+        // 3. All participants submit contributions
+        board
+            .submit_coordination_contribution(id, "coordinator", "Designed blueprint".into(), 10)
+            .unwrap();
+        // Status should auto-transition to InProgress after first submission
+        let task = board.get_coordination_task(id).unwrap();
+        assert_eq!(task.status, CoordinationTaskStatus::InProgress);
+
+        board
+            .submit_coordination_contribution(id, "agent_a", "Built foundations".into(), 15)
+            .unwrap();
+        board
+            .submit_coordination_contribution(id, "agent_b", "Painted bridge".into(), 20)
+            .unwrap();
+
+        // All submitted → auto-transition to AllSubmitted
+        let task = board.get_coordination_task(id).unwrap();
+        assert_eq!(task.status, CoordinationTaskStatus::AllSubmitted);
+        assert!(task.all_submitted());
+
+        // 4. Coordinator completes with reward overrides (proportional to contribution)
+        let mut overrides = HashMap::new();
+        overrides.insert("coordinator".into(), 400);
+        overrides.insert("agent_a".into(), 400);
+        overrides.insert("agent_b".into(), 200);
+
+        let distribution = board
+            .complete_coordination_task(id, "coordinator", Some(overrides))
+            .unwrap();
+
+        // Verify reward distribution
+        assert_eq!(distribution.get("coordinator"), Some(&400));
+        assert_eq!(distribution.get("agent_a"), Some(&400));
+        assert_eq!(distribution.get("agent_b"), Some(&200));
+
+        // Verify balances
+        assert_eq!(board.get_balance("coordinator"), 9_400); // 9000 + 400 reward (original 10000 - 1000 escrow + 400)
+        assert_eq!(board.get_balance("agent_a"), 1_400); // 1000 + 400
+        assert_eq!(board.get_balance("agent_b"), 1_200); // 1000 + 200
+
+        // Verify final state
+        let task = board.get_coordination_task(id).unwrap();
+        assert_eq!(task.status, CoordinationTaskStatus::Completed);
+        assert!(!task.escrow_held);
+    }
+
+    #[test]
+    fn test_coordination_task_org_restriction_and_equal_distribution() {
+        // Integration test: org-scoped task, non-members can't join,
+        // equal reward distribution when no overrides.
+        let mut board = make_board();
+        board.set_balance("org_lead", 10_000);
+        board.set_balance("org_member".into(), 1_000);
+
+        // 1. Create org-scoped coordination task
+        let id = board
+            .create_coordination_task(
+                "Org Project".into(),
+                "Members only".into(),
+                600,
+                Currency::Token,
+                "org_lead".into(),
+                3,
+                1,
+                None,
+                Some("org_123".into()),
+            )
+            .unwrap();
+
+        // 2. Org member joins successfully
+        board
+            .join_coordination_task(id, "org_member".into(), |agent_id, org_id| {
+                // Simulate org membership check
+                org_id == "org_123" && (agent_id == "org_member" || agent_id == "org_lead")
+            })
+            .unwrap();
+
+        // 3. Non-member fails to join
+        let result = board.join_coordination_task(id, "outsider".into(), |agent_id, org_id| {
+            org_id == "org_123" && (agent_id == "org_member" || agent_id == "org_lead")
+        });
+        assert!(result.is_err());
+        assert_eq!(
+            result.unwrap_err(),
+            CoordinationTaskError::NotOrgMember {
+                agent_id: "outsider".into(),
+                org_id: "org_123".into(),
+            }
+        );
+
+        // Verify only 2 participants
+        let task = board.get_coordination_task(id).unwrap();
+        assert_eq!(task.participant_count(), 2);
+
+        // 4. Submit contributions
+        board
+            .submit_coordination_contribution(id, "org_lead", "Led the project".into(), 5)
+            .unwrap();
+        board
+            .submit_coordination_contribution(id, "org_member", "Did the work".into(), 10)
+            .unwrap();
+
+        // 5. Complete with equal distribution (no overrides)
+        let distribution = board
+            .complete_coordination_task(id, "org_lead", None)
+            .unwrap();
+
+        // Equal split: 600 / 2 = 300 each
+        assert_eq!(distribution.get("org_lead"), Some(&300));
+        assert_eq!(distribution.get("org_member"), Some(&300));
+
+        // Verify balances
+        assert_eq!(board.get_balance("org_lead"), 9_700); // 10000 - 600 + 300
+        assert_eq!(board.get_balance("org_member"), 1_300); // 1000 + 300
+    }
+
+    #[test]
+    fn test_coordination_task_cancel_and_expiry() {
+        let mut board = make_board();
+        board.set_balance("coord", 10_000);
+
+        // Create + cancel
+        let id1 = board
+            .create_coordination_task(
+                "Cancel Test".into(),
+                "Will be cancelled".into(),
+                500,
+                Currency::Money,
+                "coord".into(),
+                3,
+                1,
+                None,
+                None,
+            )
+            .unwrap();
+        assert_eq!(board.get_balance("coord"), 9_500);
+
+        board
+            .cancel_coordination_task(id1, "coord")
+            .unwrap();
+        let task = board.get_coordination_task(id1).unwrap();
+        assert_eq!(task.status, CoordinationTaskStatus::Cancelled);
+        assert!(!task.escrow_held);
+        assert_eq!(board.get_balance("coord"), 10_000); // refund
+
+        // Create + expire
+        let id2 = board
+            .create_coordination_task(
+                "Expire Test".into(),
+                "Will expire".into(),
+                300,
+                Currency::Money,
+                "coord".into(),
+                3,
+                1,
+                Some(100),
+                None,
+            )
+            .unwrap();
+        assert_eq!(board.get_balance("coord"), 9_700);
+
+        let expired = board.process_coordination_expiry(200);
+        assert_eq!(expired.len(), 1);
+        assert_eq!(expired[0], id2);
+
+        let task = board.get_coordination_task(id2).unwrap();
+        assert_eq!(task.status, CoordinationTaskStatus::Expired);
+        assert_eq!(board.get_balance("coord"), 10_000); // refund
+    }
+
+    #[test]
+    fn test_coordination_task_already_joined_and_full() {
+        let mut board = make_board();
+        board.set_balance("coord", 10_000);
+
+        let id = board
+            .create_coordination_task(
+                "Small Team".into(),
+                "Max 2 agents".into(),
+                100,
+                Currency::Money,
+                "coord".into(),
+                2,
+                1,
+                None,
+                None,
+            )
+            .unwrap();
+
+        // Coordinator auto-joined, so 1 slot left
+        // Joining again fails
+        let result = board.join_coordination_task(id, "coord".into(), |_, _| true);
+        assert_eq!(result.unwrap_err(), CoordinationTaskError::AlreadyJoined);
+
+        // One agent joins successfully
+        board
+            .join_coordination_task(id, "agent_a".into(), |_, _| true)
+            .unwrap();
+
+        // Third agent fails — task full
+        let result = board.join_coordination_task(id, "agent_b".into(), |_, _| true);
+        assert_eq!(result.unwrap_err(), CoordinationTaskError::TaskFull);
     }
 }

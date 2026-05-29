@@ -384,6 +384,7 @@ pub fn create_router_with_wal_and_snapshots(
 pub fn build_full_router(state: AppState) -> Router {
     Router::new()
         .merge(crate::api_tasks::task_routes())
+        .merge(crate::api_coordination_tasks::coordination_task_routes())
         .merge(crate::api_world::world_routes())
         .merge(crate::api_org::org_routes())
         .merge(crate::api_governance::governance_routes())

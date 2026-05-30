@@ -59,7 +59,7 @@ impl DataCollectorPlugin {
             priority: 200, // Run after most other plugins
         };
 
-        let permissions = PermissionSet::from_iter([
+        let permissions = PermissionSet::from_permissions([
             Permission::ReadWorldState,
             Permission::ReadAgents,
             Permission::ReadEvents,
@@ -88,7 +88,7 @@ impl OnTickEnd for DataCollectorPlugin {
     fn on_tick_end(&self, ctx: &TickContext) -> HookResult {
         self.stats.total_ticks_seen.fetch_add(1, Ordering::Relaxed);
 
-        if ctx.tick > 0 && ctx.tick % self.log_interval == 0 {
+        if ctx.tick.is_multiple_of(self.log_interval) {
             tracing::info!(
                 "[DataCollector] Tick {}: living={}, total={}, events={}, transactions={}, spawns={}",
                 ctx.tick,

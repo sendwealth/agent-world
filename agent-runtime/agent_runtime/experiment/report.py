@@ -242,7 +242,11 @@ th, td {{ border: 1px solid #ddd; padding: 0.5rem; text-align: left; }}
         pdf.set_font("Helvetica", "", 10)
         pdf.cell(0, 6, f"Started: {result.started_at or 'N/A'}", new_x="LMARGIN", new_y="NEXT")
         pdf.cell(0, 6, f"Finished: {result.finished_at or 'N/A'}", new_x="LMARGIN", new_y="NEXT")
-        pdf.cell(0, 6, f"Duration: {result.completed_ticks}/{result.duration_ticks} ticks", new_x="LMARGIN", new_y="NEXT")
+        pdf.cell(
+            0, 6,
+            f"Duration: {result.completed_ticks}/{result.duration_ticks} ticks",
+            new_x="LMARGIN", new_y="NEXT",
+        )
         pdf.cell(0, 6, f"Agent Count: {result.agent_count}", new_x="LMARGIN", new_y="NEXT")
         pdf.cell(0, 6, f"Errors: {len(result.errors)}", new_x="LMARGIN", new_y="NEXT")
         pdf.ln(5)
@@ -271,7 +275,8 @@ th, td {{ border: 1px solid #ddd; padding: 0.5rem; text-align: left; }}
                 pdf.cell(col_widths[0], 6, str(tick), border=1)
                 for key in col_keys:
                     val = entry.get(key, "")
-                    pdf.cell(col_widths[1], 6, f"{val:.4f}" if isinstance(val, float) else str(val), border=1)
+                    fmt = f"{val:.4f}" if isinstance(val, float) else str(val)
+                    pdf.cell(col_widths[1], 6, fmt, border=1)
                 pdf.ln()
             pdf.ln(5)
 
@@ -325,9 +330,9 @@ th, td {{ border: 1px solid #ddd; padding: 0.5rem; text-align: left; }}
         # Attempt chart generation (graceful no-op if matplotlib missing)
         try:
             from agent_runtime.experiment.charts import (
-                population_trend,
                 gdp_trajectory,
                 gini_coefficient,
+                population_trend,
                 skill_distribution,
                 survival_pie,
             )
@@ -533,7 +538,10 @@ th, td {{ border: 1px solid #ddd; padding: 0.5rem; text-align: left; }}
         alive = snap.get("agents_alive", snap.get("alive_count", 0))
         total = result.agent_count or 1
         rate = alive / total if total > 0 else 0
-        rate_cls = "tag-success" if rate >= 0.8 else ("tag-warning" if rate >= 0.5 else "tag-danger")
+        rate_cls = (
+            "tag-success" if rate >= 0.8
+            else ("tag-warning" if rate >= 0.5 else "tag-danger")
+        )
         return (
             '<h2>\U0001f465 Demographics</h2>\n'
             f'<div class="card"><p><strong>Survival Rate:</strong> '
@@ -554,7 +562,10 @@ th, td {{ border: 1px solid #ddd; padding: 0.5rem; text-align: left; }}
         gdp_change = ((gdp_last - gdp_first) / gdp_first * 100) if gdp_first else 0
         gdp_cls = "tag-success" if gdp_change >= 0 else "tag-danger"
         gini_last = last.get("gini", last.get("gini_coefficient", 0))
-        gini_cls = "tag-success" if gini_last < 0.3 else ("tag-warning" if gini_last < 0.6 else "tag-danger")
+        gini_cls = (
+            "tag-success" if gini_last < 0.3
+            else ("tag-warning" if gini_last < 0.6 else "tag-danger")
+        )
         gini_label = "Low" if gini_last < 0.3 else "Moderate" if gini_last < 0.6 else "High"
         return (
             '<h2>\U0001f4b0 Economic Indicators</h2>\n'
@@ -600,7 +611,11 @@ th, td {{ border: 1px solid #ddd; padding: 0.5rem; text-align: left; }}
             tick = evt.get("tick", "?")
             etype = evt.get("type", "unknown")
             desc = evt.get("description", "")
-            rows += f'<tr><td>{tick}</td><td><span class="tag">{etype}</span></td><td>{desc}</td></tr>'
+            rows += (
+                f'<tr><td>{tick}</td>'
+                f'<td><span class="tag">{etype}</span></td>'
+                f'<td>{desc}</td></tr>'
+            )
         return (
             '<h2>\u26a1 Emergence Events</h2>\n'
             '<table><thead><tr><th>Tick</th><th>Type</th><th>Description</th></tr></thead>'

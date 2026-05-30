@@ -49,7 +49,7 @@ impl TaxPlugin {
             priority: 50,
         };
 
-        let permissions = PermissionSet::from_iter([
+        let permissions = PermissionSet::from_permissions([
             Permission::ReadWorldState,
             Permission::InterceptTransactions,
             Permission::ReadEvents,

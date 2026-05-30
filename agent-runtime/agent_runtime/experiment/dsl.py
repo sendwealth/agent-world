@@ -44,14 +44,12 @@ Usage::
 
 from __future__ import annotations
 
-import copy
 from dataclasses import dataclass, field
 from typing import Any, Literal
 
 import yaml
 
 from agent_runtime.experiment.config import ExperimentConfig
-
 
 # ---------------------------------------------------------------------------
 # Core DSL types

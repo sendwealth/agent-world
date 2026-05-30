@@ -11,11 +11,11 @@ Validates:
 from __future__ import annotations
 
 import json
-import pytest
 from unittest.mock import patch
 
-from agent_runtime.experiment.report import ExperimentReporter, ExperimentResult
+import pytest
 
+from agent_runtime.experiment.report import ExperimentReporter, ExperimentResult
 
 # ── Fixtures ────────────────────────────────────────────────────────────
 
@@ -62,9 +62,17 @@ def make_sample_result() -> ExperimentResult:
             {"tick": 3500, "gdp": 38000, "gini": 0.33, "population": 8},
         ],
         emergence_events=[
-            {"tick": 500, "type": "trade_route", "description": "Agents formed a trade route between sectors"},
+            {
+                "tick": 500,
+                "type": "trade_route",
+                "description": "Agents formed a trade route between sectors",
+            },
             {"tick": 1200, "type": "organization", "description": "Guild 'Miners United' formed"},
-            {"tick": 2100, "type": "cultural", "description": "New dialect emerged in trading district"},
+            {
+                "tick": 2100,
+                "type": "cultural",
+                "description": "New dialect emerged in trading district",
+            },
         ],
         errors=[],
         started_at="2026-05-29T10:00:00Z",

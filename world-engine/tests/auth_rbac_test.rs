@@ -9,7 +9,6 @@
 //! - human_stats deadlock fix verification
 //! - Password security (unique salts, min length)
 
-use std::collections::HashMap;
 use std::sync::Arc;
 use tokio::sync::Mutex;
 

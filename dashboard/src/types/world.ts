@@ -58,7 +58,13 @@ export type EventType =
   | "treaty_proposed"
   | "treaty_signed"
   | "treaty_broken"
-  | "relation_changed";
+  | "relation_changed"
+  | "coordination_task_created"
+  | "coordination_task_agent_joined"
+  | "coordination_task_agent_submitted"
+  | "coordination_task_completed"
+  | "coordination_task_cancelled"
+  | "coordination_task_expired";
 
 export interface LeaderboardEntry {
   agentId: string;

@@ -32,6 +32,12 @@ const eventTypeConfig: Record<
   treaty_signed: { label: "条约签署", color: "bg-green-500", icon: "🤝" },
   treaty_broken: { label: "条约撕毁", color: "bg-red-500", icon: "💔" },
   relation_changed: { label: "关系变化", color: "bg-purple-500", icon: "🔄" },
+  coordination_task_created: { label: "团队任务创建", color: "bg-violet-500", icon: "🎯" },
+  coordination_task_agent_joined: { label: "加入团队任务", color: "bg-blue-500", icon: "👥" },
+  coordination_task_agent_submitted: { label: "提交团队任务", color: "bg-teal-500", icon: "📤" },
+  coordination_task_completed: { label: "团队任务完成", color: "bg-emerald-500", icon: "✅" },
+  coordination_task_cancelled: { label: "团队任务取消", color: "bg-red-500", icon: "🚫" },
+  coordination_task_expired: { label: "团队任务过期", color: "bg-zinc-500", icon: "⏰" },
 };
 
 function formatTime(ts: string): string {

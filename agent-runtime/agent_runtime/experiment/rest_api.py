@@ -29,30 +29,20 @@ Or programmatically::
 
 from __future__ import annotations
 
-import asyncio
 import uuid
-from dataclasses import asdict
 from typing import Any
 
 from fastapi import FastAPI, HTTPException, Query
 from pydantic import BaseModel, Field
 
-from agent_runtime.experiment.ab_framework import ABExperiment, ComparisonReport
-from agent_runtime.experiment.config import ExperimentConfig
+from agent_runtime.experiment.ab_framework import ABExperiment
 from agent_runtime.experiment.dsl import (
     ExperimentDefinition,
     ExperimentGroup,
     ExperimentVariable,
     Hypothesis,
 )
-from agent_runtime.experiment.report import ExperimentReporter, ExperimentResult
-from agent_runtime.experiment.statistics import (
-    TestResult,
-    chi_square_test,
-    compare_metrics,
-    welch_t_test,
-)
-
+from agent_runtime.experiment.report import ExperimentReporter
 
 # ---------------------------------------------------------------------------
 # Pydantic models for API
@@ -378,15 +368,24 @@ def create_app(
                 return Response(
                     content=content,
                     media_type="application/pdf",
-                    headers={"Content-Disposition": f"attachment; filename=report-{experiment_id}.pdf"},
+                    headers={
+                        "Content-Disposition": (
+                            f"attachment; filename=report-{experiment_id}.pdf"
+                        )
+                    },
                 )
             return Response(content=content, media_type="text/html")
 
         report = reporter.generate_ab_report(comparison, format=format)
 
         if format == "json":
+            import json as json_mod
+
             from fastapi.responses import JSONResponse
-            return JSONResponse(content=json.loads(report) if isinstance(report, str) else report)
+
+            return JSONResponse(
+                content=json_mod.loads(report) if isinstance(report, str) else report
+            )
 
         return {"report": report, "format": format}
 
@@ -435,6 +434,5 @@ def create_app(
 # Convenience: default app instance
 # ---------------------------------------------------------------------------
 
-import json as json_module
 
 app = create_app()

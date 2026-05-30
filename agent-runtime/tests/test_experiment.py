@@ -189,7 +189,10 @@ class TestReproducibility:
     def test_seeded_rng_different_seeds(self) -> None:
         mgr_a = ReproducibilityManager(ExperimentConfig(seed=42))
         mgr_b = ReproducibilityManager(ExperimentConfig(seed=99))
-        assert [mgr_a.random.random() for _ in range(10)] != [mgr_b.random.random() for _ in range(10)]
+        assert (
+            [mgr_a.random.random() for _ in range(10)]
+            != [mgr_b.random.random() for _ in range(10)]
+        )
 
     def test_config_snapshot_hash_stable(self) -> None:
         mgr = ReproducibilityManager(ExperimentConfig(experiment_id="snap-test", seed=42))

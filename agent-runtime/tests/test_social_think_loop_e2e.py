@@ -24,12 +24,9 @@ from agent_runtime.core.act import ActionExecutor, ActionType
 from agent_runtime.core.decide import (
     DecisionAction,
     DecisionEngine,
-    SocialContext,
 )
 from agent_runtime.core.llm_decide import LLMDecisionProvider
 from agent_runtime.core.think_loop import (
-    Decision,
-    Perception,
     ThinkLoop,
     ThinkLoopConfig,
 )
@@ -44,7 +41,6 @@ from agent_runtime.social.provider import (
     DefaultSocialContextProvider,
 )
 from agent_runtime.survival.instinct import SurvivalInstinct
-
 
 # ---------------------------------------------------------------------------
 # Fixtures
@@ -166,7 +162,11 @@ class TestSocialContextFullPipeline:
         async def mock_chat(messages):
             captured_prompt.append(messages[0].content)
             return LLMResponse(
-                content='{"action": "socialize", "parameters": {"target_agent_id": "agent-bob"}, "reasoning": "high trust", "confidence": 80}',
+                content=(
+                    '{"action": "socialize", '
+                    '"parameters": {"target_agent_id": "agent-bob"}, '
+                    '"reasoning": "high trust", "confidence": 80}'
+                ),
                 model="test",
                 usage=TokenUsage(prompt_tokens=10, completion_tokens=5),
             )
@@ -242,7 +242,11 @@ class TestThinkLoopWithSocialProvider:
         # -- Mock LLM that always returns SOCIALIZE --
         mock_llm = AsyncMock()
         mock_llm.chat.return_value = LLMResponse(
-            content='{"action": "socialize", "parameters": {"target_agent_id": "neighbor-1"}, "reasoning": "trusted guild member", "confidence": 75}',
+            content=(
+                '{"action": "socialize", '
+                '"parameters": {"target_agent_id": "neighbor-1"}, '
+                '"reasoning": "trusted guild member", "confidence": 75}'
+            ),
             model="test",
             usage=TokenUsage(prompt_tokens=50, completion_tokens=10),
         )
@@ -399,13 +403,20 @@ class TestThinkLoopCulturalInfluence:
             call_count += 1
             if call_count % 2 == 1:
                 return LLMResponse(
-                    content='{"action": "socialize", "parameters": {"target_agent_id": "fellow-1"}, "reasoning": "nearby", "confidence": 70}',
+                    content=(
+                        '{"action": "socialize", '
+                        '"parameters": {"target_agent_id": "fellow-1"}, '
+                        '"reasoning": "nearby", "confidence": 70}'
+                    ),
                     model="test",
                     usage=TokenUsage(prompt_tokens=50, completion_tokens=10),
                 )
             else:
                 return LLMResponse(
-                    content='{"action": "rest", "parameters": {}, "reasoning": "tired", "confidence": 60}',
+                    content=(
+                        '{"action": "rest", "parameters": {}, '
+                        '"reasoning": "tired", "confidence": 60}'
+                    ),
                     model="test",
                     usage=TokenUsage(prompt_tokens=50, completion_tokens=5),
                 )

@@ -17,7 +17,6 @@ from __future__ import annotations
 import base64
 import io
 import logging
-from collections import Counter
 from typing import Any
 
 logger = logging.getLogger(__name__)
@@ -429,7 +428,10 @@ def cooperation_network_graph(
     ax.set_facecolor(_COLORS["bg"])
 
     # Draw edges
-    max_weight = max((inter.get("count", inter.get("weight", 1)) for inter in interactions), default=1)
+    max_weight = max(
+        (inter.get("count", inter.get("weight", 1)) for inter in interactions),
+        default=1,
+    )
     for inter in interactions:
         src = str(inter.get("from", ""))
         dst = str(inter.get("to", ""))

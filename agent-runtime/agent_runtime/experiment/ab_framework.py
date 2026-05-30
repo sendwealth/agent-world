@@ -14,7 +14,6 @@ from __future__ import annotations
 
 import asyncio
 import logging
-import math
 from dataclasses import dataclass, field
 from typing import Any
 
@@ -22,10 +21,7 @@ from agent_runtime.experiment.config import ExperimentConfig
 from agent_runtime.experiment.report import ExperimentResult
 from agent_runtime.experiment.reproducibility import ReproducibilityManager
 from agent_runtime.experiment.statistics import (
-    TestResult,
-    cohens_d,
     compare_metrics,
-    welch_t_test,
 )
 
 logger = logging.getLogger(__name__)
@@ -390,7 +386,6 @@ class ABExperiment:
         variant_name: str,
     ) -> ExperimentResult:
         """Build an ExperimentResult from World Engine response data."""
-        from datetime import datetime, timezone
 
         variants = exp_data.get("variants", [])
         variant = next(
@@ -543,7 +538,10 @@ class ABExperiment:
         )
 
         if significant_a == 0 and significant_b == 0:
-            return "Inconclusive — no statistically significant differences detected (p >= 0.05). Consider collecting more data."
+            return (
+                "Inconclusive — no statistically significant differences "
+                "detected (p >= 0.05). Consider collecting more data."
+            )
 
         if significant_a > significant_b:
             return (

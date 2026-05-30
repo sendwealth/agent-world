@@ -1931,7 +1931,7 @@ mod tests {
         // equal reward distribution when no overrides.
         let mut board = make_board();
         board.set_balance("org_lead", 10_000);
-        board.set_balance("org_member".into(), 1_000);
+        board.set_balance("org_member", 1_000);
 
         // 1. Create org-scoped coordination task
         let id = board

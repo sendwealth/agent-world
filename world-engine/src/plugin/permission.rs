@@ -57,7 +57,7 @@ impl PermissionSet {
     }
 
     /// Create a permission set from an iterator of permissions.
-    pub fn from_iter<I: IntoIterator<Item = Permission>>(iter: I) -> Self {
+    pub fn from_permissions<I: IntoIterator<Item = Permission>>(iter: I) -> Self {
         Self {
             permissions: iter.into_iter().collect(),
         }

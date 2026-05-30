@@ -546,6 +546,11 @@ async fn main() {
     ));
     println!("   Federation: WorldRegistry + MigrationManager initialized");
 
+    // ── Initialize A/B Experiment Store ─────────────────────
+    let ab_experiment_store: api::SharedABExperimentStore =
+        Arc::new(Mutex::new(Vec::new()));
+    println!("   ABExperimentStore: initialized");
+
     let app_state = AppState::for_test_with(task_board, wal_writer.clone(), api::TestOverrides {
         event_bus: Some(event_bus.clone()),
         tick_tx: Some(tick_tx),
@@ -569,7 +574,7 @@ async fn main() {
             &std::env::var("JWT_SECRET").unwrap_or_else(|_| "change-me-in-production".to_string())
         )))),
         api_key_store,
-        ab_experiment_store: None,
+        ab_experiment_store: Some(ab_experiment_store),
         plugin_manager: Some(plugin_manager),
     });
     let app = api::build_full_router(app_state);

@@ -174,7 +174,7 @@
 - [x] Reputation system — wired into AppState and used by reward/handler logic
 - [x] Emergence experiment Docker Compose configuration
 - [ ] Data export (behavior logs, network graphs)
-- [ ] A/B experiment framework
+- [x] A/B experiment framework — 8 API routes (`/api/v2/experiments/ab/*`), wired into AppState, full create→start→snapshot→compare→stop→export lifecycle
 - [ ] Auto report generation
 
 ### 4.6 Demo & Open-Source Promotion 🔄
@@ -185,7 +185,7 @@
 
 ### Not Implemented 🔴
 - 🔴 **API for third-party plugin/extension** — no public plugin API
-- 🔴 **Academic research tools** — no data export or experiment framework beyond snapshot CSV/JSON export
+- 🔴 **Academic research tools** — no data export beyond snapshot CSV/JSON export and A/B experiment framework
 
 ---
 

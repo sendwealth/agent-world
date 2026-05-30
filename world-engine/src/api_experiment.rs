@@ -136,13 +136,13 @@ pub fn experiment_routes() -> Router<AppState> {
     Router::new()
         .route("/api/v2/experiments", post(create_experiment))
         .route("/api/v2/experiments", get(list_experiments))
-        .route("/api/v2/experiments/{id}/start", post(start_experiment))
-        .route("/api/v2/experiments/{id}/stop", post(stop_experiment))
-        .route("/api/v2/experiments/{id}/pause", post(pause_experiment))
-        .route("/api/v2/experiments/{id}/resume", post(resume_experiment))
-        .route("/api/v2/experiments/{id}/inject", post(inject_experiment))
+        .route("/api/v2/experiments/:id/start", post(start_experiment))
+        .route("/api/v2/experiments/:id/stop", post(stop_experiment))
+        .route("/api/v2/experiments/:id/pause", post(pause_experiment))
+        .route("/api/v2/experiments/:id/resume", post(resume_experiment))
+        .route("/api/v2/experiments/:id/inject", post(inject_experiment))
         .route(
-            "/api/v2/experiments/{id}/results",
+            "/api/v2/experiments/:id/results",
             get(get_experiment_results),
         )
 }

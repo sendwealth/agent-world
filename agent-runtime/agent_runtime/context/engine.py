@@ -1,19 +1,22 @@
 """Context Engine Pipeline — token-budgeted, priority-driven context assembly.
 
 Public symbols (re-exported via ``context/__init__.py``):
-    ContextEnginePipeline, ContextItem, ContextPriority, ContextSource,
-    MemorySource, MessageFilter, PerceptionSource, PipelineConfig,
-    PipelineResult, PipelineStats, StateSource, SurvivalSource, TokenBudget
+    ContextEngine, ContextEnginePipeline, ContextItem, ContextPriority,
+    ContextSource, MemorySource, MessageFilter, PerceptionSource,
+    PipelineConfig, PipelineResult, PipelineStats, StateSource,
+    SurvivalSource, TokenBudget
 """
 
 from __future__ import annotations
 
 import json
 import logging
-import os
 from dataclasses import dataclass, field
 from enum import Enum, IntEnum
 from typing import Any, Callable, Optional, Protocol, runtime_checkable
+
+from agent_runtime.context.budget import PipelineConfig, TokenBudget
+from agent_runtime.context.processors import ContextProcessor
 
 logger = logging.getLogger(__name__)
 
@@ -21,7 +24,6 @@ logger = logging.getLogger(__name__)
 # Constants
 # ---------------------------------------------------------------------------
 
-_DEFAULT_MAX_TOKENS: int = 4096
 _TOKEN_CHARS_RATIO: float = 4.0  # rough chars-per-token estimate
 _HP_CRITICAL_THRESHOLD: float = 30.0  # HP < 30% → survival info
 _TOKEN_CRITICAL_RATIO: float = 0.20  # token ratio < 20% → survival info
@@ -129,70 +131,10 @@ class PipelineResult:
     stats: PipelineStats
 
 
-# ---------------------------------------------------------------------------
-# Token budget
-# ---------------------------------------------------------------------------
-
-
-@dataclass
-class TokenBudget:
-    """Token budget manager.
-
-    Protected items (survival-critical information) are **never** trimmed
-    and are **not** constrained by ``max_tokens``.  This is by design:
-    survival information must always reach the decision engine.  When
-    protected items alone exceed ``max_tokens``, the ``protected_overflow``
-    flag in ``PipelineStats`` is set so the caller can react accordingly.
-
-    Attributes:
-        max_tokens: Soft cap on total tokens.  Regular (non-protected)
-            items are trimmed to fit within the budget remaining after
-            protected items are accounted for.
-    """
-
-    max_tokens: int = _DEFAULT_MAX_TOKENS
-
-    def allocate(self, items: list[ContextItem]) -> tuple[list[ContextItem], int, bool]:
-        """Trim items to fit within the token budget.
-
-        Protected items are always kept. Remaining items are sorted by
-        priority (ascending — P0 first) and included until budget is full.
-
-        Returns:
-            A tuple of (kept items, trimmed count, protected_overflow flag).
-        """
-        protected: list[ContextItem] = []
-        regular: list[ContextItem] = []
-
-        for item in items:
-            if item.protected:
-                protected.append(item)
-            else:
-                regular.append(item)
-
-        # Calculate tokens used by protected items
-        protected_tokens = sum(i.token_estimate for i in protected)
-        overflow = protected_tokens > self.max_tokens
-        if overflow:
-            logger.warning(
-                "Protected items exceed total budget: %d > %d",
-                protected_tokens,
-                self.max_tokens,
-            )
-        remaining_budget = max(0, self.max_tokens - protected_tokens)
-
-        # Sort regular items by priority (lower = higher priority)
-        regular.sort(key=lambda i: i.priority)
-
-        accepted: list[ContextItem] = []
-        used = 0
-        for item in regular:
-            if used + item.token_estimate <= remaining_budget:
-                accepted.append(item)
-                used += item.token_estimate
-
-        trimmed_count = len(regular) - len(accepted)
-        return protected + accepted, trimmed_count, overflow
+# TokenBudget and PipelineConfig are imported from budget.py above and
+# re-exported for backward compatibility.  Importers can use either:
+#   from agent_runtime.context.engine import TokenBudget
+#   from agent_runtime.context.budget import TokenBudget
 
 
 # ---------------------------------------------------------------------------
@@ -495,36 +437,8 @@ class DefaultMemorySource:
 
 
 # ---------------------------------------------------------------------------
-# Pipeline configuration
+# Pipeline configuration — re-exported from budget.py
 # ---------------------------------------------------------------------------
-
-
-@dataclass
-class PipelineConfig:
-    """Configuration for the context engine pipeline.
-
-    Attributes:
-        max_tokens: Token budget cap (overridden by CONTEXT_MAX_TOKENS env var).
-            Protected items are not constrained by this cap — they are
-            always kept regardless of budget.  When protected items alone
-            exceed ``max_tokens``, ``PipelineStats.protected_overflow`` is
-            set to ``True`` so the caller can decide how to react.
-    """
-
-    max_tokens: int = _DEFAULT_MAX_TOKENS
-
-    def __post_init__(self) -> None:
-        # Allow environment variable override
-        env_val = os.environ.get("CONTEXT_MAX_TOKENS")
-        if env_val is not None:
-            try:
-                self.max_tokens = int(env_val)
-            except ValueError:
-                logger.warning(
-                    "Invalid CONTEXT_MAX_TOKENS=%r, using default %d",
-                    env_val,
-                    self.max_tokens,
-                )
 
 
 # ---------------------------------------------------------------------------
@@ -556,6 +470,7 @@ class ContextEnginePipeline:
         memory_source: MemorySource | None = None,
         message_filter: MessageFilter | None = None,
         token_budget: TokenBudget | None = None,
+        context_processor: ContextProcessor | None = None,
     ) -> None:
         self._config = config or PipelineConfig()
         self._perception = perception_source or DefaultPerceptionSource()
@@ -563,8 +478,10 @@ class ContextEnginePipeline:
         self._state = state_source or DefaultStateSource()
         self._memory = memory_source or DefaultMemorySource()
         self._filter = message_filter or MessageFilter()
+        self._processor = context_processor or ContextProcessor()
         self._budget = token_budget or TokenBudget(
             max_tokens=self._config.max_tokens,
+            safety_margin=self._config.safety_margin,
         )
 
     @property
@@ -578,8 +495,10 @@ class ContextEnginePipeline:
         survival: Any = None,
         state: Any = None,
         memory: Any = None,
+        rank_query: str = "",
+        current_tick: int = 0,
     ) -> PipelineResult:
-        """Execute the pipeline: collect → filter → budget-trim → format.
+        """Execute the pipeline: collect → filter → rank → budget-trim → format.
 
         When all inputs are ``None``, returns an empty ``PipelineResult``
         (``formatted_context=""``).  Callers should guard with
@@ -596,6 +515,11 @@ class ContextEnginePipeline:
             Agent state.
         memory : list[RecalledMemory] or MemoryRecall
             Memory context.
+        rank_query : str
+            Query string for keyword-based relevance ranking of items.
+            When empty, the ranking stage is skipped (items keep filter order).
+        current_tick : int
+            Current tick for time-decay ranking.  Defaults to 0.
 
         Returns
         -------
@@ -621,11 +545,15 @@ class ContextEnginePipeline:
         filtered_count = len(items)
         filtered_tokens = sum(i.token_estimate for i in items)
 
-        # 3. Budget trim
+        # 3. Rank by relevance (keyword + time decay)
+        if rank_query:
+            items = self._processor.process(items, rank_query, current_tick)
+
+        # 4. Budget trim
         items, trimmed_count, protected_overflow = self._budget.allocate(items)
         final_tokens = sum(i.token_estimate for i in items)
 
-        # 4. Format
+        # 5. Format
         formatted = "\n\n".join(i.content for i in items)
 
         stats = PipelineStats(
@@ -652,3 +580,127 @@ class ContextEnginePipeline:
             formatted_context=formatted,
             stats=stats,
         )
+
+
+# ---------------------------------------------------------------------------
+# ContextEngine — high-level interface matching the issue spec
+# ---------------------------------------------------------------------------
+
+
+class ContextEngine:
+    """Three-stage context processing: filter → rank → budget-truncate.
+
+    This is the primary integration point described in the architecture
+    spec.  It wraps ``ContextEnginePipeline`` and exposes a single
+    ``build_context()`` method that ``decide.py`` can call instead of the
+    old hardcoded ``build_prompt()``.
+
+    Stage 1 — **Collect**: gather candidate context from perception,
+    survival state, agent state, and memory.
+    Stage 2 — **Rank**: sort items by relevance (keyword matching +
+    time decay, no vector DB).
+    Stage 3 — **Truncate**: enforce the token budget with a 100-token
+    safety margin.
+
+    Usage::
+
+        engine = ContextEngine(token_budget=2000)
+        context = engine.build_context(
+            agent_state=state,
+            perception=perception,
+            working_memory=working_memory,
+            short_term_memory=short_term_memory,
+        )
+        # context is a string ready for the LLM prompt
+    """
+
+    def __init__(
+        self,
+        token_budget: int = 2000,
+        safety_margin: int = 100,
+        *,
+        pipeline: ContextEnginePipeline | None = None,
+    ) -> None:
+        if pipeline is not None:
+            self._pipeline = pipeline
+        else:
+            config = PipelineConfig(max_tokens=token_budget, safety_margin=safety_margin)
+            self._pipeline = ContextEnginePipeline(config=config)
+
+    @property
+    def pipeline(self) -> ContextEnginePipeline:
+        """Underlying pipeline instance."""
+        return self._pipeline
+
+    def build_context(
+        self,
+        agent_state: Any = None,
+        perception: Any = None,
+        working_memory: Any = None,
+        short_term_memory: Any = None,
+        survival: Any = None,
+        memory: Any = None,
+    ) -> str:
+        """Build token-budgeted context for the decision prompt.
+
+        Parameters
+        ----------
+        agent_state : AgentState or similar
+            Current agent state (health, tokens, skills, etc.).
+        perception : Perception or similar
+            Current tick perception (messages, market, events).
+        working_memory : WorkingMemory or list
+            Working memory entries.  If a ``WorkingMemory`` instance is
+            provided, ``read_all()`` is called automatically.
+        short_term_memory : list or None
+            Optional short-term memory entries to inject.
+        survival : SurvivalAction or similar
+            Survival assessment.
+        memory : list[RecalledMemory] or MemoryRecall
+            Recalled memories from the memory subsystem.
+
+        Returns
+        -------
+        str
+            Formatted, token-budgeted context string for the LLM prompt.
+        """
+        # Normalize working_memory: accept WorkingMemory objects
+        memory_input = memory
+        if memory_input is None:
+            memory_items: list = []
+
+            # Collect from working memory
+            if working_memory is not None:
+                entries = (
+                    working_memory.read_all()
+                    if hasattr(working_memory, "read_all")
+                    else list(working_memory)
+                )
+                memory_items.extend(entries)
+
+            # Collect from short-term memory
+            if short_term_memory is not None:
+                if isinstance(short_term_memory, list):
+                    memory_items.extend(short_term_memory)
+                elif hasattr(short_term_memory, "search"):
+                    # ShortTermMemory-like object — grab recent entries
+                    memory_items.extend(short_term_memory.search("", top_k=5, tick=0))
+
+            if memory_items:
+                memory_input = memory_items
+
+        result = self._pipeline.run(
+            perception=perception,
+            survival=survival,
+            state=agent_state,
+            memory=memory_input,
+        )
+
+        if result.stats.protected_overflow:
+            logger.warning(
+                "ContextEngine: protected items overflow budget (%d tokens > %d cap)",
+                result.stats.final_token_count,
+                self._pipeline.config.max_tokens,
+            )
+
+        return result.formatted_context

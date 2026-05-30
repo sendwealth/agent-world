@@ -149,12 +149,12 @@ pub fn ab_experiment_routes() -> Router<AppState> {
     Router::new()
         .route("/api/v2/experiments/ab", post(create_ab_experiment))
         .route("/api/v2/experiments/ab", get(list_ab_experiments))
-        .route("/api/v2/experiments/ab/{id}", get(get_ab_experiment))
-        .route("/api/v2/experiments/ab/{id}/start", post(start_ab_experiment))
-        .route("/api/v2/experiments/ab/{id}/stop", post(stop_ab_experiment))
-        .route("/api/v2/experiments/ab/{id}/snapshot", post(capture_ab_snapshot))
-        .route("/api/v2/experiments/ab/{id}/compare", get(compare_variants))
-        .route("/api/v2/experiments/ab/{id}/export", get(export_ab_results))
+        .route("/api/v2/experiments/ab/:id", get(get_ab_experiment))
+        .route("/api/v2/experiments/ab/:id/start", post(start_ab_experiment))
+        .route("/api/v2/experiments/ab/:id/stop", post(stop_ab_experiment))
+        .route("/api/v2/experiments/ab/:id/snapshot", post(capture_ab_snapshot))
+        .route("/api/v2/experiments/ab/:id/compare", get(compare_variants))
+        .route("/api/v2/experiments/ab/:id/export", get(export_ab_results))
 }
 
 // ── Helpers ───────────────────────────────────────────────
@@ -1098,5 +1098,398 @@ mod tests {
         let mean: f64 = values.iter().sum::<f64>() / values.len() as f64;
         let sd = stddev(&values, mean);
         assert!((sd - 2.0).abs() < 0.2);
+    }
+
+    // ── Integration Tests (full API lifecycle) ──────────────
+
+    use axum::body::Body;
+    use http_body_util::BodyExt;
+    use tower::ServiceExt;
+
+    /// Helper: extract JSON body from response.
+    async fn body_to_json(body: Body) -> serde_json::Value {
+        let bytes = body
+            .collect()
+            .await
+            .expect("failed to read body")
+            .to_bytes();
+        serde_json::from_slice(&bytes).expect("failed to parse JSON")
+    }
+
+    /// Build a shared ab_experiment_store and a fresh AppState wired to it.
+    /// Returns (ab_store, state) — keep the tempdir alive for the WAL.
+    fn build_shared_state() -> (SharedABExperimentStore, AppState, tempfile::TempDir) {
+        let ab_store: SharedABExperimentStore = Arc::new(Mutex::new(Vec::new()));
+        let board = Arc::new(Mutex::new(crate::economy::task::TaskBoard::new()));
+        let tmp = tempfile::tempdir().expect("tempdir");
+        let wal = Arc::new(Mutex::new(crate::wal::WAL::new(tmp.path())));
+        let state = AppState::for_test_with(
+            board,
+            wal,
+            crate::api::TestOverrides {
+                ab_experiment_store: Some(ab_store.clone()),
+                ..crate::api::TestOverrides::default()
+            },
+        );
+        (ab_store, state, tmp)
+    }
+
+    /// Build a new AppState sharing the given ab_store.
+    fn rebuild_state(ab_store: &SharedABExperimentStore) -> AppState {
+        let board = Arc::new(Mutex::new(crate::economy::task::TaskBoard::new()));
+        let tmp = tempfile::tempdir().expect("tempdir");
+        let wal = Arc::new(Mutex::new(crate::wal::WAL::new(tmp.path())));
+        AppState::for_test_with(
+            board,
+            wal,
+            crate::api::TestOverrides {
+                ab_experiment_store: Some(ab_store.clone()),
+                ..crate::api::TestOverrides::default()
+            },
+        )
+    }
+
+    /// Integration test: full A/B experiment lifecycle
+    /// create → list → get → start → snapshot → compare → stop → export
+    #[tokio::test]
+    async fn test_ab_experiment_full_lifecycle() {
+        let ab_store: SharedABExperimentStore = Arc::new(Mutex::new(Vec::new()));
+
+        let create_body = serde_json::json!({
+            "name": "Token Impact Study",
+            "description": "Comparing initial token allocations",
+            "variants": [
+                {
+                    "name": "control",
+                    "parameters": {"initial_tokens": "500"},
+                    "description": "Standard allocation"
+                },
+                {
+                    "name": "treatment",
+                    "parameters": {"initial_tokens": "1000"},
+                    "description": "Double allocation"
+                }
+            ]
+        });
+
+        // --- Create ---
+        let app = crate::api::build_full_router(rebuild_state(&ab_store));
+        let response = app
+            .oneshot(
+                axum::http::Request::builder()
+                    .method("POST")
+                    .uri("/api/v2/experiments/ab")
+                    .header("content-type", "application/json")
+                    .body(Body::from(serde_json::to_string(&create_body).unwrap()))
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+
+        assert_eq!(response.status(), StatusCode::CREATED);
+        let json = body_to_json(response.into_body()).await;
+        let experiment_id = json["experiment_id"].as_str().unwrap().to_string();
+        assert_eq!(json["name"], "Token Impact Study");
+        assert_eq!(json["variant_count"], 2);
+
+        // Verify the experiment was actually stored
+        {
+            let store = ab_store.lock().await;
+            assert_eq!(store.len(), 1, "Expected 1 experiment in shared store after create");
+            assert_eq!(store[0].id, experiment_id);
+        }
+
+        // --- List ---
+        let app = crate::api::build_full_router(rebuild_state(&ab_store));
+        let response = app
+            .oneshot(
+                axum::http::Request::builder()
+                    .uri("/api/v2/experiments/ab")
+                    .body(Body::empty())
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+
+        assert_eq!(response.status(), StatusCode::OK);
+        let list: Vec<serde_json::Value> =
+            serde_json::from_slice(
+                &response.into_body().collect().await.unwrap().to_bytes(),
+            )
+            .unwrap();
+        assert_eq!(list.len(), 1);
+        assert_eq!(list[0]["name"], "Token Impact Study");
+
+        // --- Get by ID ---
+        let app = crate::api::build_full_router(rebuild_state(&ab_store));
+        let get_uri = format!("/api/v2/experiments/ab/{}", experiment_id);
+        let response = app
+            .oneshot(
+                axum::http::Request::builder()
+                    .uri(&get_uri)
+                    .body(Body::empty())
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+
+        assert_eq!(response.status(), StatusCode::OK);
+        let exp_json = body_to_json(response.into_body()).await;
+        assert_eq!(exp_json["id"], experiment_id);
+        assert_eq!(exp_json["status"], "created");
+        assert_eq!(exp_json["variants"].as_array().unwrap().len(), 2);
+
+        // --- Start ---
+        let app = crate::api::build_full_router(rebuild_state(&ab_store));
+        let start_uri = format!("/api/v2/experiments/ab/{}/start", experiment_id);
+        let response = app
+            .oneshot(
+                axum::http::Request::builder()
+                    .method("POST")
+                    .uri(&start_uri)
+                    .body(Body::empty())
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+
+        assert_eq!(response.status(), StatusCode::OK);
+        let start_json = body_to_json(response.into_body()).await;
+        assert_eq!(start_json["status"], "running");
+
+        // --- Capture snapshots for both variants ---
+        for variant_name in &["control", "treatment"] {
+            let app = crate::api::build_full_router(rebuild_state(&ab_store));
+            let snap_uri = format!("/api/v2/experiments/ab/{}/snapshot", experiment_id);
+            let snap_body = serde_json::json!({ "variant_name": variant_name });
+            let response = app
+                .oneshot(
+                    axum::http::Request::builder()
+                        .method("POST")
+                        .uri(&snap_uri)
+                        .header("content-type", "application/json")
+                        .body(Body::from(serde_json::to_string(&snap_body).unwrap()))
+                        .unwrap(),
+                )
+                .await
+                .unwrap();
+
+            assert_eq!(response.status(), StatusCode::OK, "snapshot for {} failed", variant_name);
+        }
+
+        // --- Compare variants ---
+        let app = crate::api::build_full_router(rebuild_state(&ab_store));
+        let compare_uri = format!(
+            "/api/v2/experiments/ab/{}/compare?variant_a=control&variant_b=treatment",
+            experiment_id
+        );
+        let response = app
+            .oneshot(
+                axum::http::Request::builder()
+                    .uri(&compare_uri)
+                    .body(Body::empty())
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+
+        assert_eq!(response.status(), StatusCode::OK);
+        let comparison = body_to_json(response.into_body()).await;
+        assert_eq!(comparison["variant_a"], "control");
+        assert_eq!(comparison["variant_b"], "treatment");
+        assert!(comparison["metrics"].as_array().unwrap().len() >= 5);
+        assert!(comparison["recommendation"].is_string());
+
+        // --- Stop ---
+        let app = crate::api::build_full_router(rebuild_state(&ab_store));
+        let stop_uri = format!("/api/v2/experiments/ab/{}/stop", experiment_id);
+        let response = app
+            .oneshot(
+                axum::http::Request::builder()
+                    .method("POST")
+                    .uri(&stop_uri)
+                    .body(Body::empty())
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+
+        assert_eq!(response.status(), StatusCode::OK);
+        let stop_json = body_to_json(response.into_body()).await;
+        assert_eq!(stop_json["status"], "stopped");
+
+        // --- Export CSV ---
+        let app = crate::api::build_full_router(rebuild_state(&ab_store));
+        let export_uri = format!("/api/v2/experiments/ab/{}/export", experiment_id);
+        let response = app
+            .oneshot(
+                axum::http::Request::builder()
+                    .uri(&export_uri)
+                    .body(Body::empty())
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+
+        assert_eq!(response.status(), StatusCode::OK);
+        let bytes = response.into_body().collect().await.unwrap().to_bytes();
+        let csv = String::from_utf8(bytes.to_vec()).unwrap();
+        assert!(csv.starts_with("variant,tick,agent_count"));
+        // Should have header + 2 rows (one snapshot per variant)
+        assert_eq!(csv.lines().count(), 3);
+    }
+
+    #[tokio::test]
+    async fn test_ab_experiment_create_requires_two_variants() {
+        let board = Arc::new(Mutex::new(crate::economy::task::TaskBoard::new()));
+        let tmp = tempfile::tempdir().expect("tempdir");
+        let wal = Arc::new(Mutex::new(crate::wal::WAL::new(tmp.path())));
+        let state = AppState::for_test(board, wal);
+        let app = crate::api::build_full_router(state);
+
+        let body = serde_json::json!({
+            "name": "Bad experiment",
+            "variants": [{"name": "only_one", "parameters": {}}]
+        });
+
+        let response = app
+            .oneshot(
+                axum::http::Request::builder()
+                    .method("POST")
+                    .uri("/api/v2/experiments/ab")
+                    .header("content-type", "application/json")
+                    .body(Body::from(serde_json::to_string(&body).unwrap()))
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+
+        assert_eq!(response.status(), StatusCode::BAD_REQUEST);
+    }
+
+    #[tokio::test]
+    async fn test_ab_experiment_start_twice_returns_conflict() {
+        let (ab_store, _state, _tmp) = build_shared_state();
+
+        let create_body = serde_json::json!({
+            "name": "Double Start Test",
+            "variants": [
+                {"name": "a", "parameters": {}},
+                {"name": "b", "parameters": {}}
+            ]
+        });
+
+        // Create
+        let app = crate::api::build_full_router(rebuild_state(&ab_store));
+        let response = app
+            .oneshot(
+                axum::http::Request::builder()
+                    .method("POST")
+                    .uri("/api/v2/experiments/ab")
+                    .header("content-type", "application/json")
+                    .body(Body::from(serde_json::to_string(&create_body).unwrap()))
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        let json = body_to_json(response.into_body()).await;
+        let id = json["experiment_id"].as_str().unwrap().to_string();
+
+        // First start
+        let app = crate::api::build_full_router(rebuild_state(&ab_store));
+        let start_uri = format!("/api/v2/experiments/ab/{}/start", id);
+        let response = app
+            .oneshot(
+                axum::http::Request::builder()
+                    .method("POST")
+                    .uri(&start_uri)
+                    .body(Body::empty())
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        assert_eq!(response.status(), StatusCode::OK);
+
+        // Second start — should fail with CONFLICT
+        let app = crate::api::build_full_router(rebuild_state(&ab_store));
+        let response = app
+            .oneshot(
+                axum::http::Request::builder()
+                    .method("POST")
+                    .uri(&start_uri)
+                    .body(Body::empty())
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        assert_eq!(response.status(), StatusCode::CONFLICT);
+    }
+
+    #[tokio::test]
+    async fn test_ab_experiment_get_nonexistent_returns_404() {
+        let board = Arc::new(Mutex::new(crate::economy::task::TaskBoard::new()));
+        let tmp = tempfile::tempdir().expect("tempdir");
+        let wal = Arc::new(Mutex::new(crate::wal::WAL::new(tmp.path())));
+        let state = AppState::for_test(board, wal);
+        let app = crate::api::build_full_router(state);
+
+        let response = app
+            .oneshot(
+                axum::http::Request::builder()
+                    .uri("/api/v2/experiments/ab/nonexistent-id")
+                    .body(Body::empty())
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+
+        assert_eq!(response.status(), StatusCode::NOT_FOUND);
+    }
+
+    #[tokio::test]
+    async fn test_ab_experiment_snapshot_not_running_returns_conflict() {
+        let (ab_store, _state, _tmp) = build_shared_state();
+
+        let create_body = serde_json::json!({
+            "name": "Snapshot Conflict Test",
+            "variants": [
+                {"name": "control", "parameters": {}},
+                {"name": "treatment", "parameters": {}}
+            ]
+        });
+
+        // Create but don't start
+        let app = crate::api::build_full_router(rebuild_state(&ab_store));
+        let response = app
+            .oneshot(
+                axum::http::Request::builder()
+                    .method("POST")
+                    .uri("/api/v2/experiments/ab")
+                    .header("content-type", "application/json")
+                    .body(Body::from(serde_json::to_string(&create_body).unwrap()))
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        let json = body_to_json(response.into_body()).await;
+        let id = json["experiment_id"].as_str().unwrap().to_string();
+
+        // Try snapshot on a not-started experiment
+        let app = crate::api::build_full_router(rebuild_state(&ab_store));
+        let snap_uri = format!("/api/v2/experiments/ab/{}/snapshot", id);
+        let snap_body = serde_json::json!({ "variant_name": "control" });
+        let response = app
+            .oneshot(
+                axum::http::Request::builder()
+                    .method("POST")
+                    .uri(&snap_uri)
+                    .header("content-type", "application/json")
+                    .body(Body::from(serde_json::to_string(&snap_body).unwrap()))
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+
+        assert_eq!(response.status(), StatusCode::CONFLICT);
     }
 }

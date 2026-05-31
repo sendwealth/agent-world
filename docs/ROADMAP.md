@@ -225,6 +225,9 @@
 
 ## Version
 
-Current: `1.0.0` (VERSION file)
+Current: `4.0.0-rc.1` (VERSION file)
 
-The v1.0.0 tag represents the Phase 1 completion milestone. Given that Phases 2-4 are substantially complete at the engine level, the version accurately reflects the first stable release of the core system.
+- `v1.0.0` — Phase 1 (Island) complete
+- `v4.0.0-rc.1` — Phases 2-4 substantially complete; Phase 4 still has remaining items (demo, governance analytics, full self-legislation cycle, data export, auto reports)
+
+Tags `v4.0.0-alpha` and `v5.0.0` were removed — they overstated completion (Phase 5 has not started).

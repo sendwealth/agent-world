@@ -12,7 +12,7 @@
 <p align="center">
   <a href="https://github.com/sendwealth/agent-world/blob/main/LICENSE"><img src="https://img.shields.io/badge/License-MIT-yellow.svg" alt="License: MIT"></a>
   <a href="docs/ROADMAP.md"><img src="https://img.shields.io/badge/Phase-4_Civilization_In_Progress-6366f1?style=flat" alt="Phase"></a>
-  <a href="https://github.com/sendwealth/agent-world/releases"><img src="https://img.shields.io/badge/Release-v1.0.0-brightgreen?style=flat" alt="Release"></a>
+  <a href="https://github.com/sendwealth/agent-world/releases"><img src="https://img.shields.io/badge/Release-v4.0.0--rc.1-blue?style=flat" alt="Release"></a>
   <img src="https://img.shields.io/badge/Rust-World_Engine-orange?style=flat" alt="Rust">
   <img src="https://img.shields.io/badge/Python-Agent_Runtime-blue?style=flat" alt="Python">
   <img src="https://img.shields.io/badge/Next.js-Dashboard-black?style=flat" alt="Next.js">

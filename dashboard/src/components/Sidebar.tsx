@@ -14,6 +14,7 @@ const navItems = [
   { href: "/economy", label: "经济指标", icon: "💰" },
   { href: "/stocks", label: "股市走势", icon: "📈" },
   { href: "/evolution", label: "进化树", icon: "🧬" },
+  { href: "/feed", label: "Agent 动态", icon: "📰" },
   { href: "/timeline", label: "事件时间线", icon: "📜" },
   { href: "/briefing", label: "世界简报", icon: "📊" },
   { href: "/traces", label: "决策轨迹", icon: "🔍" },

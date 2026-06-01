@@ -583,6 +583,9 @@ async fn main() {
         diary_store: Some(std::sync::Arc::new(tokio::sync::Mutex::new(
             agent_world_engine::api_diary::DiaryStore::new(2000),
         ))),
+        feed_store: Some(std::sync::Arc::new(tokio::sync::Mutex::new(
+            agent_world_engine::api_feed::FeedStore::new(),
+        ))),
     });
     // Wire the WorldMessageRouter into the AppState for Oracle/Bounty delivery
     app_state.world_msg_router = Some(world_msg_router);

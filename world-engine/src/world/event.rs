@@ -163,6 +163,11 @@ pub enum EventType {
     CoordinationTaskCompleted,
     CoordinationTaskCancelled,
     CoordinationTaskExpired,
+    // Social feed events
+    FeedPostCreated,
+    FeedPostLiked,
+    FeedCommentCreated,
+    FeedCommentLiked,
 }
 
 /// Events emitted by the world engine.
@@ -887,6 +892,31 @@ pub enum WorldEvent {
     CoordinationTaskExpired {
         task_id: String,
     },
+    // Social feed events
+    FeedPostCreated {
+        post_id: String,
+        author_id: String,
+        author_name: String,
+        content: String,
+        mood: String,
+        tick: u64,
+    },
+    FeedPostLiked {
+        post_id: String,
+        user_id: String,
+    },
+    FeedCommentCreated {
+        comment_id: String,
+        post_id: String,
+        author_id: String,
+        author_name: String,
+        content: String,
+        tick: u64,
+    },
+    FeedCommentLiked {
+        comment_id: String,
+        user_id: String,
+    },
 }
 
 impl WorldEvent {
@@ -1033,6 +1063,10 @@ impl WorldEvent {
             WorldEvent::CoordinationTaskCompleted { .. } => EventType::CoordinationTaskCompleted,
             WorldEvent::CoordinationTaskCancelled { .. } => EventType::CoordinationTaskCancelled,
             WorldEvent::CoordinationTaskExpired { .. } => EventType::CoordinationTaskExpired,
+            WorldEvent::FeedPostCreated { .. } => EventType::FeedPostCreated,
+            WorldEvent::FeedPostLiked { .. } => EventType::FeedPostLiked,
+            WorldEvent::FeedCommentCreated { .. } => EventType::FeedCommentCreated,
+            WorldEvent::FeedCommentLiked { .. } => EventType::FeedCommentLiked,
         }
     }
 
@@ -1173,6 +1207,10 @@ impl WorldEvent {
             WorldEvent::CoordinationTaskCompleted { .. } => None,
             WorldEvent::CoordinationTaskCancelled { coordinator_id, .. } => Some(coordinator_id),
             WorldEvent::CoordinationTaskExpired { .. } => None,
+            WorldEvent::FeedPostCreated { author_id, .. } => Some(author_id),
+            WorldEvent::FeedPostLiked { user_id, .. } => Some(user_id),
+            WorldEvent::FeedCommentCreated { author_id, .. } => Some(author_id),
+            WorldEvent::FeedCommentLiked { user_id, .. } => Some(user_id),
         }
     }
 

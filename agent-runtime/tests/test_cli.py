@@ -696,3 +696,163 @@ class TestAgentPool:
         assert len(result["agents"]) == 1
         # Agent was either stopped (terminated by pool shutdown) or running
         assert result["agents"][0]["status"] in ("stopped", "running")
+
+
+# ---------------------------------------------------------------------------
+# --preset CLI argument
+# ---------------------------------------------------------------------------
+
+
+class TestPresetArg:
+    def test_parsing_preset_arg(self) -> None:
+        parser = build_parser()
+        args = parser.parse_args(["spawn", "--preset", "zhipu"])
+        assert args.preset == "zhipu"
+
+    def test_parsing_preset_with_model(self) -> None:
+        parser = build_parser()
+        args = parser.parse_args(["spawn", "--preset", "zhipu", "--llm-model", "glm-5"])
+        assert args.preset == "zhipu"
+        assert args.llm_model == "glm-5"
+
+    def test_parsing_preset_with_pool(self) -> None:
+        parser = build_parser()
+        args = parser.parse_args(["pool", "--count", "3", "--preset", "deepseek"])
+        assert args.preset == "deepseek"
+        assert args.count == 3
+
+    def test_invalid_preset_exits(self, tmp_path) -> None:
+        """Invalid preset name causes SystemExit with available list."""
+        import argparse
+
+        from agent_runtime.__main__ import _apply_preset_defaults
+
+        # Write a minimal presets file for testing
+        presets_path = tmp_path / "model-presets.yaml"
+        presets_path.write_text(
+            "providers:\n"
+            "  zhipu:\n"
+            "    id: zhipu\n"
+            "    protocol: openai\n"
+            "    base_url: 'https://example.com'\n"
+            "models: []\n"
+        )
+
+        from agent_runtime.presets import reload_presets
+        reload_presets(presets_path)
+
+        args = argparse.Namespace(
+            preset="nonexistent",
+            llm_provider=None,
+            llm_base_url=None,
+            llm_model=None,
+        )
+        with pytest.raises(SystemExit):
+            _apply_preset_defaults(args)
+
+    def test_valid_preset_fills_args(self, tmp_path) -> None:
+        """Valid preset fills in missing LLM args."""
+        import argparse
+
+        from agent_runtime.__main__ import _apply_preset_defaults
+
+        presets_path = tmp_path / "model-presets.yaml"
+        presets_path.write_text(
+            "providers:\n"
+            "  zhipu:\n"
+            "    id: zhipu\n"
+            "    protocol: openai\n"
+            "    base_url: 'https://open.bigmodel.cn/api/paas/v4'\n"
+            "    api_key_required: true\n"
+            "    api_key_env: ZHIPU_API_KEY\n"
+            "models:\n"
+            "  - id: glm-5\n"
+            "    provider: zhipu\n"
+            "    label: GLM-5\n"
+        )
+
+        from agent_runtime.presets import reload_presets
+        reload_presets(presets_path)
+
+        args = argparse.Namespace(
+            preset="zhipu",
+            llm_provider=None,
+            llm_base_url=None,
+            llm_model=None,
+        )
+        _apply_preset_defaults(args)
+
+        assert args.llm_provider == "zhipu"
+        assert args.llm_base_url == "https://open.bigmodel.cn/api/paas/v4"
+        assert args.llm_model == "glm-5"
+
+    def test_preset_does_not_override_explicit_cli(self, tmp_path) -> None:
+        """Explicit CLI flags take precedence over preset values."""
+        import argparse
+
+        from agent_runtime.__main__ import _apply_preset_defaults
+
+        presets_path = tmp_path / "model-presets.yaml"
+        presets_path.write_text(
+            "providers:\n"
+            "  zhipu:\n"
+            "    id: zhipu\n"
+            "    protocol: openai\n"
+            "    base_url: 'https://open.bigmodel.cn/api/paas/v4'\n"
+            "models:\n"
+            "  - id: glm-5\n"
+            "    provider: zhipu\n"
+        )
+
+        from agent_runtime.presets import reload_presets
+        reload_presets(presets_path)
+
+        args = argparse.Namespace(
+            preset="zhipu",
+            llm_provider="ollama",
+            llm_base_url="http://custom:1234",
+            llm_model="custom-model",
+        )
+        _apply_preset_defaults(args)
+
+        # Explicit values should NOT be overwritten
+        assert args.llm_provider == "ollama"
+        assert args.llm_base_url == "http://custom:1234"
+        assert args.llm_model == "custom-model"
+
+    def test_pool_spawn_args_includes_preset(self) -> None:
+        """--preset is forwarded in pool spawn args."""
+        from agent_runtime.__main__ import _build_pool_spawn_args
+
+        parser = build_parser()
+        args = parser.parse_args(["pool", "--preset", "zhipu"])
+        result = _build_pool_spawn_args(args)
+        assert "--preset" in result
+        assert "zhipu" in result
+
+    def test_build_config_with_preset(self, tmp_path, monkeypatch) -> None:
+        """End-to-end: build_config_from_args with --preset resolves correctly."""
+        presets_path = tmp_path / "model-presets.yaml"
+        presets_path.write_text(
+            "providers:\n"
+            "  ollama-local:\n"
+            "    id: ollama-local\n"
+            "    protocol: ollama\n"
+            "    base_url: 'http://localhost:11434'\n"
+            "    api_key_required: false\n"
+            "models:\n"
+            "  - id: qwen3:8b\n"
+            "    provider: ollama-local\n"
+        )
+
+        from agent_runtime.presets import reload_presets
+        reload_presets(presets_path)
+
+        parser = build_parser()
+        args = parser.parse_args(["spawn", "--preset", "ollama-local"])
+        config = build_config_from_args(args)
+
+        assert config.llm is not None
+        assert config.llm.provider.value == "ollama"
+        assert config.llm.model == "qwen3:8b"
+        assert config.llm.base_url == "http://localhost:11434"

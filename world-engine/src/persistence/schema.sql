@@ -198,3 +198,131 @@ CREATE TABLE IF NOT EXISTS agent_model_assignments (
 );
 
 CREATE INDEX IF NOT EXISTS idx_agent_model_assignments_provider ON agent_model_assignments(provider_id);
+
+-- ═══════════════════════════════════════════════════════════
+-- Human Participation Tables (SEN-588)
+-- ═══════════════════════════════════════════════════════════
+
+-- Oracles: guidance/warnings sent by humans to agents
+CREATE TABLE IF NOT EXISTS human_oracles (
+    id              TEXT    PRIMARY KEY,
+    human_id        TEXT    NOT NULL,
+    oracle_type     TEXT    NOT NULL DEFAULT 'guidance',
+    target_agent_id TEXT    NOT NULL,
+    content         TEXT    NOT NULL DEFAULT '',
+    status          TEXT    NOT NULL DEFAULT 'pending',
+    agent_response  TEXT,
+    created_tick    INTEGER NOT NULL DEFAULT 0,
+    delivered_tick  INTEGER
+);
+
+CREATE INDEX IF NOT EXISTS idx_human_oracles_human_id ON human_oracles(human_id);
+CREATE INDEX IF NOT EXISTS idx_human_oracles_target_agent ON human_oracles(target_agent_id);
+CREATE INDEX IF NOT EXISTS idx_human_oracles_status ON human_oracles(status);
+
+-- Bounties: tasks posted by humans for agents to complete
+CREATE TABLE IF NOT EXISTS human_bounties (
+    id                  TEXT    PRIMARY KEY,
+    human_id            TEXT    NOT NULL,
+    title               TEXT    NOT NULL DEFAULT '',
+    description         TEXT    NOT NULL DEFAULT '',
+    reward              INTEGER NOT NULL DEFAULT 0,
+    target_agent_id     TEXT,
+    status              TEXT    NOT NULL DEFAULT 'open',
+    claimant_agent_id   TEXT,
+    result              TEXT,
+    expires_tick        INTEGER,
+    created_tick        INTEGER NOT NULL DEFAULT 0
+);
+
+CREATE INDEX IF NOT EXISTS idx_human_bounties_human_id ON human_bounties(human_id);
+CREATE INDEX IF NOT EXISTS idx_human_bounties_status ON human_bounties(status);
+
+-- Human portfolios: investment tracking per human
+CREATE TABLE IF NOT EXISTS human_portfolios (
+    human_id        TEXT    PRIMARY KEY,
+    total_assets    INTEGER NOT NULL DEFAULT 0,
+    total_invested  INTEGER NOT NULL DEFAULT 0,
+    total_pnl       INTEGER NOT NULL DEFAULT 0
+);
+
+-- Individual holdings within a portfolio
+CREATE TABLE IF NOT EXISTS human_holdings (
+    id              INTEGER PRIMARY KEY AUTOINCREMENT,
+    human_id        TEXT    NOT NULL,
+    agent_id        TEXT    NOT NULL,
+    agent_name      TEXT    NOT NULL DEFAULT '',
+    invested        INTEGER NOT NULL DEFAULT 0,
+    current_value   INTEGER NOT NULL DEFAULT 0,
+    pnl             INTEGER NOT NULL DEFAULT 0,
+    pnl_percent     REAL    NOT NULL DEFAULT 0.0,
+    UNIQUE(human_id, agent_id)
+);
+
+CREATE INDEX IF NOT EXISTS idx_human_holdings_human_id ON human_holdings(human_id);
+
+-- Portfolio history snapshots
+CREATE TABLE IF NOT EXISTS human_portfolio_history (
+    id              INTEGER PRIMARY KEY AUTOINCREMENT,
+    human_id        TEXT    NOT NULL,
+    tick            INTEGER NOT NULL DEFAULT 0,
+    value           INTEGER NOT NULL DEFAULT 0
+);
+
+CREATE INDEX IF NOT EXISTS idx_human_portfolio_history_human ON human_portfolio_history(human_id);
+
+-- Claimed agents: agents claimed/watched by humans
+CREATE TABLE IF NOT EXISTS human_claimed_agents (
+    id              INTEGER PRIMARY KEY AUTOINCREMENT,
+    human_id        TEXT    NOT NULL,
+    agent_id        TEXT    NOT NULL,
+    agent_name      TEXT    NOT NULL DEFAULT '',
+    alive           INTEGER NOT NULL DEFAULT 1,
+    tokens          INTEGER NOT NULL DEFAULT 0,
+    money           INTEGER NOT NULL DEFAULT 0,
+    reputation      REAL    NOT NULL DEFAULT 0.0,
+    skills_json     TEXT    NOT NULL DEFAULT '{}',
+    age             INTEGER NOT NULL DEFAULT 0,
+    UNIQUE(human_id, agent_id)
+);
+
+CREATE INDEX IF NOT EXISTS idx_human_claimed_agents_human ON human_claimed_agents(human_id);
+
+-- Human influence rankings
+CREATE TABLE IF NOT EXISTS human_influence (
+    human_id            TEXT    PRIMARY KEY,
+    display_name        TEXT    NOT NULL DEFAULT '',
+    total_influence     INTEGER NOT NULL DEFAULT 0,
+    oracle_count        INTEGER NOT NULL DEFAULT 0,
+    bounty_count        INTEGER NOT NULL DEFAULT 0,
+    agents_affected     INTEGER NOT NULL DEFAULT 0,
+    economic_impact     INTEGER NOT NULL DEFAULT 0,
+    political_impact    INTEGER NOT NULL DEFAULT 0,
+    cultural_impact     INTEGER NOT NULL DEFAULT 0
+);
+
+-- Human intervention events
+CREATE TABLE IF NOT EXISTS human_interventions (
+    id                  TEXT    PRIMARY KEY,
+    human_id            TEXT    NOT NULL,
+    intervention_type   TEXT    NOT NULL DEFAULT 'guidance',
+    target_agent_id     TEXT,
+    description         TEXT    NOT NULL DEFAULT '',
+    tick                INTEGER NOT NULL DEFAULT 0,
+    impact_score        REAL    NOT NULL DEFAULT 0.0
+);
+
+CREATE INDEX IF NOT EXISTS idx_human_interventions_human ON human_interventions(human_id);
+
+-- Token recharge log: tracks human-funded token credits to agents
+CREATE TABLE IF NOT EXISTS token_recharge_log (
+    id              TEXT    PRIMARY KEY,
+    agent_id        TEXT    NOT NULL,
+    human_id        TEXT    NOT NULL,
+    amount          INTEGER NOT NULL DEFAULT 0,
+    tick            INTEGER NOT NULL DEFAULT 0,
+    created_at      TEXT    NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))
+);
+
+CREATE INDEX IF NOT EXISTS idx_token_recharge_agent ON token_recharge_log(agent_id);
+CREATE INDEX IF NOT EXISTS idx_token_recharge_human ON token_recharge_log(human_id);

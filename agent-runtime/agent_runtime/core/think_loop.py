@@ -174,9 +174,21 @@ class ReflectionProvider(Protocol):
 
 
 class HeartbeatProvider(Protocol):
-    """Sends a heartbeat to the server and returns the server tick."""
+    """Sends a heartbeat to the server and returns the server tick.
 
-    async def heartbeat(self) -> int: ...
+    The heartbeat now carries agent status information (token balance,
+    alive status, urgent events) so the World Engine can monitor
+    agent health and relay alerts to Human operators.
+    """
+
+    async def heartbeat(
+        self,
+        *,
+        token_balance: int = 0,
+        max_tokens: int = 0,
+        alive: bool = True,
+        urgent_events: list[str] | None = None,
+    ) -> int: ...
 
 
 class CulturalInfluenceHook(Protocol):
@@ -625,14 +637,26 @@ class ThinkLoop:
             self.stop()
             return
 
-        # 0. Heartbeat (optional — sends liveness ping and syncs server tick)
+        # 0. Heartbeat (optional — sends liveness ping with agent status)
         if self._heartbeat is not None and self.config.heartbeat_enabled:
             try:
-                self._server_tick = await self._heartbeat.heartbeat()
+                max_tokens = getattr(self.state, "max_tokens", None) or 0
+                token_balance = self.state.tokens
+                urgent_events: list[str] = []
+                # Detect low token situation
+                if max_tokens > 0 and token_balance < max_tokens * 0.15:
+                    urgent_events.append("low_tokens")
+                self._server_tick = await self._heartbeat.heartbeat(
+                    token_balance=token_balance,
+                    max_tokens=max_tokens,
+                    alive=True,
+                    urgent_events=urgent_events if urgent_events else None,
+                )
                 logger.debug(
-                    "Tick %d: heartbeat ok — server_tick=%d",
+                    "Tick %d: heartbeat ok — server_tick=%d tokens=%d",
                     self._tick,
                     self._server_tick,
+                    token_balance,
                 )
             except Exception:
                 logger.debug(

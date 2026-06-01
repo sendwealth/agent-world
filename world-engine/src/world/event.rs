@@ -153,6 +153,9 @@ pub enum EventType {
     ToolDelisted,
     ToolPurchased,
     ToolRented,
+    // Oracle / Bounty delivery events
+    OracleDelivered,
+    BountyPublished,
     // Multi-agent coordination events
     CoordinationTaskCreated,
     CoordinationTaskAgentJoined,
@@ -848,6 +851,17 @@ pub enum WorldEvent {
         total_cost: u64,
         currency: Currency,
     },
+    // Oracle / Bounty delivery events
+    OracleDelivered {
+        oracle_id: String,
+        agent_id: String,
+        content: String,
+    },
+    BountyPublished {
+        bounty_id: String,
+        title: String,
+        reward: u64,
+    },
     // Multi-agent coordination events
     CoordinationTaskCreated {
         task_id: String,
@@ -1007,6 +1021,8 @@ impl WorldEvent {
             WorldEvent::ToolDelisted { .. } => EventType::ToolDelisted,
             WorldEvent::ToolPurchased { .. } => EventType::ToolPurchased,
             WorldEvent::ToolRented { .. } => EventType::ToolRented,
+            WorldEvent::OracleDelivered { .. } => EventType::OracleDelivered,
+            WorldEvent::BountyPublished { .. } => EventType::BountyPublished,
             WorldEvent::CoordinationTaskCreated { .. } => EventType::CoordinationTaskCreated,
             WorldEvent::CoordinationTaskAgentJoined { .. } => {
                 EventType::CoordinationTaskAgentJoined
@@ -1149,6 +1165,8 @@ impl WorldEvent {
             WorldEvent::ToolDelisted { .. } => None,
             WorldEvent::ToolPurchased { buyer_id, .. } => Some(buyer_id),
             WorldEvent::ToolRented { renter_id, .. } => Some(renter_id),
+            WorldEvent::OracleDelivered { agent_id, .. } => Some(agent_id),
+            WorldEvent::BountyPublished { .. } => None,
             WorldEvent::CoordinationTaskCreated { coordinator_id, .. } => Some(coordinator_id),
             WorldEvent::CoordinationTaskAgentJoined { agent_id, .. } => Some(agent_id),
             WorldEvent::CoordinationTaskAgentSubmitted { agent_id, .. } => Some(agent_id),

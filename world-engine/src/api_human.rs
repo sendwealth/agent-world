@@ -8,11 +8,16 @@ use axum::{
     Json,
 };
 
+use crate::agentworld::a2a::v1::{
+    world_message::Payload, BountyPayload, OraclePayload, OracleType as ProtoOracleType,
+    WorldMessage,
+};
 use crate::api::{AppState, ErrorResponse};
 use crate::auth::{extractors::require_capability, Capability, RequireAuth};
 use crate::human::store::{
     ClaimAgentRequest, ClaimBountyRequest, CompleteBountyRequest, CreateBountyRequest,
-    InfluenceRankingsQuery, InvestRequest, ListBountiesQuery, ListOraclesQuery, SendOracleRequest,
+    InfluenceRankingsQuery, InvestRequest, ListBountiesQuery, ListOraclesQuery, OracleType,
+    SendOracleRequest,
 };
 
 // ── Human Participation API Handlers ──────────────────────
@@ -128,6 +133,29 @@ pub async fn human_send_oracle(
     let mut store = state.human_store.lock().await;
     store.set_tick(tick);
     let oracle = store.send_oracle(body);
+
+    // Push Oracle message to the agent via WorldMessageRouter
+    if let Some(ref router) = state.world_msg_router {
+        let oracle_type = match oracle.oracle_type {
+            OracleType::Guidance => ProtoOracleType::Guidance as i32,
+            OracleType::Warning => ProtoOracleType::Warning as i32,
+            OracleType::Blessing => ProtoOracleType::Blessing as i32,
+            OracleType::Curse => ProtoOracleType::Curse as i32,
+        };
+        let msg = WorldMessage {
+            id: uuid::Uuid::new_v4().to_string(),
+            payload: Some(Payload::Oracle(OraclePayload {
+                oracle_id: oracle.id.clone(),
+                oracle_type,
+                content: oracle.content.clone(),
+                from_human: true,
+                human_id: oracle.human_id.clone(),
+            })),
+            timestamp: chrono::Utc::now().timestamp(),
+        };
+        router.deliver(&oracle.target_agent_id, msg).await;
+    }
+
     (StatusCode::CREATED, Json(oracle)).into_response()
 }
 
@@ -191,6 +219,29 @@ pub async fn human_create_bounty(
     let mut store = state.human_store.lock().await;
     store.set_tick(tick);
     let bounty = store.create_bounty(body);
+
+    // Push Bounty message to agents via WorldMessageRouter
+    if let Some(ref router) = state.world_msg_router {
+        let msg = WorldMessage {
+            id: uuid::Uuid::new_v4().to_string(),
+            payload: Some(Payload::Bounty(BountyPayload {
+                bounty_id: bounty.id.clone(),
+                title: bounty.title.clone(),
+                description: bounty.description.clone(),
+                reward: bounty.reward,
+                deadline_tick: bounty.expires_tick.unwrap_or(0) as i64,
+                human_id: bounty.human_id.clone(),
+            })),
+            timestamp: chrono::Utc::now().timestamp(),
+        };
+        // If bounty targets a specific agent, deliver directly; otherwise broadcast
+        if let Some(ref target_id) = bounty.target_agent_id {
+            router.deliver(target_id, msg).await;
+        } else {
+            router.broadcast(msg).await;
+        }
+    }
+
     (StatusCode::CREATED, Json(bounty)).into_response()
 }
 

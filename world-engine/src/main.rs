@@ -579,7 +579,11 @@ async fn main() {
         ab_experiment_store: Some(ab_experiment_store),
         plugin_manager: Some(plugin_manager),
         providers: None,
-        agent_models: None,    });
+        agent_models: None,
+        diary_store: Some(std::sync::Arc::new(tokio::sync::Mutex::new(
+            agent_world_engine::api_diary::DiaryStore::new(2000),
+        ))),
+    });
     // Wire the WorldMessageRouter into the AppState for Oracle/Bounty delivery
     app_state.world_msg_router = Some(world_msg_router);
     let app = api::build_full_router(app_state);

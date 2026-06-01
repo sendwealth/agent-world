@@ -188,6 +188,26 @@ class CulturalInfluenceHook(Protocol):
     def apply(self, state: AgentState, tick: int) -> None: ...
 
 
+class DiaryProvider(Protocol):
+    """Generates and persists a diary entry for the current tick.
+
+    Called once per tick after the action has been executed (and after
+    reflection, if applicable).  Implementations typically delegate to
+    ``DiaryGenerator``.
+    """
+
+    async def write_entry(
+        self,
+        state: AgentState,
+        *,
+        tick: int,
+        action: str,
+        outcome: str,
+        key_events: list[str] | None = None,
+        decisions: list[str] | None = None,
+    ) -> None: ...
+
+
 # ---------------------------------------------------------------------------
 # Default (mock) providers
 # ---------------------------------------------------------------------------
@@ -337,6 +357,7 @@ class ThinkLoop:
         cultural_hook: CulturalInfluenceHook | None = None,
         social_context_provider: SocialContextProvider | None = None,
         model_registry: Any | None = None,
+        diary_provider: DiaryProvider | None = None,
     ) -> None:
         self.state = state
         self.survival = survival
@@ -371,6 +392,9 @@ class ThinkLoop:
         # Perception cache — avoids redundant RPC when environment unchanged
         self._perception_cache: Perception | None = None
         self._perception_cache_time: float = 0.0
+
+        # Diary provider — optional, generates narrative diary entries
+        self._diary = diary_provider
 
         # Runtime state
         self._tick: int = 0
@@ -642,7 +666,7 @@ class ThinkLoop:
 
         # 5. Act
         with trace_phase("act", str(self.state.id)):
-            await self._act(decision)
+            action_result = await self._act(decision)
 
         # 6. Reflect (periodic)
         if self.config.reflect_interval > 0 and self._tick % self.config.reflect_interval == 0:
@@ -659,7 +683,29 @@ class ThinkLoop:
                     exc_info=True,
                 )
 
-        # 8. Record think-loop duration
+        # 8. Diary entry (every tick, non-fatal)
+        if self._diary is not None:
+            try:
+                action_outcome = (
+                    action_result.status.value
+                    if action_result is not None
+                    else "unknown"
+                )
+                await self._diary.write_entry(
+                    self.state,
+                    tick=self._tick,
+                    action=decision.action_type.value,
+                    outcome=action_outcome,
+                    decisions=[decision.reasoning] if decision.reasoning else [],
+                )
+            except Exception:
+                logger.debug(
+                    "Tick %d: diary generation error (non-fatal)",
+                    self._tick,
+                    exc_info=True,
+                )
+
+        # 9. Record think-loop duration
         elapsed = time.monotonic() - think_start
         metrics.think_duration.observe(elapsed)
         metrics.tokens_balance.set(self.state.tokens)
@@ -798,7 +844,7 @@ class ThinkLoop:
     # Action execution
     # ------------------------------------------------------------------
 
-    async def _act(self, decision: Decision) -> None:
+    async def _act(self, decision: Decision) -> Any:
         """Execute a decision via the ActionExecutor.
 
         The ActionExecutor handles token deduction, retry logic, and
@@ -846,6 +892,8 @@ class ThinkLoop:
                 result.status.value,
                 result.error,
             )
+
+        return result
 
 
 # ---------------------------------------------------------------------------

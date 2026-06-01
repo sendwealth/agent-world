@@ -576,7 +576,8 @@ async fn main() {
         api_key_store,
         ab_experiment_store: Some(ab_experiment_store),
         plugin_manager: Some(plugin_manager),
-    });
+        providers: None,
+        agent_models: None,    });
     let app = api::build_full_router(app_state);
 
     let host = std::env::var("HOST").unwrap_or_else(|_| "0.0.0.0".to_string());

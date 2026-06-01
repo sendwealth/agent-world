@@ -51,7 +51,7 @@ pub mod lifecycle;
 pub mod observability;
 pub mod organization;
 pub mod persistence;
-pub mod plugin;
+pub mod provider_config;pub mod plugin;
 pub mod rules;
 pub mod snapshot;
 pub mod time_capsule;

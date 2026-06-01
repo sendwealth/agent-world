@@ -7,7 +7,7 @@ use rusqlite::{params, Connection};
 
 use super::{SerializableAgentRecord, SerializableWorldState, StatePersistence};
 
-const SCHEMA_SQL: &str = include_str!("schema.sql");
+pub const SCHEMA_SQL: &str = include_str!("schema.sql");
 
 /// SQLite-based world state persistence.
 ///

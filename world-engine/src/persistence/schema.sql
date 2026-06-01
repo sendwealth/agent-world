@@ -171,3 +171,30 @@ CREATE TABLE IF NOT EXISTS migration_policy (
     blocked_skills              TEXT    NOT NULL DEFAULT '[]',
     cooldown_ticks              INTEGER NOT NULL DEFAULT 100
 );
+
+-- Provider Configuration and Agent Model Assignments (SEN-574)
+CREATE TABLE IF NOT EXISTS provider_configs (
+    id                TEXT    PRIMARY KEY,
+    protocol          TEXT    NOT NULL,
+    base_url          TEXT    NOT NULL,
+    api_key_encrypted BLOB    NOT NULL,
+    api_key_nonce     BLOB    NOT NULL,
+    api_version       TEXT    NOT NULL DEFAULT '',
+    display_name      TEXT    NOT NULL DEFAULT '',
+    is_default        INTEGER NOT NULL DEFAULT 0,
+    created_at        TEXT    NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now')),
+    updated_at        TEXT    NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))
+);
+
+CREATE INDEX IF NOT EXISTS idx_provider_configs_protocol ON provider_configs(protocol);
+CREATE INDEX IF NOT EXISTS idx_provider_configs_is_default ON provider_configs(is_default);
+
+CREATE TABLE IF NOT EXISTS agent_model_assignments (
+    agent_id     TEXT    NOT NULL,
+    provider_id  TEXT    NOT NULL REFERENCES provider_configs(id) ON DELETE CASCADE,
+    model_id     TEXT    NOT NULL DEFAULT '',
+    updated_at   TEXT    NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now')),
+    PRIMARY KEY (agent_id)
+);
+
+CREATE INDEX IF NOT EXISTS idx_agent_model_assignments_provider ON agent_model_assignments(provider_id);

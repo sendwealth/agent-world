@@ -17,7 +17,7 @@ use crate::auth::{extractors::require_capability, Capability, RequireAuth};
 use crate::human::store::{
     ClaimAgentRequest, ClaimBountyRequest, CompleteBountyRequest, CreateBountyRequest,
     InfluenceRankingsQuery, InvestRequest, ListBountiesQuery, ListOraclesQuery, OracleType,
-    OracleResponseRequest, SendOracleRequest,
+    OracleResponseRequest, RechargeRequest, SendOracleRequest,
 };
 
 // ── Human Participation API Handlers ──────────────────────
@@ -33,15 +33,11 @@ pub async fn human_stats(State(state): State<AppState>) -> impl IntoResponse {
 pub async fn human_list_claimed_agents(
     State(state): State<AppState>,
     RequireAuth(auth): RequireAuth,
-    Query(query): Query<HashMap<String, String>>,
+    Query(_query): Query<HashMap<String, String>>,
 ) -> impl IntoResponse {
-    // SECURITY: Only allow users to see their own claimed agents
-    let human_id = query
-        .get("human_id")
-        .cloned()
-        .unwrap_or_else(|| auth.user_id.clone());
+    // SECURITY: Always use authenticated user ID, ignore query param
     let store = state.human_store.lock().await;
-    let agents: Vec<&crate::human::store::ClaimedAgent> = store.list_claimed_agents(&human_id);
+    let agents: Vec<crate::human::store::ClaimedAgent> = store.list_claimed_agents(&auth.user_id);
     Json(agents).into_response()
 }
 
@@ -90,7 +86,7 @@ pub async fn human_list_oracles(
     Query(query): Query<ListOraclesQuery>,
 ) -> impl IntoResponse {
     let store = state.human_store.lock().await;
-    let oracles: Vec<&crate::human::store::Oracle> = store.list_oracles(&query);
+    let oracles: Vec<crate::human::store::Oracle> = store.list_oracles(&query);
     Json(oracles).into_response()
 }
 
@@ -127,6 +123,20 @@ pub async fn human_send_oracle(
             }),
         )
             .into_response();
+    }
+
+    // Validate target_agent_id exists in the world
+    {
+        let agents = state.agents.lock().await;
+        if !agents.iter().any(|a| a.id == body.target_agent_id) {
+            return (
+                StatusCode::NOT_FOUND,
+                Json(ErrorResponse {
+                    error: "Target agent not found".into(),
+                }),
+            )
+                .into_response();
+        }
     }
 
     let tick = *state.tick_rx.borrow();
@@ -208,7 +218,7 @@ pub async fn human_list_bounties(
     Query(query): Query<ListBountiesQuery>,
 ) -> impl IntoResponse {
     let store = state.human_store.lock().await;
-    let bounties: Vec<&crate::human::store::Bounty> = store.list_bounties(&query);
+    let bounties: Vec<crate::human::store::Bounty> = store.list_bounties(&query);
     Json(bounties).into_response()
 }
 
@@ -289,6 +299,8 @@ pub async fn human_get_bounty(
     }
 }
 
+/// Claim a bounty — agent-side endpoint (no RequireAuth since agents
+/// authenticate differently). However, we log the claimant for audit.
 pub async fn human_claim_bounty(
     State(state): State<AppState>,
     Path(id): Path<String>,
@@ -307,6 +319,7 @@ pub async fn human_claim_bounty(
     }
 }
 
+/// Complete a bounty — agent-side endpoint.
 pub async fn human_complete_bounty(
     State(state): State<AppState>,
     Path(id): Path<String>,
@@ -333,7 +346,7 @@ pub async fn human_cancel_bounty(
     let mut store = state.human_store.lock().await;
     // SECURITY: Verify ownership — only the creator can cancel
     let bounty = match store.get_bounty(&id) {
-        Some(b) => b.clone(),
+        Some(b) => b,
         None => {
             return (
                 StatusCode::NOT_FOUND,
@@ -438,7 +451,7 @@ pub async fn human_rankings(
     let sort_by = query.sort_by.as_deref().unwrap_or("total_influence");
     let limit = query.limit.unwrap_or(50);
     let store = state.human_store.lock().await;
-    let rankings: Vec<&crate::human::store::HumanInfluenceEntry> =
+    let rankings: Vec<crate::human::store::HumanInfluenceEntry> =
         store.get_influence_rankings(sort_by, limit);
     Json(rankings).into_response()
 }
@@ -453,9 +466,103 @@ pub async fn human_list_interventions(
         .and_then(|s| s.parse().ok())
         .unwrap_or(50);
     let store = state.human_store.lock().await;
-    let interventions: Vec<&crate::human::store::HumanInterventionEvent> =
+    let interventions: Vec<crate::human::store::HumanInterventionEvent> =
         store.list_interventions(human_id, limit);
     Json(interventions).into_response()
+}
+
+// ── Token Recharge ────────────────────────────────────────
+
+/// Recharge tokens for an agent (Human → Agent credit).
+/// Requires Human auth. The agent must exist in the world.
+pub async fn human_recharge_agent(
+    State(state): State<AppState>,
+    RequireAuth(auth): RequireAuth,
+    Path(agent_id): Path<String>,
+    Json(body): Json<RechargeRequest>,
+) -> impl IntoResponse {
+    if body.amount == 0 {
+        return (
+            StatusCode::BAD_REQUEST,
+            Json(ErrorResponse {
+                error: "Recharge amount must be greater than 0".into(),
+            }),
+        )
+            .into_response();
+    }
+
+    // Verify the agent exists and add tokens
+    {
+        let mut agents = state.agents.lock().await;
+        match agents.iter_mut().find(|a| a.id == agent_id) {
+            Some(agent) => {
+                agent.tokens += body.amount;
+            }
+            None => {
+                return (
+                    StatusCode::NOT_FOUND,
+                    Json(ErrorResponse {
+                        error: "Agent not found".into(),
+                    }),
+                )
+                    .into_response()
+            }
+        }
+    }
+
+    let tick = *state.tick_rx.borrow();
+    let mut store = state.human_store.lock().await;
+    store.set_tick(tick);
+    let recharge_id = store.recharge_agent(&agent_id, &auth.user_id, body.amount);
+
+    let response = serde_json::json!({
+        "id": recharge_id,
+        "agent_id": agent_id,
+        "human_id": auth.user_id,
+        "amount": body.amount,
+        "tick": tick,
+    });
+
+    (StatusCode::OK, Json(response)).into_response()
+}
+
+/// Get agent energy/token status (for Dashboard display).
+pub async fn human_agent_energy(
+    State(state): State<AppState>,
+    Path(agent_id): Path<String>,
+) -> impl IntoResponse {
+    let agents = state.agents.lock().await;
+    match agents.iter().find(|a| a.id == agent_id) {
+        Some(agent) => {
+            let response = serde_json::json!({
+                "agent_id": agent.id,
+                "name": agent.name,
+                "tokens": agent.tokens,
+                "money": agent.money,
+                "phase": agent.phase,
+                "alive": agent.alive,
+                "ticks_survived": agent.ticks_survived,
+            });
+            Json(response).into_response()
+        }
+        None => (
+            StatusCode::NOT_FOUND,
+            Json(ErrorResponse {
+                error: "Agent not found".into(),
+            }),
+        )
+            .into_response(),
+    }
+}
+
+/// Get recharge history for an agent.
+pub async fn human_recharge_history(
+    State(state): State<AppState>,
+    Path(agent_id): Path<String>,
+) -> impl IntoResponse {
+    let store = state.human_store.lock().await;
+    let history = store.get_recharge_history(&agent_id, 50);
+    Json(history).into_response()
 }
 
 /// Human participation routes.
@@ -490,4 +597,8 @@ pub fn human_routes() -> axum::Router<AppState> {
         .route("/api/v1/human/portfolio/invest", post(human_invest))
         .route("/api/v1/human/rankings", get(human_rankings))
         .route("/api/v1/human/interventions", get(human_list_interventions))
+        // Token recharge endpoints
+        .route("/api/v1/human/agents/:id/recharge", post(human_recharge_agent))
+        .route("/api/v1/human/agents/:id/energy", get(human_agent_energy))
+        .route("/api/v1/human/agents/:id/recharge-history", get(human_recharge_history))
 }

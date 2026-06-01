@@ -12,7 +12,7 @@
 use std::sync::Arc;
 use tokio::sync::Mutex;
 
-use agent_world_engine::api::{build_full_router, AppState, TestOverrides};
+use agent_world_engine::api::{build_full_router, AppState, AgentRecord, TestOverrides};
 use agent_world_engine::auth::{AuthStore, Capability, HumanRole};
 use agent_world_engine::economy::task::TaskBoard;
 use agent_world_engine::wal::WAL;
@@ -38,6 +38,42 @@ fn test_app() -> Router {
             ..TestOverrides::default()
         },
     );
+
+    build_full_router(state)
+}
+
+fn test_app_with_agents() -> Router {
+    use std::collections::HashMap;
+    let board = Arc::new(Mutex::new(TaskBoard::new()));
+    let wal = Arc::new(Mutex::new(WAL::new("./data/test-wal")));
+    let auth_store = Arc::new(Mutex::new(AuthStore::new("test-jwt-secret")));
+
+    let state = AppState::for_test_with(
+        board,
+        wal,
+        TestOverrides {
+            auth_store: Some(auth_store),
+            ..TestOverrides::default()
+        },
+    );
+
+    // Pre-populate agents so target_agent_id validation passes
+    // Use try_lock since we're not in an async runtime yet
+    if let Ok(mut agents) = state.agents.try_lock() {
+        agents.push(AgentRecord {
+            id: "agent-1".to_string(),
+            name: "TestAgent".to_string(),
+            phase: "adult".to_string(),
+            tokens: 1000,
+            money: 500,
+            alive: true,
+            ticks_survived: 10,
+            personality: String::new(),
+            parent_ids: Vec::new(),
+            generation: 1,
+            skills: HashMap::new(),
+        });
+    }
 
     build_full_router(state)
 }
@@ -244,7 +280,7 @@ async fn test_rbac_creator_has_all_permissions() {
 
 #[tokio::test]
 async fn test_identity_spoofing_prevented_in_oracle() {
-    let app = test_app();
+    let app = test_app_with_agents();
     let (real_user_id, token) = register_and_login(&app, "real_user", "observer").await;
 
     // Attacker tries to send oracle with different human_id

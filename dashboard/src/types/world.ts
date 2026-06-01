@@ -500,3 +500,29 @@ export interface AgentNotification {
   agent_id?: string;
   agent_name?: string;
 }
+
+// Agent Diary types
+
+export type DiaryMood =
+  | "happy"
+  | "anxious"
+  | "fearful"
+  | "calm"
+  | "hopeful"
+  | "angry"
+  | "sad"
+  | "neutral"
+  | "excited"
+  | "confused";
+
+export interface DiaryEntry {
+  agent_id: string;
+  tick: number;
+  phase: string;
+  mood: string;
+  summary: string;
+  key_events: string[];
+  decisions: string[];
+  reflection: string;
+  created_at: string;
+}

@@ -1271,8 +1271,14 @@ def _add_spawn_args(parser: argparse.ArgumentParser) -> None:
         help="World Engine URL (default: http://localhost:3000)",
     )
     parser.add_argument(
-        "--llm-provider", choices=["openai", "anthropic", "ollama", "zhipu"], default=None,
-        help="LLM provider (default: ollama; zhipu maps to OpenAI-compatible GLM-5 API)",
+        "--llm-provider",
+        choices=["openai", "anthropic", "ollama", "zhipu", "google", "azure"],
+        default=None,
+        help=(
+            "LLM provider (default: ollama; "
+            "zhipu maps to OpenAI-compatible GLM-5 API; "
+            "google/azure via registry)"
+        ),
     )
     parser.add_argument(
         "--llm-model", default=None,
@@ -1485,6 +1491,15 @@ def _apply_llm_config(config: RuntimeConfig, args: argparse.Namespace) -> None:
     if provider_str == "zhipu":
         zhipu_mode = True
         provider_str = "openai"
+
+    # Map new protocols to their ProviderType equivalent for backward compat.
+    # google/azure use the OpenAI-compatible transport layer for now.
+    _new_protocol_map: dict[str, str] = {
+        "google": "openai",
+        "azure": "openai",
+    }
+    if provider_str in _new_protocol_map:
+        provider_str = _new_protocol_map[provider_str]
 
     # Determine model: CLI > env > existing > default(qwen3:8b)
     model = (

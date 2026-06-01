@@ -17,7 +17,6 @@ from __future__ import annotations
 import logging
 from dataclasses import dataclass
 from enum import Enum
-from typing import Any
 
 from agent_runtime.llm.base import LLMMessage, LLMProvider
 
@@ -80,14 +79,17 @@ Respond as the agent in 1-3 sentences. Your response should reflect:
 Your response:"""
 
 _STRATEGY_DESCRIPTIONS: dict[OracleResponseStrategy, str] = {
-    OracleResponseStrategy.ACKNOWLEDGE_GUIDANCE:
-        "Acknowledge the guidance, express understanding, and commit to following the advice.",
-    OracleResponseStrategy.HEED_WARNING:
-        "Show that you take the warning seriously, express caution, and plan to adjust your behaviour.",
+    OracleResponseStrategy.ACKNOWLEDGE_GUIDANCE: (
+        "Acknowledge the guidance, express understanding, and commit to following the advice."
+    ),
+    OracleResponseStrategy.HEED_WARNING: (
+        "Show that you take the warning seriously, express caution, and plan to adjust behaviour."
+    ),
     OracleResponseStrategy.EXPRESS_GRATITUDE:
         "Show genuine gratitude and positive emotion. Feel uplifted.",
-    OracleResponseStrategy.SHOW_RESILIENCE:
-        "Express determination and resilience. Acknowledge the curse but show resolve to overcome it.",
+    OracleResponseStrategy.SHOW_RESILIENCE: (
+        "Express determination and resilience. Acknowledge the curse but show resolve to overcome."
+    ),
 }
 
 

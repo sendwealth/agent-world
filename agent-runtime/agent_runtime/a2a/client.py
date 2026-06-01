@@ -14,7 +14,7 @@ from __future__ import annotations
 import asyncio
 import logging
 import random
-from typing import AsyncIterator, TYPE_CHECKING
+from typing import TYPE_CHECKING, AsyncIterator
 
 import grpc
 from protocol.gen.python import a2a_pb2, a2a_pb2_grpc

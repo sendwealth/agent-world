@@ -21,6 +21,12 @@ pub struct WorldMessageRouter {
     streams: Arc<RwLock<HashMap<String, mpsc::Sender<WorldMessage>>>>,
 }
 
+impl Default for WorldMessageRouter {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl WorldMessageRouter {
     pub fn new() -> Self {
         Self {

@@ -113,7 +113,10 @@ export default function DiaryPage() {
 
   // Initial load + reload on daysFilter change
   useEffect(() => {
-    if (!searchQuery) loadEntries();
+    if (!searchQuery) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect
+      loadEntries();
+    }
   }, [loadEntries, searchQuery]);
 
   // Debounced search
@@ -393,7 +396,7 @@ export default function DiaryPage() {
                                   反思
                                 </span>
                                 <p className="mt-1 text-xs text-zinc-400 italic leading-relaxed">
-                                  "{entry.reflection}"
+                                  &ldquo;{entry.reflection}&rdquo;
                                 </p>
                               </div>
                             )}

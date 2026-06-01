@@ -284,12 +284,18 @@ impl ProviderConfigStore {
     }
 
     /// Update a provider configuration.
+    ///
+    /// The entire read-modify-write cycle is performed within a single lock
+    /// scope to avoid TOCTOU races between concurrent updates.
     pub fn update(&self, id: &str, input: &UpdateProviderInput) -> anyhow::Result<Option<ProviderConfig>> {
-        let existing = match self.get(id)? {
+        let conn = self.conn.lock().map_err(|e| anyhow::anyhow!("lock poisoned: {}", e))?;
+
+        // Read existing within the same lock scope
+        let existing = match self.get_inner(&conn, id)? {
             Some(c) => c,
             None => return Ok(None),
         };
-        let conn = self.conn.lock().map_err(|e| anyhow::anyhow!("lock poisoned: {}", e))?;
+
         if input.is_default == Some(true) {
             conn.execute("UPDATE provider_configs SET is_default = 0 WHERE is_default = 1 AND id != ?1", params![id])?;
         }
@@ -304,8 +310,9 @@ impl ProviderConfigStore {
             "UPDATE provider_configs SET protocol=?1, base_url=?2, api_key_encrypted=?3, api_key_nonce=?4, api_version=?5, display_name=?6, is_default=?7, updated_at=strftime('%Y-%m-%dT%H:%M:%fZ','now') WHERE id=?8",
             params![protocol, base_url, ciphertext, nonce, api_version, display_name, is_default as i64, id],
         )?;
-        drop(conn);
-        self.get(id)
+
+        // Read back within the same lock — no TOCTOU gap
+        self.get_inner(&conn, id)
     }
 
     /// Delete a provider. Cascades to agent_model_assignments.

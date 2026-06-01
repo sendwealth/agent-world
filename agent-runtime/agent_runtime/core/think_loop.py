@@ -43,6 +43,7 @@ from agent_runtime.core.act import (
     ActionType,
 )
 from agent_runtime.core.decide import SocialContextProvider
+from agent_runtime.emotion.engine import EmotionEngine
 from agent_runtime.models.agent_state import AgentState
 from agent_runtime.models.phase_abilities import get_phase_abilities, is_terminal
 from agent_runtime.observability import log_tick, metrics, trace_phase
@@ -188,6 +189,26 @@ class CulturalInfluenceHook(Protocol):
     def apply(self, state: AgentState, tick: int) -> None: ...
 
 
+class EmotionHook(Protocol):
+    """Optional hook for emotion updates during the think cycle.
+
+    Called after each action with the action type and result status,
+    allowing the EmotionEngine to react to game events. Also called
+    once per tick for temporal decay.
+    """
+
+    def update_from_action(
+        self,
+        action_type: str,
+        status: str,
+        context: dict[str, Any] | None,
+    ) -> None: ...
+
+    def decay(self, ticks_elapsed: int) -> None: ...
+
+    def get_mood_description(self) -> str: ...
+
+
 # ---------------------------------------------------------------------------
 # Default (mock) providers
 # ---------------------------------------------------------------------------
@@ -331,6 +352,7 @@ class ThinkLoop:
         group_identity: GroupIdentityProvider | None = None,
         cultural_hook: CulturalInfluenceHook | None = None,
         social_context_provider: SocialContextProvider | None = None,
+        emotion_hook: EmotionHook | None = None,
     ) -> None:
         self.state = state
         self.survival = survival
@@ -354,6 +376,12 @@ class ThinkLoop:
         self._social_context_provider = social_context_provider
         if social_context_provider is not None:
             self._inject_social_provider(social_context_provider)
+
+        # Emotion hook — optional, updates emotional state from actions and decay
+        self._emotion_hook = emotion_hook
+        # If emotion hook is provided, inject it into the decision engine
+        if emotion_hook is not None:
+            self._inject_emotion_provider(emotion_hook)
 
         # Group identity provider — optional, injects cultural influence
         self._group_identity = group_identity
@@ -431,6 +459,33 @@ class ThinkLoop:
         logger.debug(
             "SocialContextProvider provided but decision_provider does not "
             "support injection — social context will not influence decisions"
+        )
+
+    def _inject_emotion_provider(self, hook: EmotionHook) -> None:
+        """Inject the emotion provider into the decision provider chain.
+
+        Walks the decision provider chain to find the inner DecisionEngine
+        and sets the _emotion_provider attribute on it.
+        """
+        target = self._decision
+
+        # Unwrap AsyncDecisionProvider if present
+        if hasattr(target, "inner"):
+            target = target.inner
+
+        # If the decision provider has a settable _engine with _emotion_provider
+        if hasattr(target, "_engine"):
+            engine = target._engine
+            if hasattr(engine, "_emotion_provider"):
+                object.__setattr__(engine, "_emotion_provider", hook)
+                logger.info(
+                    "Injected EmotionContextProvider into DecisionEngine"
+                )
+                return
+
+        logger.debug(
+            "EmotionHook provided but decision_provider does not "
+            "support injection — emotion context will not influence decisions"
         )
 
     # ------------------------------------------------------------------
@@ -622,7 +677,25 @@ class ThinkLoop:
 
         # 5. Act
         with trace_phase("act", str(self.state.id)):
-            await self._act(decision)
+            action_result = await self._act(decision)
+
+        # 5b. Emotion update from action result (optional)
+        if self._emotion_hook is not None:
+            try:
+                self._emotion_hook.update_from_action(
+                    action_type=decision.action_type.value,
+                    status=action_result.status.value if action_result else "unknown",
+                    context={
+                        "reasoning": decision.reasoning,
+                        "tick": self._tick,
+                    },
+                )
+            except Exception:
+                logger.debug(
+                    "Tick %d: emotion update error (non-fatal)",
+                    self._tick,
+                    exc_info=True,
+                )
 
         # 6. Reflect (periodic)
         if self.config.reflect_interval > 0 and self._tick % self.config.reflect_interval == 0:
@@ -635,6 +708,17 @@ class ThinkLoop:
             except Exception:
                 logger.debug(
                     "Tick %d: cultural hook error (non-fatal)",
+                    self._tick,
+                    exc_info=True,
+                )
+
+        # 7b. Emotion decay (every tick, no-op if not configured)
+        if self._emotion_hook is not None:
+            try:
+                self._emotion_hook.decay(ticks_elapsed=1)
+            except Exception:
+                logger.debug(
+                    "Tick %d: emotion decay error (non-fatal)",
                     self._tick,
                     exc_info=True,
                 )
@@ -704,7 +788,7 @@ class ThinkLoop:
     # Action execution
     # ------------------------------------------------------------------
 
-    async def _act(self, decision: Decision) -> None:
+    async def _act(self, decision: Decision) -> Any:
         """Execute a decision via the ActionExecutor.
 
         The ActionExecutor handles token deduction, retry logic, and
@@ -752,6 +836,8 @@ class ThinkLoop:
                 result.status.value,
                 result.error,
             )
+
+        return result
 
 
 # ---------------------------------------------------------------------------

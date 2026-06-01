@@ -46,6 +46,7 @@ from agent_runtime.core.decide import SocialContextProvider
 from agent_runtime.models.agent_state import AgentState
 from agent_runtime.models.phase_abilities import get_phase_abilities, is_terminal
 from agent_runtime.observability import log_tick, metrics, trace_phase
+from agent_runtime.social.feed import FeedIntegration
 from agent_runtime.survival.instinct import (
     SurvivalAction,
     SurvivalInstinct,
@@ -358,6 +359,7 @@ class ThinkLoop:
         social_context_provider: SocialContextProvider | None = None,
         model_registry: Any | None = None,
         diary_provider: DiaryProvider | None = None,
+        feed_integration: FeedIntegration | None = None,
     ) -> None:
         self.state = state
         self.survival = survival
@@ -395,6 +397,9 @@ class ThinkLoop:
 
         # Diary provider — optional, generates narrative diary entries
         self._diary = diary_provider
+
+        # Feed integration — optional, social content posting/interaction
+        self._feed = feed_integration
 
         # Runtime state
         self._tick: int = 0
@@ -705,7 +710,25 @@ class ThinkLoop:
                     exc_info=True,
                 )
 
-        # 9. Record think-loop duration
+        # 9. Feed integration (every tick, non-fatal)
+        if self._feed is not None:
+            try:
+                mood = getattr(self.state, "mood", "") or "neutral"
+                extraversion = 0.5
+                personality = getattr(self.state, "personality", None)
+                if personality and hasattr(personality, "extraversion"):
+                    extraversion = float(personality.extraversion)
+                await self._feed.on_tick(
+                    self._tick, mood=mood, extraversion=extraversion
+                )
+            except Exception:
+                logger.debug(
+                    "Tick %d: feed integration error (non-fatal)",
+                    self._tick,
+                    exc_info=True,
+                )
+
+        # 10. Record think-loop duration
         elapsed = time.monotonic() - think_start
         metrics.think_duration.observe(elapsed)
         metrics.tokens_balance.set(self.state.tokens)

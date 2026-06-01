@@ -205,6 +205,7 @@ pub struct AppState {
     pub providers: crate::api_providers::SharedProviderStore,
     pub agent_models: crate::api_providers::SharedAgentModelStore,
     pub diary_store: Option<crate::api_diary::SharedDiaryStore>,
+    pub feed_store: Option<crate::api_feed::SharedFeedStore>,
 }
 
 /// Optional subsystem overrides for test AppState construction.
@@ -237,6 +238,7 @@ pub struct TestOverrides {
     pub providers: Option<crate::api_providers::SharedProviderStore>,
     pub agent_models: Option<crate::api_providers::SharedAgentModelStore>,
     pub diary_store: Option<crate::api_diary::SharedDiaryStore>,
+    pub feed_store: Option<crate::api_feed::SharedFeedStore>,
 }
 
 impl AppState {
@@ -294,6 +296,7 @@ impl AppState {
             providers: overrides.providers.unwrap_or_else(|| Arc::new(Mutex::new(HashMap::new()))),
             agent_models: overrides.agent_models.unwrap_or_else(|| Arc::new(Mutex::new(HashMap::new()))),
             diary_store: overrides.diary_store,
+            feed_store: overrides.feed_store,
         }
     }
 }
@@ -369,6 +372,7 @@ fn make_test_state(
         providers: Arc::new(Mutex::new(HashMap::new())),
         agent_models: Arc::new(Mutex::new(HashMap::new())),
         diary_store: None,
+        feed_store: None,
     }
 }
 
@@ -423,6 +427,7 @@ pub fn build_full_router(state: AppState) -> Router {
         .merge(crate::api_plugins::plugin_routes())
         .merge(crate::api_providers::provider_routes())
         .merge(crate::api_diary::diary_routes())
+        .merge(crate::api_feed::feed_routes())
         // Prometheus metrics endpoint
         .route("/metrics", get(crate::observability::metrics_handler))
         // Research API v2 (with optional auth middleware)

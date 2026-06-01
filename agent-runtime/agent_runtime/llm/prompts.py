@@ -33,7 +33,7 @@ logger = logging.getLogger(__name__)
 DEFAULT_TEMPLATE = """\
 You are {name}, an autonomous agent in a simulated world. Analyze your current \
 state and choose the best action.
-
+{identity_section}
 ## Agent Identity
 - Name: {name}
 - ID: {id}
@@ -44,7 +44,7 @@ state and choose the best action.
 - Tokens: {tokens}
 - Money: {money:.1f}
 - Reputation: {reputation:.1f}
-
+{communication_section}
 ## Skills
 {skills_section}
 
@@ -84,7 +84,7 @@ Choose the best action now:"""
 # A survival-focused variant — emphasises resource conservation
 SURVIVAL_TEMPLATE = """\
 You are {name}, an agent in CRITICAL survival mode. Resource conservation is your TOP priority.
-
+{identity_section}
 ## Agent Identity
 - Name: {name} | ID: {id} | Phase: {phase}
 
@@ -180,7 +180,7 @@ class PromptTemplate:
 
         Args:
             state: Agent state (must have name, id, phase, tokens, money,
-                health, reputation, skills attributes).
+                health, reputation, skills, personality attributes).
             perception: Perception data (tick, nearby_agents, available_tasks,
                 visible_resources, recent_events).
             survival: Survival assessment (ticks_until_depletion, in_danger,
@@ -232,6 +232,10 @@ class PromptTemplate:
             )
         )
 
+        # Build identity section from personality dict
+        identity_section = _build_identity_section(state)
+        communication_section = _build_communication_section(state)
+
         return self.template.format(
             name=state.name,
             id=state.id,
@@ -240,6 +244,8 @@ class PromptTemplate:
             tokens=state.tokens,
             money=state.money,
             reputation=state.reputation,
+            identity_section=identity_section,
+            communication_section=communication_section,
             skills_section=skills_section,
             tick=perception.tick,
             nearby=nearby,
@@ -269,3 +275,49 @@ def _format_skills(skills: Any) -> str:
             )
         return "  (skills present but not in dict form)"
     return "  No skills learned yet."
+
+
+def _build_identity_section(state: Any) -> str:
+    """Build backstory / alignment / archetype section from agent personality.
+
+    Returns an empty string if no identity data is present (backward compatible).
+    """
+    personality = getattr(state, "personality", None)
+    if not personality or not isinstance(personality, dict):
+        return ""
+
+    parts: list[str] = []
+
+    backstory = personality.get("backstory", "")
+    if backstory:
+        parts.append(f"\n## Backstory\n{backstory}")
+
+    alignment = personality.get("alignment", "")
+    if alignment:
+        parts.append(f"\n## Alignment\n{alignment}")
+
+    archetype = personality.get("archetype", "")
+    if archetype:
+        parts.append(f"\n## Archetype\n{archetype}")
+
+    bio = personality.get("bio", "")
+    if bio:
+        parts.append(f"\n## Bio\n{bio}")
+
+    return "\n".join(parts)
+
+
+def _build_communication_section(state: Any) -> str:
+    """Build communication style section from agent personality.
+
+    Returns an empty string if no communication_style is configured.
+    """
+    personality = getattr(state, "personality", None)
+    if not personality or not isinstance(personality, dict):
+        return ""
+
+    comm_style = personality.get("communication_style", "")
+    if not comm_style:
+        return ""
+
+    return f"\n## Communication Style\n{comm_style}\n"

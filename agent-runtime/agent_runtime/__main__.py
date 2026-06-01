@@ -428,14 +428,75 @@ async def deregister_agent(
 
 
 def spawn_agent(config: AgentSpawnConfig) -> AgentState:
-    """Create an AgentState from spawn configuration."""
+    """Create an AgentState from spawn configuration.
+
+    Merges extended identity data (backstory, alignment, communication_style,
+    personality vector, values, preferences) into the AgentState personality
+    dict so it can be consumed by the prompt and decision layers.
+    """
+    # Build enriched personality dict: start with legacy traits, then merge
+    # structured sections under namespaced keys.
+    personality: dict[str, Any] = dict(config.traits)
+
+    # Identity
+    identity = config.identity
+    if identity.display_name:
+        personality["display_name"] = identity.display_name
+    if identity.bio:
+        personality["bio"] = identity.bio
+    if identity.backstory:
+        personality["backstory"] = identity.backstory
+    if identity.alignment:
+        personality["alignment"] = identity.alignment
+    if identity.archetype:
+        personality["archetype"] = identity.archetype
+    if identity.mbti:
+        personality["mbti"] = identity.mbti
+
+    # Personality vector (Big Five + survival)
+    personality["big_five"] = {
+        "openness": config.personality.openness,
+        "conscientiousness": config.personality.conscientiousness,
+        "extraversion": config.personality.extraversion,
+        "agreeableness": config.personality.agreeableness,
+        "neuroticism": config.personality.neuroticism,
+        "risk_tolerance": config.personality.risk_tolerance,
+        "social_orientation": config.personality.social_orientation,
+        "greed": config.personality.greed,
+    }
+
+    # Values
+    personality["values"] = {
+        "survival": config.values.survival,
+        "knowledge": config.values.knowledge,
+        "wealth": config.values.wealth,
+        "social": config.values.social,
+        "freedom": config.values.freedom,
+        "power": config.values.power,
+    }
+
+    # Preferences
+    prefs = config.preferences
+    if prefs.preferred_actions:
+        personality["preferred_actions"] = prefs.preferred_actions
+    if prefs.avoided_actions:
+        personality["avoided_actions"] = prefs.avoided_actions
+    if prefs.social_style:
+        personality["social_style"] = prefs.social_style
+    if prefs.communication_style:
+        personality["communication_style"] = prefs.communication_style
+
+    # Questions
+    if config.questions:
+        personality["questions"] = config.questions
+
     state = AgentState(
         name=config.name,
         tokens=config.tokens,
         max_tokens=config.max_tokens,
         money=config.money,
         health=config.health,
-        personality=config.traits,
+        personality=personality,
     )
 
     for skill_name, level in config.skills.items():

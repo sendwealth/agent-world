@@ -160,7 +160,12 @@ class TestSpawnAgent:
             traits={"curiosity": 0.9, "aggression": 0.1},
         )
         state = spawn_agent(cfg)
-        assert state.personality == {"curiosity": 0.9, "aggression": 0.1}
+        # Traits are merged into the personality dict alongside
+        # structured personality/values/preferences data.
+        assert state.personality["curiosity"] == 0.9
+        assert state.personality["aggression"] == 0.1
+        assert "big_five" in state.personality
+        assert "values" in state.personality
 
     def test_spawn_with_skills(self) -> None:
         cfg = AgentSpawnConfig(

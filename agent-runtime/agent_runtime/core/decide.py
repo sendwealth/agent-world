@@ -219,7 +219,7 @@ class ValidationError(DecisionError):
 _DECISION_PROMPT_TEMPLATE = """\
 You are {name}, an autonomous agent in a simulated world. Analyze your current \
 state and choose the best action.
-
+{identity_section}
 ## Agent Identity
 - Name: {name}
 - ID: {id}
@@ -230,7 +230,7 @@ state and choose the best action.
 - Tokens: {tokens}
 - Money: {money:.1f}
 - Reputation: {reputation:.1f}
-
+{communication_section}
 ## Personality
 {personality_description}
 
@@ -273,6 +273,52 @@ Respond with ONLY a JSON object (no markdown, no explanation outside JSON):
 "confidence": <0-100>}}
 
 Choose the best action now:"""
+
+
+def _build_identity_section(state: AgentStateProtocol) -> str:
+    """Build backstory / alignment / archetype section from agent personality.
+
+    Returns an empty string if no identity data is present (backward compatible).
+    """
+    personality = getattr(state, "personality", None)
+    if not personality or not isinstance(personality, dict):
+        return ""
+
+    parts: list[str] = []
+
+    backstory = personality.get("backstory", "")
+    if backstory:
+        parts.append(f"\n## Backstory\n{backstory}")
+
+    alignment = personality.get("alignment", "")
+    if alignment:
+        parts.append(f"\n## Alignment\n{alignment}")
+
+    archetype = personality.get("archetype", "")
+    if archetype:
+        parts.append(f"\n## Archetype\n{archetype}")
+
+    bio = personality.get("bio", "")
+    if bio:
+        parts.append(f"\n## Bio\n{bio}")
+
+    return "\n".join(parts)
+
+
+def _build_communication_section(state: AgentStateProtocol) -> str:
+    """Build communication style section from agent personality.
+
+    Returns an empty string if no communication_style is configured.
+    """
+    personality = getattr(state, "personality", None)
+    if not personality or not isinstance(personality, dict):
+        return ""
+
+    comm_style = personality.get("communication_style", "")
+    if not comm_style:
+        return ""
+
+    return f"\n## Communication Style\n{comm_style}\n"
 
 
 def build_prompt(
@@ -368,6 +414,10 @@ def build_prompt(
                 f"\n  Recommended social target: {social.recommended_target_id}"
             )
 
+    # Build identity section from agent personality dict
+    identity_section = _build_identity_section(state)
+    communication_section = _build_communication_section(state)
+
     return _DECISION_PROMPT_TEMPLATE.format(
         name=state.name,
         id=state.id,
@@ -376,6 +426,8 @@ def build_prompt(
         tokens=state.tokens,
         money=state.money,
         reputation=state.reputation,
+        identity_section=identity_section,
+        communication_section=communication_section,
         personality_description=personality_description,
         skills_section=skills_section,
         tick=perception.tick,

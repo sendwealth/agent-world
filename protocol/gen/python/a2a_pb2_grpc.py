@@ -3,7 +3,7 @@
 import grpc
 import warnings
 
-import a2a_pb2 as a2a__pb2
+from protocol.gen.python import a2a_pb2 as a2a__pb2
 
 GRPC_GENERATED_VERSION = '1.80.0'
 GRPC_VERSION = grpc.__version__

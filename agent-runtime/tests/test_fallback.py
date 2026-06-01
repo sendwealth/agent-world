@@ -13,16 +13,13 @@ Covers:
 from __future__ import annotations
 
 import logging
-from typing import AsyncIterator
 
 import pytest
 
 from agent_runtime.core.decide import (
     DecisionAction,
     DecisionEngine,
-    DecisionError,
     DecisionPerception,
-    LlmCallError,
     SurvivalAssessment,
 )
 from agent_runtime.llm.base import (
@@ -31,12 +28,10 @@ from agent_runtime.llm.base import (
     LLMMessage,
     LLMProvider,
     LLMResponse,
-    LLMStreamChunk,
     ProviderType,
 )
 from agent_runtime.llm.fallback import FallbackChainProvider, ModelFallback
 from agent_runtime.models.agent_state import AgentState
-
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -49,7 +44,10 @@ class _StubLLMProvider(LLMProvider):
     def __init__(
         self,
         config: LLMConfig,
-        response_text: str = '{"action": "rest", "parameters": {}, "reasoning": "stub", "confidence": 80}',
+        response_text: str = (
+            '{"action": "rest", "parameters": {},'
+            ' "reasoning": "stub", "confidence": 80}'
+        ),
     ) -> None:
         super().__init__(config)
         self._response_text = response_text

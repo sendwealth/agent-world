@@ -18,7 +18,6 @@ from dataclasses import dataclass, field
 from typing import AsyncIterator
 
 from .base import (
-    LLMConfig,
     LLMError,
     LLMMessage,
     LLMProvider,

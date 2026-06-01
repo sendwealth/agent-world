@@ -14,23 +14,16 @@ from __future__ import annotations
 import asyncio
 import json
 from typing import Any
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import MagicMock, patch
 
 import pytest
 
 from agent_runtime.core.act import ActionExecutor
-from agent_runtime.core.decide import (
-    DecisionAction,
-    DecisionEngine,
-    DecisionPerception,
-    SurvivalAssessment,
-)
 from agent_runtime.core.think_loop import ThinkLoop, ThinkLoopConfig
 from agent_runtime.llm.base import LLMConfig, LLMMessage, LLMProvider, LLMResponse, ProviderType
-from agent_runtime.llm.provider_registry import ModelRegistry, ProviderConfig, ProviderProtocol
+from agent_runtime.llm.provider_registry import ModelRegistry
 from agent_runtime.models.agent_state import AgentState
 from agent_runtime.survival.instinct import SurvivalInstinct
-
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -53,7 +46,14 @@ def _make_state(**overrides) -> AgentState:
 class _StubLLMProvider(LLMProvider):
     """Deterministic LLM provider for testing — returns a fixed decision."""
 
-    def __init__(self, config: LLMConfig, response_text: str = '{"action": "rest", "parameters": {}, "reasoning": "stub", "confidence": 80}') -> None:
+    def __init__(
+        self,
+        config: LLMConfig,
+        response_text: str = (
+            '{"action": "rest", "parameters": {},'
+            ' "reasoning": "stub", "confidence": 80}'
+        ),
+    ) -> None:
         super().__init__(config)
         self._response_text = response_text
         self.chat_calls: list[list[LLMMessage]] = []
@@ -155,7 +155,6 @@ class TestThinkLoopHotSwap:
         max_ticks: int = 5,
     ) -> ThinkLoop:
         from agent_runtime.core.llm_decide import LLMDecisionProvider
-        from agent_runtime.core.think_loop import MockDecisionProvider
 
         state = _make_state()
         survival = SurvivalInstinct()
@@ -311,7 +310,7 @@ class TestSwapModelEndpoint:
 
     def test_valid_swap_request(self):
         reg = ModelRegistry.instance()
-        provider = _StubLLMProvider(
+        _StubLLMProvider(
             LLMConfig(provider=ProviderType.OPENAI, model="gpt-4"),
         )
         state = _make_state()

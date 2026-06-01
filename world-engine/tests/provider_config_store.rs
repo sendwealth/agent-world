@@ -9,12 +9,11 @@
 //! 6. Concurrent r/w safe (SQLite WAL + Mutex)
 //! 7. Full CRUD coverage
 
-use std::path::PathBuf;
 use std::sync::Arc;
 use std::thread;
 
 use agent_world_engine::provider_config::{
-    AgentModelAssignment, CreateProviderInput, ProviderConfig, ProviderConfigStore,
+    CreateProviderInput, ProviderConfigStore,
     ProviderProtocol, UpdateProviderInput,
 };
 
@@ -261,7 +260,7 @@ fn full_crud_lifecycle() {
 #[test]
 fn multiple_providers_different_protocols() {
     let store = make_store();
-    let protocols = vec![
+    let protocols = [
         ProviderProtocol::OpenaiCompatible,
         ProviderProtocol::Anthropic,
         ProviderProtocol::Ollama,

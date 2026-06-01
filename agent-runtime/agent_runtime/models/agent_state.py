@@ -42,6 +42,10 @@ class AgentState(BaseModel):
     personality: Dict[str, Any] = Field(
         default_factory=dict, description="Flexible personality traits"
     )
+    emotion: Dict[str, Any] = Field(
+        default_factory=dict,
+        description="Current emotional state (PAD dimensions + labels)",
+    )
     max_tokens: int = Field(default=1000, gt=0, description="Maximum token capacity")
     current_task: Optional[str] = Field(default=None, description="Currently claimed task ID")
     tick: int = Field(default=0, ge=0, description="Current tick counter")

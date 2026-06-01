@@ -242,6 +242,9 @@ state and choose the best action.
 ## Personality
 {personality_description}
 
+## Current Mood
+{mood_description}
+
 ## Skills
 {skills_section}
 
@@ -335,18 +338,20 @@ def build_prompt(
     survival: SurvivalAssessment,
     available_actions: list[DecisionAction],
     social: SocialContext | None = None,
+    mood_description: str | None = None,
 ) -> str:
     """Build the decision prompt from agent state, perception, and survival data.
 
     The prompt is structured to guide the LLM to return valid JSON:
     1. Agent identity & current state
     2. Personality description (from social context)
-    3. Skills assessment
-    4. Perception (nearby agents, tasks, resources, events)
-    5. Survival assessment
-    6. Social context (propensity, trust, recommended targets)
-    7. Available actions with costs
-    8. Response format instructions
+    3. Current mood (from emotion engine)
+    4. Skills assessment
+    5. Perception (nearby agents, tasks, resources, events)
+    6. Survival assessment
+    7. Social context (propensity, trust, recommended targets)
+    8. Available actions with costs
+    9. Response format instructions
     """
     # Skills
     skills = state.skills
@@ -422,6 +427,9 @@ def build_prompt(
                 f"\n  Recommended social target: {social.recommended_target_id}"
             )
 
+    # Mood description
+    mood_desc = mood_description or "No mood data available."
+
     # Build identity section from agent personality dict
     identity_section = _build_identity_section(state)
     communication_section = _build_communication_section(state)
@@ -437,6 +445,7 @@ def build_prompt(
         identity_section=identity_section,
         communication_section=communication_section,
         personality_description=personality_description,
+        mood_description=mood_desc,
         skills_section=skills_section,
         tick=perception.tick,
         nearby=nearby,
@@ -642,6 +651,12 @@ class SocialContextProvider(Protocol):
     ) -> SocialContext | None: ...
 
 
+class EmotionContextProvider(Protocol):
+    """Provides emotion context (mood description) for the decision engine."""
+
+    def get_mood_description(self) -> str: ...
+
+
 class DecisionEngine:
     """Core decision engine that drives agent behavior via LLM.
 
@@ -668,11 +683,13 @@ class DecisionEngine:
         *,
         pipeline: ContextEnginePipeline | None = None,
         social_provider: SocialContextProvider | None = None,
+        emotion_provider: EmotionContextProvider | None = None,
         fallback_providers: list[LLMProvider] | None = None,
     ) -> None:
         self._provider = provider
         self._pipeline = pipeline
         self._social_provider = social_provider
+        self._emotion_provider = emotion_provider
         self._fallback_providers = fallback_providers or []
 
     async def decide(
@@ -716,9 +733,22 @@ class DecisionEngine:
                     exc_info=True,
                 )
 
+        # Get mood description if emotion provider is available
+        mood_description: str | None = None
+        if self._emotion_provider is not None:
+            try:
+                mood_description = self._emotion_provider.get_mood_description()
+            except Exception:
+                logger.debug(
+                    "Emotion context build failed for agent %s (non-fatal)",
+                    state.id,
+                    exc_info=True,
+                )
+
         try:
             decision = await self._try_decide(
-                state, perception, survival, available, social=social
+                state, perception, survival, available, social=social,
+                mood_description=mood_description,
             )
             logger.info(
                 "Agent %s decided: %s (confidence: %d)",
@@ -743,6 +773,7 @@ class DecisionEngine:
         available_actions: list[DecisionAction],
         *,
         social: SocialContext | None = None,
+        mood_description: str | None = None,
     ) -> Decision:
         """Attempt to generate a validated decision via the LLM.
 
@@ -758,7 +789,8 @@ class DecisionEngine:
             prompt = pipeline_result.formatted_context
         else:
             prompt = build_prompt(
-                state, perception, survival, available_actions, social=social
+                state, perception, survival, available_actions, social=social,
+                mood_description=mood_description,
             )
 
         # Build the provider chain: primary + fallbacks

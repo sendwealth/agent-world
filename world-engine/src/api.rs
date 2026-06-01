@@ -200,6 +200,8 @@ pub struct AppState {
     pub experiment_store: SharedExperimentStore,
     pub ab_experiment_store: SharedABExperimentStore,
     pub plugin_manager: Option<crate::plugin::SharedPluginManager>,
+    pub providers: crate::api_providers::SharedProviderStore,
+    pub agent_models: crate::api_providers::SharedAgentModelStore,
 }
 
 /// Optional subsystem overrides for test AppState construction.
@@ -229,6 +231,8 @@ pub struct TestOverrides {
     pub auth_store: Option<SharedAuthStore>,
     pub ab_experiment_store: Option<SharedABExperimentStore>,
     pub plugin_manager: Option<crate::plugin::SharedPluginManager>,
+    pub providers: Option<crate::api_providers::SharedProviderStore>,
+    pub agent_models: Option<crate::api_providers::SharedAgentModelStore>,
 }
 
 impl AppState {
@@ -282,6 +286,8 @@ impl AppState {
                 .ab_experiment_store
                 .unwrap_or_else(|| Arc::new(Mutex::new(Vec::new()))),
             plugin_manager: overrides.plugin_manager,
+            providers: overrides.providers.unwrap_or_else(|| Arc::new(Mutex::new(HashMap::new()))),
+            agent_models: overrides.agent_models.unwrap_or_else(|| Arc::new(Mutex::new(HashMap::new()))),
         }
     }
 }
@@ -353,6 +359,8 @@ fn make_test_state(
         experiment_store: Arc::new(Mutex::new(Vec::new())),
         ab_experiment_store: Arc::new(Mutex::new(Vec::new())),
         plugin_manager: None,
+        providers: Arc::new(Mutex::new(HashMap::new())),
+        agent_models: Arc::new(Mutex::new(HashMap::new())),
     }
 }
 
@@ -405,6 +413,7 @@ pub fn build_full_router(state: AppState) -> Router {
         // V1 unified export API
         .merge(crate::api_export_v1::export_v1_routes())
         .merge(crate::api_plugins::plugin_routes())
+        .merge(crate::api_providers::provider_routes())
         // Prometheus metrics endpoint
         .route("/metrics", get(crate::observability::metrics_handler))
         // Research API v2 (with optional auth middleware)

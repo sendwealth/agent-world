@@ -29,6 +29,7 @@ pub mod api_network_graph;
 pub mod api_org;
 pub mod api_population;
 pub mod api_plugins;
+pub mod api_providers;
 pub mod api_report;
 pub mod api_reputation;
 pub mod api_research;

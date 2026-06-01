@@ -434,8 +434,10 @@ export interface Provider {
   protocol: ProviderProtocol;
   base_url: string;
   api_key?: string;
+  api_version?: string;
   models?: string[];
   status?: ConnectionStatus;
+  is_default?: boolean;
   created_at?: string;
   updated_at?: string;
 }
@@ -449,6 +451,34 @@ export interface ConnectionTestResult {
 
 export interface DiscoverModelsResult {
   models: string[];
+}
+
+// Agent model assignment types
+
+export interface AgentModelAssignment {
+  agent_id: string;
+  provider_id: string;
+  model_id: string;
+}
+
+export interface SetAgentModelRequest {
+  provider_id: string;
+  model_id: string;
+}
+
+/** Agent record from GET /api/v1/agents (world engine). */
+export interface AgentRecord {
+  id: string;
+  name: string;
+  phase: string;
+  tokens: number;
+  money: number;
+  alive: boolean;
+  ticks_survived: number;
+  personality: string;
+  parent_ids: string[];
+  generation: number;
+  skills: Record<string, number>;
 }
 
 export type NotificationType =

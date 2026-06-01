@@ -30,6 +30,7 @@ const humanNavItems = [
 
 const settingsNavItems = [
   { href: "/settings/providers", label: "Provider 管理", icon: "\u2699" },
+  { href: "/settings/model-assignment", label: "模型分配", icon: "\uD83E\uDDE0" },
 ];
 
 // Routes that use prefix matching for active state

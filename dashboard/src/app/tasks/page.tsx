@@ -511,7 +511,7 @@ function TeamTaskRow({
   onClick: () => void;
 }) {
   const cfg = TEAM_STATUS_CONFIG[task.status];
-  const submitted = Object.keys(task.contributions).length;
+  const _submitted = Object.keys(task.contributions).length;
 
   return (
     <button
@@ -547,7 +547,7 @@ export default function TasksPage() {
   const {
     tasks: teamTasks,
     loading: teamLoading,
-    refresh: loadTeamTasks,
+    refresh: _loadTeamTasks,
   } = useCoordinationTaskStream();
   const [statusFilter, setStatusFilter] = useState<StatusFilter>("all");
   const [showCreate, setShowCreate] = useState(false);

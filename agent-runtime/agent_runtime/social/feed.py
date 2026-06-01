@@ -9,7 +9,7 @@ from __future__ import annotations
 
 import logging
 import random
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from typing import Any, Protocol
 
 logger = logging.getLogger(__name__)
@@ -277,7 +277,10 @@ class FeedIntegration:
 
     async def _maybe_post(self, tick: int, mood: str, extraversion: float) -> None:
         """Maybe create a post this tick."""
-        probability = self.config.post_probability_base + extraversion * self.config.extraversion_weight
+        probability = (
+            self.config.post_probability_base
+            + extraversion * self.config.extraversion_weight
+        )
         if random.random() < probability:
             content = self._generate_post_content(mood, tick)
             await self.feed.post(content, mood=mood, tick=tick)

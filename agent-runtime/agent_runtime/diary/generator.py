@@ -93,10 +93,14 @@ You are {name}, an autonomous agent in a simulation world.
 - Key events: {key_events}
 
 ## Task
-Write a short first-person diary entry (50-150 chars) about today. Express how you feel about what happened and what you're thinking about. Be grounded in actual events — don't invent things that didn't happen. Use a natural, personal tone.
+Write a short first-person diary entry (50-150 chars) about today.
+Express how you feel about what happened and what you're thinking about.
+Be grounded in actual events — don't invent things that didn't happen.
+Use a natural, personal tone.
 
 Respond with ONLY a JSON object (no markdown):
-{{"mood": "<one word mood>", "summary": "<your diary entry>", "reflection": "<optional deeper thought, or empty string>"}}
+{{"mood": "<one word mood>", "summary": "<your diary entry>",
+  "reflection": "<optional deeper thought, or empty string>"}}
 
 Write now:"""
 

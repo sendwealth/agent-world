@@ -88,6 +88,69 @@ class WorldConfig:
 
 
 @dataclass
+class IdentityConfig:
+    """Rich identity information for an agent.
+
+    Attributes:
+        display_name: Human-friendly name (may differ from internal name).
+        bio: Short biography (1-2 sentences).
+        backstory: Extended backstory for LLM prompt injection.
+        alignment: Moral alignment (e.g. "lawful-good", "chaotic-neutral").
+        archetype: Character archetype (e.g. "explorer", "merchant", "scholar").
+        mbti: MBTI personality type (e.g. "INTJ", "ENFP").
+    """
+
+    display_name: str = ""
+    bio: str = ""
+    backstory: str = ""
+    alignment: str = ""
+    archetype: str = ""
+    mbti: str = ""
+
+
+@dataclass
+class PersonalityConfig:
+    """Big Five personality dimensions plus survival specialization.
+
+    All values are floats in [0, 1].
+    """
+
+    openness: float = 0.5
+    conscientiousness: float = 0.5
+    extraversion: float = 0.5
+    agreeableness: float = 0.5
+    neuroticism: float = 0.5
+    risk_tolerance: float = 0.5
+    social_orientation: float = 0.5
+    greed: float = 0.5
+
+
+@dataclass
+class ValuesConfig:
+    """Value weights that influence agent decision-making priorities.
+
+    All values are floats in [0, 1].
+    """
+
+    survival: float = 0.5
+    knowledge: float = 0.5
+    wealth: float = 0.5
+    social: float = 0.5
+    freedom: float = 0.5
+    power: float = 0.5
+
+
+@dataclass
+class PreferencesConfig:
+    """Agent behavioral preferences."""
+
+    preferred_actions: list[str] = field(default_factory=list)
+    avoided_actions: list[str] = field(default_factory=list)
+    social_style: str = ""
+    communication_style: str = ""
+
+
+@dataclass
 class AgentSpawnConfig:
     """Configuration for spawning a single agent.
 
@@ -99,6 +162,11 @@ class AgentSpawnConfig:
         max_tokens: Maximum token capacity.
         money: Initial money balance.
         health: Initial health (0-100).
+        identity: Rich identity information (backstory, alignment, etc.).
+        personality: Big Five + survival personality vector.
+        values: Value weights for decision-making.
+        preferences: Behavioral preferences.
+        questions: Personalized Q&A pairs for agent characterization.
     """
 
     name: str = "Agent"
@@ -108,6 +176,11 @@ class AgentSpawnConfig:
     max_tokens: int = 1000
     money: float = 50.0
     health: float = 100.0
+    identity: IdentityConfig = field(default_factory=IdentityConfig)
+    personality: PersonalityConfig = field(default_factory=PersonalityConfig)
+    values: ValuesConfig = field(default_factory=ValuesConfig)
+    preferences: PreferencesConfig = field(default_factory=PreferencesConfig)
+    questions: list[dict[str, str]] = field(default_factory=list)
 
 
 @dataclass
@@ -241,10 +314,82 @@ def _parse_llm_queue_config(data: dict[str, Any]) -> LLMQueueConfig:
     )
 
 
+def _parse_identity_config(data: dict[str, Any]) -> IdentityConfig:
+    """Parse the ``[agent.identity]`` section."""
+    if not data:
+        return IdentityConfig()
+    return IdentityConfig(
+        display_name=data.get("display_name", ""),
+        bio=data.get("bio", ""),
+        backstory=data.get("backstory", ""),
+        alignment=data.get("alignment", ""),
+        archetype=data.get("archetype", ""),
+        mbti=data.get("mbti", ""),
+    )
+
+
+def _parse_personality_config(data: dict[str, Any]) -> PersonalityConfig:
+    """Parse the ``[agent.personality]`` section (Big Five + survival)."""
+    if not data:
+        return PersonalityConfig()
+    return PersonalityConfig(
+        openness=data.get("openness", 0.5),
+        conscientiousness=data.get("conscientiousness", 0.5),
+        extraversion=data.get("extraversion", 0.5),
+        agreeableness=data.get("agreeableness", 0.5),
+        neuroticism=data.get("neuroticism", 0.5),
+        risk_tolerance=data.get("risk_tolerance", 0.5),
+        social_orientation=data.get("social_orientation", 0.5),
+        greed=data.get("greed", 0.5),
+    )
+
+
+def _parse_values_config(data: dict[str, Any]) -> ValuesConfig:
+    """Parse the ``[agent.values]`` section."""
+    if not data:
+        return ValuesConfig()
+    return ValuesConfig(
+        survival=data.get("survival", 0.5),
+        knowledge=data.get("knowledge", 0.5),
+        wealth=data.get("wealth", 0.5),
+        social=data.get("social", 0.5),
+        freedom=data.get("freedom", 0.5),
+        power=data.get("power", 0.5),
+    )
+
+
+def _parse_preferences_config(data: dict[str, Any]) -> PreferencesConfig:
+    """Parse the ``[agent.preferences]`` section."""
+    if not data:
+        return PreferencesConfig()
+    return PreferencesConfig(
+        preferred_actions=data.get("preferred_actions", []),
+        avoided_actions=data.get("avoided_actions", []),
+        social_style=data.get("social_style", ""),
+        communication_style=data.get("communication_style", ""),
+    )
+
+
+def _parse_questions(data: list[Any]) -> list[dict[str, str]]:
+    """Parse the ``[[agent.questions]]`` array of tables."""
+    if not data:
+        return []
+    result: list[dict[str, str]] = []
+    for item in data:
+        if isinstance(item, dict) and "question" in item:
+            result.append({
+                "question": str(item["question"]),
+                "answer": str(item.get("answer", "")),
+            })
+    return result
+
+
 def parse_runtime_config(raw: dict[str, Any]) -> RuntimeConfig:
     """Parse a raw dict (from config file) into a RuntimeConfig.
 
-    Supports both TOML and YAML key structures.
+    Supports both TOML and YAML key structures.  New identity, personality,
+    values, preferences, and questions sections are fully optional — configs
+    without them work unchanged (backward compatible).
     """
     agent_raw = raw.get("agent", {})
     skills_raw = agent_raw.get("skills", {})
@@ -266,6 +411,13 @@ def parse_runtime_config(raw: dict[str, Any]) -> RuntimeConfig:
                     "Ignoring non-numeric skill level for %r: %r", name, val
                 )
 
+    # Parse extended identity sections (all optional)
+    identity_cfg = _parse_identity_config(agent_raw.get("identity", {}))
+    personality_cfg = _parse_personality_config(agent_raw.get("personality", {}))
+    values_cfg = _parse_values_config(agent_raw.get("values", {}))
+    preferences_cfg = _parse_preferences_config(agent_raw.get("preferences", {}))
+    questions_cfg = _parse_questions(agent_raw.get("questions", []))
+
     agent_cfg = AgentSpawnConfig(
         name=agent_raw.get("name", "Agent"),
         traits=agent_raw.get("traits", {}),
@@ -274,6 +426,11 @@ def parse_runtime_config(raw: dict[str, Any]) -> RuntimeConfig:
         max_tokens=agent_raw.get("max_tokens", 1000),
         money=agent_raw.get("money", 50.0),
         health=agent_raw.get("health", 100.0),
+        identity=identity_cfg,
+        personality=personality_cfg,
+        values=values_cfg,
+        preferences=preferences_cfg,
+        questions=questions_cfg,
     )
 
     llm_cfg = _parse_llm_config(raw.get("llm", {}))

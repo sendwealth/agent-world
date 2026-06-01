@@ -21,6 +21,11 @@ service A2AService {
 
   // Stream messages (bidirectional)
   rpc StreamMessages(stream A2AMessage) returns (stream A2AMessage);
+
+  // Consume Oracle/Bounty messages for an agent (server streaming)
+  // Agent Runtime connects and receives a stream of Oracle and Bounty
+  // messages pushed by the World Engine.
+  rpc ConsumeMessages(ConsumeMessagesRequest) returns (stream WorldMessage);
 }
 
 // ── Registration ──────────────────────────────────────────
@@ -115,4 +120,45 @@ enum MessageType {
 message MessageAck {
   bool received = 1;
   string error = 2;           // Error message if rejected
+}
+
+// ── World Message Streaming (Oracle + Bounty) ────────────
+
+message ConsumeMessagesRequest {
+  string agent_id = 1;
+}
+
+// A single world message pushed to an agent.
+// Wraps either an Oracle or a Bounty.
+message WorldMessage {
+  string id = 1;
+  oneof payload {
+    OraclePayload oracle = 2;
+    BountyPayload bounty = 3;
+  }
+  int64 timestamp = 4;
+}
+
+message OraclePayload {
+  string oracle_id = 1;
+  OracleType oracle_type = 2;   // guidance / warning / blessing / curse
+  string content = 3;
+  bool from_human = 4;
+  string human_id = 5;
+}
+
+enum OracleType {
+  GUIDANCE = 0;
+  WARNING = 1;
+  BLESSING = 2;
+  CURSE = 3;
+}
+
+message BountyPayload {
+  string bounty_id = 1;
+  string title = 2;
+  string description = 3;
+  uint64 reward = 4;
+  int64 deadline_tick = 5;      // 0 = no deadline
+  string human_id = 6;
 }

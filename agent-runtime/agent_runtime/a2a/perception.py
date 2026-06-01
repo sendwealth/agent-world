@@ -2,6 +2,8 @@
 
 Receives messages from other agents via the A2A streaming connection and
 calls Discover to populate the market_state in the Perception object.
+Also drains Oracle and Bounty messages from the ConsumeMessages stream
+via the MessageQueue, injecting them into the Perception.
 Gracefully degrades when the network is unavailable.
 """
 
@@ -24,7 +26,9 @@ class GRPCPerceptionProvider:
 
     Uses the A2A client's streaming queue to receive incoming messages
     from other agents, and the Discover RPC to find nearby agents for
-    the market_state.
+    the market_state. Oracle and Bounty messages from the
+    ConsumeMessages stream are drained from the MessageQueue and
+    injected into the Perception.messages list.
 
     Falls back to empty data on network errors — the Think Loop must
     never crash due to a transient network issue.
@@ -46,10 +50,13 @@ class GRPCPerceptionProvider:
         """Build a Perception from the agent's state and A2A messages.
 
         - Drains incoming messages from the streaming queue.
+        - Drains Oracle/Bounty messages from the MessageQueue.
         - Calls Discover to populate market_state with nearby agents.
         - Returns safe defaults on any network error.
         """
         messages = await self._drain_messages()
+        world_messages = self._drain_world_messages()
+        messages.extend(world_messages)
         market_state = await self._discover_market(state)
 
         max_tokens = getattr(state, "max_tokens", 0)
@@ -72,6 +79,24 @@ class GRPCPerceptionProvider:
     async def _drain_messages(self) -> list[dict[str, Any]]:
         """Drain all available messages from the streaming queue."""
         return [a2a_message_to_dict(msg) for msg in self._client.drain_incoming()]
+
+    def _drain_world_messages(self) -> list[dict[str, Any]]:
+        """Drain Oracle and Bounty messages from the MessageQueue.
+
+        Returns a list of perception dicts suitable for inclusion in
+        the Perception.messages list. Acknowledges each message after
+        conversion.
+        """
+        queue = self._client.message_queue
+        if queue is None:
+            return []
+
+        world_msgs = queue.dequeue()
+        result: list[dict[str, Any]] = []
+        for msg in world_msgs:
+            result.append(msg.to_perception_dict())
+            queue.ack(msg.id)
+        return result
 
     async def _discover_market(self, state: AgentState) -> dict[str, Any]:
         """Call Discover to get world/market state."""

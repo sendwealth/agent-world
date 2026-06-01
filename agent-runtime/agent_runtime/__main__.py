@@ -678,6 +678,21 @@ async def run_agent(config: RuntimeConfig) -> RunStats:
             except Exception:
                 logger.warning("Failed to start A2A streaming, perception will be limited")
 
+            # Start ConsumeMessages stream for Oracle/Bounty delivery
+            try:
+                from agent_runtime.core.message_queue import MessageQueue
+
+                msg_queue = MessageQueue()
+                await a2a_client.start_consuming(msg_queue)
+                logger.info(
+                    "World message consuming started (Oracle/Bounty)",
+                    extra={"agent": state.name, "event": "consuming_started"},
+                )
+            except Exception:
+                logger.warning(
+                    "Failed to start world message consuming, Oracle/Bounty delivery disabled"
+                )
+
         # Attempt registration (with public key).
         # If the World Engine returns its own agent_id, update the
         # RESTWorldClient so subsequent action calls use the correct ID.

@@ -151,6 +151,11 @@ proto: ## Generate protobuf code
 		--rust_out=protocol/gen/rust \
 		--tonic_out=protocol/gen/rust \
 		protocol/*.proto || echo "protoc not found. Install: brew install protobuf"
+	@# Fix generated grpc imports: protoc emits bare `import X_pb2` which breaks
+	@# when the _pb2 module lives inside a package. Patch to use absolute import.
+	@for f in protocol/gen/python/*_pb2_grpc.py; do \
+		sed -i.bak 's/^import \(.*_pb2\) as \(.*\)$$/from protocol.gen.python import \1 as \2/' "$$f" && rm -f "$$f.bak"; \
+	done
 
 build: ## Build all components
 	cd world-engine && cargo build --release

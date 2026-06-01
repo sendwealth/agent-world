@@ -58,6 +58,30 @@ export async function postJSON<T>(path: string, body: unknown): Promise<T> {
   return res.json() as Promise<T>;
 }
 
+export async function putJSON<T>(path: string, body: unknown): Promise<T> {
+  const res = await fetch(`${API_BASE}${path}`, {
+    method: "PUT",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(body),
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({ error: res.statusText }));
+    throw new Error(err.error ?? `API error: ${res.status}`);
+  }
+  return res.json() as Promise<T>;
+}
+
+export async function deleteJSON<T>(path: string): Promise<T> {
+  const res = await fetch(`${API_BASE}${path}`, {
+    method: "DELETE",
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({ error: res.statusText }));
+    throw new Error(err.error ?? `API error: ${res.status}`);
+  }
+  return res.json() as Promise<T>;
+}
+
 export function sseEndpoint(path: string): string {
   return `${API_BASE}${path}`;
 }

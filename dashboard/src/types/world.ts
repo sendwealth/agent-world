@@ -414,6 +414,43 @@ export interface ClaimedAgent {
   age: number;
 }
 
+// Provider types
+
+export type ProviderProtocol =
+  | "openai_compatible"
+  | "anthropic"
+  | "ollama"
+  | "google"
+  | "azure";
+
+export type ConnectionStatus =
+  | "online"
+  | "offline"
+  | "untested";
+
+export interface Provider {
+  id: string;
+  display_name: string;
+  protocol: ProviderProtocol;
+  base_url: string;
+  api_key?: string;
+  models?: string[];
+  status?: ConnectionStatus;
+  created_at?: string;
+  updated_at?: string;
+}
+
+export interface ConnectionTestResult {
+  success: boolean;
+  latency_ms: number;
+  error?: string;
+  sample?: string;
+}
+
+export interface DiscoverModelsResult {
+  models: string[];
+}
+
 export type NotificationType =
   | "agent_death"
   | "leadership_changed"

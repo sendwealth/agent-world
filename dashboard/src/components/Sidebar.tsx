@@ -28,8 +28,12 @@ const humanNavItems = [
   { href: "/human/rankings", label: "影响力排行", icon: "🏆" },
 ];
 
+const settingsNavItems = [
+  { href: "/settings/providers", label: "Provider 管理", icon: "\u2699" },
+];
+
 // Routes that use prefix matching for active state
-const PREFIX_ROUTES = new Set(["/agents", "/organizations", "/traces", "/governance", "/human"]);
+const PREFIX_ROUTES = new Set(["/agents", "/organizations", "/traces", "/governance", "/human", "/settings"]);
 
 function NavList({ items, pathname, onClick }: { items: typeof navItems; pathname: string; onClick?: () => void }) {
   return (
@@ -122,6 +126,14 @@ export function Sidebar() {
             </p>
           </div>
           <NavList items={humanNavItems} pathname={pathname} />
+
+          {/* Settings Section */}
+          <div className="pt-3 pb-1">
+            <p className="px-3 text-[10px] font-semibold text-zinc-600 uppercase tracking-wider">
+              系统设置
+            </p>
+          </div>
+          <NavList items={settingsNavItems} pathname={pathname} />
         </nav>
 
         <div className="border-t border-zinc-800 p-3">
@@ -171,6 +183,14 @@ export function Sidebar() {
             </p>
           </div>
           <NavList items={humanNavItems} pathname={pathname} onClick={close} />
+
+          {/* Settings Section */}
+          <div className="pt-3 pb-1">
+            <p className="px-3 text-[10px] font-semibold text-zinc-600 uppercase tracking-wider">
+              系统设置
+            </p>
+          </div>
+          <NavList items={settingsNavItems} pathname={pathname} onClick={close} />
         </nav>
 
         <div className="border-t border-zinc-800 p-3">

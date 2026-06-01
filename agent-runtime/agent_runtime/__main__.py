@@ -1400,6 +1400,14 @@ def _add_spawn_args(parser: argparse.ArgumentParser) -> None:
         "--data-dir", type=Path, default=None,
         help="Agent data directory for isolated storage (memory.db, skills.json, trace.db)",
     )
+    parser.add_argument(
+        "--preset", default=None,
+        help=(
+            "Provider preset name (e.g. zhipu, deepseek, ollama-local, openrouter). "
+            "Auto-fills --llm-provider, --llm-base-url, and --llm-model. "
+            "Explicit CLI flags override preset values."
+        ),
+    )
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -1493,6 +1501,49 @@ def parse_skills(skill_str: str | None) -> dict[str, int]:
     return skills
 
 
+def _apply_preset_defaults(args: argparse.Namespace) -> None:
+    """Fill in LLM args from a provider preset if --preset is given.
+
+    Only sets values that the user did *not* explicitly pass on the command
+    line, so ``--llm-model foo --preset zhipu`` keeps the user's model.
+    """
+    preset_name = getattr(args, "preset", None)
+    if not preset_name:
+        return
+
+    from agent_runtime.presets import get_provider_preset, list_models_for_provider
+
+    try:
+        provider_cfg = get_provider_preset(preset_name)
+    except ValueError as exc:
+        logger.error("%s", exc)
+        raise SystemExit(1)
+
+    # Map preset protocol to CLI --llm-provider choices
+    protocol = provider_cfg.get("protocol", "openai")
+    # zhipu is a special alias in the CLI
+    if preset_name == "zhipu":
+        protocol = "zhipu"
+
+    if args.llm_provider is None:
+        args.llm_provider = protocol
+    if args.llm_base_url is None:
+        args.llm_base_url = provider_cfg.get("base_url")
+    if args.llm_model is None:
+        # Pick the first model listed for this provider
+        models = list_models_for_provider(preset_name)
+        if models:
+            args.llm_model = models[0]["id"]
+
+    logger.info(
+        "Applied preset %r: provider=%s base_url=%s model=%s",
+        preset_name,
+        args.llm_provider,
+        args.llm_base_url,
+        args.llm_model,
+    )
+
+
 def build_config_from_args(args: argparse.Namespace) -> RuntimeConfig:
     """Build a RuntimeConfig from CLI arguments, optionally merging with a config file."""
     if args.config is not None:
@@ -1538,7 +1589,10 @@ def build_config_from_args(args: argparse.Namespace) -> RuntimeConfig:
         config.data_dir = Path(data_dir)
         config.data_dir.mkdir(parents=True, exist_ok=True)
 
-    # LLM configuration: CLI args > environment variables > default (Ollama)
+    # Apply --preset as defaults (explicit CLI flags override preset values)
+    _apply_preset_defaults(args)
+
+    # LLM configuration: CLI args > preset > environment variables > default (Ollama)
     _apply_llm_config(config, args)
 
     # Mock LLM preset: --mock-llm > MOCK_LLM_PRESET env var
@@ -2020,6 +2074,8 @@ def _build_pool_spawn_args(args: argparse.Namespace) -> list[str]:
         parts.extend(["--health-port", str(args.health_port)])
     if getattr(args, "data_dir", None) is not None:
         parts.extend(["--data-dir", str(args.data_dir)])
+    if getattr(args, "preset", None):
+        parts.extend(["--preset", args.preset])
     return parts
 
 

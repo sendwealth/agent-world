@@ -1,0 +1,82 @@
+# Model Presets — built-in provider/model configurations for quick setup.
+#
+# Each provider preset defines connection details and recommended models.
+# Users can add a provider via CLI: python -m agent_runtime spawn --preset zhipu --model glm-5
+# Or via the Dashboard preset store (one-click add).
+
+providers:
+  ollama-local:
+    id: ollama-local
+    protocol: ollama
+    base_url: "http://localhost:11434"
+    display_name: "Ollama (Local)"
+    api_key_required: false
+    description: "Run open-source models locally via Ollama. Zero cost, private."
+
+  zhipu:
+    id: zhipu
+    protocol: openai
+    base_url: "https://open.bigmodel.cn/api/paas/v4"
+    display_name: "Zhipu AI (智谱)"
+    api_key_required: true
+    api_key_env: "ZHIPU_API_KEY"
+    description: "Zhipu AI GLM series — high-quality Chinese & bilingual models."
+
+  deepseek:
+    id: deepseek
+    protocol: openai
+    base_url: "https://api.deepseek.com/v1"
+    display_name: "DeepSeek"
+    api_key_required: true
+    api_key_env: "DEEPSEEK_API_KEY"
+    description: "DeepSeek — strong reasoning and code models at competitive pricing."
+
+  openrouter:
+    id: openrouter
+    protocol: openai
+    base_url: "https://openrouter.ai/api/v1"
+    display_name: "OpenRouter"
+    api_key_required: true
+    api_key_env: "OPENROUTER_API_KEY"
+    description: "OpenRouter — unified API to 100+ models from multiple providers."
+
+models:
+  # Ollama models
+  - id: qwen3:8b
+    provider: ollama-local
+    label: "Qwen3 8B"
+    ctx: 32768
+    recommended_for: ["决策", "通用"]
+
+  - id: minicpm5-1b
+    provider: ollama-local
+    label: "MiniCPM5 1B"
+    ctx: 4096
+    recommended_for: ["低延迟", "轻量"]
+
+  # Zhipu models
+  - id: glm-5
+    provider: zhipu
+    label: "GLM-5"
+    ctx: 128000
+    recommended_for: ["决策", "推理", "长上下文"]
+
+  # DeepSeek models
+  - id: deepseek-chat
+    provider: deepseek
+    label: "DeepSeek Chat"
+    ctx: 64000
+    recommended_for: ["推理", "代码"]
+
+  - id: deepseek-reasoner
+    provider: deepseek
+    label: "DeepSeek Reasoner"
+    ctx: 64000
+    recommended_for: ["推理", "深度思考"]
+
+  # OpenRouter models (examples — users can use any OpenRouter-supported model)
+  - id: anthropic/claude-sonnet-4
+    provider: openrouter
+    label: "Claude Sonnet 4 (via OpenRouter)"
+    ctx: 200000
+    recommended_for: ["决策", "推理", "代码"]

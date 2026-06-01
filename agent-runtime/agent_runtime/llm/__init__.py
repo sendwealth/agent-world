@@ -29,7 +29,7 @@ from agent_runtime.llm.base import (
 )
 from agent_runtime.llm.cost import CostTracker
 from agent_runtime.llm.decision_log import DecisionLog, DecisionLogStore
-from agent_runtime.llm.factory import create_provider
+from agent_runtime.llm.factory import create_provider, create_provider_from_config
 from agent_runtime.llm.ollama_provider import (
     OllamaHealthStatus,
     OllamaModelInfo,
@@ -42,6 +42,12 @@ from agent_runtime.llm.prompts import (
     PromptTemplate,
     get_template,
     register_template,
+)
+from agent_runtime.llm.provider_registry import (
+    ModelOption,
+    ModelRegistry,
+    ProviderConfig,
+    ProviderProtocol,
 )
 from agent_runtime.llm.queue import (
     LLMQueue,
@@ -65,17 +71,22 @@ __all__ = [
     "LLMRequest",
     "LLMResponse",
     "LLMStreamChunk",
+    "ModelOption",
+    "ModelRegistry",
     "OllamaHealthStatus",
     "OllamaModelInfo",
     "OllamaProvider",
     "OpenAIProvider",
     "Priority",
     "PromptTemplate",
+    "ProviderConfig",
+    "ProviderProtocol",
     "QueueConfig",
     "QueueStats",
     "SURVIVAL_TEMPLATE",
     "TokenUsage",
     "create_provider",
+    "create_provider_from_config",
     "get_template",
     "register_template",
 ]

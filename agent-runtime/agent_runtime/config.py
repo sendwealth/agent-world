@@ -178,8 +178,18 @@ def _parse_llm_config(data: dict[str, Any]) -> LLMConfig | None:
         return None
 
     provider_str = data.get("provider", "ollama").lower()
+
+    # Map new protocols to their ProviderType equivalent.
+    _new_protocol_map: dict[str, str] = {
+        "google": "openai",
+        "azure": "openai",
+        "zhipu": "openai",
+    }
+    mapped = _new_protocol_map.get(provider_str)
+    effective_str = mapped if mapped else provider_str
+
     try:
-        provider = ProviderType(provider_str)
+        provider = ProviderType(effective_str)
     except ValueError:
         valid = ", ".join(p.value for p in ProviderType)
         raise ValueError(

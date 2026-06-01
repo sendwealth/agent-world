@@ -101,8 +101,8 @@ def _make_survival(**kwargs: Any) -> SurvivalAssessment:
 class TestDecisionAction:
     """Tests for DecisionAction enum."""
 
-    def test_all_returns_14_actions(self):
-        assert len(DecisionAction.all()) == 14
+    def test_all_returns_18_actions(self):
+        assert len(DecisionAction.all()) == 18
 
     def test_action_values_are_snake_case(self):
         for action in DecisionAction.all():
@@ -494,10 +494,10 @@ class TestFallbackDecision:
 class TestGetAvailableActions:
     """Tests for get_available_actions()."""
 
-    def test_rich_agent_has_all_14_actions(self):
+    def test_rich_agent_has_all_18_actions(self):
         state = _make_state(tokens=10000)
         actions = get_available_actions(state)
-        assert len(actions) == 14
+        assert len(actions) == 18
 
     def test_low_token_agent_filters_expensive(self):
         state = _make_state(tokens=5)
@@ -725,9 +725,9 @@ class TestAcceptance:
         assert parsed_back["confidence"] == 85
 
     @pytest.mark.asyncio
-    async def test_acceptance_all_14_actions_available_to_rich_agent(self):
-        """A rich agent should have all 14 actions available."""
+    async def test_acceptance_all_18_actions_available_to_rich_agent(self):
+        """A rich agent should have all 18 actions available."""
         state = _make_state(tokens=10000)
         actions = get_available_actions(state)
-        assert len(actions) == 14
+        assert len(actions) == 18
         assert set(actions) == set(DecisionAction.all())

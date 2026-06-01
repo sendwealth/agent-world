@@ -408,7 +408,14 @@ class MockHeartbeatProvider:
         self._server_tick = server_tick
         self.call_count = 0
 
-    async def heartbeat(self) -> int:
+    async def heartbeat(
+        self,
+        *,
+        token_balance: int = 0,
+        max_tokens: int = 0,
+        alive: bool = True,
+        urgent_events: list[str] | None = None,
+    ) -> int:
         self.call_count += 1
         return self._server_tick
 
@@ -416,7 +423,14 @@ class MockHeartbeatProvider:
 class FailingHeartbeatProvider:
     """Heartbeat provider that always fails."""
 
-    async def heartbeat(self) -> int:
+    async def heartbeat(
+        self,
+        *,
+        token_balance: int = 0,
+        max_tokens: int = 0,
+        alive: bool = True,
+        urgent_events: list[str] | None = None,
+    ) -> int:
         raise ConnectionError("Server unreachable")
 
 

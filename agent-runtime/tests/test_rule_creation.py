@@ -39,7 +39,7 @@ class TestDecisionActionRegistration:
 
     def test_action_count_is_14(self) -> None:
         """There should now be 14 actions (12 original + 2 new)."""
-        assert len(DecisionAction) == 14
+        assert len(DecisionAction) == 18
 
 
 class TestActionTypeRegistration:

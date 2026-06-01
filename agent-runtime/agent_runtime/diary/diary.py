@@ -57,16 +57,21 @@ CREATE VIRTUAL TABLE IF NOT EXISTS diary_entries_fts
 """
 
 # Triggers to keep FTS in sync with the main table
-_SCHEMA_TRIGGERS = """\
-CREATE TRIGGER IF NOT EXISTS diary_ai AFTER INSERT ON diary_entries BEGIN
-    INSERT INTO diary_entries_fts(rowid, summary, key_events, decisions, reflection)
-        VALUES (new.id, new.summary, new.key_events, new.decisions, new.reflection);
-END;
-CREATE TRIGGER IF NOT EXISTS diary_ad AFTER DELETE ON diary_entries BEGIN
-    INSERT INTO diary_entries_fts(diary_entries_fts, rowid, summary, key_events, decisions, reflection)
-        VALUES ('delete', old.id, old.summary, old.key_events, old.decisions, old.reflection);
-END;
-"""
+_SCHEMA_TRIGGERS = (  # noqa: E501
+    "CREATE TRIGGER IF NOT EXISTS diary_ai AFTER INSERT ON diary_entries BEGIN\n"
+    "    INSERT INTO diary_entries_fts(rowid, summary, key_events,"
+    " decisions, reflection)\n"
+    "        VALUES (new.id, new.summary, new.key_events,"
+    " new.decisions, new.reflection);\n"
+    "END;\n"
+    "CREATE TRIGGER IF NOT EXISTS diary_ad AFTER DELETE ON diary_entries BEGIN\n"
+    "    INSERT INTO diary_entries_fts("
+    "diary_entries_fts, rowid, summary, key_events,"
+    " decisions, reflection)\n"
+    "        VALUES ('delete', old.id, old.summary,"
+    " old.key_events, old.decisions, old.reflection);\n"
+    "END;\n"
+)
 
 
 # ---------------------------------------------------------------------------

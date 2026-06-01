@@ -21,8 +21,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
-import threading
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from enum import Enum
 from typing import Any, Union
 
@@ -254,10 +253,8 @@ class MessageQueue:
         Returns:
             OracleMessage, BountyMessage, or None if the payload is unknown.
         """
-        from protocol.gen.python import a2a_pb2
 
         msg_id = world_msg.id
-        timestamp = world_msg.timestamp
 
         payload_field = world_msg.WhichOneof("payload")
         if payload_field == "oracle":

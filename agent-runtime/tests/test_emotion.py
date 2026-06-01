@@ -10,8 +10,6 @@ Covers:
 
 from __future__ import annotations
 
-import math
-
 import pytest
 
 from agent_runtime.core.decide import (
@@ -21,14 +19,12 @@ from agent_runtime.core.decide import (
     build_prompt,
 )
 from agent_runtime.emotion.engine import (
-    EmotionEngine,
-    EmotionResponse,
-    ThinkLoopEmotionHook,
     _ACTION_TO_EMOTION_EVENT,
+    EmotionEngine,
+    ThinkLoopEmotionHook,
 )
 from agent_runtime.emotion.mood import EmotionalState, EmotionType
 from agent_runtime.models.personality import PersonalityVector
-
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -313,10 +309,13 @@ class TestEmotionEngine:
     def test_context_intensity_amount(self):
         """Large amounts should produce higher intensity."""
         personality = _default_personality()
-        engine = EmotionEngine(personality=personality)
 
-        state_small = EmotionEngine(personality=personality).update("earned_money", {"amount": 10})
-        state_large = EmotionEngine(personality=personality).update("earned_money", {"amount": 1000})
+        state_small = EmotionEngine(personality=personality).update(
+            "earned_money", {"amount": 10}
+        )
+        state_large = EmotionEngine(personality=personality).update(
+            "earned_money", {"amount": 1000}
+        )
 
         # Both should be happy, but larger amount may affect intensity via context
         assert state_small.primary_emotion == EmotionType.HAPPY

@@ -9,7 +9,6 @@ from agent_runtime.social.feed import (
     PostData,
 )
 
-
 # ── Mock API Client ───────────────────────────────────────
 
 class MockAPIClient:
@@ -23,7 +22,13 @@ class MockAPIClient:
         self._comment_id = 0
 
     async def post_json(self, path: str, body: dict) -> dict:
-        if "/feed/posts" in path and "/like" not in path and "/unlike" not in path and "/comments" not in path:
+        is_post = (
+            "/feed/posts" in path
+            and "/like" not in path
+            and "/unlike" not in path
+            and "/comments" not in path
+        )
+        if is_post:
             # Create post
             self._post_id += 1
             post = {
@@ -168,7 +173,7 @@ async def test_agent_feed_trending():
     feed1 = AgentFeed("agent-1", "Alice", client)
     feed2 = AgentFeed("agent-2", "Bob", client)
 
-    p1 = await feed1.post("Unpopular", tick=1)
+    _p1 = await feed1.post("Unpopular", tick=1)
     p2 = await feed1.post("Popular", tick=2)
     await feed2.like(p2.id)
 

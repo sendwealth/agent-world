@@ -114,8 +114,8 @@ impl FeedStore {
         };
         match sort {
             "trending" => filtered.sort_by(|a, b| b.likes.cmp(&a.likes).then(b.tick.cmp(&a.tick))),
-            "oldest" => filtered.sort_by(|a, b| a.tick.cmp(&b.tick)),
-            _ => filtered.sort_by(|a, b| b.tick.cmp(&a.tick)),
+            "oldest" => filtered.sort_by_key(|a| a.tick),
+            _ => filtered.sort_by_key(|b| std::cmp::Reverse(b.tick)),
         }
         filtered.into_iter().skip(offset).take(limit).collect()
     }
@@ -182,7 +182,7 @@ impl FeedStore {
 
     pub fn list_comments(&self, post_id: &str) -> Vec<&Comment> {
         let mut cs: Vec<&Comment> = self.comments.iter().filter(|c| c.post_id == post_id).collect();
-        cs.sort_by(|a, b| a.tick.cmp(&b.tick));
+        cs.sort_by_key(|a| a.tick);
         cs
     }
 

@@ -347,6 +347,15 @@ impl HumanParticipationStore {
     pub fn new() -> Self {
         Self::open_in_memory().expect("in-memory SQLite should never fail")
     }
+}
+
+impl Default for HumanParticipationStore {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+impl HumanParticipationStore {
 
     pub fn set_tick(&mut self, tick: u64) {
         self.current_tick = tick;
@@ -870,7 +879,7 @@ impl HumanParticipationStore {
             params![
                 human_id,
                 format!("Human-{}", &human_id[..8.min(human_id.len())]),
-                (oracle_impact + bounty_impact) as i64,
+                oracle_impact + bounty_impact,
                 oracle_count,
                 bounty_count,
             ],

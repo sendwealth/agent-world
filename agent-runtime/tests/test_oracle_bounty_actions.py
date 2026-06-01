@@ -8,17 +8,18 @@ Covers:
 
 from __future__ import annotations
 
-import pytest
 from unittest.mock import AsyncMock
 
+import pytest
+
+from agent_runtime.actions.bounty_hunter import (
+    BountyDecision,
+    BountyHunter,
+)
 from agent_runtime.actions.oracle_responder import (
     OracleResponder,
     OracleResponseStrategy,
     OracleType,
-)
-from agent_runtime.actions.bounty_hunter import (
-    BountyHunter,
-    BountyDecision,
 )
 from agent_runtime.core.act import (
     ActionContext,
@@ -26,7 +27,6 @@ from agent_runtime.core.act import (
     ActionStatus,
     ActionType,
 )
-
 
 # ============================================================================
 # OracleResponder Tests
@@ -109,7 +109,12 @@ class TestBountyHunter:
     def test_accept_good_match(self):
         hunter = BountyHunter()
         result = hunter.evaluate(
-            bounty={"id": "b-1", "title": "Gather 50 wood", "reward": 100, "description": "Collect wood from forest."},
+            bounty={
+                "id": "b-1",
+                "title": "Gather 50 wood",
+                "reward": 100,
+                "description": "Collect wood from forest.",
+            },
             agent_skills={"gather": 3, "build": 1},
             agent_tokens=50,
             agent_reputation=5.0,
@@ -123,7 +128,12 @@ class TestBountyHunter:
     def test_decline_insufficient_tokens(self):
         hunter = BountyHunter()
         result = hunter.evaluate(
-            bounty={"id": "b-2", "title": "Build tower", "reward": 200, "description": "Build stone tower."},
+            bounty={
+                "id": "b-2",
+                "title": "Build tower",
+                "reward": 200,
+                "description": "Build stone tower.",
+            },
             agent_skills={"build": 5},
             agent_tokens=3,
             agent_reputation=5.0,
@@ -136,7 +146,12 @@ class TestBountyHunter:
     def test_decline_low_reputation_high_value(self):
         hunter = BountyHunter()
         result = hunter.evaluate(
-            bounty={"id": "b-3", "title": "Defeat dragon", "reward": 1000, "description": "Slay the dragon."},
+            bounty={
+                "id": "b-3",
+                "title": "Defeat dragon",
+                "reward": 1000,
+                "description": "Slay the dragon.",
+            },
             agent_skills={"fight": 10},
             agent_tokens=100,
             agent_reputation=3.0,
@@ -147,7 +162,12 @@ class TestBountyHunter:
     def test_accept_high_reputation_high_value(self):
         hunter = BountyHunter()
         result = hunter.evaluate(
-            bounty={"id": "b-4", "title": "Defeat dragon", "reward": 1000, "description": "Slay the dragon."},
+            bounty={
+                "id": "b-4",
+                "title": "Defeat dragon",
+                "reward": 1000,
+                "description": "Slay the dragon.",
+            },
             agent_skills={"fight": 10},
             agent_tokens=100,
             agent_reputation=15.0,
@@ -156,10 +176,15 @@ class TestBountyHunter:
         assert result.reputation_sufficient
 
     def test_no_skills_zero_match(self):
-        """Agent with no skills gets skill_match=0 but may still accept based on resources/reputation."""
+        """Agent with no skills: skill_match=0 but may accept on resources/reputation."""
         hunter = BountyHunter()
         result = hunter.evaluate(
-            bounty={"id": "b-5", "title": "Explore caves", "reward": 100, "description": "Map cave system."},
+            bounty={
+                "id": "b-5",
+                "title": "Explore caves",
+                "reward": 100,
+                "description": "Map cave system.",
+            },
             agent_skills={},
             agent_tokens=100,
             agent_reputation=5.0,
@@ -168,7 +193,12 @@ class TestBountyHunter:
         assert result.skill_match == 0.0
         # If we want to ensure decline, use low tokens or low reputation
         result2 = hunter.evaluate(
-            bounty={"id": "b-5", "title": "Explore caves", "reward": 100, "description": "Map cave system."},
+            bounty={
+                "id": "b-5",
+                "title": "Explore caves",
+                "reward": 100,
+                "description": "Map cave system.",
+            },
             agent_skills={},
             agent_tokens=0,
             agent_reputation=0.0,
@@ -185,7 +215,12 @@ class TestBountyHunter:
     def test_execution_plan_generated(self):
         hunter = BountyHunter()
         result = hunter.evaluate(
-            bounty={"id": "b-7", "title": "Gather wood", "reward": 100, "description": "Collect wood."},
+            bounty={
+                "id": "b-7",
+                "title": "Gather wood",
+                "reward": 100,
+                "description": "Collect wood.",
+            },
             agent_skills={"gather": 3},
             agent_tokens=50,
             agent_reputation=5.0,

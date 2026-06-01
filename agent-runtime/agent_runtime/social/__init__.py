@@ -15,6 +15,7 @@ from .cultural_conflict import (
 from .cultural_diffusion import CulturalDiffusion
 from .engine import SocialContext as SocialEngineContext
 from .engine import SocialEngine, SocialTarget
+from .feed import AgentFeed, CommentData, FeedIntegration, FeedPostConfig, PostData
 from .imitation import ImitationEngine
 from .intergroup_trust import (
     DEFAULT_IN_GROUP_TRUST,
@@ -34,7 +35,6 @@ from .org_culture import (
     OrgCultureSystem,
 )
 from .provider import AgentProfile, DefaultSocialContextProvider
-from .feed import AgentFeed, FeedIntegration, FeedPostConfig, PostData, CommentData
 from .regional_culture import Cluster, RegionalCulture
 
 __all__ = [

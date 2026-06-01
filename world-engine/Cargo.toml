@@ -31,6 +31,9 @@ notify = "8.2.0"
 reqwest = { version = "0.12", features = ["stream"] }
 rusqlite = { version = "0.31", features = ["bundled"] }
 rand = "0.8"
+aes-gcm = "0.10"
+base64 = "0.22"
+hex = "0.4"
 dashmap = "6"
 prometheus = "0.13"
 lazy_static = "1"

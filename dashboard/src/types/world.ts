@@ -487,7 +487,10 @@ export type NotificationType =
   | "treaty_signed"
   | "treaty_broken"
   | "oracle_delivered"
-  | "bounty_claimed";
+  | "bounty_claimed"
+  | "low_token_warning"
+  | "agent_help_request"
+  | "agent_diary";
 
 export interface AgentNotification {
   id: string;
@@ -526,3 +529,25 @@ export interface DiaryEntry {
   reflection: string;
   created_at: string;
 }
+
+// Chat timeline message types (unified conversation view)
+
+export type ChatMessageRole = "oracle" | "agent_response" | "diary";
+
+export interface ChatMessage {
+  id: string;
+  role: ChatMessageRole;
+  content: string;
+  tick: number;
+  timestamp: string;
+  /** For oracle messages */
+  oracle_type?: OracleType;
+  /** For agent_response messages */
+  oracle_id?: string;
+  /** For diary messages */
+  mood?: string;
+  phase?: string;
+  /** Urgency flag (low token, death risk) */
+  urgent?: boolean;
+}
+

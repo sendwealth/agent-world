@@ -11,6 +11,9 @@ const TYPE_STYLES: Record<NotificationType, string> = {
   treaty_broken: "text-red-400 bg-red-500/10",
   oracle_delivered: "text-blue-400 bg-blue-500/10",
   bounty_claimed: "text-purple-400 bg-purple-500/10",
+  low_token_warning: "text-red-400 bg-red-500/10",
+  agent_help_request: "text-amber-400 bg-amber-500/10",
+  agent_diary: "text-zinc-400 bg-zinc-800",
 };
 
 const TYPE_ICONS: Record<NotificationType, string> = {
@@ -20,6 +23,9 @@ const TYPE_ICONS: Record<NotificationType, string> = {
   treaty_broken: "💥",
   oracle_delivered: "🔮",
   bounty_claimed: "🎯",
+  low_token_warning: "⚡",
+  agent_help_request: "🆘",
+  agent_diary: "📝",
 };
 
 export function NotificationPanel() {
@@ -49,6 +55,13 @@ export function NotificationPanel() {
     return () => document.removeEventListener("mousedown", onClick);
   }, [open]);
 
+  // Count urgent notifications
+  const urgentCount = notifications.filter(
+    (n) =>
+      !n.read &&
+      (n.type === "low_token_warning" || n.type === "agent_help_request")
+  ).length;
+
   return (
     <div className="relative" ref={panelRef}>
       <button
@@ -73,6 +86,9 @@ export function NotificationPanel() {
           <span className="absolute -right-0.5 -top-0.5 flex items-center justify-center rounded-full bg-red-500 px-1.5 text-[10px] font-bold text-white min-w-[18px]">
             {unreadCount > 9 ? "9+" : unreadCount}
           </span>
+        )}
+        {urgentCount > 0 && (
+          <span className="absolute right-1.5 top-0.5 h-2 w-2 rounded-full bg-amber-400 animate-pulse" />
         )}
       </button>
 
@@ -111,11 +127,15 @@ export function NotificationPanel() {
                   onClick={() => markRead(n.id)}
                   className={`w-full text-left px-4 py-3 border-b border-zinc-800/50 last:border-0 hover:bg-zinc-800/30 transition-colors ${
                     !n.read ? "bg-zinc-800/20" : ""
+                  } ${
+                    n.type === "low_token_warning" || n.type === "agent_help_request"
+                      ? "border-l-2 border-l-red-500"
+                      : ""
                   }`}
                 >
                   <div className="flex items-start gap-2">
                     <span className="text-sm shrink-0 mt-0.5">
-                      {TYPE_ICONS[n.type]}
+                      {TYPE_ICONS[n.type] ?? "🔔"}
                     </span>
                     <div className="min-w-0 flex-1">
                       <div className="flex items-center gap-2">
@@ -124,6 +144,11 @@ export function NotificationPanel() {
                         </span>
                         {!n.read && (
                           <span className="rounded-full bg-blue-500 h-1.5 w-1.5 shrink-0" />
+                        )}
+                        {(n.type === "low_token_warning" || n.type === "agent_help_request") && (
+                          <span className="text-[10px] font-medium text-red-400 animate-pulse">
+                            紧急
+                          </span>
                         )}
                       </div>
                       <p className="text-[11px] text-zinc-500 mt-0.5 line-clamp-2">

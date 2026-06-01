@@ -7,6 +7,30 @@ import { useSSEContext } from "@/components/SSEProvider";
 const STORAGE_KEY = "agent-world-notifications";
 const MAX_NOTIFICATIONS = 50;
 
+const TYPE_MAP: Record<string, NotificationType> = {
+  agent_death: "agent_death",
+  leadership_changed: "leadership_changed",
+  treaty_signed: "treaty_signed",
+  treaty_broken: "treaty_broken",
+  oracle_delivered: "oracle_delivered",
+  bounty_claimed: "bounty_claimed",
+  low_token_warning: "low_token_warning",
+  agent_help_request: "agent_help_request",
+  agent_diary: "agent_diary",
+};
+
+const TITLE_MAP: Record<NotificationType, string> = {
+  agent_death: "Agent 死亡",
+  leadership_changed: "领导更替",
+  treaty_signed: "条约签署",
+  treaty_broken: "条约撕毁",
+  oracle_delivered: "神谕已送达",
+  bounty_claimed: "悬赏已被认领",
+  low_token_warning: "⚡ Token 不足警告",
+  agent_help_request: "🆘 Agent 求助",
+  agent_diary: "📝 Agent 日记",
+};
+
 function eventToNotification(event: {
   type: string;
   id?: string;
@@ -15,31 +39,49 @@ function eventToNotification(event: {
   description?: string;
   tick?: number;
   timestamp?: string;
+  data?: Record<string, unknown>;
 }): AgentNotification | null {
-  const typeMap: Record<string, NotificationType> = {
-    agent_death: "agent_death",
-    leadership_changed: "leadership_changed",
-    treaty_signed: "treaty_signed",
-    treaty_broken: "treaty_broken",
-  };
+  // Check standard type map first
+  let notifType = TYPE_MAP[event.type];
 
-  const notifType = typeMap[event.type];
+  // Auto-detect low token warning from event data
+  if (!notifType) {
+    if (event.data) {
+      const data = event.data;
+      if (
+        data.token_count !== undefined &&
+        typeof data.token_count === "number" &&
+        data.token_count < 50
+      ) {
+        notifType = "low_token_warning";
+      }
+      if (
+        data.requesting_help === true ||
+        data.help_type !== undefined
+      ) {
+        notifType = "agent_help_request";
+      }
+    }
+  }
+
   if (!notifType) return null;
 
-  const titleMap: Record<NotificationType, string> = {
-    agent_death: "Agent 死亡",
-    leadership_changed: "领导更替",
-    treaty_signed: "条约签署",
-    treaty_broken: "条约撕毁",
-    oracle_delivered: "神谕已送达",
-    bounty_claimed: "悬赏已被认领",
-  };
+  // Build description for auto-detected types
+  let description = event.description || `${event.agentName || "未知 Agent"} 触发了 ${notifType}`;
+  if (notifType === "low_token_warning" && event.data) {
+    const tokens = event.data.token_count ?? "?";
+    description = `${event.agentName ?? "Agent"} Token 不足: ${tokens} — 即将面临死亡风险!`;
+  }
+  if (notifType === "agent_help_request" && event.data) {
+    const helpType = event.data.help_type ?? "通用";
+    description = `${event.agentName ?? "Agent"} 请求帮助: ${helpType}`;
+  }
 
   return {
     id: event.id || `${Date.now()}-${Math.random()}`,
     type: notifType,
-    title: titleMap[notifType],
-    description: event.description || `${event.agentName || "未知 Agent"} 触发了 ${notifType}`,
+    title: TITLE_MAP[notifType],
+    description,
     tick: event.tick || 0,
     timestamp: event.timestamp ? new Date(event.timestamp).getTime() : Date.now(),
     read: false,
@@ -83,7 +125,7 @@ export function useNotifications() {
   // Subscribe to SSE events
   useEffect(() => {
     const unsubscribe = sse.subscribe((event) => {
-      const notification = eventToNotification(event);
+      const notification = eventToNotification(event as Parameters<typeof eventToNotification>[0]);
       if (!notification) return;
       if (seenIds.current.has(notification.id)) return;
 

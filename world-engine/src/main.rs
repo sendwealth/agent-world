@@ -14,6 +14,7 @@ use tokio_util::sync::CancellationToken;
 use agent_world_engine::a2a::registry::AgentRegistry;
 use agent_world_engine::a2a::router::MessageRouter;
 use agent_world_engine::a2a::service::A2aServiceImpl;
+use agent_world_engine::a2a::world_message_router::WorldMessageRouter;
 use agent_world_engine::a2a::federation::FederationEngine;
 use agent_world_engine::agentworld::a2a::v1::a2a_service_server::A2aServiceServer;
 use agent_world_engine::api::{self, AppState};
@@ -493,7 +494,8 @@ async fn main() {
     // ── Initialize gRPC Server ──────────────────────────────
     let grpc_registry = Arc::new(AgentRegistry::new(event_bus.clone()));
     let grpc_router = Arc::new(MessageRouter::new(grpc_registry.clone()));
-    let grpc_service = A2aServiceImpl::new(grpc_registry, grpc_router);
+    let world_msg_router = Arc::new(WorldMessageRouter::new());
+    let grpc_service = A2aServiceImpl::new(grpc_registry, grpc_router, world_msg_router.clone());
     let grpc_addr_str =
         std::env::var("GRPC_ADDR").unwrap_or_else(|_| "0.0.0.0:50051".to_string());
     let grpc_addr: std::net::SocketAddr = grpc_addr_str
@@ -551,7 +553,7 @@ async fn main() {
         Arc::new(Mutex::new(Vec::new()));
     println!("   ABExperimentStore: initialized");
 
-    let app_state = AppState::for_test_with(task_board, wal_writer.clone(), api::TestOverrides {
+    let mut app_state = AppState::for_test_with(task_board, wal_writer.clone(), api::TestOverrides {
         event_bus: Some(event_bus.clone()),
         tick_tx: Some(tick_tx),
         tick_rx: Some(tick_rx),
@@ -576,7 +578,17 @@ async fn main() {
         api_key_store,
         ab_experiment_store: Some(ab_experiment_store),
         plugin_manager: Some(plugin_manager),
+        providers: None,
+        agent_models: None,
+        diary_store: Some(std::sync::Arc::new(tokio::sync::Mutex::new(
+            agent_world_engine::api_diary::DiaryStore::new(2000),
+        ))),
+        feed_store: Some(std::sync::Arc::new(tokio::sync::Mutex::new(
+            agent_world_engine::api_feed::FeedStore::new(),
+        ))),
     });
+    // Wire the WorldMessageRouter into the AppState for Oracle/Bounty delivery
+    app_state.world_msg_router = Some(world_msg_router);
     let app = api::build_full_router(app_state);
 
     let host = std::env::var("HOST").unwrap_or_else(|_| "0.0.0.0".to_string());

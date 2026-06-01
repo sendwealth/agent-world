@@ -428,14 +428,75 @@ async def deregister_agent(
 
 
 def spawn_agent(config: AgentSpawnConfig) -> AgentState:
-    """Create an AgentState from spawn configuration."""
+    """Create an AgentState from spawn configuration.
+
+    Merges extended identity data (backstory, alignment, communication_style,
+    personality vector, values, preferences) into the AgentState personality
+    dict so it can be consumed by the prompt and decision layers.
+    """
+    # Build enriched personality dict: start with legacy traits, then merge
+    # structured sections under namespaced keys.
+    personality: dict[str, Any] = dict(config.traits)
+
+    # Identity
+    identity = config.identity
+    if identity.display_name:
+        personality["display_name"] = identity.display_name
+    if identity.bio:
+        personality["bio"] = identity.bio
+    if identity.backstory:
+        personality["backstory"] = identity.backstory
+    if identity.alignment:
+        personality["alignment"] = identity.alignment
+    if identity.archetype:
+        personality["archetype"] = identity.archetype
+    if identity.mbti:
+        personality["mbti"] = identity.mbti
+
+    # Personality vector (Big Five + survival)
+    personality["big_five"] = {
+        "openness": config.personality.openness,
+        "conscientiousness": config.personality.conscientiousness,
+        "extraversion": config.personality.extraversion,
+        "agreeableness": config.personality.agreeableness,
+        "neuroticism": config.personality.neuroticism,
+        "risk_tolerance": config.personality.risk_tolerance,
+        "social_orientation": config.personality.social_orientation,
+        "greed": config.personality.greed,
+    }
+
+    # Values
+    personality["values"] = {
+        "survival": config.values.survival,
+        "knowledge": config.values.knowledge,
+        "wealth": config.values.wealth,
+        "social": config.values.social,
+        "freedom": config.values.freedom,
+        "power": config.values.power,
+    }
+
+    # Preferences
+    prefs = config.preferences
+    if prefs.preferred_actions:
+        personality["preferred_actions"] = prefs.preferred_actions
+    if prefs.avoided_actions:
+        personality["avoided_actions"] = prefs.avoided_actions
+    if prefs.social_style:
+        personality["social_style"] = prefs.social_style
+    if prefs.communication_style:
+        personality["communication_style"] = prefs.communication_style
+
+    # Questions
+    if config.questions:
+        personality["questions"] = config.questions
+
     state = AgentState(
         name=config.name,
         tokens=config.tokens,
         max_tokens=config.max_tokens,
         money=config.money,
         health=config.health,
-        personality=config.traits,
+        personality=personality,
     )
 
     for skill_name, level in config.skills.items():
@@ -677,6 +738,21 @@ async def run_agent(config: RuntimeConfig) -> RunStats:
                 )
             except Exception:
                 logger.warning("Failed to start A2A streaming, perception will be limited")
+
+            # Start ConsumeMessages stream for Oracle/Bounty delivery
+            try:
+                from agent_runtime.core.message_queue import MessageQueue
+
+                msg_queue = MessageQueue()
+                await a2a_client.start_consuming(msg_queue)
+                logger.info(
+                    "World message consuming started (Oracle/Bounty)",
+                    extra={"agent": state.name, "event": "consuming_started"},
+                )
+            except Exception:
+                logger.warning(
+                    "Failed to start world message consuming, Oracle/Bounty delivery disabled"
+                )
 
         # Attempt registration (with public key).
         # If the World Engine returns its own agent_id, update the
@@ -1093,7 +1169,11 @@ def _create_social_context_provider(state: AgentState) -> Any:
 class HealthCheckServer:
     """Lightweight HTTP health check server using asyncio.
 
-    Exposes ``GET /health`` returning JSON with agent status.
+    Exposes:
+
+    - ``GET /health`` — JSON with agent status.
+    - ``POST /api/v1/runtime/swap-model`` — Hot-swap the agent's LLM model at runtime.
+
     Runs alongside the ThinkLoop.
     """
 
@@ -1153,21 +1233,38 @@ class HealthCheckServer:
             request_line = await asyncio.wait_for(reader.readline(), timeout=5.0)
             request_str = request_line.decode("ascii", errors="replace").strip()
 
-            # Drain remaining headers (with upper limit to prevent abuse)
+            # Read remaining headers and collect body
+            content_length = 0
+            body_buf = b""
             for _ in range(64):
                 line = await asyncio.wait_for(reader.readline(), timeout=2.0)
                 if line in (b"\r\n", b"\n", b""):
                     break
+                # Parse Content-Length header
+                line_str = line.decode("ascii", errors="replace").strip().lower()
+                if line_str.startswith("content-length:"):
+                    try:
+                        content_length = int(line_str.split(":", 1)[1].strip())
+                    except ValueError:
+                        pass
             else:
                 # Too many headers — close connection
                 writer.write(b"HTTP/1.1 400 Bad Request\r\nConnection: close\r\n\r\n")
                 await writer.drain()
                 return
 
-            # Only respond to GET /health (exact path match, allow query string)
+            # Read body if Content-Length is set
+            if content_length > 0:
+                body_buf = await asyncio.wait_for(
+                    reader.readexactly(content_length), timeout=5.0
+                )
+
+            # Route the request
             parts = request_str.split()
+            method = parts[0] if parts else ""
             path = parts[1].split("?")[0] if len(parts) >= 2 else ""
-            if parts and parts[0] == "GET" and path == "/health":
+
+            if method == "GET" and path == "/health":
                 uptime = time.monotonic() - self._start_time
                 body = json.dumps({
                     "status": "running" if self._think_loop.running else "stopped",
@@ -1183,6 +1280,10 @@ class HealthCheckServer:
                     "\r\n"
                     f"{body}"
                 )
+
+            elif method == "POST" and path == "/api/v1/runtime/swap-model":
+                response = self._handle_swap_model(body_buf)
+
             else:
                 response = "HTTP/1.1 404 Not Found\r\nConnection: close\r\n\r\n"
 
@@ -1196,6 +1297,73 @@ class HealthCheckServer:
                 await writer.wait_closed()
             except Exception:
                 pass
+
+    def _handle_swap_model(self, body_buf: bytes) -> str:
+        """Handle POST /api/v1/runtime/swap-model.
+
+        Expected JSON body: ``{"agent_id": "...", "provider_id": "...", "model": "..."}``
+        """
+        from agent_runtime.llm.provider_registry import ModelRegistry
+
+        try:
+            payload = json.loads(body_buf) if body_buf else {}
+        except json.JSONDecodeError:
+            body = json.dumps({"error": "Invalid JSON body"})
+            return (
+                "HTTP/1.1 400 Bad Request\r\n"
+                "Content-Type: application/json\r\n"
+                f"Content-Length: {len(body)}\r\n"
+                "Connection: close\r\n"
+                "\r\n"
+                f"{body}"
+            )
+
+        agent_id = payload.get("agent_id")
+        provider_id = payload.get("provider_id")
+        model = payload.get("model")
+
+        if not agent_id or not provider_id or not model:
+            body = json.dumps({
+                "error": "Missing required fields: agent_id, provider_id, model",
+            })
+            return (
+                "HTTP/1.1 400 Bad Request\r\n"
+                "Content-Type: application/json\r\n"
+                f"Content-Length: {len(body)}\r\n"
+                "Connection: close\r\n"
+                "\r\n"
+                f"{body}"
+            )
+
+        reg = ModelRegistry.instance()
+        try:
+            reg.hot_swap_model(agent_id, provider_id, model)
+        except KeyError as exc:
+            body = json.dumps({"error": str(exc)})
+            return (
+                "HTTP/1.1 404 Not Found\r\n"
+                "Content-Type: application/json\r\n"
+                f"Content-Length: {len(body)}\r\n"
+                "Connection: close\r\n"
+                "\r\n"
+                f"{body}"
+            )
+
+        body = json.dumps({
+            "status": "ok",
+            "agent_id": agent_id,
+            "provider_id": provider_id,
+            "model": model,
+            "tick": self._think_loop.tick,
+        })
+        return (
+            "HTTP/1.1 200 OK\r\n"
+            "Content-Type: application/json\r\n"
+            f"Content-Length: {len(body)}\r\n"
+            "Connection: close\r\n"
+            "\r\n"
+            f"{body}"
+        )
 
 
 def _get_health_port(config: RuntimeConfig) -> int:
@@ -1308,6 +1476,14 @@ def _add_spawn_args(parser: argparse.ArgumentParser) -> None:
         "--data-dir", type=Path, default=None,
         help="Agent data directory for isolated storage (memory.db, skills.json, trace.db)",
     )
+    parser.add_argument(
+        "--preset", default=None,
+        help=(
+            "Provider preset name (e.g. zhipu, deepseek, ollama-local, openrouter). "
+            "Auto-fills --llm-provider, --llm-base-url, and --llm-model. "
+            "Explicit CLI flags override preset values."
+        ),
+    )
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -1401,6 +1577,49 @@ def parse_skills(skill_str: str | None) -> dict[str, int]:
     return skills
 
 
+def _apply_preset_defaults(args: argparse.Namespace) -> None:
+    """Fill in LLM args from a provider preset if --preset is given.
+
+    Only sets values that the user did *not* explicitly pass on the command
+    line, so ``--llm-model foo --preset zhipu`` keeps the user's model.
+    """
+    preset_name = getattr(args, "preset", None)
+    if not preset_name:
+        return
+
+    from agent_runtime.presets import get_provider_preset, list_models_for_provider
+
+    try:
+        provider_cfg = get_provider_preset(preset_name)
+    except ValueError as exc:
+        logger.error("%s", exc)
+        raise SystemExit(1)
+
+    # Map preset protocol to CLI --llm-provider choices
+    protocol = provider_cfg.get("protocol", "openai")
+    # zhipu is a special alias in the CLI
+    if preset_name == "zhipu":
+        protocol = "zhipu"
+
+    if args.llm_provider is None:
+        args.llm_provider = protocol
+    if args.llm_base_url is None:
+        args.llm_base_url = provider_cfg.get("base_url")
+    if args.llm_model is None:
+        # Pick the first model listed for this provider
+        models = list_models_for_provider(preset_name)
+        if models:
+            args.llm_model = models[0]["id"]
+
+    logger.info(
+        "Applied preset %r: provider=%s base_url=%s model=%s",
+        preset_name,
+        args.llm_provider,
+        args.llm_base_url,
+        args.llm_model,
+    )
+
+
 def build_config_from_args(args: argparse.Namespace) -> RuntimeConfig:
     """Build a RuntimeConfig from CLI arguments, optionally merging with a config file."""
     if args.config is not None:
@@ -1446,7 +1665,10 @@ def build_config_from_args(args: argparse.Namespace) -> RuntimeConfig:
         config.data_dir = Path(data_dir)
         config.data_dir.mkdir(parents=True, exist_ok=True)
 
-    # LLM configuration: CLI args > environment variables > default (Ollama)
+    # Apply --preset as defaults (explicit CLI flags override preset values)
+    _apply_preset_defaults(args)
+
+    # LLM configuration: CLI args > preset > environment variables > default (Ollama)
     _apply_llm_config(config, args)
 
     # Mock LLM preset: --mock-llm > MOCK_LLM_PRESET env var
@@ -1928,6 +2150,8 @@ def _build_pool_spawn_args(args: argparse.Namespace) -> list[str]:
         parts.extend(["--health-port", str(args.health_port)])
     if getattr(args, "data_dir", None) is not None:
         parts.extend(["--data-dir", str(args.data_dir)])
+    if getattr(args, "preset", None):
+        parts.extend(["--preset", args.preset])
     return parts
 
 

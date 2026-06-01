@@ -8,11 +8,16 @@ use axum::{
     Json,
 };
 
+use crate::agentworld::a2a::v1::{
+    world_message::Payload, BountyPayload, OraclePayload, OracleType as ProtoOracleType,
+    WorldMessage,
+};
 use crate::api::{AppState, ErrorResponse};
 use crate::auth::{extractors::require_capability, Capability, RequireAuth};
 use crate::human::store::{
     ClaimAgentRequest, ClaimBountyRequest, CompleteBountyRequest, CreateBountyRequest,
-    InfluenceRankingsQuery, InvestRequest, ListBountiesQuery, ListOraclesQuery, SendOracleRequest,
+    InfluenceRankingsQuery, InvestRequest, ListBountiesQuery, ListOraclesQuery, OracleType,
+    OracleResponseRequest, SendOracleRequest,
 };
 
 // ── Human Participation API Handlers ──────────────────────
@@ -128,6 +133,29 @@ pub async fn human_send_oracle(
     let mut store = state.human_store.lock().await;
     store.set_tick(tick);
     let oracle = store.send_oracle(body);
+
+    // Push Oracle message to the agent via WorldMessageRouter
+    if let Some(ref router) = state.world_msg_router {
+        let oracle_type = match oracle.oracle_type {
+            OracleType::Guidance => ProtoOracleType::Guidance as i32,
+            OracleType::Warning => ProtoOracleType::Warning as i32,
+            OracleType::Blessing => ProtoOracleType::Blessing as i32,
+            OracleType::Curse => ProtoOracleType::Curse as i32,
+        };
+        let msg = WorldMessage {
+            id: uuid::Uuid::new_v4().to_string(),
+            payload: Some(Payload::Oracle(OraclePayload {
+                oracle_id: oracle.id.clone(),
+                oracle_type,
+                content: oracle.content.clone(),
+                from_human: true,
+                human_id: oracle.human_id.clone(),
+            })),
+            timestamp: chrono::Utc::now().timestamp(),
+        };
+        router.deliver(&oracle.target_agent_id, msg).await;
+    }
+
     (StatusCode::CREATED, Json(oracle)).into_response()
 }
 
@@ -142,6 +170,33 @@ pub async fn human_get_oracle(
             StatusCode::NOT_FOUND,
             Json(ErrorResponse {
                 error: "Oracle not found".into(),
+            }),
+        )
+            .into_response(),
+    }
+}
+
+pub async fn human_oracle_response(
+    State(state): State<AppState>,
+    Path(id): Path<String>,
+    Json(body): Json<OracleResponseRequest>,
+) -> impl IntoResponse {
+    if body.response.trim().is_empty() {
+        return (
+            StatusCode::BAD_REQUEST,
+            Json(ErrorResponse {
+                error: "Response content cannot be empty".into(),
+            }),
+        )
+            .into_response();
+    }
+    let mut store = state.human_store.lock().await;
+    match store.respond_to_oracle(&id, &body.agent_id, &body.response) {
+        Some(oracle) => Json(oracle).into_response(),
+        None => (
+            StatusCode::BAD_REQUEST,
+            Json(ErrorResponse {
+                error: "Oracle not found or cannot be responded to".into(),
             }),
         )
             .into_response(),
@@ -191,6 +246,29 @@ pub async fn human_create_bounty(
     let mut store = state.human_store.lock().await;
     store.set_tick(tick);
     let bounty = store.create_bounty(body);
+
+    // Push Bounty message to agents via WorldMessageRouter
+    if let Some(ref router) = state.world_msg_router {
+        let msg = WorldMessage {
+            id: uuid::Uuid::new_v4().to_string(),
+            payload: Some(Payload::Bounty(BountyPayload {
+                bounty_id: bounty.id.clone(),
+                title: bounty.title.clone(),
+                description: bounty.description.clone(),
+                reward: bounty.reward,
+                deadline_tick: bounty.expires_tick.unwrap_or(0) as i64,
+                human_id: bounty.human_id.clone(),
+            })),
+            timestamp: chrono::Utc::now().timestamp(),
+        };
+        // If bounty targets a specific agent, deliver directly; otherwise broadcast
+        if let Some(ref target_id) = bounty.target_agent_id {
+            router.deliver(target_id, msg).await;
+        } else {
+            router.broadcast(msg).await;
+        }
+    }
+
     (StatusCode::CREATED, Json(bounty)).into_response()
 }
 
@@ -389,6 +467,10 @@ pub fn human_routes() -> axum::Router<AppState> {
         .route("/api/v1/human/oracles", get(human_list_oracles))
         .route("/api/v1/human/oracles", post(human_send_oracle))
         .route("/api/v1/human/oracles/:id", get(human_get_oracle))
+        .route(
+            "/api/v1/agents/:id/oracle-response",
+            post(human_oracle_response),
+        )
         .route("/api/v1/human/bounties", get(human_list_bounties))
         .route("/api/v1/human/bounties", post(human_create_bounty))
         .route("/api/v1/human/bounties/:id", get(human_get_bounty))

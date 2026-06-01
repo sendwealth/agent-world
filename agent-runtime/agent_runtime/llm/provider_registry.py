@@ -119,6 +119,9 @@ class ModelRegistry:
         self._providers: dict[str, ProviderConfig] = {}
         self._provider_type_map: dict[str, type[LLMProvider]] = {}
         self._agent_models: dict[str, str] = {}  # agent_id → provider_id
+        self._agent_models_version: int = 0  # bumped on every hot_swap
+        # agent_id → (provider_id, model)
+        self._agent_model_overrides: dict[str, tuple[str, str]] = {}
         # Register the three built-in providers so that existing code
         # ``create_provider(LLMConfig(provider=ProviderType.OPENAI, ...))``
         # keeps working out of the box.
@@ -199,6 +202,11 @@ class ModelRegistry:
                 for aid, pid in self._agent_models.items()
                 if pid != provider_id
             }
+            self._agent_model_overrides = {
+                aid: (pid, m)
+                for aid, (pid, m) in self._agent_model_overrides.items()
+                if pid != provider_id
+            }
             logger.info("Removed provider %s", provider_id)
         return removed
 
@@ -276,6 +284,58 @@ class ModelRegistry:
 
         # Last resort: first provider.
         return next(iter(self._providers.values())) if self._providers else None
+
+    # -- Hot-swap support ------------------------------------------------
+
+    def hot_swap_model(self, agent_id: str, provider_id: str, model: str) -> None:
+        """Hot-swap the model for a running agent.
+
+        Updates both the agent-to-provider routing and the model override.
+        ThinkLoop checks ``get_agent_models_version()`` at the start of each
+        tick; if the version changed, it re-creates the LLMProvider.
+
+        Thread-safe: the GIL protects dict assignments for single-key updates.
+
+        Args:
+            agent_id: The agent to retarget.
+            provider_id: Target provider ID (must be registered).
+            model: Model name for the new provider.
+
+        Raises:
+            KeyError: If ``provider_id`` is not registered.
+        """
+        if provider_id not in self._providers:
+            raise KeyError(
+                f"Provider {provider_id!r} not registered. "
+                f"Available: {list(self._providers.keys())}"
+            )
+        self._agent_models[agent_id] = provider_id
+        self._agent_model_overrides[agent_id] = (provider_id, model)
+        self._agent_models_version += 1
+        logger.info(
+            "Model hot-swap: agent=%s provider=%s model=%s (version=%d)",
+            agent_id,
+            provider_id,
+            model,
+            self._agent_models_version,
+            extra={
+                "event": "model_switched",
+                "agent": agent_id,
+                "provider": provider_id,
+                "model": model,
+            },
+        )
+
+    def get_agent_models_version(self) -> int:
+        """Return the current version counter for agent-model overrides.
+
+        Callers compare this value across ticks to detect hot-swaps.
+        """
+        return self._agent_models_version
+
+    def get_agent_model_override(self, agent_id: str) -> tuple[str, str] | None:
+        """Return the (provider_id, model) override for an agent, or None."""
+        return self._agent_model_overrides.get(agent_id)
 
     # -- Internal helpers ------------------------------------------------
 

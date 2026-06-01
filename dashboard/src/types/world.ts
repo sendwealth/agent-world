@@ -414,13 +414,83 @@ export interface ClaimedAgent {
   age: number;
 }
 
+// Provider types
+
+export type ProviderProtocol =
+  | "openai_compatible"
+  | "anthropic"
+  | "ollama"
+  | "google"
+  | "azure";
+
+export type ConnectionStatus =
+  | "online"
+  | "offline"
+  | "untested";
+
+export interface Provider {
+  id: string;
+  display_name: string;
+  protocol: ProviderProtocol;
+  base_url: string;
+  api_key?: string;
+  api_version?: string;
+  models?: string[];
+  status?: ConnectionStatus;
+  is_default?: boolean;
+  created_at?: string;
+  updated_at?: string;
+}
+
+export interface ConnectionTestResult {
+  success: boolean;
+  latency_ms: number;
+  error?: string;
+  sample?: string;
+}
+
+export interface DiscoverModelsResult {
+  models: string[];
+}
+
+// Agent model assignment types
+
+export interface AgentModelAssignment {
+  agent_id: string;
+  provider_id: string;
+  model_id: string;
+}
+
+export interface SetAgentModelRequest {
+  provider_id: string;
+  model_id: string;
+}
+
+/** Agent record from GET /api/v1/agents (world engine). */
+export interface AgentRecord {
+  id: string;
+  name: string;
+  phase: string;
+  tokens: number;
+  money: number;
+  alive: boolean;
+  ticks_survived: number;
+  personality: string;
+  parent_ids: string[];
+  generation: number;
+  skills: Record<string, number>;
+}
+
 export type NotificationType =
   | "agent_death"
   | "leadership_changed"
   | "treaty_signed"
   | "treaty_broken"
   | "oracle_delivered"
-  | "bounty_claimed";
+  | "bounty_claimed"
+  | "low_token_warning"
+  | "agent_help_request"
+  | "agent_diary";
 
 export interface AgentNotification {
   id: string;
@@ -433,3 +503,51 @@ export interface AgentNotification {
   agent_id?: string;
   agent_name?: string;
 }
+
+// Agent Diary types
+
+export type DiaryMood =
+  | "happy"
+  | "anxious"
+  | "fearful"
+  | "calm"
+  | "hopeful"
+  | "angry"
+  | "sad"
+  | "neutral"
+  | "excited"
+  | "confused";
+
+export interface DiaryEntry {
+  agent_id: string;
+  tick: number;
+  phase: string;
+  mood: string;
+  summary: string;
+  key_events: string[];
+  decisions: string[];
+  reflection: string;
+  created_at: string;
+}
+
+// Chat timeline message types (unified conversation view)
+
+export type ChatMessageRole = "oracle" | "agent_response" | "diary";
+
+export interface ChatMessage {
+  id: string;
+  role: ChatMessageRole;
+  content: string;
+  tick: number;
+  timestamp: string;
+  /** For oracle messages */
+  oracle_type?: OracleType;
+  /** For agent_response messages */
+  oracle_id?: string;
+  /** For diary messages */
+  mood?: string;
+  phase?: string;
+  /** Urgency flag (low token, death risk) */
+  urgent?: boolean;
+}
+

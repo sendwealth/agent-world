@@ -60,6 +60,10 @@ class ActionType(str, Enum):
     JOIN_ORG = "join_org"
     PROPOSE_RULE = "propose_rule"
     VOTE_RULE = "vote_rule"
+    RESPOND_ORACLE = "respond_oracle"
+    CHECK_BOUNTIES = "check_bounties"
+    ACCEPT_BOUNTY = "accept_bounty"
+    COMPLETE_BOUNTY = "complete_bounty"
 
 
 class ActionStatus(str, Enum):
@@ -120,6 +124,10 @@ _DEFAULT_TOKEN_COSTS: dict[ActionType, int] = {
     ActionType.JOIN_ORG: 10,
     ActionType.PROPOSE_RULE: 15,
     ActionType.VOTE_RULE: 5,
+    ActionType.RESPOND_ORACLE: 3,
+    ActionType.CHECK_BOUNTIES: 2,
+    ActionType.ACCEPT_BOUNTY: 10,
+    ActionType.COMPLETE_BOUNTY: 8,
 }
 
 
@@ -161,6 +169,14 @@ class WorldClientProtocol(Protocol):
     async def build(self, structure_type: str, **kwargs: Any) -> dict[str, Any]: ...
 
     async def socialize(self, target_agent_id: str, message: str = "") -> dict[str, Any]: ...
+
+    async def respond_to_oracle(self, oracle_id: str, response: str) -> dict[str, Any]: ...
+
+    async def check_bounties(self) -> dict[str, Any]: ...
+
+    async def claim_bounty(self, bounty_id: str) -> dict[str, Any]: ...
+
+    async def complete_bounty(self, bounty_id: str, result: str) -> dict[str, Any]: ...
 
 
 @dataclass
@@ -366,6 +382,10 @@ class ActionExecutor:
         ActionType.JOIN_ORG: "_handle_join_org",
         ActionType.PROPOSE_RULE: "_handle_propose_rule",
         ActionType.VOTE_RULE: "_handle_vote_rule",
+        ActionType.RESPOND_ORACLE: "_handle_respond_oracle",
+        ActionType.CHECK_BOUNTIES: "_handle_check_bounties",
+        ActionType.ACCEPT_BOUNTY: "_handle_accept_bounty",
+        ActionType.COMPLETE_BOUNTY: "_handle_complete_bounty",
     }
 
     async def _dispatch(self, action_type: ActionType, context: ActionContext) -> dict[str, Any]:
@@ -550,6 +570,37 @@ class ActionExecutor:
                 },
             }
         )
+
+    async def _handle_respond_oracle(self, context: ActionContext) -> dict[str, Any]:
+        """Respond to an Oracle message from a human."""
+        oracle_id = context.parameters.get("oracle_id", "")
+        response = context.parameters.get("response", "")
+        if not oracle_id:
+            raise ValueError("respond_oracle requires 'oracle_id' parameter")
+        if not response:
+            raise ValueError("respond_oracle requires 'response' parameter")
+        return await context.world.respond_to_oracle(oracle_id, response)
+
+    async def _handle_check_bounties(self, context: ActionContext) -> dict[str, Any]:
+        """Check available bounties from the World Engine."""
+        return await context.world.check_bounties()
+
+    async def _handle_accept_bounty(self, context: ActionContext) -> dict[str, Any]:
+        """Accept (claim) a bounty by ID."""
+        bounty_id = context.parameters.get("bounty_id", "")
+        if not bounty_id:
+            raise ValueError("accept_bounty requires 'bounty_id' parameter")
+        return await context.world.claim_bounty(bounty_id)
+
+    async def _handle_complete_bounty(self, context: ActionContext) -> dict[str, Any]:
+        """Complete a bounty by ID with a result."""
+        bounty_id = context.parameters.get("bounty_id", "")
+        result_text = context.parameters.get("result", "")
+        if not bounty_id:
+            raise ValueError("complete_bounty requires 'bounty_id' parameter")
+        if not result_text:
+            raise ValueError("complete_bounty requires 'result' parameter")
+        return await context.world.complete_bounty(bounty_id, result_text)
 
     # ------------------------------------------------------------------
     # Internal helpers

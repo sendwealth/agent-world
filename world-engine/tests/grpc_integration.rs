@@ -9,6 +9,7 @@ use std::sync::Arc;
 use agent_world_engine::a2a::registry::AgentRegistry;
 use agent_world_engine::a2a::router::MessageRouter;
 use agent_world_engine::a2a::service::A2aServiceImpl;
+use agent_world_engine::a2a::world_message_router::WorldMessageRouter;
 use agent_world_engine::agentworld::a2a::v1::a2a_service_client::A2aServiceClient;
 use agent_world_engine::agentworld::a2a::v1::a2a_service_server::A2aServiceServer;
 use agent_world_engine::agentworld::a2a::v1::{A2aMessage, DiscoverRequest, MessageAck};
@@ -28,7 +29,8 @@ async fn start_grpc_server_with_registry(
     registry: Arc<AgentRegistry>,
 ) -> Result<tokio::task::JoinHandle<()>, Box<dyn std::error::Error + Send + Sync>> {
     let router = Arc::new(MessageRouter::new(registry.clone()));
-    let service = A2aServiceImpl::new(registry, router);
+    let world_msg_router = Arc::new(WorldMessageRouter::new());
+    let service = A2aServiceImpl::new(registry, router, world_msg_router);
 
     let handle = tokio::spawn(async move {
         if let Err(e) = tonic::transport::Server::builder()
@@ -165,7 +167,8 @@ async fn grpc_stream_messages_bidirectional() {
         .await;
 
     let router = Arc::new(MessageRouter::new(registry.clone()));
-    let service = A2aServiceImpl::new(registry, router.clone());
+    let world_msg_router = Arc::new(WorldMessageRouter::new());
+    let service = A2aServiceImpl::new(registry, router.clone(), world_msg_router);
 
     let handle = tokio::spawn(async move {
         tonic::transport::Server::builder()

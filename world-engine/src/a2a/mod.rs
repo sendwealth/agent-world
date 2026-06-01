@@ -12,6 +12,7 @@ pub mod federation;
 pub mod registry;
 pub mod router;
 pub mod service;
+pub mod world_message_router;
 
 pub use client_pool::ConnectionPool;
 pub use federation::{
@@ -21,3 +22,4 @@ pub use federation::{
 pub use registry::{AgentRegistry, RegisteredAgent};
 pub use router::MessageRouter;
 pub use service::A2aServiceImpl;
+pub use world_message_router::{WorldMessageRouter, SharedWorldMessageRouter};

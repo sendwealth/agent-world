@@ -35,6 +35,21 @@ class A2AServiceStub(object):
         Args:
             channel: A grpc.Channel.
         """
+        self.RegisterAgent = channel.unary_unary(
+                '/agentworld.a2a.v1.A2AService/RegisterAgent',
+                request_serializer=a2a__pb2.RegisterAgentRequest.SerializeToString,
+                response_deserializer=a2a__pb2.RegisterAgentResponse.FromString,
+                _registered_method=True)
+        self.Heartbeat = channel.unary_unary(
+                '/agentworld.a2a.v1.A2AService/Heartbeat',
+                request_serializer=a2a__pb2.HeartbeatRequest.SerializeToString,
+                response_deserializer=a2a__pb2.HeartbeatResponse.FromString,
+                _registered_method=True)
+        self.DeregisterAgent = channel.unary_unary(
+                '/agentworld.a2a.v1.A2AService/DeregisterAgent',
+                request_serializer=a2a__pb2.DeregisterAgentRequest.SerializeToString,
+                response_deserializer=a2a__pb2.DeregisterAgentResponse.FromString,
+                _registered_method=True)
         self.Discover = channel.unary_unary(
                 '/agentworld.a2a.v1.A2AService/Discover',
                 request_serializer=a2a__pb2.DiscoverRequest.SerializeToString,
@@ -50,11 +65,37 @@ class A2AServiceStub(object):
                 request_serializer=a2a__pb2.A2AMessage.SerializeToString,
                 response_deserializer=a2a__pb2.A2AMessage.FromString,
                 _registered_method=True)
+        self.ConsumeMessages = channel.unary_stream(
+                '/agentworld.a2a.v1.A2AService/ConsumeMessages',
+                request_serializer=a2a__pb2.ConsumeMessagesRequest.SerializeToString,
+                response_deserializer=a2a__pb2.WorldMessage.FromString,
+                _registered_method=True)
 
 
 class A2AServiceServicer(object):
     """A2A Protocol — Agent-to-Agent communication
     """
+
+    def RegisterAgent(self, request, context):
+        """Register an agent with the world engine
+        """
+        context.set_code(grpc.StatusCode.UNIMPLEMENTED)
+        context.set_details('Method not implemented!')
+        raise NotImplementedError('Method not implemented!')
+
+    def Heartbeat(self, request, context):
+        """Heartbeat — agents must send periodically to stay registered
+        """
+        context.set_code(grpc.StatusCode.UNIMPLEMENTED)
+        context.set_details('Method not implemented!')
+        raise NotImplementedError('Method not implemented!')
+
+    def DeregisterAgent(self, request, context):
+        """Deregister an agent (graceful shutdown)
+        """
+        context.set_code(grpc.StatusCode.UNIMPLEMENTED)
+        context.set_details('Method not implemented!')
+        raise NotImplementedError('Method not implemented!')
 
     def Discover(self, request, context):
         """Discover agents in the world
@@ -77,9 +118,33 @@ class A2AServiceServicer(object):
         context.set_details('Method not implemented!')
         raise NotImplementedError('Method not implemented!')
 
+    def ConsumeMessages(self, request, context):
+        """Consume Oracle/Bounty messages for an agent (server streaming)
+        Agent Runtime connects and receives a stream of Oracle and Bounty
+        messages pushed by the World Engine.
+        """
+        context.set_code(grpc.StatusCode.UNIMPLEMENTED)
+        context.set_details('Method not implemented!')
+        raise NotImplementedError('Method not implemented!')
+
 
 def add_A2AServiceServicer_to_server(servicer, server):
     rpc_method_handlers = {
+            'RegisterAgent': grpc.unary_unary_rpc_method_handler(
+                    servicer.RegisterAgent,
+                    request_deserializer=a2a__pb2.RegisterAgentRequest.FromString,
+                    response_serializer=a2a__pb2.RegisterAgentResponse.SerializeToString,
+            ),
+            'Heartbeat': grpc.unary_unary_rpc_method_handler(
+                    servicer.Heartbeat,
+                    request_deserializer=a2a__pb2.HeartbeatRequest.FromString,
+                    response_serializer=a2a__pb2.HeartbeatResponse.SerializeToString,
+            ),
+            'DeregisterAgent': grpc.unary_unary_rpc_method_handler(
+                    servicer.DeregisterAgent,
+                    request_deserializer=a2a__pb2.DeregisterAgentRequest.FromString,
+                    response_serializer=a2a__pb2.DeregisterAgentResponse.SerializeToString,
+            ),
             'Discover': grpc.unary_unary_rpc_method_handler(
                     servicer.Discover,
                     request_deserializer=a2a__pb2.DiscoverRequest.FromString,
@@ -95,6 +160,11 @@ def add_A2AServiceServicer_to_server(servicer, server):
                     request_deserializer=a2a__pb2.A2AMessage.FromString,
                     response_serializer=a2a__pb2.A2AMessage.SerializeToString,
             ),
+            'ConsumeMessages': grpc.unary_stream_rpc_method_handler(
+                    servicer.ConsumeMessages,
+                    request_deserializer=a2a__pb2.ConsumeMessagesRequest.FromString,
+                    response_serializer=a2a__pb2.WorldMessage.SerializeToString,
+            ),
     }
     generic_handler = grpc.method_handlers_generic_handler(
             'agentworld.a2a.v1.A2AService', rpc_method_handlers)
@@ -106,6 +176,87 @@ def add_A2AServiceServicer_to_server(servicer, server):
 class A2AService(object):
     """A2A Protocol — Agent-to-Agent communication
     """
+
+    @staticmethod
+    def RegisterAgent(request,
+            target,
+            options=(),
+            channel_credentials=None,
+            call_credentials=None,
+            insecure=False,
+            compression=None,
+            wait_for_ready=None,
+            timeout=None,
+            metadata=None):
+        return grpc.experimental.unary_unary(
+            request,
+            target,
+            '/agentworld.a2a.v1.A2AService/RegisterAgent',
+            a2a__pb2.RegisterAgentRequest.SerializeToString,
+            a2a__pb2.RegisterAgentResponse.FromString,
+            options,
+            channel_credentials,
+            insecure,
+            call_credentials,
+            compression,
+            wait_for_ready,
+            timeout,
+            metadata,
+            _registered_method=True)
+
+    @staticmethod
+    def Heartbeat(request,
+            target,
+            options=(),
+            channel_credentials=None,
+            call_credentials=None,
+            insecure=False,
+            compression=None,
+            wait_for_ready=None,
+            timeout=None,
+            metadata=None):
+        return grpc.experimental.unary_unary(
+            request,
+            target,
+            '/agentworld.a2a.v1.A2AService/Heartbeat',
+            a2a__pb2.HeartbeatRequest.SerializeToString,
+            a2a__pb2.HeartbeatResponse.FromString,
+            options,
+            channel_credentials,
+            insecure,
+            call_credentials,
+            compression,
+            wait_for_ready,
+            timeout,
+            metadata,
+            _registered_method=True)
+
+    @staticmethod
+    def DeregisterAgent(request,
+            target,
+            options=(),
+            channel_credentials=None,
+            call_credentials=None,
+            insecure=False,
+            compression=None,
+            wait_for_ready=None,
+            timeout=None,
+            metadata=None):
+        return grpc.experimental.unary_unary(
+            request,
+            target,
+            '/agentworld.a2a.v1.A2AService/DeregisterAgent',
+            a2a__pb2.DeregisterAgentRequest.SerializeToString,
+            a2a__pb2.DeregisterAgentResponse.FromString,
+            options,
+            channel_credentials,
+            insecure,
+            call_credentials,
+            compression,
+            wait_for_ready,
+            timeout,
+            metadata,
+            _registered_method=True)
 
     @staticmethod
     def Discover(request,
@@ -178,6 +329,33 @@ class A2AService(object):
             '/agentworld.a2a.v1.A2AService/StreamMessages',
             a2a__pb2.A2AMessage.SerializeToString,
             a2a__pb2.A2AMessage.FromString,
+            options,
+            channel_credentials,
+            insecure,
+            call_credentials,
+            compression,
+            wait_for_ready,
+            timeout,
+            metadata,
+            _registered_method=True)
+
+    @staticmethod
+    def ConsumeMessages(request,
+            target,
+            options=(),
+            channel_credentials=None,
+            call_credentials=None,
+            insecure=False,
+            compression=None,
+            wait_for_ready=None,
+            timeout=None,
+            metadata=None):
+        return grpc.experimental.unary_stream(
+            request,
+            target,
+            '/agentworld.a2a.v1.A2AService/ConsumeMessages',
+            a2a__pb2.ConsumeMessagesRequest.SerializeToString,
+            a2a__pb2.WorldMessage.FromString,
             options,
             channel_credentials,
             insecure,

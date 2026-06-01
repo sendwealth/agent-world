@@ -5,13 +5,15 @@ use tokio_stream::{Stream, StreamExt};
 use tonic::{Request, Response, Status};
 
 use crate::agentworld::a2a::v1::{
-    a2a_service_server::A2aService, A2aMessage, AgentInfo, DeregisterAgentRequest,
-    DeregisterAgentResponse, DiscoverRequest, DiscoverResponse, HeartbeatRequest,
-    HeartbeatResponse, MessageAck, RegisterAgentRequest, RegisterAgentResponse,
+    a2a_service_server::A2aService, A2aMessage, AgentInfo, ConsumeMessagesRequest,
+    DeregisterAgentRequest, DeregisterAgentResponse, DiscoverRequest, DiscoverResponse,
+    HeartbeatRequest, HeartbeatResponse, MessageAck, RegisterAgentRequest,
+    RegisterAgentResponse, WorldMessage,
 };
 
 use super::registry::AgentRegistry;
 use super::router::MessageRouter;
+use super::world_message_router::WorldMessageRouter;
 
 /// Maximum number of messages that can be sent in a single batch.
 const MAX_BATCH_SIZE: usize = 256;
@@ -21,11 +23,25 @@ const MAX_BATCH_SIZE: usize = 256;
 pub struct A2aServiceImpl {
     registry: Arc<AgentRegistry>,
     router: Arc<MessageRouter>,
+    world_msg_router: Arc<WorldMessageRouter>,
 }
 
 impl A2aServiceImpl {
-    pub fn new(registry: Arc<AgentRegistry>, router: Arc<MessageRouter>) -> Self {
-        Self { registry, router }
+    pub fn new(
+        registry: Arc<AgentRegistry>,
+        router: Arc<MessageRouter>,
+        world_msg_router: Arc<WorldMessageRouter>,
+    ) -> Self {
+        Self {
+            registry,
+            router,
+            world_msg_router,
+        }
+    }
+
+    /// Provide access to the shared WorldMessageRouter.
+    pub fn world_message_router(&self) -> Arc<WorldMessageRouter> {
+        self.world_msg_router.clone()
     }
 }
 
@@ -219,6 +235,43 @@ impl A2aService for A2aServiceImpl {
 
         Ok(Response::new(output))
     }
+
+    type ConsumeMessagesStream = Pin<Box<dyn Stream<Item = Result<WorldMessage, Status>> + Send>>;
+
+    async fn consume_messages(
+        &self,
+        request: Request<ConsumeMessagesRequest>,
+    ) -> Result<Response<Self::ConsumeMessagesStream>, Status> {
+        let req = request.into_inner();
+
+        if req.agent_id.is_empty() {
+            return Err(Status::invalid_argument("agent_id is required"));
+        }
+
+        let agent_id = req.agent_id;
+        let world_router = self.world_msg_router.clone();
+
+        // Open a downstream receiver for this agent's world messages
+        let rx = world_router.open_stream(agent_id.clone()).await;
+
+        // Spawn a cleanup task that waits for the stream to end (receiver
+        // dropped) and then removes the sender from the router.
+        let cleanup_router = world_router.clone();
+        let cleanup_id = agent_id.clone();
+        tokio::spawn(async move {
+            // Wait a reasonable maximum session duration, then clean up.
+            // The primary cleanup happens when the tonic response stream
+            // is dropped and the ReceiverStream ends.
+            tokio::time::sleep(std::time::Duration::from_secs(86400)).await;
+            cleanup_router.close_stream(&cleanup_id).await;
+        });
+
+        // Map the receiver stream to produce Result<WorldMessage, Status>
+        #[allow(clippy::result_large_err)]
+        let output: Self::ConsumeMessagesStream = Box::pin(rx.map(Ok));
+
+        Ok(Response::new(output))
+    }
 }
 
 // ── Batch operations ────────────────────────────────────────────────────
@@ -309,7 +362,12 @@ mod tests {
         let bus = Arc::new(EventBus::new(256));
         let registry = Arc::new(AgentRegistry::new(bus));
         let router = Arc::new(MessageRouter::new(Arc::clone(&registry)));
-        let service = A2aServiceImpl::new(Arc::clone(&registry), Arc::clone(&router));
+        let world_msg_router = Arc::new(WorldMessageRouter::new());
+        let service = A2aServiceImpl::new(
+            Arc::clone(&registry),
+            Arc::clone(&router),
+            world_msg_router,
+        );
         (service, registry, router)
     }
 

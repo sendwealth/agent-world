@@ -28,6 +28,7 @@ use crate::economy::stock_market::StockMarket;
 use crate::economy::task::TaskBoard;
 use crate::economy::tool_marketplace::ToolMarketplace;
 use crate::federation::{MigrationManager, MigrationPolicy, WorldRegistry};
+use crate::a2a::world_message_router::WorldMessageRouter;
 use crate::human::store::HumanParticipationStore;
 use crate::organization::governance::GovernanceSystem;
 use crate::organization::governance_metrics::GovernanceMetricsCollector;
@@ -200,6 +201,11 @@ pub struct AppState {
     pub experiment_store: SharedExperimentStore,
     pub ab_experiment_store: SharedABExperimentStore,
     pub plugin_manager: Option<crate::plugin::SharedPluginManager>,
+    pub world_msg_router: Option<Arc<WorldMessageRouter>>,
+    pub providers: crate::api_providers::SharedProviderStore,
+    pub agent_models: crate::api_providers::SharedAgentModelStore,
+    pub diary_store: Option<crate::api_diary::SharedDiaryStore>,
+    pub feed_store: Option<crate::api_feed::SharedFeedStore>,
 }
 
 /// Optional subsystem overrides for test AppState construction.
@@ -229,6 +235,10 @@ pub struct TestOverrides {
     pub auth_store: Option<SharedAuthStore>,
     pub ab_experiment_store: Option<SharedABExperimentStore>,
     pub plugin_manager: Option<crate::plugin::SharedPluginManager>,
+    pub providers: Option<crate::api_providers::SharedProviderStore>,
+    pub agent_models: Option<crate::api_providers::SharedAgentModelStore>,
+    pub diary_store: Option<crate::api_diary::SharedDiaryStore>,
+    pub feed_store: Option<crate::api_feed::SharedFeedStore>,
 }
 
 impl AppState {
@@ -282,6 +292,11 @@ impl AppState {
                 .ab_experiment_store
                 .unwrap_or_else(|| Arc::new(Mutex::new(Vec::new()))),
             plugin_manager: overrides.plugin_manager,
+            world_msg_router: None,
+            providers: overrides.providers.unwrap_or_else(|| Arc::new(Mutex::new(HashMap::new()))),
+            agent_models: overrides.agent_models.unwrap_or_else(|| Arc::new(Mutex::new(HashMap::new()))),
+            diary_store: overrides.diary_store,
+            feed_store: overrides.feed_store,
         }
     }
 }
@@ -353,6 +368,11 @@ fn make_test_state(
         experiment_store: Arc::new(Mutex::new(Vec::new())),
         ab_experiment_store: Arc::new(Mutex::new(Vec::new())),
         plugin_manager: None,
+        world_msg_router: None,
+        providers: Arc::new(Mutex::new(HashMap::new())),
+        agent_models: Arc::new(Mutex::new(HashMap::new())),
+        diary_store: None,
+        feed_store: None,
     }
 }
 
@@ -405,6 +425,9 @@ pub fn build_full_router(state: AppState) -> Router {
         // V1 unified export API
         .merge(crate::api_export_v1::export_v1_routes())
         .merge(crate::api_plugins::plugin_routes())
+        .merge(crate::api_providers::provider_routes())
+        .merge(crate::api_diary::diary_routes())
+        .merge(crate::api_feed::feed_routes())
         // Prometheus metrics endpoint
         .route("/metrics", get(crate::observability::metrics_handler))
         // Research API v2 (with optional auth middleware)

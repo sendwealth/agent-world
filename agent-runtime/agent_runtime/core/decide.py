@@ -79,6 +79,10 @@ class DecisionAction(str, Enum):
     JOIN_ORG = "join_org"  # 10 tokens
     PROPOSE_RULE = "propose_rule"  # 15 tokens
     VOTE_RULE = "vote_rule"  # 5 tokens
+    RESPOND_ORACLE = "respond_oracle"  # 3 tokens
+    CHECK_BOUNTIES = "check_bounties"  # 2 tokens
+    ACCEPT_BOUNTY = "accept_bounty"  # 10 tokens
+    COMPLETE_BOUNTY = "complete_bounty"  # 8 tokens
 
     @classmethod
     def all(cls) -> list[DecisionAction]:
@@ -106,6 +110,10 @@ _TOKEN_COSTS: dict[DecisionAction, int] = {
     DecisionAction.JOIN_ORG: 10,
     DecisionAction.PROPOSE_RULE: 15,
     DecisionAction.VOTE_RULE: 5,
+    DecisionAction.RESPOND_ORACLE: 3,
+    DecisionAction.CHECK_BOUNTIES: 2,
+    DecisionAction.ACCEPT_BOUNTY: 10,
+    DecisionAction.COMPLETE_BOUNTY: 8,
 }
 
 
@@ -219,7 +227,7 @@ class ValidationError(DecisionError):
 _DECISION_PROMPT_TEMPLATE = """\
 You are {name}, an autonomous agent in a simulated world. Analyze your current \
 state and choose the best action.
-
+{identity_section}
 ## Agent Identity
 - Name: {name}
 - ID: {id}
@@ -230,7 +238,7 @@ state and choose the best action.
 - Tokens: {tokens}
 - Money: {money:.1f}
 - Reputation: {reputation:.1f}
-
+{communication_section}
 ## Personality
 {personality_description}
 
@@ -276,6 +284,52 @@ Respond with ONLY a JSON object (no markdown, no explanation outside JSON):
 "confidence": <0-100>}}
 
 Choose the best action now:"""
+
+
+def _build_identity_section(state: AgentStateProtocol) -> str:
+    """Build backstory / alignment / archetype section from agent personality.
+
+    Returns an empty string if no identity data is present (backward compatible).
+    """
+    personality = getattr(state, "personality", None)
+    if not personality or not isinstance(personality, dict):
+        return ""
+
+    parts: list[str] = []
+
+    backstory = personality.get("backstory", "")
+    if backstory:
+        parts.append(f"\n## Backstory\n{backstory}")
+
+    alignment = personality.get("alignment", "")
+    if alignment:
+        parts.append(f"\n## Alignment\n{alignment}")
+
+    archetype = personality.get("archetype", "")
+    if archetype:
+        parts.append(f"\n## Archetype\n{archetype}")
+
+    bio = personality.get("bio", "")
+    if bio:
+        parts.append(f"\n## Bio\n{bio}")
+
+    return "\n".join(parts)
+
+
+def _build_communication_section(state: AgentStateProtocol) -> str:
+    """Build communication style section from agent personality.
+
+    Returns an empty string if no communication_style is configured.
+    """
+    personality = getattr(state, "personality", None)
+    if not personality or not isinstance(personality, dict):
+        return ""
+
+    comm_style = personality.get("communication_style", "")
+    if not comm_style:
+        return ""
+
+    return f"\n## Communication Style\n{comm_style}\n"
 
 
 def build_prompt(
@@ -376,6 +430,10 @@ def build_prompt(
     # Mood description
     mood_desc = mood_description or "No mood data available."
 
+    # Build identity section from agent personality dict
+    identity_section = _build_identity_section(state)
+    communication_section = _build_communication_section(state)
+
     return _DECISION_PROMPT_TEMPLATE.format(
         name=state.name,
         id=state.id,
@@ -384,6 +442,8 @@ def build_prompt(
         tokens=state.tokens,
         money=state.money,
         reputation=state.reputation,
+        identity_section=identity_section,
+        communication_section=communication_section,
         personality_description=personality_description,
         mood_description=mood_desc,
         skills_section=skills_section,
@@ -600,10 +660,21 @@ class EmotionContextProvider(Protocol):
 class DecisionEngine:
     """Core decision engine that drives agent behavior via LLM.
 
+    Supports optional fallback providers: if the primary LLM call fails,
+    each fallback is tried in order.  If all providers fail, a random
+    decision is returned (via ``fallback_decision()``).
+
     Usage::
 
         engine = DecisionEngine(provider=my_llm)
         decision = await engine.decide(state, perception, survival)
+
+    With fallbacks::
+
+        from agent_runtime.llm.fallback import ModelFallback, FallbackChainProvider
+
+        chain = ModelFallback(primary=primary_llm, fallbacks=[backup_llm])
+        engine = DecisionEngine(provider=FallbackChainProvider(chain))
     """
 
     def __init__(
@@ -613,11 +684,13 @@ class DecisionEngine:
         pipeline: ContextEnginePipeline | None = None,
         social_provider: SocialContextProvider | None = None,
         emotion_provider: EmotionContextProvider | None = None,
+        fallback_providers: list[LLMProvider] | None = None,
     ) -> None:
         self._provider = provider
         self._pipeline = pipeline
         self._social_provider = social_provider
         self._emotion_provider = emotion_provider
+        self._fallback_providers = fallback_providers or []
 
     async def decide(
         self,
@@ -702,7 +775,11 @@ class DecisionEngine:
         social: SocialContext | None = None,
         mood_description: str | None = None,
     ) -> Decision:
-        """Attempt to generate a validated decision via the LLM."""
+        """Attempt to generate a validated decision via the LLM.
+
+        If the primary provider fails, tries each fallback provider in
+        order.  Raises ``LlmCallError`` only when all providers fail.
+        """
         if self._pipeline is not None:
             pipeline_result: PipelineResult = self._pipeline.run(
                 perception=perception,
@@ -716,26 +793,70 @@ class DecisionEngine:
                 mood_description=mood_description,
             )
 
-        # Call LLM provider
-        try:
-            response = await self._provider.chat([LLMMessage(role="user", content=prompt)])
-        except Exception as e:
-            raise LlmCallError(f"LLM request failed: {e}") from e
+        # Build the provider chain: primary + fallbacks
+        providers = [self._provider] + self._fallback_providers
+        messages = [LLMMessage(role="user", content=prompt)]
 
-        raw = response.content
+        last_error: Exception | None = None
+        for i, provider in enumerate(providers):
+            label = "primary" if i == 0 else f"fallback[{i - 1}]"
+            try:
+                response = await provider.chat(messages)
+                # Parse and validate the response
+                raw = response.content
+                parsed = parse_llm_response(raw)
+                decision = Decision(
+                    action=DecisionAction(parsed["action"]),
+                    parameters=parsed["parameters"],
+                    reasoning=parsed["reasoning"],
+                    confidence=parsed["confidence"],
+                )
+                validate_decision(decision, state, available_actions)
 
-        # Parse JSON
-        parsed = parse_llm_response(raw)
+                if i > 0:
+                    logger.info(
+                        "Fallback triggered: %s succeeded for agent %s "
+                        "(provider=%s, model=%s)",
+                        label,
+                        state.id,
+                        provider._config.provider.value,
+                        provider._config.model,
+                        extra={
+                            "event": "fallback_triggered",
+                            "agent": state.id,
+                            "fallback_index": i - 1,
+                            "provider": provider._config.provider.value,
+                            "model": provider._config.model,
+                        },
+                    )
 
-        # Build Decision object
-        decision = Decision(
-            action=DecisionAction(parsed["action"]),
-            parameters=parsed["parameters"],
-            reasoning=parsed["reasoning"],
-            confidence=parsed["confidence"],
-        )
+                return decision
+            except Exception as exc:
+                last_error = exc
+                if i < len(providers) - 1:
+                    next_label = "fallback[0]" if i == 0 else f"fallback[{i}]"
+                    logger.warning(
+                        "Fallback triggered: %s failed for agent %s (%s: %s), "
+                        "trying %s",
+                        label,
+                        state.id,
+                        type(exc).__name__,
+                        exc,
+                        next_label,
+                        extra={
+                            "event": "fallback_triggered",
+                            "agent": state.id,
+                            "failed_provider": provider._config.provider.value
+                            if hasattr(provider, "_config")
+                            else "unknown",
+                        },
+                    )
 
-        # Validate
-        validate_decision(decision, state, available_actions)
+        # All providers failed
+        if last_error is not None:
+            raise LlmCallError(
+                f"All providers failed (primary + {len(self._fallback_providers)} "
+                f"fallbacks): {last_error}"
+            ) from last_error
 
-        return decision
+        raise LlmCallError("No providers available")

@@ -24,27 +24,49 @@ _sym_db = _symbol_database.Default()
 
 
 
-DESCRIPTOR = _descriptor_pool.Default().AddSerializedFile(b'\n\ta2a.proto\x12\x11\x61gentworld.a2a.v1\"9\n\x0f\x44iscoverRequest\x12\x10\n\x08\x61gent_id\x18\x01 \x01(\t\x12\x14\n\x0c\x63\x61pabilities\x18\x02 \x03(\t\"@\n\x10\x44iscoverResponse\x12,\n\x06\x61gents\x18\x01 \x03(\x0b\x32\x1c.agentworld.a2a.v1.AgentInfo\"\x9c\x01\n\tAgentInfo\x12\x10\n\x08\x61gent_id\x18\x01 \x01(\t\x12\x0c\n\x04name\x18\x02 \x01(\t\x12\x0e\n\x06tokens\x18\x03 \x01(\x03\x12\r\n\x05money\x18\x04 \x01(\x03\x12\x0e\n\x06skills\x18\x05 \x03(\t\x12\x12\n\nreputation\x18\x06 \x01(\x02\x12,\n\x05phase\x18\x07 \x01(\x0e\x32\x1d.agentworld.a2a.v1.AgentPhase\"\xb2\x01\n\nA2AMessage\x12\n\n\x02id\x18\x01 \x01(\t\x12\x12\n\nfrom_agent\x18\x02 \x01(\t\x12\x10\n\x08to_agent\x18\x03 \x01(\t\x12,\n\x04type\x18\x04 \x01(\x0e\x32\x1e.agentworld.a2a.v1.MessageType\x12\x0f\n\x07payload\x18\x05 \x01(\x0c\x12\x11\n\ttimestamp\x18\x06 \x01(\x03\x12\x11\n\tsignature\x18\x07 \x01(\t\x12\r\n\x05nonce\x18\x08 \x01(\t\"-\n\nMessageAck\x12\x10\n\x08received\x18\x01 \x01(\x08\x12\r\n\x05\x65rror\x18\x02 \x01(\t*F\n\nAgentPhase\x12\t\n\x05\x42IRTH\x10\x00\x12\r\n\tCHILDHOOD\x10\x01\x12\t\n\x05\x41\x44ULT\x10\x02\x12\t\n\x05\x45LDER\x10\x03\x12\x08\n\x04\x44\x45\x41\x44\x10\x04*|\n\x0bMessageType\x12\x0c\n\x08\x44ISCOVER\x10\x00\x12\x0b\n\x07PROPOSE\x10\x01\x12\n\n\x06\x41\x43\x43\x45PT\x10\x02\x12\n\n\x06REJECT\x10\x03\x12\n\n\x06INFORM\x10\x04\x12\t\n\x05TEACH\x10\x05\x12\r\n\tREPRODUCE\x10\x06\x12\x08\n\x04WILL\x10\x07\x12\n\n\x06THREAT\x10\x08\x32\x82\x02\n\nA2AService\x12S\n\x08\x44iscover\x12\".agentworld.a2a.v1.DiscoverRequest\x1a#.agentworld.a2a.v1.DiscoverResponse\x12K\n\x0bSendMessage\x12\x1d.agentworld.a2a.v1.A2AMessage\x1a\x1d.agentworld.a2a.v1.MessageAck\x12R\n\x0eStreamMessages\x12\x1d.agentworld.a2a.v1.A2AMessage\x1a\x1d.agentworld.a2a.v1.A2AMessage(\x01\x30\x01\x62\x06proto3')
+DESCRIPTOR = _descriptor_pool.Default().AddSerializedFile(b'\n\ta2a.proto\x12\x11\x61gentworld.a2a.v1\"`\n\x14RegisterAgentRequest\x12\x10\n\x08\x61gent_id\x18\x01 \x01(\t\x12\x0c\n\x04name\x18\x02 \x01(\t\x12\x14\n\x0c\x63\x61pabilities\x18\x03 \x03(\t\x12\x12\n\npublic_key\x18\x04 \x01(\t\"J\n\x15RegisterAgentResponse\x12\x0f\n\x07success\x18\x01 \x01(\x08\x12\r\n\x05\x65rror\x18\x02 \x01(\t\x12\x11\n\ttimestamp\x18\x03 \x01(\x03\"$\n\x10HeartbeatRequest\x12\x10\n\x08\x61gent_id\x18\x01 \x01(\t\"7\n\x11HeartbeatResponse\x12\r\n\x05\x61live\x18\x01 \x01(\x08\x12\x13\n\x0bserver_time\x18\x02 \x01(\x03\"=\n\x16\x44\x65registerAgentRequest\x12\x10\n\x08\x61gent_id\x18\x01 \x01(\t\x12\x11\n\tsignature\x18\x02 \x01(\t\"9\n\x17\x44\x65registerAgentResponse\x12\x0f\n\x07success\x18\x01 \x01(\x08\x12\r\n\x05\x65rror\x18\x02 \x01(\t\"9\n\x0f\x44iscoverRequest\x12\x10\n\x08\x61gent_id\x18\x01 \x01(\t\x12\x14\n\x0c\x63\x61pabilities\x18\x02 \x03(\t\"@\n\x10\x44iscoverResponse\x12,\n\x06\x61gents\x18\x01 \x03(\x0b\x32\x1c.agentworld.a2a.v1.AgentInfo\"\xaf\x01\n\tAgentInfo\x12\x10\n\x08\x61gent_id\x18\x01 \x01(\t\x12\x0c\n\x04name\x18\x02 \x01(\t\x12\x0e\n\x06tokens\x18\x03 \x01(\x03\x12\r\n\x05money\x18\x04 \x01(\x03\x12\x0e\n\x06skills\x18\x05 \x03(\t\x12\x12\n\nreputation\x18\x06 \x01(\x02\x12,\n\x05phase\x18\x07 \x01(\x0e\x32\x1d.agentworld.a2a.v1.AgentPhase\x12\x11\n\tlast_seen\x18\x08 \x01(\x03\"\xb2\x01\n\nA2AMessage\x12\n\n\x02id\x18\x01 \x01(\t\x12\x12\n\nfrom_agent\x18\x02 \x01(\t\x12\x10\n\x08to_agent\x18\x03 \x01(\t\x12,\n\x04type\x18\x04 \x01(\x0e\x32\x1e.agentworld.a2a.v1.MessageType\x12\x0f\n\x07payload\x18\x05 \x01(\x0c\x12\x11\n\ttimestamp\x18\x06 \x01(\x03\x12\x11\n\tsignature\x18\x07 \x01(\t\x12\r\n\x05nonce\x18\x08 \x01(\t\"-\n\nMessageAck\x12\x10\n\x08received\x18\x01 \x01(\x08\x12\r\n\x05\x65rror\x18\x02 \x01(\t\"*\n\x16\x43onsumeMessagesRequest\x12\x10\n\x08\x61gent_id\x18\x01 \x01(\t\"\xa0\x01\n\x0cWorldMessage\x12\n\n\x02id\x18\x01 \x01(\t\x12\x32\n\x06oracle\x18\x02 \x01(\x0b\x32 .agentworld.a2a.v1.OraclePayloadH\x00\x12\x32\n\x06\x62ounty\x18\x03 \x01(\x0b\x32 .agentworld.a2a.v1.BountyPayloadH\x00\x12\x11\n\ttimestamp\x18\x04 \x01(\x03\x42\t\n\x07payload\"\x8d\x01\n\rOraclePayload\x12\x11\n\toracle_id\x18\x01 \x01(\t\x12\x32\n\x0boracle_type\x18\x02 \x01(\x0e\x32\x1d.agentworld.a2a.v1.OracleType\x12\x0f\n\x07\x63ontent\x18\x03 \x01(\t\x12\x12\n\nfrom_human\x18\x04 \x01(\x08\x12\x10\n\x08human_id\x18\x05 \x01(\t\"\x7f\n\rBountyPayload\x12\x11\n\tbounty_id\x18\x01 \x01(\t\x12\r\n\x05title\x18\x02 \x01(\t\x12\x13\n\x0b\x64\x65scription\x18\x03 \x01(\t\x12\x0e\n\x06reward\x18\x04 \x01(\x04\x12\x15\n\rdeadline_tick\x18\x05 \x01(\x03\x12\x10\n\x08human_id\x18\x06 \x01(\t*F\n\nAgentPhase\x12\t\n\x05\x42IRTH\x10\x00\x12\r\n\tCHILDHOOD\x10\x01\x12\t\n\x05\x41\x44ULT\x10\x02\x12\t\n\x05\x45LDER\x10\x03\x12\x08\n\x04\x44\x45\x41\x44\x10\x04*|\n\x0bMessageType\x12\x0c\n\x08\x44ISCOVER\x10\x00\x12\x0b\n\x07PROPOSE\x10\x01\x12\n\n\x06\x41\x43\x43\x45PT\x10\x02\x12\n\n\x06REJECT\x10\x03\x12\n\n\x06INFORM\x10\x04\x12\t\n\x05TEACH\x10\x05\x12\r\n\tREPRODUCE\x10\x06\x12\x08\n\x04WILL\x10\x07\x12\n\n\x06THREAT\x10\x08*@\n\nOracleType\x12\x0c\n\x08GUIDANCE\x10\x00\x12\x0b\n\x07WARNING\x10\x01\x12\x0c\n\x08\x42LESSING\x10\x02\x12\t\n\x05\x43URSE\x10\x03\x32\x89\x05\n\nA2AService\x12\x62\n\rRegisterAgent\x12\'.agentworld.a2a.v1.RegisterAgentRequest\x1a(.agentworld.a2a.v1.RegisterAgentResponse\x12V\n\tHeartbeat\x12#.agentworld.a2a.v1.HeartbeatRequest\x1a$.agentworld.a2a.v1.HeartbeatResponse\x12h\n\x0f\x44\x65registerAgent\x12).agentworld.a2a.v1.DeregisterAgentRequest\x1a*.agentworld.a2a.v1.DeregisterAgentResponse\x12S\n\x08\x44iscover\x12\".agentworld.a2a.v1.DiscoverRequest\x1a#.agentworld.a2a.v1.DiscoverResponse\x12K\n\x0bSendMessage\x12\x1d.agentworld.a2a.v1.A2AMessage\x1a\x1d.agentworld.a2a.v1.MessageAck\x12R\n\x0eStreamMessages\x12\x1d.agentworld.a2a.v1.A2AMessage\x1a\x1d.agentworld.a2a.v1.A2AMessage(\x01\x30\x01\x12_\n\x0f\x43onsumeMessages\x12).agentworld.a2a.v1.ConsumeMessagesRequest\x1a\x1f.agentworld.a2a.v1.WorldMessage0\x01\x62\x06proto3')
 
 _globals = globals()
 _builder.BuildMessageAndEnumDescriptors(DESCRIPTOR, _globals)
 _builder.BuildTopDescriptorsAndMessages(DESCRIPTOR, 'a2a_pb2', _globals)
 if not _descriptor._USE_C_DESCRIPTORS:
   DESCRIPTOR._loaded_options = None
-  _globals['_AGENTPHASE']._serialized_start=544
-  _globals['_AGENTPHASE']._serialized_end=614
-  _globals['_MESSAGETYPE']._serialized_start=616
-  _globals['_MESSAGETYPE']._serialized_end=740
-  _globals['_DISCOVERREQUEST']._serialized_start=32
-  _globals['_DISCOVERREQUEST']._serialized_end=89
-  _globals['_DISCOVERRESPONSE']._serialized_start=91
-  _globals['_DISCOVERRESPONSE']._serialized_end=155
-  _globals['_AGENTINFO']._serialized_start=158
-  _globals['_AGENTINFO']._serialized_end=314
-  _globals['_A2AMESSAGE']._serialized_start=317
-  _globals['_A2AMESSAGE']._serialized_end=495
-  _globals['_MESSAGEACK']._serialized_start=497
-  _globals['_MESSAGEACK']._serialized_end=542
-  _globals['_A2ASERVICE']._serialized_start=743
-  _globals['_A2ASERVICE']._serialized_end=1001
+  _globals['_AGENTPHASE']._serialized_start=1434
+  _globals['_AGENTPHASE']._serialized_end=1504
+  _globals['_MESSAGETYPE']._serialized_start=1506
+  _globals['_MESSAGETYPE']._serialized_end=1630
+  _globals['_ORACLETYPE']._serialized_start=1632
+  _globals['_ORACLETYPE']._serialized_end=1696
+  _globals['_REGISTERAGENTREQUEST']._serialized_start=32
+  _globals['_REGISTERAGENTREQUEST']._serialized_end=128
+  _globals['_REGISTERAGENTRESPONSE']._serialized_start=130
+  _globals['_REGISTERAGENTRESPONSE']._serialized_end=204
+  _globals['_HEARTBEATREQUEST']._serialized_start=206
+  _globals['_HEARTBEATREQUEST']._serialized_end=242
+  _globals['_HEARTBEATRESPONSE']._serialized_start=244
+  _globals['_HEARTBEATRESPONSE']._serialized_end=299
+  _globals['_DEREGISTERAGENTREQUEST']._serialized_start=301
+  _globals['_DEREGISTERAGENTREQUEST']._serialized_end=362
+  _globals['_DEREGISTERAGENTRESPONSE']._serialized_start=364
+  _globals['_DEREGISTERAGENTRESPONSE']._serialized_end=421
+  _globals['_DISCOVERREQUEST']._serialized_start=423
+  _globals['_DISCOVERREQUEST']._serialized_end=480
+  _globals['_DISCOVERRESPONSE']._serialized_start=482
+  _globals['_DISCOVERRESPONSE']._serialized_end=546
+  _globals['_AGENTINFO']._serialized_start=549
+  _globals['_AGENTINFO']._serialized_end=724
+  _globals['_A2AMESSAGE']._serialized_start=727
+  _globals['_A2AMESSAGE']._serialized_end=905
+  _globals['_MESSAGEACK']._serialized_start=907
+  _globals['_MESSAGEACK']._serialized_end=952
+  _globals['_CONSUMEMESSAGESREQUEST']._serialized_start=954
+  _globals['_CONSUMEMESSAGESREQUEST']._serialized_end=996
+  _globals['_WORLDMESSAGE']._serialized_start=999
+  _globals['_WORLDMESSAGE']._serialized_end=1159
+  _globals['_ORACLEPAYLOAD']._serialized_start=1162
+  _globals['_ORACLEPAYLOAD']._serialized_end=1303
+  _globals['_BOUNTYPAYLOAD']._serialized_start=1305
+  _globals['_BOUNTYPAYLOAD']._serialized_end=1432
+  _globals['_A2ASERVICE']._serialized_start=1699
+  _globals['_A2ASERVICE']._serialized_end=2348
 # @@protoc_insertion_point(module_scope)

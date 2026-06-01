@@ -506,6 +506,18 @@ export interface AgentNotification {
 
 // Agent Diary types
 
+export type DiaryMood =
+  | "happy"
+  | "anxious"
+  | "fearful"
+  | "calm"
+  | "hopeful"
+  | "angry"
+  | "sad"
+  | "neutral"
+  | "excited"
+  | "confused";
+
 export interface DiaryEntry {
   agent_id: string;
   tick: number;
@@ -538,3 +550,4 @@ export interface ChatMessage {
   /** Urgency flag (low token, death risk) */
   urgent?: boolean;
 }
+

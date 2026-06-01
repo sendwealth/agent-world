@@ -120,7 +120,8 @@ class ModelRegistry:
         self._provider_type_map: dict[str, type[LLMProvider]] = {}
         self._agent_models: dict[str, str] = {}  # agent_id → provider_id
         self._agent_models_version: int = 0  # bumped on every hot_swap
-        self._agent_model_overrides: dict[str, tuple[str, str]] = {}  # agent_id → (provider_id, model)
+        # agent_id → (provider_id, model)
+        self._agent_model_overrides: dict[str, tuple[str, str]] = {}
         # Register the three built-in providers so that existing code
         # ``create_provider(LLMConfig(provider=ProviderType.OPENAI, ...))``
         # keeps working out of the box.

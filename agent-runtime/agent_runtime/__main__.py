@@ -1093,7 +1093,11 @@ def _create_social_context_provider(state: AgentState) -> Any:
 class HealthCheckServer:
     """Lightweight HTTP health check server using asyncio.
 
-    Exposes ``GET /health`` returning JSON with agent status.
+    Exposes:
+
+    - ``GET /health`` — JSON with agent status.
+    - ``POST /api/v1/runtime/swap-model`` — Hot-swap the agent's LLM model at runtime.
+
     Runs alongside the ThinkLoop.
     """
 
@@ -1153,21 +1157,38 @@ class HealthCheckServer:
             request_line = await asyncio.wait_for(reader.readline(), timeout=5.0)
             request_str = request_line.decode("ascii", errors="replace").strip()
 
-            # Drain remaining headers (with upper limit to prevent abuse)
+            # Read remaining headers and collect body
+            content_length = 0
+            body_buf = b""
             for _ in range(64):
                 line = await asyncio.wait_for(reader.readline(), timeout=2.0)
                 if line in (b"\r\n", b"\n", b""):
                     break
+                # Parse Content-Length header
+                line_str = line.decode("ascii", errors="replace").strip().lower()
+                if line_str.startswith("content-length:"):
+                    try:
+                        content_length = int(line_str.split(":", 1)[1].strip())
+                    except ValueError:
+                        pass
             else:
                 # Too many headers — close connection
                 writer.write(b"HTTP/1.1 400 Bad Request\r\nConnection: close\r\n\r\n")
                 await writer.drain()
                 return
 
-            # Only respond to GET /health (exact path match, allow query string)
+            # Read body if Content-Length is set
+            if content_length > 0:
+                body_buf = await asyncio.wait_for(
+                    reader.readexactly(content_length), timeout=5.0
+                )
+
+            # Route the request
             parts = request_str.split()
+            method = parts[0] if parts else ""
             path = parts[1].split("?")[0] if len(parts) >= 2 else ""
-            if parts and parts[0] == "GET" and path == "/health":
+
+            if method == "GET" and path == "/health":
                 uptime = time.monotonic() - self._start_time
                 body = json.dumps({
                     "status": "running" if self._think_loop.running else "stopped",
@@ -1183,6 +1204,10 @@ class HealthCheckServer:
                     "\r\n"
                     f"{body}"
                 )
+
+            elif method == "POST" and path == "/api/v1/runtime/swap-model":
+                response = self._handle_swap_model(body_buf)
+
             else:
                 response = "HTTP/1.1 404 Not Found\r\nConnection: close\r\n\r\n"
 
@@ -1196,6 +1221,73 @@ class HealthCheckServer:
                 await writer.wait_closed()
             except Exception:
                 pass
+
+    def _handle_swap_model(self, body_buf: bytes) -> str:
+        """Handle POST /api/v1/runtime/swap-model.
+
+        Expected JSON body: ``{"agent_id": "...", "provider_id": "...", "model": "..."}``
+        """
+        from agent_runtime.llm.provider_registry import ModelRegistry
+
+        try:
+            payload = json.loads(body_buf) if body_buf else {}
+        except json.JSONDecodeError:
+            body = json.dumps({"error": "Invalid JSON body"})
+            return (
+                "HTTP/1.1 400 Bad Request\r\n"
+                "Content-Type: application/json\r\n"
+                f"Content-Length: {len(body)}\r\n"
+                "Connection: close\r\n"
+                "\r\n"
+                f"{body}"
+            )
+
+        agent_id = payload.get("agent_id")
+        provider_id = payload.get("provider_id")
+        model = payload.get("model")
+
+        if not agent_id or not provider_id or not model:
+            body = json.dumps({
+                "error": "Missing required fields: agent_id, provider_id, model",
+            })
+            return (
+                "HTTP/1.1 400 Bad Request\r\n"
+                "Content-Type: application/json\r\n"
+                f"Content-Length: {len(body)}\r\n"
+                "Connection: close\r\n"
+                "\r\n"
+                f"{body}"
+            )
+
+        reg = ModelRegistry.instance()
+        try:
+            reg.hot_swap_model(agent_id, provider_id, model)
+        except KeyError as exc:
+            body = json.dumps({"error": str(exc)})
+            return (
+                "HTTP/1.1 404 Not Found\r\n"
+                "Content-Type: application/json\r\n"
+                f"Content-Length: {len(body)}\r\n"
+                "Connection: close\r\n"
+                "\r\n"
+                f"{body}"
+            )
+
+        body = json.dumps({
+            "status": "ok",
+            "agent_id": agent_id,
+            "provider_id": provider_id,
+            "model": model,
+            "tick": self._think_loop.tick,
+        })
+        return (
+            "HTTP/1.1 200 OK\r\n"
+            "Content-Type: application/json\r\n"
+            f"Content-Length: {len(body)}\r\n"
+            "Connection: close\r\n"
+            "\r\n"
+            f"{body}"
+        )
 
 
 def _get_health_port(config: RuntimeConfig) -> int:

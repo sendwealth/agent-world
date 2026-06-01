@@ -17,7 +17,7 @@ use crate::auth::{extractors::require_capability, Capability, RequireAuth};
 use crate::human::store::{
     ClaimAgentRequest, ClaimBountyRequest, CompleteBountyRequest, CreateBountyRequest,
     InfluenceRankingsQuery, InvestRequest, ListBountiesQuery, ListOraclesQuery, OracleType,
-    SendOracleRequest,
+    OracleResponseRequest, SendOracleRequest,
 };
 
 // ── Human Participation API Handlers ──────────────────────
@@ -170,6 +170,33 @@ pub async fn human_get_oracle(
             StatusCode::NOT_FOUND,
             Json(ErrorResponse {
                 error: "Oracle not found".into(),
+            }),
+        )
+            .into_response(),
+    }
+}
+
+pub async fn human_oracle_response(
+    State(state): State<AppState>,
+    Path(id): Path<String>,
+    Json(body): Json<OracleResponseRequest>,
+) -> impl IntoResponse {
+    if body.response.trim().is_empty() {
+        return (
+            StatusCode::BAD_REQUEST,
+            Json(ErrorResponse {
+                error: "Response content cannot be empty".into(),
+            }),
+        )
+            .into_response();
+    }
+    let mut store = state.human_store.lock().await;
+    match store.respond_to_oracle(&id, &body.agent_id, &body.response) {
+        Some(oracle) => Json(oracle).into_response(),
+        None => (
+            StatusCode::BAD_REQUEST,
+            Json(ErrorResponse {
+                error: "Oracle not found or cannot be responded to".into(),
             }),
         )
             .into_response(),
@@ -440,6 +467,10 @@ pub fn human_routes() -> axum::Router<AppState> {
         .route("/api/v1/human/oracles", get(human_list_oracles))
         .route("/api/v1/human/oracles", post(human_send_oracle))
         .route("/api/v1/human/oracles/:id", get(human_get_oracle))
+        .route(
+            "/api/v1/agents/:id/oracle-response",
+            post(human_oracle_response),
+        )
         .route("/api/v1/human/bounties", get(human_list_bounties))
         .route("/api/v1/human/bounties", post(human_create_bounty))
         .route("/api/v1/human/bounties/:id", get(human_get_bounty))

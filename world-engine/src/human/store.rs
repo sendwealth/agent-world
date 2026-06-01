@@ -176,6 +176,12 @@ pub struct CompleteBountyRequest {
 }
 
 #[derive(Debug, Deserialize)]
+pub struct OracleResponseRequest {
+    pub agent_id: String,
+    pub response: String,
+}
+
+#[derive(Debug, Deserialize)]
 pub struct ClaimAgentRequest {
     pub human_id: String,
     pub agent_id: String,
@@ -284,6 +290,21 @@ impl HumanParticipationStore {
 
     pub fn get_oracle(&self, id: &str) -> Option<&Oracle> {
         self.oracles.iter().find(|o| o.id == id)
+    }
+
+    pub fn respond_to_oracle(&mut self, oracle_id: &str, agent_id: &str, response: &str) -> Option<Oracle> {
+        let oracle = self.oracles.iter_mut().find(|o| o.id == oracle_id)?;
+        // Verify the oracle is targeted at this agent
+        if oracle.target_agent_id != agent_id {
+            return None;
+        }
+        // Only respond to delivered or pending oracles
+        if oracle.status != OracleStatus::Pending && oracle.status != OracleStatus::Delivered {
+            return None;
+        }
+        oracle.agent_response = Some(response.to_string());
+        oracle.status = OracleStatus::Acknowledged;
+        Some(oracle.clone())
     }
 
     // ── Bounty operations ────────────────────────────────────

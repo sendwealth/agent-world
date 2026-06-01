@@ -79,6 +79,10 @@ class DecisionAction(str, Enum):
     JOIN_ORG = "join_org"  # 10 tokens
     PROPOSE_RULE = "propose_rule"  # 15 tokens
     VOTE_RULE = "vote_rule"  # 5 tokens
+    RESPOND_ORACLE = "respond_oracle"  # 3 tokens
+    CHECK_BOUNTIES = "check_bounties"  # 2 tokens
+    ACCEPT_BOUNTY = "accept_bounty"  # 10 tokens
+    COMPLETE_BOUNTY = "complete_bounty"  # 8 tokens
 
     @classmethod
     def all(cls) -> list[DecisionAction]:
@@ -106,6 +110,10 @@ _TOKEN_COSTS: dict[DecisionAction, int] = {
     DecisionAction.JOIN_ORG: 10,
     DecisionAction.PROPOSE_RULE: 15,
     DecisionAction.VOTE_RULE: 5,
+    DecisionAction.RESPOND_ORACLE: 3,
+    DecisionAction.CHECK_BOUNTIES: 2,
+    DecisionAction.ACCEPT_BOUNTY: 10,
+    DecisionAction.COMPLETE_BOUNTY: 8,
 }
 
 

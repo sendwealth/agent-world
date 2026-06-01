@@ -194,6 +194,72 @@ class GRPCWorldClient:
             raise
 
     # ------------------------------------------------------------------
+    # Oracle & Bounty methods (Human Participation integration)
+    # ------------------------------------------------------------------
+
+    async def respond_to_oracle(self, oracle_id: str, response: str) -> dict[str, Any]:
+        """Respond to an Oracle — sent as an INFORM message to World Engine."""
+        try:
+            ack = await self._client.send_message(
+                message_type=a2a_pb2.INFORM,
+                payload={
+                    "action": "respond_oracle",
+                    "oracle_id": oracle_id,
+                    "response": response,
+                },
+            )
+            return {"status": "ok", "oracle_id": oracle_id, "received": ack.received}
+        except Exception:
+            logger.exception("respond_to_oracle failed")
+            raise
+
+    async def check_bounties(self) -> dict[str, Any]:
+        """Check available bounties — sent as a DISCOVER message."""
+        try:
+            response = await self._client.discover(capabilities=["bounties"])
+            return {
+                "status": "ok",
+                "bounties": [
+                    {"id": a.agent_id, "name": a.name}
+                    for a in response.agents
+                ],
+            }
+        except Exception:
+            logger.exception("check_bounties failed")
+            raise
+
+    async def claim_bounty(self, bounty_id: str) -> dict[str, Any]:
+        """Claim a bounty — sent as a PROPOSE message to World Engine."""
+        try:
+            ack = await self._client.send_message(
+                message_type=a2a_pb2.PROPOSE,
+                payload={
+                    "action": "claim_bounty",
+                    "bounty_id": bounty_id,
+                },
+            )
+            return {"status": "ok", "bounty_id": bounty_id, "received": ack.received}
+        except Exception:
+            logger.exception("claim_bounty failed")
+            raise
+
+    async def complete_bounty(self, bounty_id: str, result: str) -> dict[str, Any]:
+        """Complete a bounty — sent as an INFORM message to World Engine."""
+        try:
+            ack = await self._client.send_message(
+                message_type=a2a_pb2.INFORM,
+                payload={
+                    "action": "complete_bounty",
+                    "bounty_id": bounty_id,
+                    "result": result,
+                },
+            )
+            return {"status": "ok", "bounty_id": bounty_id, "received": ack.received}
+        except Exception:
+            logger.exception("complete_bounty failed")
+            raise
+
+    # ------------------------------------------------------------------
     # A2AClientProtocol method (SurvivalInstinct integration)
     # ------------------------------------------------------------------
 

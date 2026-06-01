@@ -129,6 +129,10 @@ class TestActionType:
             "join_org",
             "propose_rule",
             "vote_rule",
+            "respond_oracle",
+            "check_bounties",
+            "accept_bounty",
+            "complete_bounty",
         }
         assert {t.value for t in ActionType} == expected
 

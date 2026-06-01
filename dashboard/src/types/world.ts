@@ -451,6 +451,45 @@ export interface DiscoverModelsResult {
   models: string[];
 }
 
+// Agent model assignment types
+
+export interface AgentModelAssignment {
+  agent_id: string;
+  provider_id: string;
+  model_id: string;
+}
+
+export interface SetAgentModelRequest {
+  provider_id: string;
+  model_id: string;
+}
+
+/** Agent record from GET /api/v1/agents (world engine). */
+export interface AgentRecord {
+  id: string;
+  name: string;
+  phase: string;
+  tokens: number;
+  money: number;
+  alive: boolean;
+  ticks_survived: number;
+  personality: string;
+  parent_ids: string[];
+  generation: number;
+  skills: Record<string, number>;
+}
+
+/** Provider response from GET /api/v1/providers (includes is_default). */
+export interface ProviderResponse {
+  id: string;
+  protocol: string;
+  base_url: string;
+  api_key?: string;
+  api_version?: string;
+  display_name?: string;
+  is_default: boolean;
+}
+
 export type NotificationType =
   | "agent_death"
   | "leadership_changed"

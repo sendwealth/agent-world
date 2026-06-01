@@ -434,8 +434,10 @@ export interface Provider {
   protocol: ProviderProtocol;
   base_url: string;
   api_key?: string;
+  api_version?: string;
   models?: string[];
   status?: ConnectionStatus;
+  is_default?: boolean;
   created_at?: string;
   updated_at?: string;
 }
@@ -477,17 +479,6 @@ export interface AgentRecord {
   parent_ids: string[];
   generation: number;
   skills: Record<string, number>;
-}
-
-/** Provider response from GET /api/v1/providers (includes is_default). */
-export interface ProviderResponse {
-  id: string;
-  protocol: string;
-  base_url: string;
-  api_key?: string;
-  api_version?: string;
-  display_name?: string;
-  is_default: boolean;
 }
 
 export type NotificationType =

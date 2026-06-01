@@ -1,13 +1,17 @@
 "use client";
 
-import { useEffect, useState, useCallback } from "react";
+import { useEffect, useState, useCallback, useRef } from "react";
 import type {
   AgentRecord,
   AgentModelAssignment,
-  ProviderResponse,
+  Provider,
   SetAgentModelRequest,
 } from "@/types/world";
 import { fetchJSON, putJSON } from "@/lib/api";
+
+// ── Constants ────────────────────────────────────────────
+
+const CUSTOM_MODEL_VALUE = "__custom__";
 
 // ── Spinner Component ─────────────────────────────────────
 
@@ -88,26 +92,25 @@ function DefaultModelSelector({
   onSave,
   saving,
 }: {
-  providers: ProviderResponse[];
-  defaultProvider: ProviderResponse | null;
-  onSave: (providerId: string, modelId: string) => void;
+  providers: Provider[];
+  defaultProvider: Provider | null;
+  onSave: (providerId: string) => void;
   saving: boolean;
 }) {
   const [selectedProvider, setSelectedProvider] = useState(() =>
     defaultProvider?.id ?? "",
   );
-  const [modelInput, setModelInput] = useState("");
 
   const currentProvider = providers.find((p) => p.id === selectedProvider);
 
   return (
     <div className="rounded-xl border border-zinc-800 bg-zinc-900/50 p-4 sm:p-5">
       <h2 className="text-base font-bold text-zinc-100 mb-3">
-        Pool 默认模型
+        Pool 默认 Provider
       </h2>
       <p className="text-xs text-zinc-500 mb-3">
-        未单独分配模型的 Agent 将使用此默认配置。
-        当前默认 Provider：
+        未单独分配模型的 Agent 将使用此默认 Provider 的模型。
+        当前默认：
         <span className="text-zinc-300 font-medium">
           {defaultProvider
             ? ` ${defaultProvider.display_name ?? defaultProvider.id}`
@@ -117,10 +120,7 @@ function DefaultModelSelector({
       <div className="flex flex-col sm:flex-row gap-3">
         <select
           value={selectedProvider}
-          onChange={(e) => {
-            setSelectedProvider(e.target.value);
-            setModelInput("");
-          }}
+          onChange={(e) => setSelectedProvider(e.target.value)}
           className="flex-1 rounded-lg border border-zinc-800 bg-zinc-950 px-3 py-2 text-sm text-zinc-200 outline-none focus:border-zinc-700 focus:ring-1 focus:ring-zinc-700"
         >
           <option value="">-- 选择 Provider --</option>
@@ -130,28 +130,21 @@ function DefaultModelSelector({
             </option>
           ))}
         </select>
-        <input
-          type="text"
-          value={modelInput}
-          onChange={(e) => setModelInput(e.target.value)}
-          placeholder="模型 ID (如 gpt-4o, qwen3:8b)"
-          className="flex-1 rounded-lg border border-zinc-800 bg-zinc-950 px-3 py-2 text-sm text-zinc-200 placeholder-zinc-600 outline-none focus:border-zinc-700 focus:ring-1 focus:ring-zinc-700"
-        />
         <button
           onClick={() => {
-            if (selectedProvider && modelInput.trim()) {
-              onSave(selectedProvider, modelInput.trim());
+            if (selectedProvider) {
+              onSave(selectedProvider);
             }
           }}
-          disabled={saving || !selectedProvider || !modelInput.trim()}
+          disabled={saving || !selectedProvider}
           className="rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-500 disabled:opacity-50 transition-colors shrink-0"
         >
-          {saving ? "保存中..." : "设置默认"}
+          {saving ? "保存中..." : "设为默认"}
         </button>
       </div>
       {currentProvider && (
         <p className="text-xs text-zinc-600 mt-2">
-          Provider: {currentProvider.protocol} · {currentProvider.base_url}
+          {currentProvider.protocol} · {currentProvider.base_url}
         </p>
       )}
     </div>
@@ -170,8 +163,11 @@ function BatchAssignDialog({
   open: boolean;
   onClose: () => void;
   agentCount: number;
-  providers: ProviderResponse[];
-  onAssign: (providerId: string, modelId: string) => void;
+  providers: Provider[];
+  onAssign: (providerId: string, modelId: string) => Promise<{
+    succeeded: number;
+    failed: number;
+  }>;
 }) {
   const [providerId, setProviderId] = useState("");
   const [modelInput, setModelInput] = useState("");
@@ -192,10 +188,14 @@ function BatchAssignDialog({
     setAssigning(true);
     setError(null);
     try {
-      onAssign(providerId, modelInput.trim());
-      onClose();
-      setProviderId("");
-      setModelInput("");
+      const result = await onAssign(providerId, modelInput.trim());
+      if (result.failed > 0) {
+        setError(`${result.failed} 个 Agent 分配失败，${result.succeeded} 个成功`);
+      } else {
+        onClose();
+        setProviderId("");
+        setModelInput("");
+      }
     } catch (err) {
       setError(err instanceof Error ? err.message : "批量分配失败");
     } finally {
@@ -295,7 +295,7 @@ function BatchAssignDialog({
 
 export default function ModelAssignmentPage() {
   const [agents, setAgents] = useState<AgentRecord[]>([]);
-  const [providers, setProviders] = useState<ProviderResponse[]>([]);
+  const [providers, setProviders] = useState<Provider[]>([]);
   const [assignments, setAssignments] = useState<
     Record<string, AgentModelAssignment>
   >({});
@@ -318,22 +318,27 @@ export default function ModelAssignmentPage() {
   // Default model saving
   const [savingDefault, setSavingDefault] = useState(false);
 
+  // Batch result notification
+  const [batchResult, setBatchResult] = useState<string | null>(null);
+
   const defaultProvider = providers.find((p) => p.is_default) ?? null;
 
   // ── Data Loading ──────────────────────────────────────
+
+  const cancelledRef = useRef(false);
 
   const loadData = useCallback(async () => {
     try {
       const [agentsData, providersData] = await Promise.all([
         fetchJSON<AgentRecord[]>("/api/v1/agents"),
-        fetchJSON<ProviderResponse[]>("/api/v1/providers"),
+        fetchJSON<Provider[]>("/api/v1/providers"),
       ]);
+      if (cancelledRef.current) return;
 
       setAgents(agentsData);
       setProviders(providersData);
 
-      // Load model assignments for each agent
-      const assignmentMap: Record<string, AgentModelAssignment> = {};
+      // Discover models for each provider
       const modelPromises = providersData.map(async (p) => {
         try {
           const result = await fetchJSON<{ models: string[] }>(
@@ -345,6 +350,8 @@ export default function ModelAssignmentPage() {
         }
       });
       const modelResults = await Promise.all(modelPromises);
+      if (cancelledRef.current) return;
+
       const modelMap: Record<string, string[]> = {};
       for (const r of modelResults) {
         modelMap[r.id] = r.models;
@@ -352,6 +359,7 @@ export default function ModelAssignmentPage() {
       setProviderModels(modelMap);
 
       // Load per-agent model assignments
+      const assignmentMap: Record<string, AgentModelAssignment> = {};
       const assignPromises = agentsData.map(async (agent) => {
         try {
           const a = await fetchJSON<AgentModelAssignment | null>(
@@ -361,84 +369,30 @@ export default function ModelAssignmentPage() {
             assignmentMap[agent.id] = a;
           }
         } catch {
-          // Agent may not have an assignment yet
+          // no assignment yet
         }
       });
       await Promise.all(assignPromises);
-      setAssignments(assignmentMap);
-      setError(null);
+      if (!cancelledRef.current) {
+        setAssignments(assignmentMap);
+        setError(null);
+      }
     } catch (err) {
-      setError(err instanceof Error ? err.message : "加载数据失败");
+      if (!cancelledRef.current) {
+        setError(err instanceof Error ? err.message : "加载数据失败");
+      }
     } finally {
-      setLoading(false);
+      if (!cancelledRef.current) setLoading(false);
     }
   }, []);
 
   useEffect(() => {
-    let cancelled = false;
-    async function load() {
-      try {
-        const [agentsData, providersData] = await Promise.all([
-          fetchJSON<AgentRecord[]>("/api/v1/agents"),
-          fetchJSON<ProviderResponse[]>("/api/v1/providers"),
-        ]);
-        if (cancelled) return;
-
-        setAgents(agentsData);
-        setProviders(providersData);
-
-        // Discover models for each provider
-        const modelPromises = providersData.map(async (p) => {
-          try {
-            const result = await fetchJSON<{ models: string[] }>(
-              `/api/v1/providers/${p.id}/models`,
-            );
-            return { id: p.id, models: result.models };
-          } catch {
-            return { id: p.id, models: [] };
-          }
-        });
-        const modelResults = await Promise.all(modelPromises);
-        if (cancelled) return;
-
-        const modelMap: Record<string, string[]> = {};
-        for (const r of modelResults) {
-          modelMap[r.id] = r.models;
-        }
-        setProviderModels(modelMap);
-
-        // Load per-agent model assignments
-        const assignmentMap: Record<string, AgentModelAssignment> = {};
-        const assignPromises = agentsData.map(async (agent) => {
-          try {
-            const a = await fetchJSON<AgentModelAssignment | null>(
-              `/api/v1/agents/${agent.id}/model`,
-            );
-            if (a) {
-              assignmentMap[agent.id] = a;
-            }
-          } catch {
-            // no assignment yet
-          }
-        });
-        await Promise.all(assignPromises);
-        if (!cancelled) {
-          setAssignments(assignmentMap);
-          setError(null);
-        }
-      } catch (err) {
-        if (!cancelled) {
-          setError(err instanceof Error ? err.message : "加载数据失败");
-        }
-      } finally {
-        if (!cancelled) setLoading(false);
-      }
-    }
-    load();
+    cancelledRef.current = false;
+    loadData();
     return () => {
-      cancelled = true;
+      cancelledRef.current = true;
     };
-  }, []);
+  }, [loadData]);
 
   // ── Save single agent model assignment ────────────────
 
@@ -467,7 +421,6 @@ export default function ModelAssignmentPage() {
           body,
         );
         setAssignments((prev) => ({ ...prev, [agentId]: result }));
-        // Clear the edit state
         setRowEdits((prev) => {
           const next = { ...prev };
           delete next[agentId];
@@ -489,63 +442,14 @@ export default function ModelAssignmentPage() {
     [rowEdits],
   );
 
-  // ── Reset to default (clear override) ─────────────────
-
-  const handleResetRow = useCallback(
-    async (agentId: string) => {
-      // To reset, we assign the default provider and a generic model
-      // or use the PUT endpoint with the default provider's info
-      if (!defaultProvider) return;
-
-      setSavingRows((prev) => new Set(prev).add(agentId));
-      setRowErrors((prev) => {
-        const next = { ...prev };
-        delete next[agentId];
-        return next;
-      });
-
-      try {
-        // Clear the override by re-setting to default
-        const body: SetAgentModelRequest = {
-          provider_id: defaultProvider.id,
-          model_id: "default",
-        };
-        await putJSON<AgentModelAssignment>(
-          `/api/v1/agents/${agentId}/model`,
-          body,
-        );
-        // Remove the assignment from local state
-        setAssignments((prev) => {
-          const next = { ...prev };
-          delete next[agentId];
-          return next;
-        });
-        setRowEdits((prev) => {
-          const next = { ...prev };
-          delete next[agentId];
-          return next;
-        });
-      } catch (err) {
-        setRowErrors((prev) => ({
-          ...prev,
-          [agentId]: err instanceof Error ? err.message : "重置失败",
-        }));
-      } finally {
-        setSavingRows((prev) => {
-          const next = new Set(prev);
-          next.delete(agentId);
-          return next;
-        });
-      }
-    },
-    [defaultProvider],
-  );
-
   // ── Batch assign ──────────────────────────────────────
 
   const handleBatchAssign = useCallback(
     async (providerId: string, modelId: string) => {
       const ids = Array.from(selectedAgents);
+      let succeeded = 0;
+      let failed = 0;
+
       const promises = ids.map(async (agentId) => {
         try {
           const body: SetAgentModelRequest = {
@@ -556,8 +460,10 @@ export default function ModelAssignmentPage() {
             `/api/v1/agents/${agentId}/model`,
             body,
           );
+          succeeded++;
           return { agentId, result };
         } catch (err) {
+          failed++;
           return { agentId, error: err instanceof Error ? err.message : "分配失败" };
         }
       });
@@ -571,12 +477,20 @@ export default function ModelAssignmentPage() {
       }
       setAssignments(newAssignments);
       setSelectedAgents(new Set());
-      // Clear any row edits for affected agents
       setRowEdits((prev) => {
         const next = { ...prev };
         for (const id of ids) delete next[id];
         return next;
       });
+
+      if (failed > 0) {
+        setBatchResult(`${succeeded} 个成功，${failed} 个失败`);
+      } else {
+        setBatchResult(`${succeeded} 个 Agent 已分配模型`);
+      }
+      setTimeout(() => setBatchResult(null), 5000);
+
+      return { succeeded, failed };
     },
     [selectedAgents, assignments],
   );
@@ -584,16 +498,15 @@ export default function ModelAssignmentPage() {
   // ── Default model save ────────────────────────────────
 
   const handleSaveDefault = useCallback(
-    async (providerId: string, _modelId: string) => {
+    async (providerId: string) => {
       setSavingDefault(true);
       try {
-        // Update the provider to be the default
         await putJSON(`/api/v1/providers/${providerId}`, {
           is_default: true,
         });
         await loadData();
       } catch (err) {
-        setError(err instanceof Error ? err.message : "设置默认模型失败");
+        setError(err instanceof Error ? err.message : "设置默认 Provider 失败");
       } finally {
         setSavingDefault(false);
       }
@@ -628,8 +541,6 @@ export default function ModelAssignmentPage() {
       if (!assignment) return "untested";
       const provider = providers.find((p) => p.id === assignment.provider_id);
       if (!provider) return "unavailable";
-      // If the provider exists and has models, we consider it online
-      // (actual connectivity test would be done via the test endpoint)
       const models = providerModels[provider.id];
       if (models && models.length > 0) return "online";
       return "untested";
@@ -701,6 +612,11 @@ export default function ModelAssignmentPage() {
               {error}
             </div>
           )}
+          {batchResult && (
+            <div className="rounded-lg bg-blue-500/10 border border-blue-500/20 px-3 py-1.5 text-xs text-blue-400">
+              {batchResult}
+            </div>
+          )}
           {selectedAgents.size > 0 && (
             <button
               onClick={() => setShowBatchDialog(true)}
@@ -757,15 +673,10 @@ export default function ModelAssignmentPage() {
               {allSelected ? "取消全选" : "全选"}
             </span>
           </label>
-          {selectedAgents.size > 0 && (
+          {selectedAgents.size > 0 && defaultProvider && (
             <button
-              onClick={() => {
-                if (defaultProvider) {
-                  handleBatchAssign(defaultProvider.id, "default");
-                }
-              }}
-              disabled={!defaultProvider}
-              className="text-xs text-zinc-400 hover:text-zinc-200 transition-colors disabled:opacity-50"
+              onClick={() => handleBatchAssign(defaultProvider.id, "default")}
+              className="text-xs text-zinc-400 hover:text-zinc-200 transition-colors"
             >
               全部使用默认
             </button>
@@ -908,9 +819,9 @@ export default function ModelAssignmentPage() {
                                 {m}
                               </option>
                             ))}
-                            <option value="__custom__">手动输入...</option>
+                            <option value={CUSTOM_MODEL_VALUE}>手动输入...</option>
                           </select>
-                          {edit.model_id === "__custom__" && (
+                          {edit.model_id === CUSTOM_MODEL_VALUE && (
                             <input
                               type="text"
                               value={edit.custom_model}
@@ -947,14 +858,6 @@ export default function ModelAssignmentPage() {
                             className="rounded-lg bg-blue-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-blue-500 disabled:opacity-50 transition-colors"
                           >
                             {saving ? "..." : "保存"}
-                          </button>
-                          <button
-                            onClick={() => handleResetRow(agent.id)}
-                            disabled={saving || !defaultProvider}
-                            title="重置为默认模型"
-                            className="rounded-lg px-3 py-1.5 text-xs font-medium text-zinc-400 hover:bg-zinc-800 hover:text-zinc-200 disabled:opacity-50 transition-colors"
-                          >
-                            重置
                           </button>
                         </div>
                       </td>

@@ -585,10 +585,21 @@ class SocialContextProvider(Protocol):
 class DecisionEngine:
     """Core decision engine that drives agent behavior via LLM.
 
+    Supports optional fallback providers: if the primary LLM call fails,
+    each fallback is tried in order.  If all providers fail, a random
+    decision is returned (via ``fallback_decision()``).
+
     Usage::
 
         engine = DecisionEngine(provider=my_llm)
         decision = await engine.decide(state, perception, survival)
+
+    With fallbacks::
+
+        from agent_runtime.llm.fallback import ModelFallback, FallbackChainProvider
+
+        chain = ModelFallback(primary=primary_llm, fallbacks=[backup_llm])
+        engine = DecisionEngine(provider=FallbackChainProvider(chain))
     """
 
     def __init__(
@@ -597,10 +608,12 @@ class DecisionEngine:
         *,
         pipeline: ContextEnginePipeline | None = None,
         social_provider: SocialContextProvider | None = None,
+        fallback_providers: list[LLMProvider] | None = None,
     ) -> None:
         self._provider = provider
         self._pipeline = pipeline
         self._social_provider = social_provider
+        self._fallback_providers = fallback_providers or []
 
     async def decide(
         self,
@@ -671,7 +684,11 @@ class DecisionEngine:
         *,
         social: SocialContext | None = None,
     ) -> Decision:
-        """Attempt to generate a validated decision via the LLM."""
+        """Attempt to generate a validated decision via the LLM.
+
+        If the primary provider fails, tries each fallback provider in
+        order.  Raises ``LlmCallError`` only when all providers fail.
+        """
         if self._pipeline is not None:
             pipeline_result: PipelineResult = self._pipeline.run(
                 perception=perception,
@@ -684,26 +701,70 @@ class DecisionEngine:
                 state, perception, survival, available_actions, social=social
             )
 
-        # Call LLM provider
-        try:
-            response = await self._provider.chat([LLMMessage(role="user", content=prompt)])
-        except Exception as e:
-            raise LlmCallError(f"LLM request failed: {e}") from e
+        # Build the provider chain: primary + fallbacks
+        providers = [self._provider] + self._fallback_providers
+        messages = [LLMMessage(role="user", content=prompt)]
 
-        raw = response.content
+        last_error: Exception | None = None
+        for i, provider in enumerate(providers):
+            label = "primary" if i == 0 else f"fallback[{i - 1}]"
+            try:
+                response = await provider.chat(messages)
+                # Parse and validate the response
+                raw = response.content
+                parsed = parse_llm_response(raw)
+                decision = Decision(
+                    action=DecisionAction(parsed["action"]),
+                    parameters=parsed["parameters"],
+                    reasoning=parsed["reasoning"],
+                    confidence=parsed["confidence"],
+                )
+                validate_decision(decision, state, available_actions)
 
-        # Parse JSON
-        parsed = parse_llm_response(raw)
+                if i > 0:
+                    logger.info(
+                        "Fallback triggered: %s succeeded for agent %s "
+                        "(provider=%s, model=%s)",
+                        label,
+                        state.id,
+                        provider._config.provider.value,
+                        provider._config.model,
+                        extra={
+                            "event": "fallback_triggered",
+                            "agent": state.id,
+                            "fallback_index": i - 1,
+                            "provider": provider._config.provider.value,
+                            "model": provider._config.model,
+                        },
+                    )
 
-        # Build Decision object
-        decision = Decision(
-            action=DecisionAction(parsed["action"]),
-            parameters=parsed["parameters"],
-            reasoning=parsed["reasoning"],
-            confidence=parsed["confidence"],
-        )
+                return decision
+            except Exception as exc:
+                last_error = exc
+                if i < len(providers) - 1:
+                    next_label = "fallback[0]" if i == 0 else f"fallback[{i}]"
+                    logger.warning(
+                        "Fallback triggered: %s failed for agent %s (%s: %s), "
+                        "trying %s",
+                        label,
+                        state.id,
+                        type(exc).__name__,
+                        exc,
+                        next_label,
+                        extra={
+                            "event": "fallback_triggered",
+                            "agent": state.id,
+                            "failed_provider": provider._config.provider.value
+                            if hasattr(provider, "_config")
+                            else "unknown",
+                        },
+                    )
 
-        # Validate
-        validate_decision(decision, state, available_actions)
+        # All providers failed
+        if last_error is not None:
+            raise LlmCallError(
+                f"All providers failed (primary + {len(self._fallback_providers)} "
+                f"fallbacks): {last_error}"
+            ) from last_error
 
-        return decision
+        raise LlmCallError("No providers available")

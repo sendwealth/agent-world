@@ -310,6 +310,11 @@ class ThinkLoop:
     Supports an optional perception cache that avoids redundant Discover RPC
     calls when the environment hasn't changed since the last perception.
 
+    Supports model hot-swapping: if a ``model_registry`` is provided, each
+    tick checks whether the agent's model assignment changed in the registry.
+    If so, the LLMProvider inside the decision chain is re-created and the
+    swap takes effect on the **next** tick without interrupting the current one.
+
     Usage::
 
         loop = ThinkLoop(state=state, survival=instinct, executor=executor)
@@ -331,6 +336,7 @@ class ThinkLoop:
         group_identity: GroupIdentityProvider | None = None,
         cultural_hook: CulturalInfluenceHook | None = None,
         social_context_provider: SocialContextProvider | None = None,
+        model_registry: Any | None = None,
     ) -> None:
         self.state = state
         self.survival = survival
@@ -359,6 +365,9 @@ class ThinkLoop:
         self._group_identity = group_identity
         # Cultural influence hook — optional, nudges values/personality each tick
         self._cultural_hook = cultural_hook
+        # Model registry — optional, enables runtime model hot-swap
+        self._model_registry = model_registry
+        self._last_model_version: int = 0
         # Perception cache — avoids redundant RPC when environment unchanged
         self._perception_cache: Perception | None = None
         self._perception_cache_time: float = 0.0
@@ -547,6 +556,17 @@ class ThinkLoop:
                     exc_info=True,
                 )
 
+        # 0b. Model hot-swap check (optional — re-create LLMProvider if changed)
+        if self._model_registry is not None:
+            try:
+                self._check_model_swap()
+            except Exception:
+                logger.debug(
+                    "Tick %d: model swap check failed (non-fatal)",
+                    self._tick,
+                    exc_info=True,
+                )
+
         # 1. Perceive (with optional caching)
         with trace_phase("perceive", str(self.state.id)):
             perception = await self._perceive_with_cache()
@@ -651,6 +671,80 @@ class ThinkLoop:
             self.state.health,
             self.state.phase.value,
         )
+
+    # ------------------------------------------------------------------
+    # Model hot-swap
+    # ------------------------------------------------------------------
+
+    def _check_model_swap(self) -> None:
+        """Check if the model registry has a pending hot-swap for this agent.
+
+        Walks the decision provider chain to find the innermost
+        ``DecisionEngine._provider``, re-creates it from the registry
+        override, and injects the new provider.  The swap takes effect
+        on the **next** tick — the current tick proceeds with the old
+        provider.
+        """
+        reg = self._model_registry
+        current_version = reg.get_agent_models_version()
+        if current_version == self._last_model_version:
+            return  # No change
+
+        self._last_model_version = current_version
+        agent_id = str(self.state.id)
+
+        override = reg.get_agent_model_override(agent_id)
+        if override is None:
+            return  # No specific override for this agent
+
+        provider_id, model = override
+        provider_cfg = reg.get_provider(provider_id)
+        if provider_cfg is None:
+            logger.warning(
+                "Hot-swap: provider %r not found for agent %s",
+                provider_id,
+                agent_id,
+            )
+            return
+
+        new_provider = reg.create_provider(provider_cfg, model)
+
+        # Walk the decision provider chain to find and replace the LLMProvider.
+        # Chain: AsyncDecisionProvider → LLMDecisionProvider → DecisionEngine._provider
+        target = self._decision
+        engine = None
+
+        # Unwrap AsyncDecisionProvider
+        if hasattr(target, "_inner"):
+            target = target._inner
+
+        # Unwrap MemoryAwareDecisionProvider or similar wrappers
+        if hasattr(target, "base_provider"):
+            target = target.base_provider
+
+        # Get the DecisionEngine
+        if hasattr(target, "_engine"):
+            engine = target._engine
+
+        if engine is not None and hasattr(engine, "_provider"):
+            old_provider = engine._provider
+            engine._provider = new_provider
+            logger.info(
+                "Model switched for agent %s: %s/%s → %s/%s (tick %d)",
+                agent_id,
+                old_provider._config.provider.value if hasattr(old_provider, "_config") else "?",
+                old_provider._config.model if hasattr(old_provider, "_config") else "?",
+                provider_id,
+                model,
+                self._tick,
+                extra={
+                    "event": "model_switched",
+                    "agent": agent_id,
+                    "provider": provider_id,
+                    "model": model,
+                    "tick": self._tick,
+                },
+            )
 
     # ------------------------------------------------------------------
     # Perception caching

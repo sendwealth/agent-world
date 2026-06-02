@@ -66,6 +66,8 @@ pub struct CultureStore {
     org_cultures: DashMap<String, OrgCultureVector>,
     /// cluster_id -> CulturalCluster
     clusters: DashMap<String, CulturalCluster>,
+    /// Reverse index: agent_id -> cluster_id for O(1) lookup.
+    agent_to_cluster: DashMap<String, String>,
     /// (source_group, target_group) -> GroupTrustRecord
     trust_records: DashMap<(String, String), GroupTrustRecord>,
 }
@@ -76,6 +78,7 @@ impl CultureStore {
         Self {
             org_cultures: DashMap::new(),
             clusters: DashMap::new(),
+            agent_to_cluster: DashMap::new(),
             trust_records: DashMap::new(),
         }
     }
@@ -104,9 +107,29 @@ impl CultureStore {
 
     // ── Cultural Clusters ──
 
-    /// Store a cultural cluster.
+    /// Store a cultural cluster and maintain the agent→cluster reverse index.
     pub fn set_cluster(&self, cluster: CulturalCluster) {
-        self.clusters.insert(cluster.cluster_id.clone(), cluster);
+        let cluster_id = cluster.cluster_id.clone();
+        let agent_ids = cluster.agent_ids.clone();
+
+        // Remove stale reverse-index entries for agents previously in this cluster
+        // but no longer in the updated member list.
+        self.agent_to_cluster.retain(|aid, cid| {
+            if cid == &cluster_id {
+                // Keep only if the agent is still in the new member list.
+                agent_ids.contains(aid)
+            } else {
+                true
+            }
+        });
+
+        // Insert / update forward map.
+        self.clusters.insert(cluster_id.clone(), cluster);
+
+        // Build reverse index entries for all current members.
+        for aid in &agent_ids {
+            self.agent_to_cluster.insert(aid.clone(), cluster_id.clone());
+        }
     }
 
     /// Get a cultural cluster by ID.
@@ -114,9 +137,22 @@ impl CultureStore {
         self.clusters.get(cluster_id).map(|r| r.value().clone())
     }
 
-    /// Remove a cultural cluster.
+    /// Remove a cultural cluster and clean up the reverse index.
     pub fn remove_cluster(&self, cluster_id: &str) -> Option<CulturalCluster> {
-        self.clusters.remove(cluster_id).map(|(_, v)| v)
+        let removed = self.clusters.remove(cluster_id).map(|(_, v)| v);
+        if let Some(ref cluster) = removed {
+            for aid in &cluster.agent_ids {
+                // Only remove the reverse entry if it still points to this cluster
+                // (it may have been repointed by a subsequent set_cluster).
+                if let Some(entry) = self.agent_to_cluster.get(aid) {
+                    if entry.value() == cluster_id {
+                        drop(entry);
+                        self.agent_to_cluster.remove(aid);
+                    }
+                }
+            }
+        }
+        removed
     }
 
     /// List all cluster IDs.
@@ -124,16 +160,11 @@ impl CultureStore {
         self.clusters.iter().map(|e| e.key().clone()).collect()
     }
 
-    /// Find which cluster an agent belongs to.
-    // TODO: add reverse index agent_id→cluster_id (DashMap<String, String>) maintained in set_cluster()
-    // to avoid O(C × A) linear scan over all clusters.
+    /// Find which cluster an agent belongs to — O(1) via reverse index.
     pub fn find_agent_cluster(&self, agent_id: &str) -> Option<CulturalCluster> {
-        for entry in self.clusters.iter() {
-            if entry.value().agent_ids.contains(&agent_id.to_string()) {
-                return Some(entry.value().clone());
-            }
-        }
-        None
+        self.agent_to_cluster
+            .get(agent_id)
+            .and_then(|entry| self.get_cluster(entry.value()))
     }
 
     // ── Inter-Group Trust ──
@@ -237,7 +268,7 @@ mod tests {
         let retrieved = store.get_cluster("cluster_0").unwrap();
         assert_eq!(retrieved.agent_ids.len(), 2);
 
-        // Find by agent
+        // Find by agent — uses O(1) reverse index
         let found = store.find_agent_cluster("a1").unwrap();
         assert_eq!(found.cluster_id, "cluster_0");
 
@@ -272,5 +303,87 @@ mod tests {
 
         let records = store.trust_for_group("g1");
         assert_eq!(records.len(), 2);
+    }
+
+    // ── Reverse index maintenance tests ──
+
+    #[test]
+    fn test_reverse_index_cluster_overwrite() {
+        // Re-setting a cluster with fewer agents should remove stale reverse entries.
+        let store = CultureStore::new();
+
+        store.set_cluster(CulturalCluster {
+            cluster_id: "c0".into(),
+            agent_ids: vec!["a1".into(), "a2".into(), "a3".into()],
+            center_personality: HashMap::new(),
+            center_values: HashMap::new(),
+            region_id: String::new(),
+        });
+
+        // All three are indexed.
+        assert!(store.find_agent_cluster("a1").is_some());
+        assert!(store.find_agent_cluster("a2").is_some());
+        assert!(store.find_agent_cluster("a3").is_some());
+
+        // Overwrite with a2 removed, a4 added.
+        store.set_cluster(CulturalCluster {
+            cluster_id: "c0".into(),
+            agent_ids: vec!["a1".into(), "a3".into(), "a4".into()],
+            center_personality: HashMap::new(),
+            center_values: HashMap::new(),
+            region_id: String::new(),
+        });
+
+        assert!(store.find_agent_cluster("a1").is_some());
+        assert!(store.find_agent_cluster("a2").is_none()); // evicted
+        assert!(store.find_agent_cluster("a3").is_some());
+        assert!(store.find_agent_cluster("a4").is_some());
+    }
+
+    #[test]
+    fn test_reverse_index_cluster_remove() {
+        // Removing a cluster should clear all its reverse-index entries.
+        let store = CultureStore::new();
+
+        store.set_cluster(CulturalCluster {
+            cluster_id: "c0".into(),
+            agent_ids: vec!["a1".into(), "a2".into()],
+            center_personality: HashMap::new(),
+            center_values: HashMap::new(),
+            region_id: String::new(),
+        });
+
+        assert!(store.find_agent_cluster("a1").is_some());
+        store.remove_cluster("c0");
+        assert!(store.find_agent_cluster("a1").is_none());
+        assert!(store.find_agent_cluster("a2").is_none());
+    }
+
+    #[test]
+    fn test_reverse_index_agent_reassignment() {
+        // When an agent moves from cluster A to cluster B, the reverse index
+        // should point to the new cluster.
+        let store = CultureStore::new();
+
+        store.set_cluster(CulturalCluster {
+            cluster_id: "ca".into(),
+            agent_ids: vec!["x".into()],
+            center_personality: HashMap::new(),
+            center_values: HashMap::new(),
+            region_id: "r1".into(),
+        });
+        assert_eq!(store.find_agent_cluster("x").unwrap().cluster_id, "ca");
+
+        store.set_cluster(CulturalCluster {
+            cluster_id: "cb".into(),
+            agent_ids: vec!["x".into()],
+            center_values: HashMap::new(),
+            region_id: "r2".into(),
+            center_personality: HashMap::new(),
+        });
+        // Agent x now belongs to cb.
+        assert_eq!(store.find_agent_cluster("x").unwrap().cluster_id, "cb");
+        // ca still exists but has no members in reverse index — x is not under ca.
+        // (The forward map for ca still lists x, but the reverse index correctly points to cb.)
     }
 }

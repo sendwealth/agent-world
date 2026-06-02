@@ -471,6 +471,21 @@ impl HumanParticipationStore {
         Some(updated)
     }
 
+    pub fn respond_to_oracle(&mut self, oracle_id: &str, agent_id: &str, response: &str) -> Option<Oracle> {
+        let oracle = self.oracles.iter_mut().find(|o| o.id == oracle_id)?;
+        // Verify the oracle is targeted at this agent
+        if oracle.target_agent_id != agent_id {
+            return None;
+        }
+        // Only respond to delivered or pending oracles
+        if oracle.status != OracleStatus::Pending && oracle.status != OracleStatus::Delivered {
+            return None;
+        }
+        oracle.agent_response = Some(response.to_string());
+        oracle.status = OracleStatus::Acknowledged;
+        Some(oracle.clone())
+    }
+
     // ── Bounty operations ────────────────────────────────────
 
     pub fn create_bounty(&mut self, req: CreateBountyRequest) -> Bounty {

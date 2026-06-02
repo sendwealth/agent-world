@@ -173,9 +173,9 @@
 - [x] Human observer mode — bounties, oracles, portfolio, rankings, interventions, wired with 15 API routes (`/api/v1/human/*`)
 - [x] Reputation system — wired into AppState and used by reward/handler logic
 - [x] Emergence experiment Docker Compose configuration
-- [ ] Data export (behavior logs, network graphs)
+- [x] Data export (behavior logs, network graphs, economy, prices, organizations)
 - [x] A/B experiment framework — 8 API routes (`/api/v2/experiments/ab/*`), wired into AppState, full create→start→snapshot→compare→stop→export lifecycle
-- [ ] Auto report generation
+- [x] Auto report generation — `GET /api/v2/export/report` (HTML/JSON/Markdown with trend analysis, emergent pattern detection, SVG sparklines) + Python `ExperimentReporter` (Markdown/JSON/HTML/PDF with embedded matplotlib charts)
 
 ### 4.6 Demo & Open-Source Promotion 🔄
 - [ ] Dashboard demo video / screenshots

@@ -250,6 +250,74 @@ export interface ListingRating {
   created_tick: number;
 }
 
+// Tool Marketplace types
+
+export type ToolCategory =
+  | "computation"
+  | "communication"
+  | "analysis"
+  | "storage"
+  | "automation"
+  | "defense"
+  | "production"
+  | "utility";
+
+export type ToolListingMode = "sale" | "rent" | "both";
+
+export type ToolListingStatus = "active" | "inactive" | "delisted";
+
+export type RentalStatus = "active" | "expired" | "cancelled";
+
+export interface ToolListing {
+  id: string;
+  name: string;
+  description: string;
+  category: ToolCategory;
+  owner_id: string;
+  purchase_price: number;
+  rental_price_per_tick: number;
+  currency: string;
+  listing_mode: ToolListingMode;
+  status: ToolListingStatus;
+  total_purchases: number;
+  total_rentals: number;
+  rating_sum: number;
+  rating_count: number;
+  tags: string[];
+  created_tick: number;
+}
+
+export interface ToolRentalRecord {
+  id: string;
+  tool_id: string;
+  renter_id: string;
+  owner_id: string;
+  price_per_tick: number;
+  currency: string;
+  start_tick: number;
+  end_tick: number;
+  status: RentalStatus;
+}
+
+export interface ToolPurchaseRecord {
+  id: string;
+  tool_id: string;
+  buyer_id: string;
+  seller_id: string;
+  price: number;
+  currency: string;
+  tick: number;
+}
+
+export interface ToolRating {
+  id: string;
+  tool_id: string;
+  rater_id: string;
+  score: number;
+  review: string | null;
+  tick: number;
+}
+
 // Agent Tracing types
 
 export interface PhaseData {

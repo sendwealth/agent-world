@@ -19,6 +19,7 @@ const navItems = [
   { href: "/briefing", label: "世界简报", icon: "📊" },
   { href: "/traces", label: "决策轨迹", icon: "🔍" },
   { href: "/marketplace", label: "知识市场", icon: "💡" },
+  { href: "/tool-marketplace", label: "工具市场", icon: "🛠" },
 ];
 
 const humanNavItems = [

@@ -421,6 +421,7 @@ pub fn build_full_router(state: AppState) -> Router {
         .merge(crate::api_investment::investment_routes())
         .merge(crate::api_diplomacy::diplomacy_routes())
         .merge(crate::api_marketplace::marketplace_routes())
+        .merge(crate::api_tool_marketplace::tool_marketplace_routes())
         .merge(crate::api_reputation::reputation_routes())
         // V1 unified export API
         .merge(crate::api_export_v1::export_v1_routes())

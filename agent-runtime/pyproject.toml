@@ -1,6 +1,6 @@
 [project]
 name = "agent-world-runtime"
-version = "1.0.0"
+version = "1.1.0"
 description = "Agent runtime for Agent World — think loop, memory, survival"
 requires-python = ">=3.11"
 license = {text = "MIT"}

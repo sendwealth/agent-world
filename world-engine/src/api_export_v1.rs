@@ -100,12 +100,13 @@ async fn export_handler(
         "network" => export_network(&state, &query).await,
         "economic" => export_economic(&state, &query).await,
         "organization" => export_organization(&state, &query).await,
+        "prices" => export_prices(&state, &query).await,
         _ => (
             StatusCode::BAD_REQUEST,
             [(header::CONTENT_TYPE, "application/json")],
             axum::Json(serde_json::json!({
                 "error": format!(
-                    "Unknown export type '{}'. Valid types: behavior, network, economic, organization",
+                    "Unknown export type '{}'. Valid types: behavior, network, economic, organization, prices",
                     export_type
                 )
             })),
@@ -1250,6 +1251,242 @@ async fn export_org_csv(state: &AppState, _query: &ExportQuery) -> axum::respons
                     om.legislation_success_rate,
                 ));
             }
+        }
+    }
+
+    (
+        StatusCode::OK,
+        [(header::CONTENT_TYPE, "text/csv; charset=utf-8")],
+        csv,
+    )
+        .into_response()
+}
+
+// ════════════════════════════════════════════════════════════
+//  PRICE HISTORY & ASSET DISTRIBUTION EXPORT
+// ════════════════════════════════════════════════════════════
+
+async fn export_prices(state: &AppState, query: &ExportQuery) -> axum::response::Response {
+    let fmt = query.format.as_deref().unwrap_or("json").to_lowercase();
+
+    match fmt.as_str() {
+        "csv" => export_prices_csv(state, query).await,
+        _ => export_prices_json(state, query).await,
+    }
+}
+
+async fn export_prices_json(state: &AppState, query: &ExportQuery) -> axum::response::Response {
+    let from = query.from_tick.unwrap_or(0);
+    let current_tick = *state.tick_rx.borrow();
+    let to = query.to_tick.unwrap_or(current_tick);
+
+    let mut result = serde_json::Map::new();
+
+    // 1. Stock listings with current prices
+    {
+        if let Some(ref stock_market) = state.stock_market {
+            let sm = stock_market.lock().await;
+            let stocks: Vec<serde_json::Value> = sm
+                .list_stocks()
+                .iter()
+                .map(|s| {
+                    let holdings = sm.get_stock_holdings(&s.id);
+                    let total_held: u64 = holdings.iter().map(|h| h.quantity).sum();
+                    serde_json::json!({
+                        "stock_id": s.id,
+                        "org_id": s.org_id,
+                        "ticker": s.ticker,
+                        "total_shares": s.total_shares,
+                        "price": s.price,
+                        "market_cap": s.price * s.total_shares,
+                        "status": format!("{:?}", s.status),
+                        "listed_tick": s.listed_tick,
+                        "shareholders": holdings.len(),
+                        "float_shares": s.total_shares.saturating_sub(total_held),
+                    })
+                })
+                .collect();
+
+            // 2. Recent orders as price history proxy
+            let orders: Vec<serde_json::Value> = sm
+                .list_orders(None, None)
+                .iter()
+                .filter(|o| o.created_tick >= from && o.created_tick <= to)
+                .filter(|o| o.filled_quantity > 0)
+                .map(|o| {
+                    serde_json::json!({
+                        "tick": o.created_tick,
+                        "stock_id": o.stock_id,
+                        "order_type": format!("{:?}", o.order_type),
+                        "price": o.price,
+                        "quantity": o.filled_quantity,
+                    })
+                })
+                .collect();
+
+            // 3. Per-stock holdings (asset distribution)
+            let mut asset_distribution: Vec<serde_json::Value> = Vec::new();
+            for stock in sm.list_stocks() {
+                let holdings = sm.get_stock_holdings(&stock.id);
+                for h in holdings {
+                    if let Some(ref aid) = query.agent_id {
+                        if h.agent_id != *aid {
+                            continue;
+                        }
+                    }
+                    asset_distribution.push(serde_json::json!({
+                        "agent_id": h.agent_id,
+                        "stock_id": h.stock_id,
+                        "ticker": stock.ticker,
+                        "quantity": h.quantity,
+                        "value": h.quantity * stock.price,
+                    }));
+                }
+            }
+
+            result.insert("stocks".into(), serde_json::json!(stocks));
+            result.insert("filled_orders".into(), serde_json::json!(orders));
+            result.insert("asset_distribution".into(), serde_json::json!(asset_distribution));
+        }
+    }
+
+    // 4. Marketplace listing prices
+    {
+        if let Some(ref marketplace) = state.marketplace {
+            let mp = marketplace.lock().await;
+            let listings: Vec<serde_json::Value> = mp
+                .list_all()
+                .iter()
+                .filter(|l| {
+                    if let Some(ref aid) = query.agent_id {
+                        l.publisher_id == *aid
+                    } else {
+                        true
+                    }
+                })
+                .map(|l| {
+                    let purchases = mp.listing_purchases(l.id);
+                    let total_revenue: u64 = purchases.iter().map(|p| p.price).sum();
+                    serde_json::json!({
+                        "listing_id": l.id.to_string(),
+                        "title": l.title,
+                        "publisher_id": l.publisher_id,
+                        "price": l.price,
+                        "category": format!("{:?}", l.category),
+                        "status": format!("{:?}", l.status),
+                        "created_tick": l.created_tick,
+                        "purchase_count": purchases.len(),
+                        "total_revenue": total_revenue,
+                    })
+                })
+                .collect();
+
+            result.insert("marketplace_listings".into(), serde_json::json!(listings));
+        }
+    }
+
+    // 5. Banking as part of asset distribution
+    {
+        if let Some(ref banking) = state.banking_system {
+            let bank = banking.lock().await;
+            let accounts: Vec<serde_json::Value> = bank
+                .list_accounts()
+                .iter()
+                .filter(|a| {
+                    if let Some(ref aid) = query.agent_id {
+                        a.owner_id == *aid
+                    } else {
+                        true
+                    }
+                })
+                .map(|a| {
+                    let balance = bank.get_balance(a.id).unwrap_or(0);
+                    serde_json::json!({
+                        "account_id": a.id.to_string(),
+                        "owner_id": a.owner_id,
+                        "account_type": format!("{:?}", a.account_type),
+                        "balance": balance,
+                    })
+                })
+                .collect();
+
+            result.insert("bank_balances".into(), serde_json::json!(accounts));
+        }
+    }
+
+    (
+        StatusCode::OK,
+        [(header::CONTENT_TYPE, "application/json")],
+        axum::Json(serde_json::Value::Object(result)),
+    )
+        .into_response()
+}
+
+async fn export_prices_csv(state: &AppState, query: &ExportQuery) -> axum::response::Response {
+    let from = query.from_tick.unwrap_or(0);
+    let current_tick = *state.tick_rx.borrow();
+    let to = query.to_tick.unwrap_or(current_tick);
+    let _ = (from, to); // Used below
+
+    let mut csv = String::new();
+
+    // Stock listings
+    csv.push_str("# Stock Listings\n");
+    csv.push_str("stock_id,org_id,ticker,total_shares,price,market_cap,status,listed_tick\n");
+    if let Some(ref stock_market) = state.stock_market {
+        let sm = stock_market.lock().await;
+        for s in sm.list_stocks() {
+            csv.push_str(&format!(
+                "{},{},{},{},{},{},{},{}\n",
+                csv_escape(&s.id),
+                csv_escape(&s.org_id),
+                csv_escape(&s.ticker),
+                s.total_shares,
+                s.price,
+                s.price * s.total_shares,
+                csv_escape(&format!("{:?}", s.status)),
+                s.listed_tick,
+            ));
+        }
+        csv.push('\n');
+
+        // Asset distribution
+        csv.push_str("# Asset Distribution (Stock Holdings)\n");
+        csv.push_str("agent_id,stock_id,ticker,quantity,value\n");
+        for stock in sm.list_stocks() {
+            for h in sm.get_stock_holdings(&stock.id) {
+                if let Some(ref aid) = query.agent_id {
+                    if h.agent_id != *aid {
+                        continue;
+                    }
+                }
+                csv.push_str(&format!(
+                    "{},{},{},{},{}\n",
+                    csv_escape(&h.agent_id),
+                    csv_escape(&h.stock_id),
+                    csv_escape(&stock.ticker),
+                    h.quantity,
+                    h.quantity * stock.price,
+                ));
+            }
+        }
+        csv.push('\n');
+
+        // Filled orders as price history
+        csv.push_str("# Filled Orders (Price History)\n");
+        csv.push_str("tick,stock_id,order_type,price,quantity\n");
+        for o in sm.list_orders(None, None) {
+            if o.created_tick < from || o.created_tick > to || o.filled_quantity == 0 {
+                continue;
+            }
+            csv.push_str(&format!(
+                "{},{},{},{},{}\n",
+                o.created_tick,
+                csv_escape(&o.stock_id),
+                csv_escape(&format!("{:?}", o.order_type)),
+                o.price,
+                o.filled_quantity,
+            ));
         }
     }
 

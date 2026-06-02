@@ -1,4 +1,12 @@
-"""Agent behavior log exporter for researcher analysis."""
+"""Agent behavior log exporter for researcher analysis.
+
+Supports:
+- Per-agent trace export with tick range filtering
+- Batch export of multiple agents
+- Paginated iteration for large datasets
+- JSON and CSV output formats
+- Batch summary statistics
+"""
 
 from __future__ import annotations
 
@@ -6,7 +14,7 @@ import csv
 import io
 import json
 from dataclasses import dataclass
-from typing import TYPE_CHECKING
+from typing import Any, Iterator, TYPE_CHECKING
 
 if TYPE_CHECKING:
     from agent_runtime.tracing.store import TraceStore
@@ -25,11 +33,22 @@ class BehaviorEntry:
     error: str | None = None
 
 
+@dataclass
+class BatchPage:
+    """A single page of paginated behavior entries."""
+    entries: list[BehaviorEntry]
+    page: int
+    page_size: int
+    total_entries: int
+    has_next: bool
+
+
 class BehaviorLogExporter:
     """Export agent decision behavior logs from trace data.
 
     Supports filtering by agent, tick range, and event type.
     Outputs JSON or CSV formats compatible with analysis tools.
+    Provides paginated iteration for large datasets.
     """
 
     def __init__(self, trace_store: TraceStore) -> None:
@@ -117,6 +136,61 @@ class BehaviorLogExporter:
 
         return entries
 
+    # ── Paginated Export ──────────────────────────────────────
+
+    def iter_pages(self, page_size: int = 100) -> Iterator[BatchPage]:
+        """Iterate over behavior entries in pages.
+
+        Args:
+            page_size: Number of entries per page.
+
+        Yields:
+            BatchPage objects containing entries and pagination metadata.
+        """
+        all_entries = self._collect_entries()
+        total = len(all_entries)
+        total_pages = (total + page_size - 1) // page_size if total > 0 else 1
+
+        for page_num in range(total_pages):
+            start_idx = page_num * page_size
+            end_idx = min(start_idx + page_size, total)
+            page_entries = all_entries[start_idx:end_idx]
+
+            yield BatchPage(
+                entries=page_entries,
+                page=page_num,
+                page_size=page_size,
+                total_entries=total,
+                has_next=(page_num + 1) < total_pages,
+            )
+
+    def get_page(self, page: int, page_size: int = 100) -> BatchPage:
+        """Get a specific page of behavior entries.
+
+        Args:
+            page: Zero-indexed page number.
+            page_size: Number of entries per page.
+
+        Returns:
+            BatchPage with entries and pagination metadata.
+        """
+        all_entries = self._collect_entries()
+        total = len(all_entries)
+        start_idx = page * page_size
+        end_idx = min(start_idx + page_size, total)
+
+        total_pages = (total + page_size - 1) // page_size if total > 0 else 1
+
+        return BatchPage(
+            entries=all_entries[start_idx:end_idx],
+            page=page,
+            page_size=page_size,
+            total_entries=total,
+            has_next=(page + 1) < total_pages,
+        )
+
+    # ── Single Agent Export ───────────────────────────────────
+
     def export_agent_trace(self, agent_id: str, tick_range: tuple[int, int],
                            format: str = "json") -> str:
         """Export a single agent's complete decision trace.
@@ -136,6 +210,8 @@ class BehaviorLogExporter:
         if format == "csv":
             return self._entries_to_csv(entries)
         return self._entries_to_json(entries)
+
+    # ── Batch Export ──────────────────────────────────────────
 
     def export_batch_traces(self, agent_ids: list[str],
                            tick_range: tuple[int, int]) -> dict:
@@ -162,6 +238,84 @@ class BehaviorLogExporter:
             ]
 
         return result
+
+    def export_batch_summary(self, agent_ids: list[str] | None = None,
+                             tick_range: tuple[int, int] | None = None) -> dict[str, Any]:
+        """Export summary statistics for a batch of agents.
+
+        Args:
+            agent_ids: Agents to include. None for all agents.
+            tick_range: Optional tick range filter.
+
+        Returns:
+            Dict with per-agent and aggregate statistics.
+        """
+        if agent_ids is not None:
+            self._agent_filter = agent_ids
+        if tick_range is not None:
+            self._tick_range = tick_range
+
+        entries = self._collect_entries()
+
+        # Group by agent
+        agent_entries: dict[str, list[BehaviorEntry]] = {}
+        for entry in entries:
+            agent_entries.setdefault(entry.agent_id, []).append(entry)
+
+        per_agent: dict[str, dict[str, Any]] = {}
+        total_errors = 0
+        total_duration = 0.0
+        phase_counts: dict[str, int] = {}
+
+        for aid, agent_list in agent_entries.items():
+            errors = sum(1 for e in agent_list if e.error)
+            durations = [e.duration_ms for e in agent_list]
+
+            per_agent[aid] = {
+                "entry_count": len(agent_list),
+                "error_count": errors,
+                "avg_duration_ms": sum(durations) / len(durations) if durations else 0.0,
+                "max_duration_ms": max(durations) if durations else 0.0,
+                "min_duration_ms": min(durations) if durations else 0.0,
+                "ticks_covered": len(set(e.tick for e in agent_list)),
+            }
+
+            total_errors += errors
+            total_duration += sum(durations)
+
+            for e in agent_list:
+                phase_counts[e.phase] = phase_counts.get(e.phase, 0) + 1
+
+        return {
+            "total_entries": len(entries),
+            "total_agents": len(agent_entries),
+            "total_errors": total_errors,
+            "avg_duration_ms": total_duration / len(entries) if entries else 0.0,
+            "phase_distribution": phase_counts,
+            "per_agent": per_agent,
+        }
+
+    def export_all_traces(self, format: str = "json",
+                          tick_range: tuple[int, int] | None = None) -> str:
+        """Export all agent traces in a single output.
+
+        Args:
+            format: "json" or "csv".
+            tick_range: Optional tick range filter.
+
+        Returns:
+            Serialized export data as string.
+        """
+        if tick_range is not None:
+            self._tick_range = tick_range
+        self._agent_filter = None
+        entries = self._collect_entries()
+
+        if format == "csv":
+            return self._entries_to_csv(entries)
+        return self._entries_to_json(entries)
+
+    # ── Serialization ────────────────────────────────────────
 
     def _entries_to_json(self, entries: list[BehaviorEntry]) -> str:
         """Serialize entries to JSON."""

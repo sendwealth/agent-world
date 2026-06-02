@@ -4,7 +4,7 @@ Provides:
 - SkillDefinition: Describes a skill template.
 - SkillRegistry: Central registry for skill definitions (register / query / upgrade).
 - SkillExecutor: Executes skills and awards experience points.
-- Built-in skills: coding, trading, research, teaching.
+- Built-in skills: coding, trading, research, teaching, tool_marketplace.
 """
 
 from .coding import CODING_SKILL
@@ -12,10 +12,11 @@ from .executor import SkillExecutionResult, SkillExecutor, XPReward
 from .registry import SkillDefinition, SkillRegistry
 from .research import RESEARCH_SKILL
 from .teaching import TEACHING_SKILL
+from .tool_marketplace import TOOL_MARKETPLACE_SKILL, ToolMarketplaceClient
 from .trading import TRADING_SKILL
 
 # Convenience: all built-in skill definitions as a list.
-BUILTIN_SKILLS = [CODING_SKILL, TRADING_SKILL, RESEARCH_SKILL, TEACHING_SKILL]
+BUILTIN_SKILLS = [CODING_SKILL, TRADING_SKILL, RESEARCH_SKILL, TEACHING_SKILL, TOOL_MARKETPLACE_SKILL]
 
 
 def create_registry_with_builtins() -> SkillRegistry:
@@ -36,6 +37,8 @@ __all__ = [
     "TRADING_SKILL",
     "RESEARCH_SKILL",
     "TEACHING_SKILL",
+    "TOOL_MARKETPLACE_SKILL",
+    "ToolMarketplaceClient",
     "BUILTIN_SKILLS",
     "create_registry_with_builtins",
 ]

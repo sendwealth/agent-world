@@ -92,7 +92,7 @@ class TestSkillRegistryRegister:
         registry = SkillRegistry()
         for s in BUILTIN_SKILLS:
             registry.register(s)
-        assert registry.count == 4
+        assert registry.count == len(BUILTIN_SKILLS)
 
 
 class TestSkillRegistryUnregister:
@@ -145,7 +145,7 @@ class TestSkillRegistryQuery:
         assert "trading" in names
         assert "research" in names
         assert "teaching" in names
-        assert len(skills) == 4
+        assert len(skills) == len(BUILTIN_SKILLS)
 
     def test_list_skills_sorted_by_name(self):
         skills = self.registry.list_skills()
@@ -169,7 +169,7 @@ class TestSkillRegistryQuery:
         assert "social" in cats
 
     def test_count(self):
-        assert self.registry.count == 4
+        assert self.registry.count == len(BUILTIN_SKILLS)
 
 
 class TestSkillRegistryCreateSkill:
@@ -200,7 +200,7 @@ class TestCreateRegistryWithBuiltins:
             assert registry.has(skill_def.name)
 
     def test_builtin_count(self):
-        assert len(BUILTIN_SKILLS) == 4
+        assert len(BUILTIN_SKILLS) == 5
 
 
 # ============================================================

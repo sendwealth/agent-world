@@ -23,7 +23,7 @@ from agent_runtime.experiment.dsl import (
 from agent_runtime.experiment.report import ExperimentReporter, ExperimentResult
 from agent_runtime.experiment.reproducibility import ReproducibilityManager
 from agent_runtime.experiment.statistics import (
-    TestResult,
+    ABTestResult,
     chi_square_goodness_of_fit,
     chi_square_test,
     cohens_d,
@@ -47,7 +47,7 @@ __all__ = [
     "ExperimentVariable",
     "Hypothesis",
     # Statistics
-    "TestResult",
+    "ABTestResult",
     "chi_square_goodness_of_fit",
     "chi_square_test",
     "cohens_d",

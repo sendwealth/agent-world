@@ -31,7 +31,7 @@ from agent_runtime.experiment.dsl import (
 from agent_runtime.experiment.report import ExperimentReporter, ExperimentResult
 from agent_runtime.experiment.reproducibility import ReproducibilityManager
 from agent_runtime.experiment.statistics import (
-    TestResult,
+    ABTestResult,
     chi_square_goodness_of_fit,
     chi_square_test,
     cohens_d,
@@ -311,7 +311,7 @@ class TestStatistics:
         assert "effect_size" in results["survival_rate"]
 
     def test_test_result_to_dict(self) -> None:
-        result = TestResult(
+        result = ABTestResult(
             statistic=2.5,
             p_value=0.03,
             significant=True,

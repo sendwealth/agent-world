@@ -19,7 +19,7 @@ import numpy as np
 
 
 @dataclass
-class TestResult:
+class ABTestResult:
     """Result of a statistical test.
 
     Attributes:
@@ -58,7 +58,7 @@ def welch_t_test(
     group_a: list[float] | np.ndarray,
     group_b: list[float] | np.ndarray,
     alpha: float = 0.05,
-) -> TestResult:
+) -> ABTestResult:
     """Perform Welch's t-test (two-sample, unequal variance).
 
     Args:
@@ -67,14 +67,14 @@ def welch_t_test(
         alpha: Significance level (default 0.05).
 
     Returns:
-        TestResult with t-statistic, p-value, and significance.
+        ABTestResult with t-statistic, p-value, and significance.
     """
     a = np.asarray(group_a, dtype=float)
     b = np.asarray(group_b, dtype=float)
 
     n_a, n_b = len(a), len(b)
     if n_a < 2 or n_b < 2:
-        return TestResult(
+        return ABTestResult(
             statistic=0.0,
             p_value=1.0,
             significant=False,
@@ -92,7 +92,7 @@ def welch_t_test(
     se_sum = se_a + se_b
 
     if se_sum == 0.0:
-        return TestResult(
+        return ABTestResult(
             statistic=0.0,
             p_value=1.0,
             significant=False,
@@ -113,7 +113,7 @@ def welch_t_test(
 
     p_value = _two_tailed_t_p_value(abs(t_stat), df)
 
-    return TestResult(
+    return ABTestResult(
         statistic=t_stat,
         p_value=p_value,
         significant=p_value < alpha,
@@ -139,7 +139,7 @@ def welch_t_test(
 def chi_square_test(
     observed: list[list[int]] | np.ndarray,
     alpha: float = 0.05,
-) -> TestResult:
+) -> ABTestResult:
     """Perform chi-square test of independence.
 
     Args:
@@ -147,12 +147,12 @@ def chi_square_test(
         alpha: Significance level (default 0.05).
 
     Returns:
-        TestResult with chi-square statistic, p-value, and significance.
+        ABTestResult with chi-square statistic, p-value, and significance.
     """
     obs = np.asarray(observed, dtype=float)
 
     if obs.ndim != 2 or obs.shape[0] < 2 or obs.shape[1] < 2:
-        return TestResult(
+        return ABTestResult(
             statistic=0.0,
             p_value=1.0,
             significant=False,
@@ -166,7 +166,7 @@ def chi_square_test(
     grand_total = obs.sum()
 
     if grand_total == 0:
-        return TestResult(
+        return ABTestResult(
             statistic=0.0,
             p_value=1.0,
             significant=False,
@@ -185,7 +185,7 @@ def chi_square_test(
 
     p_value = _chi2_survival(chi2, df)
 
-    return TestResult(
+    return ABTestResult(
         statistic=chi2,
         p_value=p_value,
         significant=p_value < alpha,
@@ -204,7 +204,7 @@ def chi_square_goodness_of_fit(
     observed: list[int] | np.ndarray,
     expected: list[float] | np.ndarray | None = None,
     alpha: float = 0.05,
-) -> TestResult:
+) -> ABTestResult:
     """Perform chi-square goodness-of-fit test.
 
     Args:
@@ -213,7 +213,7 @@ def chi_square_goodness_of_fit(
         alpha: Significance level.
 
     Returns:
-        TestResult with chi-square statistic and p-value.
+        ABTestResult with chi-square statistic and p-value.
     """
     obs = np.asarray(observed, dtype=float)
     if expected is None:
@@ -221,7 +221,7 @@ def chi_square_goodness_of_fit(
     exp = np.asarray(expected, dtype=float)
 
     if len(obs) < 2:
-        return TestResult(
+        return ABTestResult(
             statistic=0.0,
             p_value=1.0,
             significant=False,
@@ -234,7 +234,7 @@ def chi_square_goodness_of_fit(
     df = len(obs) - 1
     p_value = _chi2_survival(chi2, df)
 
-    return TestResult(
+    return ABTestResult(
         statistic=chi2,
         p_value=p_value,
         significant=p_value < alpha,
@@ -253,7 +253,7 @@ def mann_whitney_u_test(
     group_a: list[float] | np.ndarray,
     group_b: list[float] | np.ndarray,
     alpha: float = 0.05,
-) -> TestResult:
+) -> ABTestResult:
     """Perform Mann-Whitney U test (Wilcoxon rank-sum test).
 
     Non-parametric alternative to t-test when normality is not assumed.
@@ -264,14 +264,14 @@ def mann_whitney_u_test(
         alpha: Significance level.
 
     Returns:
-        TestResult with U-statistic and approximate p-value.
+        ABTestResult with U-statistic and approximate p-value.
     """
     a = np.asarray(group_a, dtype=float)
     b = np.asarray(group_b, dtype=float)
     n_a, n_b = len(a), len(b)
 
     if n_a < 1 or n_b < 1:
-        return TestResult(
+        return ABTestResult(
             statistic=0.0,
             p_value=1.0,
             significant=False,
@@ -318,7 +318,7 @@ def mann_whitney_u_test(
         z = (u_stat - mean_u) / std_u
         p_value = 2.0 * (1.0 - _normal_cdf(abs(z)))
 
-    return TestResult(
+    return ABTestResult(
         statistic=u_stat,
         p_value=p_value,
         significant=p_value < alpha,

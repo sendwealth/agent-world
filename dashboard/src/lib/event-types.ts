@@ -27,4 +27,8 @@ export const EVENT_TYPE_CONFIG: Record<string, EventTypeConfig> = {
   treaty_signed: { label: "条约签署", color: "text-green-400", dot: "bg-green-400", bgClass: "bg-green-400", icon: "🤝" },
   treaty_broken: { label: "条约撕毁", color: "text-red-400", dot: "bg-red-400", bgClass: "bg-red-400", icon: "💔" },
   relation_changed: { label: "关系变化", color: "text-purple-400", dot: "bg-purple-400", bgClass: "bg-purple-400", icon: "🔄" },
+  soft_rule_proposed: { label: "法案提议", color: "text-sky-400", dot: "bg-sky-400", bgClass: "bg-sky-400", icon: "📜" },
+  soft_rule_activated: { label: "法案生效", color: "text-green-400", dot: "bg-green-400", bgClass: "bg-green-400", icon: "✅" },
+  soft_rule_expired: { label: "法案过期", color: "text-zinc-400", dot: "bg-zinc-400", bgClass: "bg-zinc-400", icon: "⏰" },
+  soft_rule_repealed: { label: "法案废除", color: "text-red-400", dot: "bg-red-400", bgClass: "bg-red-400", icon: "❌" },
 };

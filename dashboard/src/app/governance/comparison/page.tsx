@@ -126,8 +126,10 @@ export default function GovernanceComparisonPage() {
   // Radar chart: normalized governance metrics per org
   const radarMetrics = [
     "选举活跃度",
+    "投票参与率",
     "税收效率",
     "外交活跃度",
+    "立法通过率",
     "治理稳定性",
     "成员规模",
   ];
@@ -146,11 +148,17 @@ export default function GovernanceComparisonPage() {
         case "选举活跃度":
           value = (org.election_count / maxElections) * 100;
           break;
+        case "投票参与率":
+          value = org.avg_participation_rate * 100;
+          break;
         case "税收效率":
           value = (org.total_tax_collected / maxTax) * 100;
           break;
         case "外交活跃度":
           value = (org.active_relations_count / maxRelations) * 100;
+          break;
+        case "立法通过率":
+          value = org.legislation_success_rate * 100;
           break;
         case "治理稳定性":
           value = org.governance_stability_score * 100;
@@ -173,6 +181,7 @@ export default function GovernanceComparisonPage() {
       tax: org.total_tax_collected,
       treaties: org.treaties_signed,
       stability: Math.round(org.governance_stability_score * 100),
+      legislation: Math.round(org.legislation_success_rate * 100),
     };
   });
 
@@ -232,7 +241,7 @@ export default function GovernanceComparisonPage() {
       </div>
 
       {/* Bar Charts Row */}
-      <div className="grid grid-cols-1 gap-6 xl:grid-cols-2">
+      <div className="grid grid-cols-1 gap-6 xl:grid-cols-3">
         {/* Elections Comparison */}
         <div className="rounded-xl border border-zinc-800 bg-zinc-900/50 p-4 space-y-3">
           <h2 className="text-sm font-semibold text-zinc-200">选举次数对比</h2>
@@ -272,6 +281,27 @@ export default function GovernanceComparisonPage() {
             </BarChart>
           </ResponsiveContainer>
         </div>
+
+        {/* Legislation Comparison */}
+        <div className="rounded-xl border border-zinc-800 bg-zinc-900/50 p-4 space-y-3">
+          <h2 className="text-sm font-semibold text-zinc-200">
+            立法通过率对比
+          </h2>
+          <ResponsiveContainer width="100%" height={240}>
+            <BarChart data={comparisonBarData}>
+              <CartesianGrid strokeDasharray="3 3" stroke="#27272a" />
+              <XAxis dataKey="name" stroke="#52525b" tick={{ fontSize: 10 }} />
+              <YAxis stroke="#52525b" tick={{ fontSize: 10 }} domain={[0, 100]} />
+              <Tooltip content={<CustomTooltip />} />
+              <Bar
+                dataKey="legislation"
+                fill="#0ea5e9"
+                name="立法通过率 %"
+                radius={[4, 4, 0, 0]}
+              />
+            </BarChart>
+          </ResponsiveContainer>
+        </div>
       </div>
 
       {/* Detailed Comparison Table */}
@@ -288,6 +318,9 @@ export default function GovernanceComparisonPage() {
                   选举次数
                 </th>
                 <th className="px-4 py-3 text-right text-xs font-semibold text-zinc-400">
+                  参与率
+                </th>
+                <th className="px-4 py-3 text-right text-xs font-semibold text-zinc-400">
                   税收总额
                 </th>
                 <th className="px-4 py-3 text-right text-xs font-semibold text-zinc-400">
@@ -295,6 +328,9 @@ export default function GovernanceComparisonPage() {
                 </th>
                 <th className="px-4 py-3 text-right text-xs font-semibold text-zinc-400">
                   条约
+                </th>
+                <th className="px-4 py-3 text-right text-xs font-semibold text-zinc-400">
+                  立法
                 </th>
                 <th className="px-4 py-3 text-right text-xs font-semibold text-zinc-400">
                   稳定性
@@ -322,6 +358,9 @@ export default function GovernanceComparisonPage() {
                     {org.election_count}
                   </td>
                   <td className="px-4 py-3 text-right text-sm text-zinc-300 tabular-nums">
+                    {(org.avg_participation_rate * 100).toFixed(0)}%
+                  </td>
+                  <td className="px-4 py-3 text-right text-sm text-zinc-300 tabular-nums">
                     ${org.total_tax_collected.toLocaleString()}
                   </td>
                   <td className="px-4 py-3 text-right text-sm text-zinc-300 tabular-nums">
@@ -331,6 +370,15 @@ export default function GovernanceComparisonPage() {
                     {org.treaties_signed} /{" "}
                     <span className="text-red-400">
                       {org.treaties_broken}
+                    </span>
+                  </td>
+                  <td className="px-4 py-3 text-right text-sm tabular-nums">
+                    <span className="text-zinc-300">
+                      {org.rules_activated}/{org.rules_proposed}
+                    </span>
+                    {" "}
+                    <span className="text-sky-400">
+                      ({(org.legislation_success_rate * 100).toFixed(0)}%)
                     </span>
                   </td>
                   <td className="px-4 py-3 text-right">

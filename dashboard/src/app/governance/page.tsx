@@ -14,6 +14,9 @@ import {
   PolarAngleAxis,
   PolarRadiusAxis,
   Radar,
+  PieChart,
+  Pie,
+  Cell,
 } from "recharts";
 import { useGovernanceOverview } from "@/hooks/useGovernanceStream";
 import type { OrgMetrics } from "@/types/world";
@@ -111,7 +114,29 @@ export default function GovernancePage() {
     perCapita: o.tax_per_member,
   }));
 
-  // Chart data: diplomacy radar
+  // Chart data: legislation status per org
+  const legislationBarData = orgMetrics.map((o: OrgWithMetrics) => ({
+    name:
+      o.org_name.length > 8 ? o.org_name.slice(0, 8) + "…" : o.org_name,
+    activated: o.rules_activated,
+    expired: o.rules_expired,
+    repealed: o.rules_repealed,
+  }));
+
+  // World legislation pie chart data
+  const legislationPieData = [
+    { name: "已生效", value: summary.total_rules_activated, color: "#22c55e" },
+    {
+      name: "已过期",
+      value:
+        summary.total_rules_proposed - summary.total_rules_activated > 0
+          ? summary.total_rules_proposed - summary.total_rules_activated
+          : 0,
+      color: "#71717a",
+    },
+  ].filter((d) => d.value > 0);
+
+  // Radar data with legislation
   const diplomacyRadarData = [
     {
       metric: "条约签署",
@@ -121,6 +146,11 @@ export default function GovernancePage() {
     {
       metric: "选举活跃度",
       value: Math.round(summary.election_activity_rate * 100),
+      fullMark: 100,
+    },
+    {
+      metric: "立法通过率",
+      value: Math.round(summary.avg_legislation_success_rate * 100),
       fullMark: 100,
     },
     {
@@ -139,6 +169,13 @@ export default function GovernancePage() {
       fullMark: 100,
     },
   ];
+
+  // Compute avg participation rate across orgs
+  const avgParticipation =
+    orgMetrics.length > 0
+      ? orgMetrics.reduce((sum, o) => sum + o.avg_participation_rate, 0) /
+        orgMetrics.length
+      : 0;
 
   return (
     <div className="p-4 md:p-6 space-y-6">
@@ -159,7 +196,7 @@ export default function GovernancePage() {
       )}
 
       {/* Key Indicators */}
-      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-6">
         <div className="rounded-xl border border-blue-500/20 bg-blue-500/5 p-4 space-y-1">
           <p className="text-sm text-zinc-400">组织总数</p>
           <p className="text-2xl font-bold text-blue-400">
@@ -174,6 +211,13 @@ export default function GovernancePage() {
           </p>
           <p className="text-xs text-zinc-500">有选举的组织占比</p>
         </div>
+        <div className="rounded-xl border border-violet-500/20 bg-violet-500/5 p-4 space-y-1">
+          <p className="text-sm text-zinc-400">投票参与率</p>
+          <p className="text-2xl font-bold text-violet-400">
+            {(avgParticipation * 100).toFixed(1)}%
+          </p>
+          <p className="text-xs text-zinc-500">平均选举参与</p>
+        </div>
         <div className="rounded-xl border border-orange-500/20 bg-orange-500/5 p-4 space-y-1">
           <p className="text-sm text-zinc-400">税收总额</p>
           <p className="text-2xl font-bold text-orange-400">
@@ -181,12 +225,21 @@ export default function GovernancePage() {
           </p>
           <p className="text-xs text-zinc-500">累计征收</p>
         </div>
-        <div className="rounded-xl border border-emerald-500/20 bg-emerald-500/5 p-4 space-y-1">
-          <p className="text-sm text-zinc-400">条约数量</p>
-          <p className="text-2xl font-bold text-emerald-400">
-            {summary.total_treaties}
+        <div className="rounded-xl border border-sky-500/20 bg-sky-500/5 p-4 space-y-1">
+          <p className="text-sm text-zinc-400">立法通过率</p>
+          <p className="text-2xl font-bold text-sky-400">
+            {(summary.avg_legislation_success_rate * 100).toFixed(0)}%
           </p>
-          <p className="text-xs text-zinc-500">已签署条约</p>
+          <p className="text-xs text-zinc-500">
+            {summary.total_rules_proposed} 项提案 / {summary.total_rules_activated} 项生效
+          </p>
+        </div>
+        <div className="rounded-xl border border-emerald-500/20 bg-emerald-500/5 p-4 space-y-1">
+          <p className="text-sm text-zinc-400">治理健康度</p>
+          <p className="text-2xl font-bold text-emerald-400">
+            {(summary.avg_stability * 100).toFixed(0)}%
+          </p>
+          <p className="text-xs text-zinc-500">世界平均稳定性</p>
         </div>
       </div>
 
@@ -261,6 +314,107 @@ export default function GovernancePage() {
         </div>
       </div>
 
+      {/* Legislation Row */}
+      <div className="grid grid-cols-1 gap-6 xl:grid-cols-2">
+        {/* Legislation status per org — stacked bar */}
+        <div className="rounded-xl border border-zinc-800 bg-zinc-900/50 p-4 space-y-3">
+          <h2 className="text-sm font-semibold text-zinc-200">
+            组织立法状态对比
+          </h2>
+          {legislationBarData.length === 0 ? (
+            <p className="text-sm text-zinc-600 h-48 flex items-center justify-center">
+              暂无立法数据
+            </p>
+          ) : (
+            <ResponsiveContainer width="100%" height={240}>
+              <BarChart data={legislationBarData}>
+                <CartesianGrid strokeDasharray="3 3" stroke="#27272a" />
+                <XAxis
+                  dataKey="name"
+                  stroke="#52525b"
+                  tick={{ fontSize: 10 }}
+                />
+                <YAxis stroke="#52525b" tick={{ fontSize: 10 }} />
+                <Tooltip content={<CustomTooltip />} />
+                <Bar
+                  dataKey="activated"
+                  stackId="legislation"
+                  fill="#22c55e"
+                  name="已生效"
+                  radius={[0, 0, 0, 0]}
+                />
+                <Bar
+                  dataKey="expired"
+                  stackId="legislation"
+                  fill="#71717a"
+                  name="已过期"
+                />
+                <Bar
+                  dataKey="repealed"
+                  stackId="legislation"
+                  fill="#ef4444"
+                  name="已废除"
+                  radius={[4, 4, 0, 0]}
+                />
+              </BarChart>
+            </ResponsiveContainer>
+          )}
+        </div>
+
+        {/* World legislation pie — pass vs fail */}
+        <div className="rounded-xl border border-zinc-800 bg-zinc-900/50 p-4 space-y-3">
+          <h2 className="text-sm font-semibold text-zinc-200">
+            世界立法总览
+          </h2>
+          {summary.total_rules_proposed === 0 ? (
+            <p className="text-sm text-zinc-600 h-48 flex items-center justify-center">
+              暂无立法数据
+            </p>
+          ) : (
+            <div className="flex items-center justify-center gap-6">
+              <ResponsiveContainer width="50%" height={220}>
+                <PieChart>
+                  <Pie
+                    data={legislationPieData}
+                    cx="50%"
+                    cy="50%"
+                    innerRadius={50}
+                    outerRadius={80}
+                    dataKey="value"
+                    stroke="none"
+                  >
+                    {legislationPieData.map((entry, idx) => (
+                      <Cell key={idx} fill={entry.color} />
+                    ))}
+                  </Pie>
+                  <Tooltip content={<CustomTooltip />} />
+                </PieChart>
+              </ResponsiveContainer>
+              <div className="space-y-3">
+                <div>
+                  <p className="text-xs text-zinc-500">总提案</p>
+                  <p className="text-lg font-bold text-zinc-100">
+                    {summary.total_rules_proposed}
+                  </p>
+                </div>
+                <div>
+                  <p className="text-xs text-zinc-500">已生效</p>
+                  <p className="text-lg font-bold text-green-400">
+                    {summary.total_rules_activated}
+                  </p>
+                </div>
+                <div>
+                  <p className="text-xs text-zinc-500">通过率</p>
+                  <p className="text-lg font-bold text-sky-400">
+                    {(summary.avg_legislation_success_rate * 100).toFixed(1)}%
+                  </p>
+                </div>
+              </div>
+            </div>
+          )}
+        </div>
+      </div>
+
       {/* Organization Governance Health Ranking */}
       <div className="rounded-xl border border-zinc-800 bg-zinc-900/50 p-4 space-y-3">
         <div className="flex items-center justify-between">
@@ -306,10 +460,12 @@ export default function GovernancePage() {
                     </div>
                     <div className="text-right shrink-0">
                       <p className="text-xs text-zinc-400">
-                        {org.election_count} 次选举
+                        {org.election_count} 次选举 · 参与{" "}
+                        {(org.avg_participation_rate * 100).toFixed(0)}%
                       </p>
                       <p className="text-[10px] text-zinc-500">
-                        ${org.total_tax_collected.toLocaleString()} 税收
+                        ${org.total_tax_collected.toLocaleString()} 税收 ·{" "}
+                        {org.rules_activated}/{org.rules_proposed} 法案通过
                       </p>
                     </div>
                   </Link>

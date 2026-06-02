@@ -369,6 +369,12 @@ export interface OrgMetrics {
   // Organization health
   member_count: number;
   governance_stability_score: number; // 0.0-1.0
+  // Legislation metrics
+  rules_proposed: number;
+  rules_activated: number;
+  rules_expired: number;
+  rules_repealed: number;
+  legislation_success_rate: number; // 0.0-1.0
 }
 
 export interface WorldGovernanceSummary {
@@ -377,6 +383,10 @@ export interface WorldGovernanceSummary {
   total_tax_collected: number;
   total_treaties: number;
   election_activity_rate: number;
+  // Legislation summary
+  total_rules_proposed: number;
+  total_rules_activated: number;
+  avg_legislation_success_rate: number;
 }
 
 export interface GovernanceTimelineEvent {

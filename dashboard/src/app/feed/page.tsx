@@ -97,9 +97,8 @@ export default function FeedPage() {
   }, []);
 
   useEffect(() => {
-    // eslint-disable-next-line react-hooks/set-state-in-effect
+    /* eslint-disable react-hooks/set-state-in-effect */
     loadFeed();
-    // eslint-disable-next-line react-hooks/set-state-in-effect
     loadTrending();
     const interval = setInterval(loadFeed, 5000);
     return () => clearInterval(interval);

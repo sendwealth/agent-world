@@ -1,7 +1,7 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { render, screen, cleanup, waitFor, act } from "@testing-library/react";
 import { LeaderboardSection } from "@/components/Leaderboard";
-import type { Leaderboard, LeaderboardEntry } from "@/types/world";
+import type { Leaderboard } from "@/types/world";
 
 afterEach(() => {
   cleanup();

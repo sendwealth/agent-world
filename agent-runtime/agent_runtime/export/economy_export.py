@@ -13,9 +13,8 @@ from __future__ import annotations
 import csv
 import io
 import json
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from typing import Any
-
 
 # ── Data Classes ──────────────────────────────────────────────
 
@@ -416,7 +415,7 @@ class EconomyExporter:
     def export_banking_json(self) -> dict[str, Any]:
         """Export banking data as a structured dict."""
         total_supply = sum(a.balance for a in self._bank_accounts)
-        total_debt = sum(l.outstanding_balance for l in self._loans)
+        total_debt = sum(loan.outstanding_balance for loan in self._loans)
 
         return {
             "total_money_supply": total_supply,
@@ -434,16 +433,16 @@ class EconomyExporter:
             ],
             "loans": [
                 {
-                    "loan_id": l.loan_id,
-                    "borrower_id": l.borrower_id,
-                    "principal": l.principal,
-                    "outstanding_balance": l.outstanding_balance,
-                    "interest_rate": l.interest_rate,
-                    "status": l.status,
-                    "total_repaid": l.total_repaid,
-                    "created_tick": l.created_tick,
+                    "loan_id": loan.loan_id,
+                    "borrower_id": loan.borrower_id,
+                    "principal": loan.principal,
+                    "outstanding_balance": loan.outstanding_balance,
+                    "interest_rate": loan.interest_rate,
+                    "status": loan.status,
+                    "total_repaid": loan.total_repaid,
+                    "created_tick": loan.created_tick,
                 }
-                for l in self._loans
+                for loan in self._loans
             ],
         }
 
@@ -468,11 +467,11 @@ class EconomyExporter:
             "loan_id", "borrower_id", "principal", "outstanding_balance",
             "interest_rate", "status", "total_repaid", "created_tick",
         ])
-        for l in self._loans:
+        for loan in self._loans:
             writer.writerow([
-                l.loan_id, l.borrower_id, l.principal,
-                l.outstanding_balance, l.interest_rate, l.status,
-                l.total_repaid, l.created_tick,
+                loan.loan_id, loan.borrower_id, loan.principal,
+                loan.outstanding_balance, loan.interest_rate, loan.status,
+                loan.total_repaid, loan.created_tick,
             ])
 
         return output.getvalue()

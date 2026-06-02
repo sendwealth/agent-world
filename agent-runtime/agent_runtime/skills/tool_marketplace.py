@@ -9,7 +9,6 @@ operations (renting, bulk operations, analytics).
 from __future__ import annotations
 
 import logging
-from dataclasses import dataclass
 from enum import Enum
 from typing import Any, Dict, List, Optional
 
@@ -263,11 +262,19 @@ def _execute_tool_marketplace(agent_skills: Dict[str, Skill], **kwargs: Any) -> 
         available_actions.add("delist")
 
     if action not in available_actions:
+        level_map = {
+            'rent': 2, 'rate': 3, 'update': 4,
+            'cancel_rental': 4, 'delist': 5,
+        }
+        required = level_map.get(action, 1)
         return {
             "skill": "tool_marketplace",
             "action": action,
             "success": False,
-            "error": f"action '{action}' requires tool_marketplace level {({'rent': 2, 'rate': 3, 'update': 4, 'cancel_rental': 4, 'delist': 5}.get(action, 1))}",
+            "error": (
+                f"action '{action}' requires"
+                f" tool_marketplace level {required}"
+            ),
             "level_used": level,
         }
 

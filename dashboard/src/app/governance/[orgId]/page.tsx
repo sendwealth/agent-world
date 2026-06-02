@@ -3,6 +3,15 @@
 import { useState, useMemo, useEffect } from "react";
 import { useParams, useRouter } from "next/navigation";
 import {
+  BarChart,
+  Bar,
+  XAxis,
+  YAxis,
+  CartesianGrid,
+  Tooltip,
+  ResponsiveContainer,
+} from "recharts";
+import {
   useGovernanceOrg,
   useGovernanceTimeline,
 } from "@/hooks/useGovernanceStream";
@@ -19,6 +28,39 @@ const eventTypeLabels: Record<string, string> = {
   treaty_signed: "条约签署",
   treaty_broken: "条约撕毁",
   relation_changed: "关系变化",
+  soft_rule_proposed: "法案提议",
+  soft_rule_activated: "法案生效",
+  soft_rule_expired: "法案过期",
+  soft_rule_repealed: "法案废除",
+};
+
+const CustomTooltip = ({
+  active,
+  payload,
+  label,
+}: {
+  active?: boolean;
+  payload?: Array<{ value: number; name: string; color: string }>;
+  label?: string;
+}) => {
+  if (!active || !payload) return null;
+  return (
+    <div className="rounded-lg border border-zinc-700 bg-zinc-800/95 px-3 py-2 text-xs shadow-xl backdrop-blur-sm">
+      <p className="text-zinc-400 mb-1">{label}</p>
+      {payload.map((p, i) => (
+        <p
+          key={i}
+          style={{ color: p.color }}
+          className="font-medium tabular-nums"
+        >
+          {p.name}:{" "}
+          {typeof p.value === "number"
+            ? p.value.toLocaleString(undefined, { maximumFractionDigits: 2 })
+            : p.value}
+        </p>
+      ))}
+    </div>
+  );
 };
 
 export default function GovernanceOrgDetailPage() {
@@ -30,7 +72,7 @@ export default function GovernanceOrgDetailPage() {
   const { events: timelineEvents } = useGovernanceTimeline(orgId);
   const [orgName, setOrgName] = useState<string>(orgId);
   const [tab, setTab] = useState<
-    "leadership" | "tax" | "diplomacy" | "timeline"
+    "leadership" | "tax" | "diplomacy" | "legislation" | "timeline"
   >("leadership");
 
   // Fetch org name from /api/v1/orgs/:id
@@ -56,6 +98,28 @@ export default function GovernanceOrgDetailPage() {
       grouped[type].push(event);
     }
     return grouped;
+  }, [timelineEvents]);
+
+  // Governance activity time series: bin events by tick intervals
+  const activityTimeSeries = useMemo(() => {
+    if (timelineEvents.length === 0) return [];
+    const sorted = [...timelineEvents].sort((a, b) => a.tick - b.tick);
+    const minTick = sorted[0].tick;
+    const maxTick = sorted[sorted.length - 1].tick;
+    const bucketSize = Math.max(1, Math.ceil((maxTick - minTick) / 30));
+    const buckets: Record<number, Record<string, number>> = {};
+    for (const event of sorted) {
+      const bucket = Math.floor(event.tick / bucketSize) * bucketSize;
+      if (!buckets[bucket]) buckets[bucket] = {};
+      const type = event.event_type;
+      buckets[bucket][type] = (buckets[bucket][type] ?? 0) + 1;
+    }
+    return Object.entries(buckets)
+      .sort(([a], [b]) => Number(a) - Number(b))
+      .map(([tick, counts]) => ({
+        tick: `T${tick}`,
+        ...counts,
+      }));
   }, [timelineEvents]);
 
   if (loading) {
@@ -120,8 +184,8 @@ export default function GovernanceOrgDetailPage() {
         </div>
       </div>
 
-      {/* Stats Cards */}
-      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
+      {/* Stats Cards — now 6 cards */}
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-6">
         <div className="rounded-xl border border-blue-500/20 bg-blue-500/5 p-4 space-y-1">
           <p className="text-sm text-zinc-400">选举次数</p>
           <p className="text-2xl font-bold text-blue-400">
@@ -130,6 +194,13 @@ export default function GovernanceOrgDetailPage() {
           <p className="text-xs text-zinc-500">
             平均 {metrics.avg_candidate_count.toFixed(1)} 名候选人
           </p>
+        </div>
+        <div className="rounded-xl border border-violet-500/20 bg-violet-500/5 p-4 space-y-1">
+          <p className="text-sm text-zinc-400">投票参与率</p>
+          <p className="text-2xl font-bold text-violet-400">
+            {(metrics.avg_participation_rate * 100).toFixed(1)}%
+          </p>
+          <p className="text-xs text-zinc-500">选举参与水平</p>
         </div>
         <div className="rounded-xl border border-orange-500/20 bg-orange-500/5 p-4 space-y-1">
           <p className="text-sm text-zinc-400">税收总额</p>
@@ -149,6 +220,15 @@ export default function GovernanceOrgDetailPage() {
             撕毁 {metrics.treaties_broken}
           </p>
         </div>
+        <div className="rounded-xl border border-sky-500/20 bg-sky-500/5 p-4 space-y-1">
+          <p className="text-sm text-zinc-400">立法通过率</p>
+          <p className="text-2xl font-bold text-sky-400">
+            {(metrics.legislation_success_rate * 100).toFixed(0)}%
+          </p>
+          <p className="text-xs text-zinc-500">
+            {metrics.rules_activated}/{metrics.rules_proposed} 项生效
+          </p>
+        </div>
         <div className="rounded-xl border border-purple-500/20 bg-purple-500/5 p-4 space-y-1">
           <p className="text-sm text-zinc-400">外交关系</p>
           <p className="text-2xl font-bold text-purple-400">
@@ -158,22 +238,78 @@ export default function GovernanceOrgDetailPage() {
         </div>
       </div>
 
+      {/* Governance Health Score Breakdown */}
+      <div className="rounded-xl border border-zinc-800 bg-zinc-900/50 p-4 space-y-3">
+        <h3 className="text-sm font-semibold text-zinc-200">
+          治理健康度评分
+        </h3>
+        <div className="grid grid-cols-1 gap-3 sm:grid-cols-4">
+          <div className="space-y-1">
+            <p className="text-xs text-zinc-500">综合评分</p>
+            <div className="flex items-center gap-2">
+              <span className="text-lg font-bold text-zinc-100">
+                {(metrics.governance_stability_score * 100).toFixed(0)}
+              </span>
+              <span className="text-sm text-zinc-500">/ 100</span>
+            </div>
+          </div>
+          <div className="space-y-1">
+            <p className="text-xs text-zinc-500">外交健康 (40%)</p>
+            <div className="h-2 rounded-full bg-zinc-800">
+              <div
+                className="h-full rounded-full bg-emerald-500 transition-all duration-500"
+                style={{
+                  width: `${(metrics.treaties_signed + metrics.treaties_broken > 0
+                    ? metrics.treaties_signed / (metrics.treaties_signed + metrics.treaties_broken)
+                    : 0.5
+                  ) * 100}%`,
+                }}
+              />
+            </div>
+          </div>
+          <div className="space-y-1">
+            <p className="text-xs text-zinc-500">领导稳定性 (40%)</p>
+            <div className="h-2 rounded-full bg-zinc-800">
+              <div
+                className="h-full rounded-full bg-blue-500 transition-all duration-500"
+                style={{
+                  width: `${(metrics.election_count > 0
+                    ? Math.min(1, metrics.election_count / Math.max(metrics.election_count, 1))
+                    : 1
+                  ) * 100}%`,
+                }}
+              />
+            </div>
+          </div>
+          <div className="space-y-1">
+            <p className="text-xs text-zinc-500">立法通过率 (20%)</p>
+            <div className="h-2 rounded-full bg-zinc-800">
+              <div
+                className="h-full rounded-full bg-sky-500 transition-all duration-500"
+                style={{ width: `${metrics.legislation_success_rate * 100}%` }}
+              />
+            </div>
+          </div>
+        </div>
+      </div>
+
       {/* Tab Navigation */}
-      <div className="flex items-center gap-1 border-b border-zinc-800">
+      <div className="flex items-center gap-1 border-b border-zinc-800 overflow-x-auto">
         {(
-          ["leadership", "tax", "diplomacy", "timeline"] as const
+          ["leadership", "tax", "diplomacy", "legislation", "timeline"] as const
         ).map((t) => {
           const labels = {
             leadership: "领导变更",
             tax: "税收趋势",
             diplomacy: "外交关系",
+            legislation: "立法追踪",
             timeline: "事件流",
           };
           return (
             <button
               key={t}
               onClick={() => setTab(t)}
-              className={`px-4 py-2.5 text-sm font-medium transition-colors border-b-2 ${
+              className={`px-4 py-2.5 text-sm font-medium transition-colors border-b-2 whitespace-nowrap ${
                 tab === t
                   ? "text-blue-400 border-blue-400"
                   : "text-zinc-400 border-transparent hover:text-zinc-200"
@@ -332,46 +468,243 @@ export default function GovernanceOrgDetailPage() {
         </div>
       )}
 
-      {tab === "timeline" && (
-        <div className="rounded-xl border border-zinc-800 bg-zinc-900/50 p-4 space-y-3">
-          <h3 className="text-sm font-semibold text-zinc-200">
-            治理事件时间线
-          </h3>
-          {timelineEvents.length === 0 ? (
-            <p className="text-sm text-zinc-600">暂无治理事件</p>
-          ) : (
-            <div className="space-y-2">
-              {timelineEvents.slice(0, 50).map((event, idx) => {
-                const config = EVENT_TYPE_CONFIG[event.event_type];
-                return (
-                  <div
-                    key={`${event.event_type}-${event.tick}-${idx}`}
-                    className="flex items-center justify-between rounded-lg border border-zinc-800 bg-zinc-900/30 px-4 py-3"
-                  >
-                    <div className="flex items-center gap-3 min-w-0">
-                      <span
-                        className={`shrink-0 h-2 w-2 rounded-full ${
-                          config?.dot ?? "bg-zinc-400"
-                        }`}
-                      />
-                      <div className="min-w-0">
-                        <p className="text-sm text-zinc-200 truncate">
-                          {event.summary}
-                        </p>
-                        <p className="text-[10px] text-zinc-500">
-                          {eventTypeLabels[event.event_type] ??
-                            event.event_type}
-                        </p>
-                      </div>
-                    </div>
-                    <span className="text-xs text-zinc-500 tabular-nums shrink-0 ml-3">
-                      Tick #{event.tick}
-                    </span>
+      {tab === "legislation" && (
+        <div className="space-y-4">
+          {/* Legislation summary cards */}
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-4">
+            <div className="rounded-xl border border-sky-500/20 bg-sky-500/5 p-4">
+              <p className="text-sm text-zinc-400">提案数</p>
+              <p className="text-xl font-bold text-sky-400">
+                {metrics.rules_proposed}
+              </p>
+            </div>
+            <div className="rounded-xl border border-green-500/20 bg-green-500/5 p-4">
+              <p className="text-sm text-zinc-400">已生效</p>
+              <p className="text-xl font-bold text-green-400">
+                {metrics.rules_activated}
+              </p>
+            </div>
+            <div className="rounded-xl border border-zinc-500/20 bg-zinc-500/5 p-4">
+              <p className="text-sm text-zinc-400">已过期</p>
+              <p className="text-xl font-bold text-zinc-400">
+                {metrics.rules_expired}
+              </p>
+            </div>
+            <div className="rounded-xl border border-red-500/20 bg-red-500/5 p-4">
+              <p className="text-sm text-zinc-400">已废除</p>
+              <p className="text-xl font-bold text-red-400">
+                {metrics.rules_repealed}
+              </p>
+            </div>
+          </div>
+
+          {/* Legislation pass/veto rate bar */}
+          <div className="rounded-xl border border-zinc-800 bg-zinc-900/50 p-4 space-y-3">
+            <h3 className="text-sm font-semibold text-zinc-200">
+              法案通过/否决率
+            </h3>
+            {metrics.rules_proposed === 0 ? (
+              <p className="text-sm text-zinc-600">暂无法案数据</p>
+            ) : (
+              <div className="space-y-2">
+                <div className="flex items-center gap-2">
+                  <span className="text-xs text-zinc-500 w-16">通过</span>
+                  <div className="flex-1 h-3 rounded-full bg-zinc-800 overflow-hidden">
+                    <div
+                      className="h-full bg-green-500 rounded-full"
+                      style={{
+                        width: `${(metrics.rules_activated / metrics.rules_proposed) * 100}%`,
+                      }}
+                    />
                   </div>
-                );
-              })}
+                  <span className="text-xs text-zinc-400 tabular-nums w-12 text-right">
+                    {metrics.rules_activated}/{metrics.rules_proposed}
+                  </span>
+                </div>
+                <div className="flex items-center gap-2">
+                  <span className="text-xs text-zinc-500 w-16">过期</span>
+                  <div className="flex-1 h-3 rounded-full bg-zinc-800 overflow-hidden">
+                    <div
+                      className="h-full bg-zinc-500 rounded-full"
+                      style={{
+                        width: `${(metrics.rules_expired / metrics.rules_proposed) * 100}%`,
+                      }}
+                    />
+                  </div>
+                  <span className="text-xs text-zinc-400 tabular-nums w-12 text-right">
+                    {metrics.rules_expired}/{metrics.rules_proposed}
+                  </span>
+                </div>
+                <div className="flex items-center gap-2">
+                  <span className="text-xs text-zinc-500 w-16">废除</span>
+                  <div className="flex-1 h-3 rounded-full bg-zinc-800 overflow-hidden">
+                    <div
+                      className="h-full bg-red-500 rounded-full"
+                      style={{
+                        width: `${(metrics.rules_repealed / metrics.rules_proposed) * 100}%`,
+                      }}
+                    />
+                  </div>
+                  <span className="text-xs text-zinc-400 tabular-nums w-12 text-right">
+                    {metrics.rules_repealed}/{metrics.rules_proposed}
+                  </span>
+                </div>
+              </div>
+            )}
+          </div>
+
+          {/* Legislation events timeline */}
+          <div className="rounded-xl border border-zinc-800 bg-zinc-900/50 p-4 space-y-3">
+            <h3 className="text-sm font-semibold text-zinc-200">
+              法案事件记录
+            </h3>
+            {[
+              ...(groupedTimeline["soft_rule_proposed"] ?? []),
+              ...(groupedTimeline["soft_rule_activated"] ?? []),
+              ...(groupedTimeline["soft_rule_expired"] ?? []),
+              ...(groupedTimeline["soft_rule_repealed"] ?? []),
+            ]
+              .sort((a, b) => b.tick - a.tick)
+              .slice(0, 30)
+              .length === 0 ? (
+              <p className="text-sm text-zinc-600">暂无法案事件</p>
+            ) : (
+              <div className="space-y-2">
+                {[
+                  ...(groupedTimeline["soft_rule_proposed"] ?? []),
+                  ...(groupedTimeline["soft_rule_activated"] ?? []),
+                  ...(groupedTimeline["soft_rule_expired"] ?? []),
+                  ...(groupedTimeline["soft_rule_repealed"] ?? []),
+                ]
+                  .sort((a, b) => b.tick - a.tick)
+                  .slice(0, 30)
+                  .map((event, idx) => {
+                    const config = EVENT_TYPE_CONFIG[event.event_type];
+                    return (
+                      <div
+                        key={`${event.event_type}-${event.tick}-${idx}`}
+                        className="flex items-center justify-between rounded-lg border border-zinc-800 bg-zinc-900/30 px-4 py-3"
+                      >
+                        <div className="flex items-center gap-3 min-w-0">
+                          <span className="text-base">
+                            {config?.icon ?? "📜"}
+                          </span>
+                          <div className="min-w-0">
+                            <p className="text-sm text-zinc-200 truncate">
+                              {event.summary}
+                            </p>
+                            <p className="text-[10px] text-zinc-500">
+                              {eventTypeLabels[event.event_type] ??
+                                event.event_type}
+                            </p>
+                          </div>
+                        </div>
+                        <span className="text-xs text-zinc-500 tabular-nums shrink-0 ml-3">
+                          Tick #{event.tick}
+                        </span>
+                      </div>
+                    );
+                  })}
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
+      {tab === "timeline" && (
+        <div className="space-y-4">
+          {/* Governance activity time series chart */}
+          {activityTimeSeries.length > 0 && (
+            <div className="rounded-xl border border-zinc-800 bg-zinc-900/50 p-4 space-y-3">
+              <h3 className="text-sm font-semibold text-zinc-200">
+                治理活跃度时间序列
+              </h3>
+              <ResponsiveContainer width="100%" height={200}>
+                <BarChart data={activityTimeSeries}>
+                  <CartesianGrid strokeDasharray="3 3" stroke="#27272a" />
+                  <XAxis
+                    dataKey="tick"
+                    stroke="#52525b"
+                    tick={{ fontSize: 9 }}
+                  />
+                  <YAxis stroke="#52525b" tick={{ fontSize: 9 }} />
+                  <Tooltip content={<CustomTooltip />} />
+                  <Bar
+                    dataKey="tax_collected"
+                    stackId="events"
+                    fill="#f97316"
+                    name="税收"
+                  />
+                  <Bar
+                    dataKey="leadership_changed"
+                    stackId="events"
+                    fill="#3b82f6"
+                    name="领导变更"
+                  />
+                  <Bar
+                    dataKey="treaty_signed"
+                    stackId="events"
+                    fill="#22c55e"
+                    name="条约签署"
+                  />
+                  <Bar
+                    dataKey="soft_rule_proposed"
+                    stackId="events"
+                    fill="#0ea5e9"
+                    name="法案提议"
+                  />
+                  <Bar
+                    dataKey="soft_rule_activated"
+                    stackId="events"
+                    fill="#10b981"
+                    name="法案生效"
+                  />
+                </BarChart>
+              </ResponsiveContainer>
             </div>
           )}
+
+          {/* Event stream */}
+          <div className="rounded-xl border border-zinc-800 bg-zinc-900/50 p-4 space-y-3">
+            <h3 className="text-sm font-semibold text-zinc-200">
+              治理事件时间线
+            </h3>
+            {timelineEvents.length === 0 ? (
+              <p className="text-sm text-zinc-600">暂无治理事件</p>
+            ) : (
+              <div className="space-y-2">
+                {timelineEvents.slice(0, 50).map((event, idx) => {
+                  const config = EVENT_TYPE_CONFIG[event.event_type];
+                  return (
+                    <div
+                      key={`${event.event_type}-${event.tick}-${idx}`}
+                      className="flex items-center justify-between rounded-lg border border-zinc-800 bg-zinc-900/30 px-4 py-3"
+                    >
+                      <div className="flex items-center gap-3 min-w-0">
+                        <span
+                          className={`shrink-0 h-2 w-2 rounded-full ${
+                            config?.dot ?? "bg-zinc-400"
+                          }`}
+                        />
+                        <div className="min-w-0">
+                          <p className="text-sm text-zinc-200 truncate">
+                            {event.summary}
+                          </p>
+                          <p className="text-[10px] text-zinc-500">
+                            {eventTypeLabels[event.event_type] ??
+                              event.event_type}
+                          </p>
+                        </div>
+                      </div>
+                      <span className="text-xs text-zinc-500 tabular-nums shrink-0 ml-3">
+                        Tick #{event.tick}
+                      </span>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </div>
         </div>
       )}
     </div>

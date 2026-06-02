@@ -19,6 +19,10 @@ const GOVERNANCE_EVENT_TYPES = new Set([
   "treaty_signed",
   "treaty_broken",
   "relation_changed",
+  "soft_rule_proposed",
+  "soft_rule_activated",
+  "soft_rule_expired",
+  "soft_rule_repealed",
 ]);
 
 function isGovernanceEvent(event: WorldEvent): boolean {

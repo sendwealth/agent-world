@@ -1,23 +1,9 @@
 "use client";
 
-import { TimelineView } from "@/components/TimelineView";
-import { getEmergenceEvents, getTimelineSnapshots } from "@/lib/data";
-
-export default function TimelinePage() {
-  const events = getEmergenceEvents();
-  const snapshots = getTimelineSnapshots();
-
-  return (
-    <div className="mx-auto max-w-5xl px-4 py-8">
-      <h1 className="text-2xl font-bold text-white md:text-3xl">文明时间线</h1>
-      <p className="mt-2 text-zinc-400">
-        拖动滑块或点击事件节点，浏览 5000 Tick 内的文明涌现历程。
-      </p>
-      <div className="mt-6">
-        <TimelineView events={events} snapshots={snapshots} />
 import { useEffect, useState, useCallback } from "react";
-import { loadEvents, loadSnapshots } from "@/lib/data";
-import type { EmergenceEvent, WorldSnapshot } from "@/types/demo";
+import { loadEvents, loadSnapshots } from "@/lib/demo-data";
+import { EMERGENCE_COLORS, EMERGENCE_LABELS } from "@/types/demo";
+import type { EmergenceEvent, EmergenceCategory, WorldSnapshot } from "@/types/demo";
 
 const CATEGORY_CONFIG: Record<string, { color: string; bg: string; border: string; label: string }> = {
   organization: { color: "text-blue-400", bg: "bg-blue-500/10", border: "border-blue-500/20", label: "Organization" },
@@ -226,6 +212,21 @@ export default function TimelinePage() {
                   </div>
                 );
               })}
+            </div>
+
+            {/* Legend */}
+            <div className="flex flex-wrap items-center gap-4 text-xs text-zinc-400 mt-6">
+              {(Object.entries(EMERGENCE_COLORS) as [EmergenceCategory, string][]).map(
+                ([cat, color]) => (
+                  <div key={cat} className="flex items-center gap-1.5">
+                    <span
+                      className="inline-block h-2.5 w-2.5 rounded-full"
+                      style={{ backgroundColor: color }}
+                    />
+                    {EMERGENCE_LABELS[cat]}
+                  </div>
+                )
+              )}
             </div>
           </div>
         </div>

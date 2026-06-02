@@ -129,12 +129,21 @@ describe("Human Agents Page", () => {
     ];
     const mockClaimed: never[] = [];
 
+    // Component makes 4 concurrent fetch calls via Promise.all:
+    // 1. /api/v1/agents  2. /api/v1/human/agents  3. /api/v1/human/oracles  4. /api/v1/human/bounties
+    // Must mock all 4 to avoid fetchWithRetry delays causing waitFor timeout.
     mockFetch
       .mockImplementationOnce(() =>
         Promise.resolve(mockFetchResponse(mockAgents))
       )
       .mockImplementationOnce(() =>
         Promise.resolve(mockFetchResponse(mockClaimed))
+      )
+      .mockImplementationOnce(() =>
+        Promise.resolve(mockFetchResponse([]))
+      )
+      .mockImplementationOnce(() =>
+        Promise.resolve(mockFetchResponse([]))
       );
 
     const { default: HumanAgentsPage } = await import(

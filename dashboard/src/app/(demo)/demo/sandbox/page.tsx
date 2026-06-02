@@ -1,18 +1,7 @@
-import { SandboxForm } from "@/components/SandboxForm";
-
-export default function SandboxPage() {
-  return (
-    <div className="mx-auto max-w-2xl px-4 py-8">
-      <h1 className="text-2xl font-bold text-white md:text-3xl">交互式沙盒</h1>
-      <p className="mt-2 text-zinc-400">
-        创建你自己的 Agent，看看它在虚拟世界中可能经历什么。纯模拟，不连接后端。
-      </p>
-      <div className="mt-8">
-        <SandboxForm />
 "use client";
 
 import { useState } from "react";
-import { loadTemplates } from "@/lib/data";
+import { loadTemplates } from "@/lib/demo-data";
 import type { SandboxTemplate, PersonalityTraits } from "@/types/demo";
 
 function SliderField({
@@ -108,7 +97,7 @@ export default function SandboxPage() {
     return (
       <div className="min-h-screen flex items-center justify-center px-4">
         <div className="max-w-lg w-full text-center">
-          <div className="text-5xl mb-6">🎉</div>
+          <div className="text-5xl mb-6">{"\uD83C\uDF89"}</div>
           <h1 className="text-2xl font-bold text-zinc-100 mb-2">
             {name} has entered the world!
           </h1>
@@ -117,10 +106,10 @@ export default function SandboxPage() {
           </p>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mb-8 text-left">
             {[
-              { emoji: "🤝", title: "Allies", desc: `${Math.floor(Math.random() * 5) + 2} agents share similar values` },
-              { emoji: "⚔️", title: "Rivals", desc: `${Math.floor(Math.random() * 3) + 1} agents compete for resources` },
-              { emoji: "🏛️", title: "Organizations", desc: `${Math.floor(Math.random() * 3) + 1} guilds match their skills` },
-              { emoji: "📊", title: "Trade Routes", desc: `${Math.floor(Math.random() * 4) + 2} profitable trade opportunities` },
+              { emoji: "\uD83E\uDD1D", title: "Allies", desc: "4 agents share similar values" },
+              { emoji: "\u2694\uFE0F", title: "Rivals", desc: "2 agents compete for resources" },
+              { emoji: "\uD83C\uDFDB\uFE0F", title: "Organizations", desc: "3 guilds match their skills" },
+              { emoji: "\uD83D\uDCCA", title: "Trade Routes", desc: "5 profitable trade opportunities" },
             ].map((item) => (
               <div key={item.title} className="rounded-xl border border-zinc-800 bg-zinc-900/50 p-4">
                 <div className="text-xl mb-1">{item.emoji}</div>
@@ -144,7 +133,7 @@ export default function SandboxPage() {
     return (
       <div className="min-h-screen flex items-center justify-center px-4">
         <div className="max-w-md w-full text-center">
-          <div className="text-4xl mb-6 animate-bounce">🚀</div>
+          <div className="text-4xl mb-6 animate-bounce">{"\uD83D\uDE80"}</div>
           <h1 className="text-xl font-bold text-zinc-100 mb-2">Deploying {name}...</h1>
           <p className="text-sm text-zinc-400 mb-6">{simMessage}</p>
           <div className="w-full h-2 rounded-full bg-zinc-800 overflow-hidden">

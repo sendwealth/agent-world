@@ -9,8 +9,8 @@
 //! Depends on: world (WorldState, EventBus), economy (BankingSystem)
 //!
 //! Sub-modules: charter, competition, diplomacy, governance,
-//!              governance_metrics, leadership, members, org,
-//!              rule_engine, treasury
+//!              governance_metrics, leadership, legislation_cycle,
+//!              members, org, rule_engine, treasury
 //!
 pub mod charter;
 pub mod competition;
@@ -18,6 +18,7 @@ pub mod diplomacy;
 pub mod governance;
 pub mod governance_metrics;
 pub mod leadership;
+pub mod legislation_cycle;
 pub mod members;
 pub mod org;
 pub mod rule_engine;
@@ -41,6 +42,10 @@ pub use governance_metrics::{
 };
 pub use leadership::{
     Ballot, Election, ElectionStatus, LeadershipEngine, LeadershipError, VotingMethod,
+};
+pub use legislation_cycle::{
+    CandidateRule, CycleEffectSummary, CycleStatus, LegislationCycleConfig,
+    LegislationCycleEngine, LegislationCycleError, LegislationCycleRecord,
 };
 pub use members::{MemberError, MemberRole, OrgMember};
 pub use org::{

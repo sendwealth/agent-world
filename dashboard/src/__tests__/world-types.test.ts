@@ -104,7 +104,9 @@ describe("World Types", () => {
       debts: 500,
       member_count: 10,
       members: [],
-    } as Organization;
+      created_tick: 1,
+      last_activity_tick: 100,
+    };
     expect(org.type).toBe("company");
     expect(org.member_count).toBe(10);
   });

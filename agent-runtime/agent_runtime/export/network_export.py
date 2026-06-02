@@ -12,7 +12,7 @@ from __future__ import annotations
 
 import json
 from collections import defaultdict, deque
-from typing import Any, TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 if TYPE_CHECKING:
     from agent_runtime.tracing.interaction_graph import InteractionGraph
@@ -188,7 +188,9 @@ class NetworkExporter:
             "smallest_community_size": min(len(c) for c in communities) if communities else 0,
         }
 
-    def export_relationship_matrix(self, tick_range: tuple[int, int] | None = None) -> dict[str, Any]:
+    def export_relationship_matrix(
+        self, tick_range: tuple[int, int] | None = None
+    ) -> dict[str, Any]:
         """Export weighted relationship matrix grouped by interaction type.
 
         Returns:

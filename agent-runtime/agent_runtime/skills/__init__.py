@@ -16,7 +16,10 @@ from .tool_marketplace import TOOL_MARKETPLACE_SKILL, ToolMarketplaceClient
 from .trading import TRADING_SKILL
 
 # Convenience: all built-in skill definitions as a list.
-BUILTIN_SKILLS = [CODING_SKILL, TRADING_SKILL, RESEARCH_SKILL, TEACHING_SKILL, TOOL_MARKETPLACE_SKILL]
+BUILTIN_SKILLS = [
+    CODING_SKILL, TRADING_SKILL, RESEARCH_SKILL,
+    TEACHING_SKILL, TOOL_MARKETPLACE_SKILL,
+]
 
 
 def create_registry_with_builtins() -> SkillRegistry:

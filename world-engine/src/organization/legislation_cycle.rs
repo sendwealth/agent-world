@@ -623,6 +623,7 @@ impl LegislationCycleEngine {
     ///
     /// This is a convenience method for testing or automated scenarios where
     /// all votes are known upfront.
+    #[allow(clippy::too_many_arguments)]
     pub fn run_full_cycle(
         &mut self,
         governance: &mut GovernanceSystem,

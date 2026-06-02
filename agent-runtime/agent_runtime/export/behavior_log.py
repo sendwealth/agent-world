@@ -14,7 +14,7 @@ import csv
 import io
 import json
 from dataclasses import dataclass
-from typing import Any, Iterator, TYPE_CHECKING
+from typing import TYPE_CHECKING, Any, Iterator
 
 if TYPE_CHECKING:
     from agent_runtime.tracing.store import TraceStore

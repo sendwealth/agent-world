@@ -47,6 +47,9 @@ class AgentWorldClient:
         self._experiments: ExperimentsModule | None = None
         self._export: ExportModule | None = None
         self._analyze: AnalyzeModule | None = None
+        self._economic: EconomicModule | None = None
+        self._social: SocialModule | None = None
+        self._behavior: BehaviorModule | None = None
 
     # -- Sub-client properties --
 
@@ -85,6 +88,27 @@ class AgentWorldClient:
         if self._analyze is None:
             self._analyze = AnalyzeModule()
         return self._analyze
+
+    @property
+    def economic(self) -> EconomicModule:
+        """Economic analysis: Gini, wealth distribution, price trends, inflation."""
+        if self._economic is None:
+            self._economic = EconomicModule()
+        return self._economic
+
+    @property
+    def social(self) -> SocialModule:
+        """Social network analysis: centrality, communities, interaction patterns."""
+        if self._social is None:
+            self._social = SocialModule()
+        return self._social
+
+    @property
+    def behavior(self) -> BehaviorModule:
+        """Behavioral patterns: survival stats, activity profiles, strategy classification."""
+        if self._behavior is None:
+            self._behavior = BehaviorModule()
+        return self._behavior
 
     # -- HTTP helpers --
 
@@ -136,3 +160,6 @@ from agent_world_sdk.world import WorldModule, AgentsModule, EventsModule
 from agent_world_sdk.experiments import ExperimentsModule
 from agent_world_sdk.export import ExportModule
 from agent_world_sdk.analyze import AnalyzeModule
+from agent_world_sdk.economic import EconomicModule
+from agent_world_sdk.social import SocialModule
+from agent_world_sdk.behavior import BehaviorModule

@@ -28,6 +28,12 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      - name: Free disk space
+        run: |
+          sudo rm -rf /usr/share/dotnet /usr/local/lib/android /opt/ghc
+          sudo apt-get clean
+          df -h /
+
       - name: Install Protoc
         uses: arduino/setup-protoc@v3
         with:
@@ -53,7 +59,10 @@ jobs:
       - name: Clippy
         run: cargo clippy --all-targets -- -D warnings
 
-      - name: Test
+      - name: Unit tests
+        run: cargo test --lib
+
+      - name: Integration tests
         run: cargo test
 
   # ── Python ───────────────────────────────────────────────

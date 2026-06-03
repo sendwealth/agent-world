@@ -16,10 +16,21 @@ export async function GET(
     headers: Object.fromEntries(request.headers.entries()),
   });
 
-  const body = await res.arrayBuffer();
-  return new NextResponse(body, {
+  const headers = new Headers(res.headers);
+  headers.delete("content-encoding");
+  headers.delete("content-length");
+  headers.delete("transfer-encoding");
+
+  if (!res.body) {
+    return new NextResponse(null, {
+      status: res.status,
+      headers,
+    });
+  }
+
+  return new Response(res.body, {
     status: res.status,
-    headers: res.headers,
+    headers,
   });
 }
 

@@ -3,9 +3,7 @@
 from __future__ import annotations
 
 import logging
-from unittest.mock import AsyncMock, MagicMock
-
-import pytest
+from unittest.mock import MagicMock
 
 from agent_runtime.core.act import ActionExecutor
 from agent_runtime.core.decide import SocialContext

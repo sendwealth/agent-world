@@ -482,31 +482,59 @@ class ThinkLoop:
     # Social provider injection
     # ------------------------------------------------------------------
 
+    @staticmethod
+    def _unwrap_to_engine(provider: Any) -> Any | None:
+        """Walk the decision-provider wrapper chain and return the inner DecisionEngine.
+
+        Known wrapper attributes (checked at each level):
+        * _inner  — AsyncDecisionProvider
+        * _base   — MemoryAwareDecisionProvider
+
+        If an object with an _engine attribute is reached (e.g. LLMDecisionProvider),
+        its _engine value is returned.
+
+        Returns None when the chain cannot be resolved.
+        """
+        seen: set[int] = set()
+        current = provider
+        while current is not None:
+            if id(current) in seen:
+                break
+            seen.add(id(current))
+
+            # Reached a provider that wraps a DecisionEngine directly
+            engine = getattr(current, "_engine", None)
+            if engine is not None:
+                return engine
+
+            # Try each known wrapper attribute
+            for attr in ("_inner", "_base"):
+                inner = getattr(current, attr, None)
+                if inner is not None:
+                    current = inner
+                    break
+            else:
+                # No known wrapper attribute — dead end
+                break
+
+        return None
+
     def _inject_social_provider(self, provider: SocialContextProvider) -> None:
         """Inject the social context provider into the decision provider.
 
-        Handles two patterns:
-        1. If the decision_provider wraps a DecisionEngine (e.g. LLMDecisionProvider),
-           set the social_provider on the inner engine.
-        2. If the decision_provider is wrapped in an async adapter, unwrap first.
+        Walks the wrapper chain (AsyncDecisionProvider, MemoryAwareDecisionProvider,
+        etc.) to find the inner DecisionEngine and sets the _social_provider
+        attribute on it.
         """
-        target = self._decision
+        engine = self._unwrap_to_engine(self._decision)
+        if engine is not None and hasattr(engine, "_social_provider"):
+            object.__setattr__(engine, "_social_provider", provider)
+            logger.info(
+                "Injected SocialContextProvider into DecisionEngine"
+            )
+            return
 
-        # Unwrap AsyncDecisionProvider if present
-        if hasattr(target, "inner"):
-            target = target.inner
-
-        # If the decision provider has a settable _engine with social_provider
-        if hasattr(target, "_engine"):
-            engine = target._engine
-            if hasattr(engine, "_social_provider"):
-                object.__setattr__(engine, "_social_provider", provider)
-                logger.info(
-                    "Injected SocialContextProvider into DecisionEngine"
-                )
-                return
-
-        logger.debug(
+        logger.warning(
             "SocialContextProvider provided but decision_provider does not "
             "support injection — social context will not influence decisions"
         )
@@ -514,26 +542,18 @@ class ThinkLoop:
     def _inject_emotion_provider(self, hook: EmotionHook) -> None:
         """Inject the emotion provider into the decision provider chain.
 
-        Walks the decision provider chain to find the inner DecisionEngine
+        Walks the wrapper chain to find the inner DecisionEngine
         and sets the _emotion_provider attribute on it.
         """
-        target = self._decision
+        engine = self._unwrap_to_engine(self._decision)
+        if engine is not None and hasattr(engine, "_emotion_provider"):
+            object.__setattr__(engine, "_emotion_provider", hook)
+            logger.info(
+                "Injected EmotionContextProvider into DecisionEngine"
+            )
+            return
 
-        # Unwrap AsyncDecisionProvider if present
-        if hasattr(target, "inner"):
-            target = target.inner
-
-        # If the decision provider has a settable _engine with _emotion_provider
-        if hasattr(target, "_engine"):
-            engine = target._engine
-            if hasattr(engine, "_emotion_provider"):
-                object.__setattr__(engine, "_emotion_provider", hook)
-                logger.info(
-                    "Injected EmotionContextProvider into DecisionEngine"
-                )
-                return
-
-        logger.debug(
+        logger.warning(
             "EmotionHook provided but decision_provider does not "
             "support injection — emotion context will not influence decisions"
         )

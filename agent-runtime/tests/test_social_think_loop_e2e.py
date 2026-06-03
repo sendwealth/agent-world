@@ -107,6 +107,13 @@ class _MockWorldClient:
     async def build(self, structure_type: str, **kwargs: Any) -> dict[str, Any]:
         return {"status": "ok", "action": "build"}
 
+    async def socialize(self, target_agent_id: str, message: str = "") -> dict[str, Any]:
+        return {
+            "status": "ok",
+            "action": "socialize",
+            "target_agent_id": target_agent_id,
+        }
+
 
 # ---------------------------------------------------------------------------
 # Test 1: Full pipeline — provider -> prompt includes social context

@@ -474,23 +474,16 @@ class ActionExecutor:
     async def _handle_socialize(self, context: ActionContext) -> dict[str, Any]:
         """Socialize with nearby agents — triggers trust and cultural computations.
 
-        Sends a SOCIALIZE intent to the World Engine, which distributes it to
-        nearby agents.  The action carries optional target_agent_id and
-        interaction_type fields that downstream social modules (trust,
-        cultural diffusion) can consume.
+        Calls the dedicated ``socialize()`` method on the world client, which
+        sends a SOCIALIZE intent to the World Engine for distribution to nearby
+        agents.  The action carries ``target_agent_id`` and an optional
+        ``message`` that downstream social modules consume.
         """
         target_agent_id = context.parameters.get("target_agent_id", "")
-        interaction_type = context.parameters.get("interaction_type", "casual")
-        return await context.world.send_message(
-            {
-                "type": "SOCIALIZE",
-                "payload": {
-                    "action": "socialize",
-                    "target_agent_id": target_agent_id,
-                    "interaction_type": interaction_type,
-                },
-            }
-        )
+        if not target_agent_id:
+            raise ValueError("socialize requires 'target_agent_id' parameter")
+        message = context.parameters.get("message", "")
+        return await context.world.socialize(target_agent_id, message)
     async def _handle_form_org(self, context: ActionContext) -> dict[str, Any]:
         """Form a new organization — sent as a WILL message to World Engine."""
         org_name = context.parameters.get("org_name", "")

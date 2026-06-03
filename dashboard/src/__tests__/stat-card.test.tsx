@@ -105,23 +105,23 @@ describe("StatCards", () => {
       agentCount: 100,
       aliveCount: 80,
       deadCount: 20,
-      gdp: 50000,
-      inflationRate: 2.5,
       totalMoney: 200000,
+      totalTokens: 50000,
       tick: 500,
+      taskCount: 12,
     };
 
     render(<StatCards stats={stats} />);
 
     expect(screen.getByText("Agent 总数")).toBeInTheDocument();
-    expect(screen.getByText("世界 GDP")).toBeInTheDocument();
-    expect(screen.getByText("通胀率")).toBeInTheDocument();
+    expect(screen.getByText("总货币")).toBeInTheDocument();
+    expect(screen.getByText("任务数")).toBeInTheDocument();
     expect(screen.getByText("死亡数")).toBeInTheDocument();
 
     // Value rendering
     expect(screen.getByText("100")).toBeInTheDocument();
     expect(screen.getByText("20")).toBeInTheDocument();
-    expect(screen.getByText("2.50%")).toBeInTheDocument();
+    expect(screen.getByText("12")).toBeInTheDocument();
   });
 
   it("shows alive count in agent card subtitle", () => {
@@ -129,10 +129,10 @@ describe("StatCards", () => {
       agentCount: 100,
       aliveCount: 80,
       deadCount: 20,
-      gdp: 50000,
-      inflationRate: 2.5,
       totalMoney: 200000,
+      totalTokens: 50000,
       tick: 500,
+      taskCount: 12,
     };
 
     render(<StatCards stats={stats} />);
@@ -145,14 +145,16 @@ describe("StatCards", () => {
       agentCount: 100,
       aliveCount: 80,
       deadCount: 20,
-      gdp: 50000,
-      inflationRate: 2.5,
       totalMoney: 200000,
+      totalTokens: 50000,
       tick: 500,
+      taskCount: 12,
     };
 
     render(<StatCards stats={stats} />);
 
-    expect(screen.getByText("Tick #500")).toBeInTheDocument();
+    // Tick #500 appears in both the task count and deaths card subtitles
+    const tickTexts = screen.getAllByText("Tick #500");
+    expect(tickTexts.length).toBeGreaterThanOrEqual(1);
   });
 });

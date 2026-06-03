@@ -142,7 +142,7 @@ export function LeaderboardSection({ statsTick }: LeaderboardProps) {
   useEffect(() => {
     async function loadReputation() {
       try {
-        const data = await fetchJSON<ReputationRankingEntry[]>("/reputation/rankings");
+        const data = await fetchJSON<ReputationRankingEntry[]>("/api/v1/reputation/rankings");
         setReputationRankings(data);
       } catch {
         // Reputation API may not be configured

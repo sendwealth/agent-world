@@ -330,7 +330,7 @@ export default function EvolutionPage() {
 
   useEffect(() => {
     function onEvent(event: WorldEvent) {
-      if (event.type === "skill_up" || event.type === "agent_spawn" || event.type === "agent_death") {
+      if (event.type === "skill_level_up" || event.type === "agent_spawned" || event.type === "agent_died") {
         loadData();
       }
     }

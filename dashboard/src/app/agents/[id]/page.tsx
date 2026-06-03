@@ -131,8 +131,8 @@ export default function AgentDetailPage() {
       const isRelevant =
         event.agentId === agentId ||
         event.targetId === agentId ||
-        event.type === "agent_spawn" ||
-        event.type === "agent_death";
+        event.type === "agent_spawned" ||
+        event.type === "agent_died";
 
       if (!isRelevant || refreshPending.current) return;
 

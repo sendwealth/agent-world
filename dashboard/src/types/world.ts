@@ -4,10 +4,10 @@ export interface WorldStats {
   agentCount: number;
   aliveCount: number;
   deadCount: number;
-  gdp: number;
-  inflationRate: number;
   totalMoney: number;
+  totalTokens: number;
   tick: number;
+  taskCount: number;
 }
 
 export interface Agent {
@@ -38,19 +38,32 @@ export interface WorldEvent {
 }
 
 export type EventType =
-  | "agent_spawn"
-  | "agent_death"
-  | "trade"
+  | "tick_advanced"
+  | "agent_spawned"
+  | "agent_dying"
+  | "agent_died"
+  | "agent_rescued"
+  | "transaction_completed"
+  | "balance_changed"
+  | "phase_changed"
+  | "rule_violated"
+  | "snapshot_taken"
+  | "escrow_created"
+  | "escrow_claimed"
+  | "escrow_released"
+  | "escrow_refunded"
+  | "escrow_frozen"
   | "task_created"
   | "task_claimed"
+  | "task_started"
+  | "task_submitted"
+  | "task_reviewed"
   | "task_completed"
-  | "message"
-  | "skill_up"
-  | "reputation_change"
+  | "task_expired"
+  | "reward_distributed"
   | "reputation_changed"
-  | "inflation"
-  | "investment"
-  | "tax"
+  | "skill_level_up"
+  | "skill_mutated"
   | "tax_collected"
   | "treasury_distributed"
   | "leadership_election_started"
@@ -64,7 +77,19 @@ export type EventType =
   | "coordination_task_agent_submitted"
   | "coordination_task_completed"
   | "coordination_task_cancelled"
-  | "coordination_task_expired";
+  | "coordination_task_expired"
+  | "soft_rule_proposed"
+  | "soft_rule_activated"
+  | "soft_rule_expired"
+  | "soft_rule_repealed"
+  | "investment_product_created"
+  | "investment_purchased"
+  | "investment_sold"
+  | "investment_dividend"
+  | "feed_post_created"
+  | "feed_post_liked"
+  | "feed_comment_created"
+  | "feed_comment_liked";
 
 export interface LeaderboardEntry {
   agentId: string;

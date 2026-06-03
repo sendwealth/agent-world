@@ -12,7 +12,7 @@ afterEach(() => {
 const mockEvents: WorldEvent[] = [
   {
     id: "evt-1",
-    type: "agent_spawn",
+    type: "agent_spawned",
     agentId: "agent-1",
     agentName: "Alpha",
     description: "Alpha was born into the world",
@@ -21,7 +21,7 @@ const mockEvents: WorldEvent[] = [
   },
   {
     id: "evt-2",
-    type: "trade",
+    type: "transaction_completed",
     agentId: "agent-1",
     agentName: "Alpha",
     targetId: "agent-2",
@@ -33,7 +33,7 @@ const mockEvents: WorldEvent[] = [
   },
   {
     id: "evt-3",
-    type: "agent_death",
+    type: "agent_died",
     agentId: "agent-2",
     agentName: "Beta",
     description: "Beta has died",

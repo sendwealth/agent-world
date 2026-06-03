@@ -41,7 +41,7 @@ export default function MemoryStats({ agentId, events }: MemoryStatsProps) {
     }
 
     // Trade volume
-    const tradeEvents = agentEvents.filter((e) => e.type === "trade");
+    const tradeEvents = agentEvents.filter((e) => e.type === "transaction_completed");
     const tradeVolume = tradeEvents.reduce((sum, e) => sum + (e.amount ?? 0), 0);
 
     // Task stats
@@ -50,7 +50,7 @@ export default function MemoryStats({ agentId, events }: MemoryStatsProps) {
     const tasksClaimed = agentEvents.filter((e) => e.type === "task_claimed" && e.agentId === agentId).length;
 
     // Skill-up events
-    const skillUpEvents = agentEvents.filter((e) => e.type === "skill_up" && e.agentId === agentId);
+    const skillUpEvents = agentEvents.filter((e) => e.type === "skill_level_up" && e.agentId === agentId);
 
     return {
       totalEvents: agentEvents.length,

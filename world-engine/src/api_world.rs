@@ -174,6 +174,7 @@ pub struct SendMessageRequest {
 }
 
 #[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
 pub struct WorldStatsResponse {
     pub agent_count: usize,
     pub alive_count: usize,
@@ -182,6 +183,113 @@ pub struct WorldStatsResponse {
     pub total_tokens: u64,
     pub tick: u64,
     pub task_count: usize,
+}
+
+// ── Leaderboard ──────────────────────────────────────────
+
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct LeaderboardEntry {
+    pub agent_id: String,
+    pub agent_name: String,
+    pub value: f64,
+    pub rank: usize,
+}
+
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct LeaderboardResponse {
+    pub richest: Vec<LeaderboardEntry>,
+    pub longest_lived: Vec<LeaderboardEntry>,
+    pub highest_skill: Vec<LeaderboardEntry>,
+    pub highest_reputation: Vec<LeaderboardEntry>,
+}
+
+pub async fn world_leaderboard(State(state): State<AppState>) -> impl IntoResponse {
+    let agents = state.agents.lock().await;
+    let alive_agents: Vec<&AgentRecord> = agents.iter().filter(|a| a.alive).collect();
+    let limit = 10usize;
+
+    // Richest by money
+    let mut by_money: Vec<&AgentRecord> = alive_agents.iter().copied().collect();
+    by_money.sort_by(|a, b| b.money.cmp(&a.money));
+    let richest: Vec<LeaderboardEntry> = by_money
+        .iter()
+        .take(limit)
+        .enumerate()
+        .map(|(i, a)| LeaderboardEntry {
+            agent_id: a.id.clone(),
+            agent_name: a.name.clone(),
+            value: a.money as f64,
+            rank: i + 1,
+        })
+        .collect();
+
+    // Longest lived by ticks_survived
+    let mut by_age: Vec<&AgentRecord> = alive_agents.iter().copied().collect();
+    by_age.sort_by(|a, b| b.ticks_survived.cmp(&a.ticks_survived));
+    let longest_lived: Vec<LeaderboardEntry> = by_age
+        .iter()
+        .take(limit)
+        .enumerate()
+        .map(|(i, a)| LeaderboardEntry {
+            agent_id: a.id.clone(),
+            agent_name: a.name.clone(),
+            value: a.ticks_survived as f64,
+            rank: i + 1,
+        })
+        .collect();
+
+    // Highest skill (max skill level across all skills)
+    let mut by_skill: Vec<&AgentRecord> = alive_agents.iter().copied().collect();
+    by_skill.sort_by(|a, b| {
+        let max_a = a.skills.values().max().copied().unwrap_or(0);
+        let max_b = b.skills.values().max().copied().unwrap_or(0);
+        max_b.cmp(&max_a)
+    });
+    let highest_skill: Vec<LeaderboardEntry> = by_skill
+        .iter()
+        .take(limit)
+        .enumerate()
+        .map(|(i, a)| LeaderboardEntry {
+            agent_id: a.id.clone(),
+            agent_name: a.name.clone(),
+            value: a.skills.values().max().copied().unwrap_or(0) as f64,
+            rank: i + 1,
+        })
+        .collect();
+
+    // Highest reputation — use reputation system if available, else empty
+    let highest_reputation: Vec<LeaderboardEntry> = {
+        if let Some(rep_sys) = state.reputation_system.as_ref() {
+            let rep = rep_sys.lock().await;
+            let rankings = rep.get_rankings(limit);
+            drop(rep);
+            rankings
+                .into_iter()
+                .filter(|r| alive_agents.iter().any(|a| a.id == r.agent_id))
+                .map(|r| LeaderboardEntry {
+                    agent_id: r.agent_id.clone(),
+                    agent_name: alive_agents
+                        .iter()
+                        .find(|a| a.id == r.agent_id)
+                        .map(|a| a.name.clone())
+                        .unwrap_or_else(|| r.agent_id.clone()),
+                    value: r.reputation,
+                    rank: r.rank,
+                })
+                .collect()
+        } else {
+            Vec::new()
+        }
+    };
+
+    Json(LeaderboardResponse {
+        richest,
+        longest_lived,
+        highest_skill,
+        highest_reputation,
+    })
 }
 
 // ── World Stats Handler ───────────────────────────────────
@@ -593,6 +701,7 @@ pub fn world_routes() -> axum::Router<AppState> {
     axum::Router::new()
         .route("/api/v1/world/events", get(world_events_sse))
         .route("/api/v1/world/stats", get(world_stats))
+        .route("/api/v1/world/leaderboard", get(world_leaderboard))
         .route("/api/v1/agents", get(list_agents))
         .route("/api/v1/agents", post(spawn_agent))
         .route("/api/v1/agents/:id", get(get_agent))

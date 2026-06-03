@@ -239,13 +239,8 @@ class TestA2AClientLifecycle:
         mock_channel.close = AsyncMock()
         ready_future: asyncio.Future[None] = asyncio.Future()
         ready_future.set_result(None)
-        with (
-            patch("agent_runtime.a2a.client.grpc.aio.insecure_channel", return_value=mock_channel),
-            patch(
-                "agent_runtime.a2a.client.grpc.channel_ready_future",
-                return_value=ready_future,
-            ),
-        ):
+        with patch("agent_runtime.a2a.client.grpc.aio.insecure_channel", return_value=mock_channel), \
+             patch("agent_runtime.a2a.client.grpc.channel_ready_future", return_value=ready_future):
             await client.connect()
             assert client.connected
             await client.close()
@@ -262,13 +257,8 @@ class TestA2AClientLifecycle:
         mock_channel.close = AsyncMock()
         ready_future: asyncio.Future[None] = asyncio.Future()
         ready_future.set_result(None)
-        with (
-            patch("agent_runtime.a2a.client.grpc.aio.insecure_channel", return_value=mock_channel),
-            patch(
-                "agent_runtime.a2a.client.grpc.channel_ready_future",
-                return_value=ready_future,
-            ),
-        ):
+        with patch("agent_runtime.a2a.client.grpc.aio.insecure_channel", return_value=mock_channel), \
+             patch("agent_runtime.a2a.client.grpc.channel_ready_future", return_value=ready_future):
             async with A2AClient(make_config()) as client:
                 assert client.connected
             # After exiting the context, channel should be closed
@@ -284,13 +274,8 @@ class TestA2AClientLifecycle:
         mock_channel.close = AsyncMock()
         # Create a future that never resolves (simulates server unavailable)
         ready_future: asyncio.Future[None] = asyncio.Future()
-        with (
-            patch("agent_runtime.a2a.client.grpc.aio.insecure_channel", return_value=mock_channel),
-            patch(
-                "agent_runtime.a2a.client.grpc.channel_ready_future",
-                return_value=ready_future,
-            ),
-        ):
+        with patch("agent_runtime.a2a.client.grpc.aio.insecure_channel", return_value=mock_channel), \
+             patch("agent_runtime.a2a.client.grpc.channel_ready_future", return_value=ready_future):
             with pytest.raises(ConnectionError, match="did not become ready"):
                 await client.connect()
             assert not client.connected
@@ -309,13 +294,8 @@ class TestA2AClientSyncRPCs:
         client = A2AClient(make_config())
         mock_ack = a2a_pb2.MessageAck(received=True)
 
-        with (
-            patch("agent_runtime.a2a.client.grpc.aio"),
-            patch(
-                "agent_runtime.a2a.client.grpc.channel_ready_future",
-                return_value=_ready_future(),
-            ),
-        ):
+        with patch("agent_runtime.a2a.client.grpc.aio"), \
+             patch("agent_runtime.a2a.client.grpc.channel_ready_future", return_value=_ready_future()):
             await client.connect()
             client._stub = MagicMock()
             client._stub.SendMessage = AsyncMock(return_value=mock_ack)
@@ -336,13 +316,8 @@ class TestA2AClientSyncRPCs:
             ]
         )
 
-        with (
-            patch("agent_runtime.a2a.client.grpc.aio"),
-            patch(
-                "agent_runtime.a2a.client.grpc.channel_ready_future",
-                return_value=_ready_future(),
-            ),
-        ):
+        with patch("agent_runtime.a2a.client.grpc.aio"), \
+             patch("agent_runtime.a2a.client.grpc.channel_ready_future", return_value=_ready_future()):
             await client.connect()
             client._stub = MagicMock()
             client._stub.Discover = AsyncMock(return_value=mock_response)
@@ -364,13 +339,8 @@ class TestA2AClientRetry:
 
         client = A2AClient(make_config(retry_policy=RetryPolicy(max_retries=3, base_delay=0.01)))
 
-        with (
-            patch("agent_runtime.a2a.client.grpc.aio.insecure_channel"),
-            patch(
-                "agent_runtime.a2a.client.grpc.channel_ready_future",
-                return_value=_ready_future(),
-            ),
-        ):
+        with patch("agent_runtime.a2a.client.grpc.aio.insecure_channel"), \
+             patch("agent_runtime.a2a.client.grpc.channel_ready_future", return_value=_ready_future()):
             await client.connect()
             client._stub = MagicMock()
 
@@ -402,13 +372,8 @@ class TestA2AClientRetry:
 
         client = A2AClient(make_config(retry_policy=RetryPolicy(max_retries=3, base_delay=0.01)))
 
-        with (
-            patch("agent_runtime.a2a.client.grpc.aio.insecure_channel"),
-            patch(
-                "agent_runtime.a2a.client.grpc.channel_ready_future",
-                return_value=_ready_future(),
-            ),
-        ):
+        with patch("agent_runtime.a2a.client.grpc.aio.insecure_channel"), \
+             patch("agent_runtime.a2a.client.grpc.channel_ready_future", return_value=_ready_future()):
             await client.connect()
             client._stub = MagicMock()
 
@@ -437,13 +402,8 @@ class TestA2AClientStreaming:
     async def test_start_and_stop_streaming(self):
         client = A2AClient(make_config())
 
-        with (
-            patch("agent_runtime.a2a.client.grpc.aio"),
-            patch(
-                "agent_runtime.a2a.client.grpc.channel_ready_future",
-                return_value=_ready_future(),
-            ),
-        ):
+        with patch("agent_runtime.a2a.client.grpc.aio"), \
+             patch("agent_runtime.a2a.client.grpc.channel_ready_future", return_value=_ready_future()):
             await client.connect()
             assert not client.streaming
             await client.start_streaming()

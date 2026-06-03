@@ -29,7 +29,7 @@ function classifyPhase(tick: number): "exploration" | "organization" | "governan
 function mapEventType(type: string): EmergenceCategory {
   switch (type) {
     case "economic":
-    case "trade":
+    case "transaction_completed":
       return "economic";
     case "organization":
       return "organization";

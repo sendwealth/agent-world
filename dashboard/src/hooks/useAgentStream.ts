@@ -6,13 +6,13 @@ import { fetchJSON } from "@/lib/api";
 import { useSSEContext } from "@/components/SSEProvider";
 
 const AGENT_EVENT_TYPES = new Set<WorldEvent["type"]>([
-  "agent_spawn",
-  "agent_death",
-  "skill_up",
-  "reputation_change",
-  "trade",
-  "investment",
-  "tax",
+  "agent_spawned",
+  "agent_died",
+  "skill_level_up",
+  "reputation_changed",
+  "transaction_completed",
+  "investment_purchased",
+  "tax_collected",
 ]);
 
 interface UseAgentStreamOptions {

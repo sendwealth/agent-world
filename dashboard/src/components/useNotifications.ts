@@ -8,7 +8,7 @@ const STORAGE_KEY = "agent-world-notifications";
 const MAX_NOTIFICATIONS = 50;
 
 const TYPE_MAP: Record<string, NotificationType> = {
-  agent_death: "agent_death",
+  agent_died: "agent_death",
   leadership_changed: "leadership_changed",
   treaty_signed: "treaty_signed",
   treaty_broken: "treaty_broken",

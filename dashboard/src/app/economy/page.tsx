@@ -85,7 +85,7 @@ export default function EconomyPage() {
   // SSE-driven refresh
   useEffect(() => {
     function onEvent(event: WorldEvent) {
-      if (event.type === "inflation" || event.type === "tax" || event.type === "investment" || event.type === "trade") {
+      if (event.type === "tax_collected" || event.type === "treasury_distributed" || event.type === "investment_purchased" || event.type === "transaction_completed") {
         loadData();
       }
     }
@@ -128,9 +128,8 @@ export default function EconomyPage() {
     );
   }
 
-  const latestGdp = snapshots.length > 0 ? snapshots[snapshots.length - 1].gdp : stats?.gdp ?? 0;
+  const latestGdp = snapshots.length > 0 ? snapshots[snapshots.length - 1].gdp : 0;
   const latestGini = snapshots.length > 0 ? snapshots[snapshots.length - 1].gini : 0;
-  const inflationRate = stats?.inflationRate ?? 0;
   const totalMoney = stats?.totalMoney ?? 0;
 
   return (
@@ -140,7 +139,7 @@ export default function EconomyPage() {
         <h1 className="text-xl md:text-2xl font-bold text-zinc-100">经济指标面板</h1>
         <p className="text-sm text-zinc-500">
           {stats
-            ? `Tick #${stats.tick} · GDP $${latestGdp.toLocaleString()} · 通胀率 ${inflationRate.toFixed(2)}%`
+            ? `Tick #${stats.tick} · GDP $${latestGdp.toLocaleString()} · 总货币 $${totalMoney.toLocaleString()}`
             : "加载中..."}
         </p>
       </div>
@@ -159,9 +158,9 @@ export default function EconomyPage() {
           <p className="text-xs text-zinc-500">总产出代理</p>
         </div>
         <div className="rounded-xl border border-amber-500/20 bg-amber-500/5 p-4 space-y-1">
-          <p className="text-sm text-zinc-400">通胀率</p>
-          <p className="text-2xl font-bold text-amber-400">{inflationRate.toFixed(2)}%</p>
-          <p className="text-xs text-zinc-500">每 Tick</p>
+          <p className="text-sm text-zinc-400">任务数</p>
+          <p className="text-2xl font-bold text-amber-400">{stats?.taskCount ?? "—"}</p>
+          <p className="text-xs text-zinc-500">活跃任务</p>
         </div>
         <div className="rounded-xl border border-purple-500/20 bg-purple-500/5 p-4 space-y-1">
           <p className="text-sm text-zinc-400">基尼系数</p>

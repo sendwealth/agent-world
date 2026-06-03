@@ -238,13 +238,13 @@ async fn test_e2e_smoke_2_agent_conversation_with_dashboard() {
         .unwrap();
     assert_eq!(stats_resp.status(), StatusCode::OK);
     let stats: serde_json::Value = stats_resp.json().await.unwrap();
-    assert_eq!(stats["agent_count"], 2);
-    assert_eq!(stats["alive_count"], 2);
-    assert_eq!(stats["dead_count"], 0);
+    assert_eq!(stats["agentCount"], 2);
+    assert_eq!(stats["aliveCount"], 2);
+    assert_eq!(stats["deadCount"], 0);
     assert_eq!(stats["tick"], 10);
     println!(
         "  Stats: {} agents, tick={}, alive={}",
-        stats["agent_count"], stats["tick"], stats["alive_count"]
+        stats["agentCount"], stats["tick"], stats["aliveCount"]
     );
 
     // ── Phase 6: Task Lifecycle (Alice creates, Bob claims/completes) ──
@@ -521,8 +521,8 @@ async fn test_e2e_ledger_consistency_with_rewards() {
         .await
         .unwrap();
 
-    assert_eq!(stats["agent_count"], 3);
-    assert_eq!(stats["alive_count"], 3);
+    assert_eq!(stats["agentCount"], 3);
+    assert_eq!(stats["aliveCount"], 3);
     assert_eq!(stats["tick"], 5);
 
     // Verify WAL consistency

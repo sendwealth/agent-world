@@ -10,6 +10,7 @@ import {
 } from "react";
 import type { WorldEvent } from "@/types/world";
 import { sseEndpoint } from "@/lib/api";
+import { transformSSEEvent } from "@/lib/transform-sse-event";
 
 interface SSEContextValue {
   /** All events received from the SSE stream (most recent first, capped). */
@@ -71,7 +72,8 @@ export function SSEProvider({ children }: { children: React.ReactNode }) {
           for (const line of lines) {
             if (line.startsWith("data: ")) {
               try {
-                const event: WorldEvent = JSON.parse(line.slice(6));
+                const raw = JSON.parse(line.slice(6));
+                const event: WorldEvent = transformSSEEvent(raw);
                 setEvents((prev) => [event, ...prev].slice(0, MAX_EVENTS));
                 // Notify all listeners
                 for (const cb of listenersRef.current) {

@@ -373,8 +373,8 @@ export default function OrganizationsPage() {
       const t = event.type as string;
       if (
         t.startsWith("org_") ||
-        t === "trade" ||
-        t === "investment"
+        t === "transaction_completed" ||
+        t === "investment_purchased"
       ) {
         loadOrgs();
       }

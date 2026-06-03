@@ -34,7 +34,7 @@ const mockSnapshots: WorldSnapshotData[] = [
   { tick: 200, timestamp: Date.now(), total_population: 60, active_agents: 55, gdp: 15000, gini_coefficient: 0.40, skill_distribution_top5: [{ skill_name: "trading", agent_count: 30, avg_level: 4.2 }], key_events: [] },
 ];
 
-const mockStats: WorldStats = { agentCount: 60, aliveCount: 55, deadCount: 5, gdp: 15000, inflationRate: 2.5, totalMoney: 200000, tick: 200 };
+const mockStats: WorldStats = { agentCount: 60, aliveCount: 55, deadCount: 5, totalMoney: 200000, totalTokens: 50000, tick: 200, taskCount: 12 };
 
 afterEach(() => { cleanup(); });
 
@@ -61,7 +61,7 @@ describe("EconomyPage", () => {
     render(<EconomyPage />);
     await waitFor(() => { expect(screen.getByText("经济指标面板")).toBeInTheDocument(); });
     expect(screen.getByText("GDP")).toBeInTheDocument();
-    expect(screen.getByText("通胀率")).toBeInTheDocument();
+    expect(screen.getByText("任务数")).toBeInTheDocument();
     expect(screen.getByText("基尼系数")).toBeInTheDocument();
     expect(screen.getByText("总货币量")).toBeInTheDocument();
   });
@@ -79,7 +79,7 @@ describe("EconomyPage", () => {
     });
   });
 
-  it("displays inflation rate formatted", async () => {
+  it("displays task count formatted", async () => {
     mockFetch.mockImplementation((url: string) => {
       if (url.includes("/snapshots")) return Promise.resolve(mockFetchResponse(mockSnapshots));
       if (url.includes("/world/stats")) return Promise.resolve(mockFetchResponse(mockStats));
@@ -87,7 +87,7 @@ describe("EconomyPage", () => {
     });
     const { default: EconomyPage } = await import("@/app/economy/page");
     render(<EconomyPage />);
-    await waitFor(() => { expect(screen.getByText("2.50%")).toBeInTheDocument(); });
+    await waitFor(() => { expect(screen.getByText("12")).toBeInTheDocument(); });
   });
 
   it("displays gini coefficient interpretation", async () => {

@@ -21,7 +21,7 @@
 - [x] Reward distributor — 2% platform fee, XP awards, reputation changes
 - [x] Task board — task marketplace with escrow integration
 - [x] Genesis configuration loader
-- [x] Event system — EventBus with 30+ event types, filtered subscriptions, SSE
+- [x] Event system — EventBus with 139 event types (26 categories), filtered subscriptions, SSE
 - [x] Basic rule engine — 3 rules (TokenConsumption, DeathJudgment, NewbieProtection)
 - [x] Skill registry — 4 built-in skills (Explore, Trade, Rest, Communicate)
 - [x] Ed25519 crypto — signing, verification, nonce replay prevention, key registry
@@ -96,9 +96,9 @@
 - [x] Social context protocol — `decide.py` defines `SocialContextProvider` and `SocialContext` dataclass
 - [x] **Social graph — wired into think loop** — `DefaultSocialContextProvider` (`social/provider.py`) implements the `SocialContextProvider` protocol, wraps `SocialEngine` which aggregates all 12 social modules (trust, cultural diffusion, imitation, language, etc.). Injected into `ThinkLoop` via `social_context_provider` parameter, which propagates to `DecisionEngine` for prompt injection. E2E tests confirm social context (trust scores, recommended targets, personality description) flows through the full Perceive → Decide → Act pipeline.
 
-### Not Implemented 🔴
-- 🔴 **Tool marketplace** — agents cannot build or rent tools. No backend module found.
-- 🔴 **Multi-agent coordination** — no team/group task types in `economy/task.rs`. All tasks are solo.
+### Implemented ✅ (previously marked 🔴)
+- [x] **Tool marketplace** — `economy/tool_marketplace.rs` + `api_tool_marketplace.rs` (567 lines): list/delist/purchase/rent tools, per-tick rental pricing, full lifecycle API routes
+- [x] **Multi-agent coordination** — `api_coordination_tasks.rs` (517 lines): create/join/submit/complete/cancel multi-agent tasks with contributor tracking
 
 ---
 
@@ -225,9 +225,9 @@
 
 ## Version
 
-Current: `4.0.0-rc.1` (VERSION file)
+Current: `1.1.0` (VERSION file)
 
 - `v1.0.0` — Phase 1 (Island) complete
-- `v4.0.0-rc.1` — Phases 2-4 substantially complete; Phase 4 still has remaining items (demo, governance analytics, full self-legislation cycle, data export, auto reports)
+- `v1.1.0` — Phases 2-4 substantially complete; Phase 4 still has remaining items (demo, governance analytics, full self-legislation cycle)
 
 Tags `v4.0.0-alpha` and `v5.0.0` were removed — they overstated completion (Phase 5 has not started).

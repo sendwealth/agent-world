@@ -6,7 +6,7 @@ use std::sync::Arc;
 
 use tokio::sync::{watch, Mutex};
 
-use agent_world_engine::api::{self, AgentRecord};
+use agent_world_engine::api::{self, AgentDto};
 use agent_world_engine::economy::TaskBoard;
 use agent_world_engine::wal::WAL;
 use agent_world_engine::world::state::EventBus;
@@ -39,7 +39,7 @@ async fn start_server() -> String {
     format!("http://127.0.0.1:{}", port)
 }
 
-async fn seed_agents(base: &str) -> Vec<AgentRecord> {
+async fn seed_agents(base: &str) -> Vec<AgentDto> {
     let client = Client::new();
     let mut agents = Vec::new();
 
@@ -50,7 +50,7 @@ async fn seed_agents(base: &str) -> Vec<AgentRecord> {
         .await
         .unwrap();
     assert_eq!(resp.status(), StatusCode::CREATED);
-    let alice: AgentRecord = resp.json().await.unwrap();
+    let alice: AgentDto = resp.json().await.unwrap();
     agents.push(alice);
 
     let resp = client
@@ -60,7 +60,7 @@ async fn seed_agents(base: &str) -> Vec<AgentRecord> {
         .await
         .unwrap();
     assert_eq!(resp.status(), StatusCode::CREATED);
-    let bob: AgentRecord = resp.json().await.unwrap();
+    let bob: AgentDto = resp.json().await.unwrap();
     agents.push(bob);
 
     agents

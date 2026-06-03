@@ -14,7 +14,7 @@ use std::sync::Arc;
 
 use tokio::sync::{watch, Mutex};
 
-use agent_world_engine::api::{self, A2AMessage, AgentRecord};
+use agent_world_engine::api::{self, A2AMessage, AgentDto};
 use agent_world_engine::economy::TaskBoard;
 use agent_world_engine::wal::WAL;
 use agent_world_engine::world::event::{EventType, WorldEvent};
@@ -87,7 +87,7 @@ async fn test_e2e_smoke_2_agent_conversation_with_dashboard() {
         .await
         .unwrap();
     assert_eq!(alice_resp.status(), StatusCode::CREATED);
-    let alice: AgentRecord = alice_resp.json().await.unwrap();
+    let alice: AgentDto = alice_resp.json().await.unwrap();
     println!("  Spawned Alice: id={}", alice.id);
 
     // Spawn Bob
@@ -102,7 +102,7 @@ async fn test_e2e_smoke_2_agent_conversation_with_dashboard() {
         .await
         .unwrap();
     assert_eq!(bob_resp.status(), StatusCode::CREATED);
-    let bob: AgentRecord = bob_resp.json().await.unwrap();
+    let bob: AgentDto = bob_resp.json().await.unwrap();
     println!("  Spawned Bob: id={}", bob.id);
 
     // Verify agents via list endpoint
@@ -112,7 +112,7 @@ async fn test_e2e_smoke_2_agent_conversation_with_dashboard() {
         .await
         .unwrap();
     assert_eq!(agents_resp.status(), StatusCode::OK);
-    let agents: Vec<AgentRecord> = agents_resp.json().await.unwrap();
+    let agents: Vec<AgentDto> = agents_resp.json().await.unwrap();
     assert_eq!(agents.len(), 2);
     assert_eq!(agents[0].name, "Alice");
     assert_eq!(agents[1].name, "Bob");
@@ -499,7 +499,7 @@ async fn test_e2e_ledger_consistency_with_rewards() {
             .send()
             .await
             .unwrap();
-        let agent: AgentRecord = resp.json().await.unwrap();
+        let agent: AgentDto = resp.json().await.unwrap();
         agents.push(agent);
     }
 

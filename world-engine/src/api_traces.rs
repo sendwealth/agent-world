@@ -7,7 +7,7 @@ use axum::{
 };
 use serde::{Deserialize, Serialize};
 
-use crate::api::{A2AMessage, AgentRecord, AppState, ErrorResponse};
+use crate::api::{A2AMessage, AgentDto, AppState, ErrorResponse};
 
 pub fn default_format() -> String {
     "json".to_string()
@@ -22,7 +22,7 @@ pub struct ExportSnapshotQuery {
 #[derive(Debug, Serialize)]
 pub struct WorldSnapshotExport {
     pub tick: u64,
-    pub agents: Vec<AgentRecord>,
+    pub agents: Vec<AgentDto>,
     pub messages: Vec<A2AMessage>,
     pub task_count: usize,
     pub exported_at: String,
@@ -195,7 +195,7 @@ pub fn compute_gini(values: &[u64]) -> f64 {
     sum_diff / (2.0 * n * n * mean)
 }
 
-pub fn agents_to_csv(agents: &[AgentRecord]) -> String {
+pub fn agents_to_csv(agents: &[AgentDto]) -> String {
     let mut csv = String::from("id,name,phase,tokens,money,alive,ticks_survived,personality\n");
     for a in agents {
         csv.push_str(&format!(
@@ -454,7 +454,7 @@ pub async fn export_query(
 
     // Filter agents
     let agents = state.agents.lock().await;
-    let filtered_agents: Vec<AgentRecord> = match &filters.agent_ids {
+    let filtered_agents: Vec<AgentDto> = match &filters.agent_ids {
         Some(ids) => agents
             .iter()
             .filter(|a| ids.contains(&a.id))

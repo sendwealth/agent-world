@@ -5,37 +5,11 @@ use axum::{
     routing::*,
     Json,
 };
-use uuid::Uuid;
 
-use crate::api::AppState;
+use crate::api::{api_err, api_ok, AppState};
 use crate::federation::migration::{AgentSnapshot, MigrationStatus as MigStatus};
 use crate::federation::registry::{WorldEndpoint, WorldEntry, WorldMetrics};
 use crate::federation::service::{RestMigrationReview, RestMigrationSubmit, RestWorldRegister};
-
-/// Helper: wrap success response in { data, error: null, request_id } format.
-pub fn api_ok(data: impl serde::Serialize) -> axum::response::Response {
-    let request_id = Uuid::new_v4().to_string();
-    Json(serde_json::json!({
-        "data": data,
-        "error": null,
-        "request_id": request_id,
-    }))
-    .into_response()
-}
-
-/// Helper: wrap error response in { data: null, error, request_id } format.
-pub fn api_err(status: StatusCode, error: impl Into<String>) -> axum::response::Response {
-    let request_id = Uuid::new_v4().to_string();
-    (
-        status,
-        Json(serde_json::json!({
-            "data": null,
-            "error": error.into(),
-            "request_id": request_id,
-        })),
-    )
-        .into_response()
-}
 
 /// POST /api/v1/federation/worlds — Register a new world.
 #[allow(dead_code)]

@@ -16,7 +16,7 @@ use tokio_stream::wrappers::BroadcastStream;
 use tokio_stream::StreamExt;
 use uuid::Uuid;
 
-use crate::api::{A2AMessage, AgentRecord, AppState, ErrorResponse};
+use crate::api::{A2AMessage, AgentDto, AppState, ErrorResponse};
 use crate::world::event::WorldEvent;
 
 #[derive(Debug, Deserialize)]
@@ -214,7 +214,7 @@ pub async fn spawn_agent(
     State(state): State<AppState>,
     Json(body): Json<SpawnAgentRequest>,
 ) -> impl IntoResponse {
-    let agent = AgentRecord {
+    let agent = AgentDto {
         id: Uuid::new_v4().to_string(),
         name: body.name.clone(),
         phase: "adult".to_string(),

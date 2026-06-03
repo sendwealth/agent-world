@@ -12,7 +12,7 @@
 use std::sync::Arc;
 use tokio::sync::Mutex;
 
-use agent_world_engine::api::{build_full_router, AppState, AgentRecord, TestOverrides};
+use agent_world_engine::api::{build_full_router, AppState, AgentDto, TestOverrides};
 use agent_world_engine::auth::{AuthStore, Capability, HumanRole};
 use agent_world_engine::economy::task::TaskBoard;
 use agent_world_engine::wal::WAL;
@@ -60,7 +60,7 @@ fn test_app_with_agents() -> Router {
     // Pre-populate agents so target_agent_id validation passes
     // Use try_lock since we're not in an async runtime yet
     if let Ok(mut agents) = state.agents.try_lock() {
-        agents.push(AgentRecord {
+        agents.push(AgentDto {
             id: "agent-1".to_string(),
             name: "TestAgent".to_string(),
             phase: "adult".to_string(),

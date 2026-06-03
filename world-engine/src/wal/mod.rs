@@ -82,6 +82,7 @@ pub struct WAL {
     writer: Option<BufWriter<fs::File>>,
     entry_count: usize,
     current_sequence: u64,
+    // TODO: Use for WAL recovery and compaction operations.
     #[allow(dead_code)]
     data_dir: PathBuf,
     snapshot_dir: PathBuf,

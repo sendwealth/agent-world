@@ -27,7 +27,7 @@ pub struct SnapshotStorage {
 
 /// Index entry for quick lookup without loading compressed data.
 #[derive(Debug, Clone)]
-#[allow(dead_code)]
+#[allow(dead_code)]  // tick/content_hash reserved for future index queries
 struct SnapshotIndexEntry {
     tick: u64,
     kind: SnapshotKind,

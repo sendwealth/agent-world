@@ -200,6 +200,7 @@ pub enum HumanInterventionType {
 }
 
 impl HumanInterventionType {
+    // TODO: Use when serialising intervention type for persistence/API responses.
     #[allow(dead_code)]
     fn as_str(&self) -> &'static str {
         match self {

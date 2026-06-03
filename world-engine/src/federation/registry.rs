@@ -78,6 +78,7 @@ pub struct WorldEntry {
 #[derive(Clone)]
 pub struct WorldRegistry {
     worlds: Arc<RwLock<HashMap<String, WorldEntry>>>,
+    // TODO: Use for emitting WorldRegistered/Deregistered events.
     #[allow(dead_code)]
     event_bus: Arc<EventBus>,
     heartbeat_timeout_secs: u64,

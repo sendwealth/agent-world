@@ -173,6 +173,7 @@ struct RuleVote {
 pub struct RuleEngine {
     rules: HashMap<String, SoftRule>,
     votes: HashMap<String, Vec<RuleVote>>,
+    // TODO: Use for broadcasting RuleProposed/RuleVoted events.
     #[allow(dead_code)]
     event_bus: Option<Arc<EventBus>>,
 }
@@ -487,6 +488,7 @@ impl RuleEngine {
 
     // ── Helpers ────────────────────────────────────────────
 
+    // TODO: Call from rule proposal/vote/apply methods to broadcast events.
     #[allow(dead_code)]
     fn emit(&self, _event: WorldEvent) {
         if let Some(ref bus) = self.event_bus {

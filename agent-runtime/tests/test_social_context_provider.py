@@ -11,6 +11,7 @@ Covers:
 
 from __future__ import annotations
 
+from typing import Any
 from unittest.mock import AsyncMock
 
 import pytest
@@ -503,3 +504,156 @@ class TestFullSocialContextIntegration:
         assert "Social Context" in prompt
         assert "agent-b" in prompt
         assert "trust=" in prompt
+
+
+# ---------------------------------------------------------------------------
+# Tests for nearby_source wiring through perception cache
+# ---------------------------------------------------------------------------
+
+
+class TestNearbySourceFromPerceptionCache:
+    """Validate that the nearby_source callback reads from a mutable cache
+    that gets updated with perception data each tick.
+
+    This mirrors the wiring done in ``__main__.py`` — the ThinkLoop updates
+    the cache after perception, and the social provider reads it synchronously.
+    """
+
+    def test_nearby_source_reads_from_cache(self):
+        """The nearby_source closure returns data that was placed in the cache."""
+        nearby_cache: list[dict[str, Any]] = []
+
+        def nearby_source(aid: str, tick: int):
+            return list(nearby_cache)
+
+        profile = _extraverted_profile()
+        provider = DefaultSocialContextProvider(
+            profile_source=lambda aid: profile if aid == "a1" else None,
+            nearby_source=nearby_source,
+        )
+
+        # Initially no nearby agents
+        result = provider.build_social_context("a1", tick=1)
+        assert result is not None
+        assert result.should_socialize is False
+        assert result.recommended_target_id == ""
+
+        # Simulate perception updating the cache with nearby agents
+        nearby_cache.clear()
+        nearby_cache.extend(_nearby_agents())
+
+        # Now the social context should reflect nearby agents
+        result = provider.build_social_context("a1", tick=2)
+        assert result is not None
+        assert result.should_socialize is True
+        assert result.recommended_target_id == "agent-b"
+
+    @pytest.mark.asyncio
+    async def test_thinkloop_feeds_perception_into_social_cache(self):
+        """ThinkLoop updates social_nearby_cache from perception.market_state."""
+        state = _make_state()
+
+        # Create a perception provider that returns nearby agents
+        from agent_runtime.core.think_loop import Perception
+
+        class FakePerceptionProvider:
+            async def perceive(self, s, tick):
+                return Perception(
+                    messages=[],
+                    token_balance=s.tokens,
+                    token_ratio=0.5,
+                    market_state={
+                        "nearby_agents": [
+                            {"agent_id": "neighbor-1", "name": "Bob", "tokens": 100},
+                            {"agent_id": "neighbor-2", "name": "Alice", "tokens": 200},
+                        ],
+                        "agent_count": 2,
+                    },
+                    tick=tick,
+                )
+
+        # Build social provider with nearby cache (mirrors __main__.py wiring)
+        profile = _extraverted_profile()
+        nearby_cache: list[dict[str, Any]] = []
+
+        def nearby_source(aid, tick):
+            return list(nearby_cache)
+
+        social_provider = DefaultSocialContextProvider(
+            profile_source=lambda aid: profile if aid == str(state.id) else None,
+            nearby_source=nearby_source,
+        )
+
+        executor = ActionExecutor()
+        from agent_runtime.survival.instinct import SurvivalInstinct
+        survival = SurvivalInstinct()
+
+        loop = ThinkLoop(
+            state=state,
+            survival=survival,
+            executor=executor,
+            perception_provider=FakePerceptionProvider(),
+            social_context_provider=social_provider,
+            social_nearby_cache=nearby_cache,
+        )
+
+        # Run one tick to populate the cache
+        await loop._think_once()
+
+        # The nearby cache should now contain the agents from perception
+        assert len(nearby_cache) == 2
+        assert nearby_cache[0]["agent_id"] == "neighbor-1"
+        assert nearby_cache[1]["agent_id"] == "neighbor-2"
+
+    @pytest.mark.asyncio
+    async def test_social_context_has_nearby_agents_after_tick(self):
+        """After a tick with nearby agents in perception, social context is non-empty."""
+        from agent_runtime.core.think_loop import Perception
+
+        state = _make_state()
+
+        class FakePerceptionProvider:
+            async def perceive(self, s, tick):
+                return Perception(
+                    market_state={
+                        "nearby_agents": _nearby_agents(),
+                    },
+                    tick=tick,
+                )
+
+        profile = _extraverted_profile()
+        nearby_cache: list[dict[str, Any]] = []
+
+        def nearby_source(aid, tick):
+            return list(nearby_cache)
+
+        social_provider = DefaultSocialContextProvider(
+            profile_source=lambda aid: profile if aid == str(state.id) else None,
+            nearby_source=nearby_source,
+        )
+
+        # Before tick: no nearby agents
+        ctx_before = social_provider.build_social_context(str(state.id), tick=0)
+        assert ctx_before is not None
+        assert ctx_before.recommended_target_id == ""
+
+        executor = ActionExecutor()
+        from agent_runtime.survival.instinct import SurvivalInstinct
+        survival = SurvivalInstinct()
+
+        loop = ThinkLoop(
+            state=state,
+            survival=survival,
+            executor=executor,
+            perception_provider=FakePerceptionProvider(),
+            social_context_provider=social_provider,
+            social_nearby_cache=nearby_cache,
+        )
+
+        await loop._think_once()
+
+        # After tick: social context should have nearby agents
+        ctx_after = social_provider.build_social_context(str(state.id), tick=1)
+        assert ctx_after is not None
+        assert ctx_after.should_socialize is True
+        assert ctx_after.recommended_target_id == "agent-b"

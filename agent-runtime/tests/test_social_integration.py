@@ -9,8 +9,6 @@ Covers the acceptance criteria:
 
 from __future__ import annotations
 
-import pytest
-
 from agent_runtime.core.experience import Experience
 from agent_runtime.models.personality import PersonalityVector
 from agent_runtime.models.skill import Skill
@@ -21,7 +19,6 @@ from agent_runtime.social.intergroup_trust import (
     IntergroupTrust,
 )
 from agent_runtime.social.knowledge_transfer import KnowledgeTransfer
-
 
 # ---------------------------------------------------------------------------
 # Helpers

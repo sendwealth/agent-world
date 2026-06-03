@@ -15,6 +15,7 @@ use std::sync::Arc;
 use axum::{http::StatusCode, response::IntoResponse, routing::get, Router};
 use serde::{Deserialize, Serialize};
 use tokio::sync::{watch, Mutex};
+use tower_http::cors::CorsLayer;
 use uuid::Uuid;
 
 use crate::api_auth::SharedApiKeyStore;
@@ -404,8 +405,41 @@ pub fn create_router_with_wal_and_snapshots(
     build_full_router(state)
 }
 
+/// Build a CORS layer based on the `CORS_ORIGINS` environment variable.
+///
+/// - If `CORS_ORIGINS` is unset or empty → permissive (allow any origin, dev-friendly).
+/// - If set → only the listed origins are allowed (production-safe).
+///   Multiple origins can be separated by commas, e.g. `CORS_ORIGINS=https://app.example.com,https://admin.example.com`
+fn build_cors_layer() -> CorsLayer {
+    use axum::http::header::{AUTHORIZATION, CONTENT_TYPE};
+    use axum::http::Method;
+    use tower_http::cors::AllowOrigin;
+
+    let origins_env = std::env::var("CORS_ORIGINS").unwrap_or_default();
+    if origins_env.is_empty() {
+        CorsLayer::permissive()
+    } else {
+        let origins: Vec<_> = origins_env
+            .split(',')
+            .filter_map(|s| s.trim().parse().ok())
+            .collect();
+        CorsLayer::new()
+            .allow_origin(AllowOrigin::list(origins))
+            .allow_methods([
+                Method::GET,
+                Method::POST,
+                Method::PUT,
+                Method::DELETE,
+                Method::OPTIONS,
+            ])
+            .allow_headers([CONTENT_TYPE, AUTHORIZATION])
+    }
+}
+
 /// Build the full router by merging all domain sub-routers.
 pub fn build_full_router(state: AppState) -> Router {
+    let cors = build_cors_layer();
+
     Router::new()
         .merge(crate::api_tasks::task_routes())
         .merge(crate::api_coordination_tasks::coordination_task_routes())
@@ -437,6 +471,7 @@ pub fn build_full_router(state: AppState) -> Router {
         .route("/metrics", get(crate::observability::metrics_handler))
         // Research API v2 (with optional auth middleware)
         .merge(v2_router(&state))
+        .layer(cors)
         .with_state(state)
 }
 

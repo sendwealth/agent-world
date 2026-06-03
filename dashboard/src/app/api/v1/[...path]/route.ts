@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 
 const WORLD_ENGINE_URL =
-  process.env.WORLD_ENGINE_URL ?? "http://127.0.0.1:3000";
+  process.env.WORLD_ENGINE_URL ?? "http://127.0.0.1:8080";
 
 export async function GET(
   request: NextRequest,

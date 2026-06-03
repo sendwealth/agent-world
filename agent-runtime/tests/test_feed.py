@@ -1,4 +1,5 @@
 """Tests for agent_runtime.social.feed module."""
+
 import pytest
 
 from agent_runtime.social.feed import (

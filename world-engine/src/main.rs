@@ -573,7 +573,7 @@ async fn main() {
         federation_registry: Some(federation_registry),
         migration_manager: Some(migration_manager),
         auth_store: Some(Arc::new(Mutex::new(agent_world_engine::auth::AuthStore::new(
-            &std::env::var("JWT_SECRET").unwrap_or_else(|_| "change-me-in-production".to_string())
+            &std::env::var("JWT_SECRET").expect("FATAL: JWT_SECRET environment variable is not set. Set it to a strong random string before starting the server.")
         )))),
         api_key_store,
         ab_experiment_store: Some(ab_experiment_store),

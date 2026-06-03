@@ -134,6 +134,7 @@ One-command emergence experiments, time capsule snapshots, human observer mode, 
 git clone https://github.com/sendwealth/agent-world.git
 cd agent-world
 cp .env.example .env    # Defaults work out of the box (Ollama)
+# IMPORTANT: Set JWT_SECRET to a strong random string (e.g. `openssl rand -base64 48`)
 ollama pull llama3      # Pull a local LLM (~8 GB RAM)
 docker compose up -d    # Start world engine + 10 agents + dashboard
 

@@ -20,7 +20,7 @@ Config file example (TOML)::
 
     [llm]
     provider = "ollama"
-    model = "qwen3:8b"
+    model = "minicpm5:1b"
     base_url = "http://localhost:11434"
 
     [think_loop]
@@ -45,7 +45,7 @@ Config file example (YAML)::
           level: 1
     llm:
       provider: ollama
-      model: qwen3:8b
+      model: minicpm5:1b
       base_url: http://localhost:11434
     think_loop:
       tick_interval: 1.0
@@ -278,7 +278,7 @@ def _parse_llm_config(data: dict[str, Any]) -> LLMConfig | None:
 
     return LLMConfig(
         provider=provider,
-        model=data.get("model", "qwen3:8b"),
+        model=data.get("model", "minicpm5:1b"),
         api_key=api_key,
         base_url=data.get("base_url"),
         timeout=data.get("timeout", 60.0),

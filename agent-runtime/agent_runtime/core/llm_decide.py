@@ -15,7 +15,7 @@ Usage::
     from agent_runtime.core.llm_decide import LLMDecisionProvider
     from agent_runtime.llm import create_provider, LLMConfig
 
-    llm = create_provider(LLMConfig(provider="ollama", model="qwen3:8b"))
+    llm = create_provider(LLMConfig(provider="ollama", model="minicpm5:1b"))
     provider = LLMDecisionProvider(llm_provider=llm)
 
     # Use in ThinkLoop

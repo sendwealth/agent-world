@@ -73,9 +73,31 @@ class A2AClient:
     # ------------------------------------------------------------------
 
     async def connect(self) -> None:
-        """Open a gRPC channel and create the service stub."""
+        """Open a gRPC channel, verify readiness, and create the service stub.
+
+        Raises:
+            ConnectionError: If the channel does not become ready within the
+                configured timeout.
+        """
         self._channel = grpc.aio.insecure_channel(self._config.server_address)
         self._stub = a2a_pb2_grpc.A2AServiceStub(self._channel)
+
+        # Verify channel connectivity before returning so callers get a fast
+        # error instead of waiting for the first RPC to time out.
+        try:
+            await asyncio.wait_for(
+                grpc.channel_ready_future(self._channel),
+                timeout=self._config.timeout,
+            )
+        except asyncio.TimeoutError:
+            await self._channel.close()
+            self._channel = None
+            self._stub = None
+            raise ConnectionError(
+                f"gRPC channel to {self._config.server_address} did not become "
+                f"ready within {self._config.timeout}s"
+            ) from None
+
         logger.info("A2A client connected to %s", self._config.server_address)
 
     async def close(self) -> None:

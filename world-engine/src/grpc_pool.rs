@@ -46,6 +46,7 @@ impl Default for PoolConfig {
 /// A pooled gRPC connection with metadata.
 struct PooledConnection {
     channel: Channel,
+    // TODO: Use for connection max-age TTL enforcement.
     #[allow(dead_code)]
     created_at: std::time::Instant,
     last_used: std::time::Instant,

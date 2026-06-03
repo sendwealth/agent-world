@@ -95,7 +95,7 @@ pub fn proposal_to_response(
     }
 }
 
-#[allow(dead_code)]
+// TODO: Integrate into governance API when decision-mode parsing is needed in handlers.
 pub fn parse_decision_mode(s: &str) -> Option<crate::organization::governance::DecisionMode> {
     use crate::organization::governance::DecisionMode;
     match s {

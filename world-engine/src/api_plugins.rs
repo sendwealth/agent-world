@@ -26,6 +26,7 @@ struct PluginListResponse {
 }
 
 #[derive(Debug, Deserialize)]
+// TODO: Wire into POST /api/v1/plugins/register endpoint when dynamic plugin loading is implemented.
 #[allow(dead_code)]
 pub struct RegisterPluginRequest {
     pub id: String,

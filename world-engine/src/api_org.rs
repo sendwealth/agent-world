@@ -203,7 +203,7 @@ impl From<&crate::organization::org::Organization> for OrgResponse {
     }
 }
 
-#[allow(dead_code)]
+// TODO: Wire into governance-based org handlers when they are added.
 pub fn org_to_response(org: &crate::organization::governance::Organization) -> OrgResponse {
     OrgResponse {
         id: org.id.to_string(),
@@ -239,17 +239,6 @@ pub fn proposal_to_response(
         votes_against: proposal.votes_against(),
         total_votes: proposal.votes_for() + proposal.votes_against(),
         created_at: proposal.created_at,
-    }
-}
-
-#[allow(dead_code)]
-pub fn parse_decision_mode(s: &str) -> Option<crate::organization::governance::DecisionMode> {
-    use crate::organization::governance::DecisionMode;
-    match s {
-        "vote" => Some(DecisionMode::Vote),
-        "dictator" => Some(DecisionMode::Dictator),
-        "council" => Some(DecisionMode::Council),
-        _ => None,
     }
 }
 

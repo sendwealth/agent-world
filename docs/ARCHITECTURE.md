@@ -1,6 +1,6 @@
 # Agent World — Architecture Design Document
 
-> **版本**: v1.0.0 | **日期**: 2026-05-21 | **状态**: current
+> **版本**: v1.1.0 | **日期**: 2026-06-04 | **状态**: current
 > 与 [DESIGN.md](DESIGN.md)（产品规格）和 [ROADMAP.md](ROADMAP.md)（路线图）配合阅读
 
 ---
@@ -12,7 +12,7 @@
 | 子系统 | 模块 | 状态 | 说明 |
 |--------|------|------|------|
 | World Engine | economy/ | **已实现** | token_burn、escrow、reward、task 均有完整实现和测试 |
-| World Engine | world/ | **已实现** | EventBus（30+ 种事件类型）、enums、state、SSE endpoint |
+| World Engine | world/ | **已实现** | EventBus（139 种事件类型）、enums、state、SSE endpoint |
 | World Engine | api.rs | **已实现** | Axum REST API，包含 tasks、WAL、organizations、governance、stocks、banking 端点 |
 | World Engine | config/ | **已实现** | genesis.yaml with economy, lifecycle, evolution parameters |
 | World Engine | engine/ | **已实现** | WorldState、CultureStore；Tick 调度器在 world/scheduler.rs 中实现 |
@@ -193,16 +193,20 @@ Agent World 采用 **微内核 + 插件式** 架构：
 
 ### 2.2 Docker Compose（生产/演示）
 
-```yaml
-# docker-compose.yml
-version: '3.8'
+> **注意**：以下为简化示意。实际 `docker-compose.yml` 包含 10 个 Agent 实例、
+> 健康检查、YAML anchors（`x-agent-common`）、profiles（`ci`、`observability`、`local-llm`）、
+> Ollama/Prometheus/Grafana 可选服务等。完整配置见项目根目录 `docker-compose.yml`。
 
+```yaml
+# docker-compose.yml — 简化示意（完整版见项目根目录）
 services:
   world-engine:
-    build: ./world-engine
+    build:
+      context: .
+      dockerfile: world-engine/Dockerfile
     ports:
-      - "50051:50051"    # gRPC
-      - "8080:8080"      # REST API
+      - "${ENGINE_PORT:-8080}:${ENGINE_PORT:-8080}"   # REST API
+      - "${GRPC_PORT:-50051}:${GRPC_PORT:-50051}"     # gRPC
     volumes:
       - world-data:/data
       - ./config:/config:ro
@@ -212,23 +216,22 @@ services:
 
   agent-runtime:
     build: ./agent-runtime
-    deploy:
-      replicas: 2        # 初始 2 个 Agent
     depends_on:
-      - world-engine
+      world-engine:
+        condition: service_healthy
     environment:
-      - WORLD_ENGINE_URL=http://world-engine:50051
+      - WORLD_ENGINE_URL=http://world-engine:${ENGINE_PORT:-8080}
       - LLM_PROVIDER=openai  # or: ollama, anthropic
       - LLM_MODEL=gpt-4o-mini
 
   dashboard:
     build: ./dashboard
     ports:
-      - "3001:3000"
+      - "${DASHBOARD_PORT:-3001}:3000"
     depends_on:
       - world-engine
     environment:
-      - NEXT_PUBLIC_API_URL=http://localhost:8080
+      - NEXT_PUBLIC_API_URL=http://localhost:${ENGINE_PORT:-8080}
 
 volumes:
   world-data:
@@ -290,7 +293,7 @@ world-engine/
 │   ├── world/
 │   │   ├── mod.rs               # ✅ 模块重导出
 │   │   ├── enums.rs             # ✅ Currency, AgentPhase, DeathReason
-│   │   ├── event.rs             # ✅ 30+ 种 WorldEvent 变体
+│   │   ├── event.rs             # ✅ 139 种 WorldEvent 变体
 │   │   ├── state.rs             # ✅ EventBus（tokio broadcast）
 │   │   ├── agent.rs             # ✅ AgentRecord 数据结构
 │   │   ├── genesis.rs           # ✅ GenesisConfig 加载
@@ -361,31 +364,69 @@ pub struct WorldState {
     pub event_tx: broadcast::Sender<WorldEvent>,
 }
 
-/// Agent 记录（World Engine 侧的视图）
+/// Agent 记录 — 规范类型（world/agent.rs）
+///
+/// 所有子系统（经济、进化、持久化、快照）统一使用此类型。
+/// API 层 DTO（api.rs 中 AgentRecord）通过 From/Into 转换。
 pub struct AgentRecord {
+    pub id: Uuid,
+    pub name: String,
+    pub phase: AgentPhase,
+    pub tokens: u64,
+    pub skills: HashMap<String, SkillRecord>,
+    /// 人格向量，JSON 字符串（由 Python 侧管理 schema）
+    #[serde(default)]
+    pub personality: String,
+    /// 已成功完成的任务数
+    #[serde(default)]
+    pub tasks_completed: u32,
+    /// 已尝试的任务数（claimed 或 started）
+    #[serde(default)]
+    pub tasks_attempted: u32,
+}
+
+/// API 层 Agent 记录 — DTO（api.rs）
+///
+/// REST API 端点使用的扁平化视图，字段与 JSON 响应一一对应。
+pub struct AgentRecord {  // api.rs 版本
+    pub id: String,
+    pub name: String,
+    pub phase: String,
+    pub tokens: u64,
+    pub money: u64,
+    pub alive: bool,
+    pub ticks_survived: u64,
+    #[serde(default)]
+    pub personality: String,
+    #[serde(default)]
+    pub parent_ids: Vec<String>,
+    #[serde(default)]
+    pub generation: u32,
+    #[serde(default)]
+    pub skills: HashMap<String, u32>,
+}
+
+/// 运行时 Agent 实体 — world/agent.rs
+///
+/// AgentRegistry 管理的运行时 Agent 实体，包含模拟中需要的状态。
+pub struct Agent {
     pub id: String,
     pub name: String,
     pub phase: AgentPhase,
-    pub tokens: AtomicI64,
-    pub money: AtomicI64,
-    pub health: AtomicI32,
-    pub reputation: AtomicF64,
-    pub skills: HashMap<String, SkillRecord>,
-    pub organization_id: Option<String>,
-    pub created_tick: u64,
-    pub death_tick: Option<u64>,
-    pub last_active_tick: AtomicU64,
-    pub endpoint: String,            // gRPC 地址
-    pub public_key: Vec<u8>,         // ed25519 公钥
+    pub money: u64,
+    pub tokens: u64,
+    pub reputation: f64,
+    pub skills: HashMap<String, u64>,
+    pub alive: bool,
+    pub age: u64,
+    pub created_at: String,
 }
 
-/// 技能记录
+/// 技能记录 — world/agent.rs
 pub struct SkillRecord {
     pub name: String,
     pub level: u32,
-    pub experience: u64,
-    pub mutations: Vec<Mutation>,
-    pub last_used_tick: u64,
+    pub experience: f64,
 }
 
 /// 双式记账账本
@@ -410,17 +451,51 @@ pub struct LedgerEntry {
 }
 
 /// 世界事件（广播给所有订阅者）
-#[derive(Clone, Serialize)]
+///
+/// WorldEvent 枚举共 139 个变体，按子系统分组。
+/// 完整定义详见 `world-engine/src/world/event.rs`。
+///
+/// 分组概览：
+///
+/// | 分组 | 变体数 | 代表变体 |
+/// |------|--------|---------|
+/// | 核心 / Tick | 5 | TickAdvanced, AgentSpawned, AgentDying, AgentDied, AgentRescued |
+/// | 经济 / 交易 | 4 | TransactionCompleted, BalanceChanged, PhaseChanged, RuleViolated |
+/// | 快照 | 1 | SnapshotTaken |
+/// | 托管 (Escrow) | 5 | EscrowCreated, EscrowClaimed, EscrowReleased, EscrowRefunded, EscrowFrozen |
+/// | 任务市场 | 7 | TaskCreated, TaskClaimed, TaskStarted, TaskSubmitted, TaskReviewed, TaskCompleted, TaskExpired |
+/// | 奖励 / 信誉 | 2 | RewardDistributed, ReputationChanged |
+/// | Agent 注册 / 心跳 | 4 | AgentRegistered, AgentDeregistered, AgentHeartbeat, ConfigReloaded |
+/// | 知识市场 | 4 | KnowledgeListed, KnowledgeDelisted, KnowledgePurchased, KnowledgeRated |
+/// | 信任 / 导师 | 6 | TrustChanged, TrustInteraction, MentorshipEstablished, MentorshipProgress, MentorshipCompleted |
+/// | 遗产 / 时间胶囊 | 3 | WillCreated, InheritanceTriggered, TimeCapsuleBriefing |
+/// | 组织 (Org) | 5 | OrgCreated, OrgMemberJoined, OrgMemberLeft, OrgDissolved, OrgInactivated |
+/// | 股票市场 | 5 | StockIssued, StockIpo, StockTraded, StockTransferred, StockDividend |
+/// | 组织治理 (Organization) | 9 | OrganizationCreated/Dissolved/MemberJoined/Left, ProposalCreated/VotingStarted/Voted/Executed/Rejected, ArgumentAdded |
+/// | 银行系统 | 9 | BankAccountOpened, BankDeposit, BankWithdrawal, LoanApplied/Approved/Disbursed/Repayment, BankRateAdjusted, MoneyMinted, BadDebtWrittenOff |
+/// | 进化 / 技能 | 6 | SkillLevelUp, SkillMutated, FitnessEvaluated, OrgResourceConflict, OrgTerritoryClaimed, OrgFormationSuggested |
+/// | 金库 / 领导 | 4 | TaxCollected, TreasuryDistributed, LeadershipElectionStarted, LeadershipChanged |
+/// | 外交 (Diplomacy) | 4 | TreatyProposed, TreatySigned, TreatyBroken, RelationChanged |
+/// | 后代突变 / 建筑 | 7 | OffspringMutated, BuildingConstructed/Completed/Damaged/Destroyed/Demolished/Maintained/Upgraded |
+/// | 投资 | 4 | InvestmentProductCreated, InvestmentPurchased, InvestmentSold, InvestmentDividend |
+/// | 跨世界联邦 (Federation) | 16 | ForeignWorldDiscovered/Deregistered, DiplomaticRelationsEstablished/StatusChanged, CrossWorldRelation/Treaty*, Sanctions*, DiplomaticTiesSevered, WarDeclared, PeaceProposed/Established |
+/// | 迁移 (Migration) | 8 | MigrationSubmitted/Approved/Rejected/Completed/Cancelled, AgentEmigrated/Immigrated |
+/// | 软规则 | 4 | SoftRuleProposed, SoftRuleActivated, SoftRuleExpired, SoftRuleRepealed |
+/// | 工具市场 | 4 | ToolListed, ToolDelisted, ToolPurchased, ToolRented |
+/// | 预言机 / 赏金 | 2 | OracleDelivered, BountyPublished |
+/// | 多智能体协作 | 6 | CoordinationTaskCreated/AgentJoined/AgentSubmitted/Completed/Cancelled/Expired |
+/// | 社交动态 | 4 | FeedPostCreated/liked, FeedCommentCreated/Liked |
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(tag = "type", content = "payload", rename_all = "snake_case")]
+#[non_exhaustive]
 pub enum WorldEvent {
+    // 示例变体 — 完整列表见 world/engine/src/world/event.rs
     TickAdvanced { tick: u64 },
     AgentSpawned { agent_id: String, name: String },
-    AgentDied { agent_id: String, cause: DeathCause },
-    TransactionCompleted { from: String, to: String, amount: i64, currency: String },
-    TaskPublished { task_id: String, reward: i64 },
-    TaskCompleted { task_id: String, agent_id: String },
-    OrganizationCreated { org_id: String, name: String },
-    InflationAdjusted { rate: f64 },
-    RuleViolated { agent_id: String, rule_id: String },
+    AgentDied { agent_id: String, reason: DeathReason },
+    TransactionCompleted { from: String, to: String, amount: u64, currency: Currency },
+    TaskCompleted { task_id: String },
+    // ... 以及其余 134 个变体
 }
 ```
 

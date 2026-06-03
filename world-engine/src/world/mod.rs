@@ -34,5 +34,6 @@ pub use subsystem::{Subsystem, SubsystemRegistry};
 pub use subsystems::{
     TokenBurnSubsystem, DeathJudgmentSubsystem,
     RuleCheckSubsystem, EventBroadcastSubsystem,
+    TrustDecaySubsystem, MentorshipProgressSubsystem, EscrowExpirySubsystem,
 };
 pub use tick_profiler::{TickProfiler, TickPhase, TickProfileReport, TickTiming};

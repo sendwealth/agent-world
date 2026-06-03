@@ -10,8 +10,12 @@ use std::sync::Arc;
 
 use uuid::Uuid;
 
+use crate::economy::escrow::EscrowManager;
+use crate::economy::mentorship::MentorshipConfig;
+use crate::economy::mentorship::MentorshipSystem;
 use crate::economy::reputation::{ReputationConfig, ReputationSystem};
 use crate::economy::token_burn::{AgentRecord, TokenBurnEngine};
+use crate::economy::trust::{TrustConfig, TrustNetwork};
 use crate::lifecycle::{LifecycleConfig, LifecycleMachine};
 use crate::rules::RuleRegistry;
 use crate::world::enums::{AgentPhase, DeathReason};
@@ -284,6 +288,123 @@ impl Subsystem for ReputationDecaySubsystem {
         let mut system = self.system.lock().unwrap();
         let _changes = system.process_time_decay(tick);
         // Reputation changes are emitted internally by ReputationSystem
+        Vec::new()
+    }
+}
+
+// ========================================================================
+// Trust Decay Subsystem
+// ========================================================================
+
+/// Decays all trust edges toward zero each tick.
+pub struct TrustDecaySubsystem {
+    network: std::sync::Mutex<TrustNetwork>,
+}
+
+impl TrustDecaySubsystem {
+    pub fn new(config: TrustConfig) -> Self {
+        Self {
+            network: std::sync::Mutex::new(TrustNetwork::new(config)),
+        }
+    }
+
+    pub fn new_with_event_bus(config: TrustConfig, event_bus: EventBus) -> Self {
+        Self {
+            network: std::sync::Mutex::new(TrustNetwork::with_event_bus(config, event_bus)),
+        }
+    }
+
+    pub fn network(&self) -> &std::sync::Mutex<TrustNetwork> {
+        &self.network
+    }
+}
+
+impl Subsystem for TrustDecaySubsystem {
+    fn name(&self) -> &str {
+        "trust_decay"
+    }
+
+    fn on_tick(&self, tick: u64, _agents: &mut [(Uuid, u64, AgentRecord)]) -> Vec<WorldEvent> {
+        let mut net = self.network.lock().unwrap();
+        let _changes = net.decay_trust(tick);
+        Vec::new()
+    }
+}
+
+// ========================================================================
+// Mentorship Progress Subsystem
+// ========================================================================
+
+/// Advances active mentorship sessions each tick.
+pub struct MentorshipProgressSubsystem {
+    system: std::sync::Mutex<MentorshipSystem>,
+}
+
+impl MentorshipProgressSubsystem {
+    pub fn new(config: MentorshipConfig) -> Self {
+        Self {
+            system: std::sync::Mutex::new(MentorshipSystem::new(config)),
+        }
+    }
+
+    pub fn new_with_event_bus(config: MentorshipConfig, event_bus: EventBus) -> Self {
+        Self {
+            system: std::sync::Mutex::new(MentorshipSystem::with_event_bus(config, event_bus)),
+        }
+    }
+
+    pub fn system(&self) -> &std::sync::Mutex<MentorshipSystem> {
+        &self.system
+    }
+}
+
+impl Subsystem for MentorshipProgressSubsystem {
+    fn name(&self) -> &str {
+        "mentorship_progress"
+    }
+
+    fn on_tick(&self, tick: u64, agents: &mut [(Uuid, u64, AgentRecord)]) -> Vec<WorldEvent> {
+        let mut sys = self.system.lock().unwrap();
+        let _completed = sys.progress_tick(tick, agents);
+        Vec::new()
+    }
+}
+
+// ========================================================================
+// Escrow Expiry Subsystem
+// ========================================================================
+
+/// Processes escrow expiry each tick.
+pub struct EscrowExpirySubsystem {
+    manager: std::sync::Mutex<EscrowManager>,
+}
+
+impl EscrowExpirySubsystem {
+    pub fn new() -> Self {
+        Self {
+            manager: std::sync::Mutex::new(EscrowManager::new()),
+        }
+    }
+
+    pub fn new_with_event_bus(event_bus: EventBus) -> Self {
+        Self {
+            manager: std::sync::Mutex::new(EscrowManager::with_event_bus(event_bus)),
+        }
+    }
+
+    pub fn manager(&self) -> &std::sync::Mutex<EscrowManager> {
+        &self.manager
+    }
+}
+
+impl Subsystem for EscrowExpirySubsystem {
+    fn name(&self) -> &str {
+        "escrow_expiry"
+    }
+
+    fn on_tick(&self, tick: u64, _agents: &mut [(Uuid, u64, AgentRecord)]) -> Vec<WorldEvent> {
+        let mut mgr = self.manager.lock().unwrap();
+        let _expired = mgr.process_expiry(tick);
         Vec::new()
     }
 }

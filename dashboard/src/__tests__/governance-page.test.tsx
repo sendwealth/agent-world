@@ -46,13 +46,13 @@ describe("GovernancePage", () => {
   it("renders governance header after loading", async () => {
     const mockSummary: WorldGovernanceSummary = {
       total_orgs: 3,
-      avg_stability: 0.85,
-      total_tax_collected: 1000,
+      active_orgs: 2,
       total_treaties: 5,
-      election_activity_rate: 0.6,
-      total_rules_proposed: 10,
-      total_rules_activated: 7,
-      avg_legislation_success_rate: 0.7,
+      active_treaties: 3,
+      election_count: 1,
+      avg_tax_rate: 0.05,
+      total_tax_collected: 1000,
+      total_treasury_distributed: 800,
     };
     mockFetch.mockImplementation((url: string) => {
       if (url.includes("/governance/summary")) return Promise.resolve(mockFetchResponse(mockSummary));
@@ -70,13 +70,13 @@ describe("GovernancePage", () => {
   it("displays governance summary stats", async () => {
     const mockSummary: WorldGovernanceSummary = {
       total_orgs: 5,
-      avg_stability: 0.9,
-      total_tax_collected: 5000,
+      active_orgs: 3,
       total_treaties: 10,
-      election_activity_rate: 0.75,
-      total_rules_proposed: 20,
-      total_rules_activated: 15,
-      avg_legislation_success_rate: 0.75,
+      active_treaties: 6,
+      election_count: 2,
+      avg_tax_rate: 0.08,
+      total_tax_collected: 5000,
+      total_treasury_distributed: 4000,
     };
     mockFetch.mockImplementation((url: string) => {
       if (url.includes("/governance/summary")) return Promise.resolve(mockFetchResponse(mockSummary));

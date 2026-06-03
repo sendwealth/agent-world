@@ -39,26 +39,26 @@ describe("World Types", () => {
       agentCount: 100,
       aliveCount: 80,
       deadCount: 20,
+      gdp: 50000,
+      inflationRate: 2.5,
       totalMoney: 200000,
-      totalTokens: 50000,
       tick: 500,
-      taskCount: 12,
     };
     expect(stats.agentCount).toBe(100);
-    expect(stats.taskCount).toBe(12);
+    expect(stats.inflationRate).toBe(2.5);
   });
 
   it("WorldEvent type matches expected shape", () => {
     const event: WorldEvent = {
       id: "evt-1",
-      type: "agent_spawned",
+      type: "agent_spawn",
       agentId: "a1",
       agentName: "Alpha",
       description: "Alpha spawned",
       timestamp: "2024-01-01T00:00:00Z",
       tick: 1,
     };
-    expect(event.type).toBe("agent_spawned");
+    expect(event.type).toBe("agent_spawn");
     expect(event.tick).toBe(1);
   });
 
@@ -104,18 +104,16 @@ describe("World Types", () => {
       debts: 500,
       member_count: 10,
       members: [],
-      created_tick: 1,
-      last_activity_tick: 100,
-    };
+    } as Organization;
     expect(org.type).toBe("company");
     expect(org.member_count).toBe(10);
   });
 
   it("EventType covers all known event types", () => {
     const types: EventType[] = [
-      "agent_spawned", "agent_died", "transaction_completed", "task_created", "task_claimed",
-      "task_completed", "skill_level_up", "reputation_changed",
-      "tax_collected", "treasury_distributed",
+      "agent_spawn", "agent_death", "trade", "task_created", "task_claimed",
+      "task_completed", "message", "skill_up", "reputation_change",
+      "inflation", "investment", "tax",
       "leadership_election_started", "leadership_changed",
       "treaty_proposed", "treaty_signed", "treaty_broken",
       "relation_changed", "coordination_task_created",

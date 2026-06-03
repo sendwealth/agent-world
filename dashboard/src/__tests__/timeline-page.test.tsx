@@ -9,8 +9,8 @@ vi.mock("next/navigation", () => ({
 }));
 
 const mockEvents: WorldEvent[] = [
-  { id: "e1", type: "agent_spawned", agentId: "a1", agentName: "Alpha", description: "Alpha spawned", timestamp: "2024-01-01T10:00:00Z", tick: 1 },
-  { id: "e2", type: "transaction_completed", agentId: "a1", agentName: "Alpha", targetId: "a2", targetName: "Beta", description: "Trade occurred", amount: 100, timestamp: "2024-01-01T10:01:00Z", tick: 2 },
+  { id: "e1", type: "agent_spawn", agentId: "a1", agentName: "Alpha", description: "Alpha spawned", timestamp: "2024-01-01T10:00:00Z", tick: 1 },
+  { id: "e2", type: "trade", agentId: "a1", agentName: "Alpha", targetId: "a2", targetName: "Beta", description: "Trade occurred", amount: 100, timestamp: "2024-01-01T10:01:00Z", tick: 2 },
 ];
 
 const mockSubscribe = vi.fn(() => () => {});

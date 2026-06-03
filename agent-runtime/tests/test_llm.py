@@ -529,6 +529,39 @@ class TestOllamaProvider:
     def test_parse_stream_line_empty(self):
         assert OllamaProvider._parse_stream_line("") is None
 
+    def test_timeout_has_fine_grained_phases(self):
+        """OllamaProvider should use separate connect/read/write/pool timeouts."""
+        config = self._make_config(timeout=90.0)
+        provider = OllamaProvider(config)
+
+        t = provider._client.timeout
+        assert t.connect == 10.0
+        assert t.read == 90.0
+        assert t.write == 30.0
+        assert t.pool == 10.0
+
+    @pytest.mark.asyncio
+    async def test_switch_model_rebuilds_client(self):
+        """switch_model() should close the old httpx client and create a new one."""
+        config = self._make_config(timeout=45.0)
+        provider = OllamaProvider(config)
+
+        old_client = provider._client
+        old_model = await provider.switch_model("mistral")
+
+        assert old_model == "llama3"
+        assert provider.active_model == "mistral"
+        assert provider._client is not old_client
+
+        # New client should have the correct timeout config
+        t = provider._client.timeout
+        assert t.read == 45.0
+        assert t.connect == 10.0
+        assert t.write == 30.0
+        assert t.pool == 10.0
+
+        await provider.close()
+
 
 # ---------------------------------------------------------------------------
 # Factory (config-driven selection) tests

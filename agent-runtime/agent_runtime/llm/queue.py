@@ -75,14 +75,12 @@ class QueueConfig:
     Attributes:
         max_concurrency: Maximum number of concurrent LLM requests.
         timeout_seconds: Per-request timeout.  If exceeded, the enqueue
-            call returns a fallback response instead of raising.
-        fallback_on_timeout: Whether to return a fallback response on timeout
-            (if False, the timeout raises ``asyncio.TimeoutError``).
+            call raises ``asyncio.TimeoutError`` so that the caller
+            (typically DecisionEngine) can apply its own validated fallback.
     """
 
     max_concurrency: int = 2
     timeout_seconds: float = 120.0
-    fallback_on_timeout: bool = True
 
 
 # ---------------------------------------------------------------------------
@@ -125,11 +123,13 @@ class QueueStats:
 # ---------------------------------------------------------------------------
 
 # JSON schema: {"action": str, "parameters": {}, "reasoning": str, "confidence": int}
-# Used when LLM calls time out or fail and fallback_on_timeout is True.
+# Used only when the queue is stopped with pending requests still enqueued.
+# Normal timeouts and errors propagate so DecisionEngine.fallback_decision() can
+# pick an action validated against available_actions.
 _FALLBACK_RESPONSE = LLMResponse(
     content=(
         '{"action": "rest", "parameters": {},'
-        ' "reasoning": "LLM queue fallback", "confidence": 0}'
+        ' "reasoning": "LLM queue shutdown fallback", "confidence": 0}'
     ),
     model="fallback",
 )
@@ -206,12 +206,7 @@ class LLMQueue:
             try:
                 entry = self._queue.get_nowait()
                 if not entry.future.done():
-                    if self._config.fallback_on_timeout:
-                        entry.future.set_result(_FALLBACK_RESPONSE)
-                    else:
-                        entry.future.set_exception(
-                            asyncio.CancelledError("LLMQueue stopped")
-                        )
+                    entry.future.set_result(_FALLBACK_RESPONSE)
             except asyncio.QueueEmpty:
                 break
 
@@ -266,7 +261,9 @@ class LLMQueue:
                 timeout=self._config.timeout_seconds,
             )
         except asyncio.TimeoutError:
-            # Timeout covers both semaphore acquisition and LLM call
+            # Timeout covers both semaphore acquisition and LLM call.
+            # Propagate so the caller (DecisionEngine) can use its own
+            # fallback_decision() which validates against available_actions.
             self._stats.timed_out_requests += 1
             logger.warning(
                 "LLM queue: request timed out (%.1fs) priority=%s",
@@ -274,19 +271,11 @@ class LLMQueue:
                 entry.request.priority,
             )
             if not entry.future.done():
-                if self._config.fallback_on_timeout:
-                    entry.future.set_result(_FALLBACK_RESPONSE)
-                else:
-                    entry.future.set_exception(asyncio.TimeoutError())
+                entry.future.set_exception(asyncio.TimeoutError())
         except asyncio.CancelledError:
             # Queue is shutting down — resolve with fallback
             if not entry.future.done():
-                if self._config.fallback_on_timeout:
-                    entry.future.set_result(_FALLBACK_RESPONSE)
-                else:
-                    entry.future.set_exception(
-                        asyncio.CancelledError("LLMQueue stopped")
-                    )
+                entry.future.set_result(_FALLBACK_RESPONSE)
             raise
 
     async def _execute_with_semaphore(self, entry: _QueueEntry) -> None:
@@ -306,10 +295,7 @@ class LLMQueue:
             except Exception as exc:
                 self._stats.failed_requests += 1
                 if not entry.future.done():
-                    if self._config.fallback_on_timeout:
-                        entry.future.set_result(_FALLBACK_RESPONSE)
-                    else:
-                        entry.future.set_exception(exc)
+                    entry.future.set_exception(exc)
             finally:
                 self._active_count -= 1
                 self._stats.active_requests = self._active_count

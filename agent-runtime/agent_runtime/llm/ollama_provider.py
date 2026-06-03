@@ -62,6 +62,16 @@ class OllamaProvider(LLMProvider):
         self._num_parallel = int(os.environ.get("OLLAMA_NUM_PARALLEL", "1"))
         self._config_lock = asyncio.Lock()
 
+        # Override the client with fine-grained timeouts for long text generation
+        self._client = httpx.AsyncClient(
+            timeout=httpx.Timeout(
+                connect=10.0,
+                read=config.timeout,
+                write=30.0,
+                pool=10.0,
+            ),
+        )
+
     @property
     def active_model(self) -> str:
         """Return the currently configured model name."""
@@ -102,11 +112,14 @@ class OllamaProvider(LLMProvider):
         Protected by an ``asyncio.Lock`` to prevent TOCTOU races between
         concurrent ``switch_model`` or ``chat`` calls.
 
+        Rebuilds the httpx.AsyncClient so that timeout / connection pool
+        settings are consistent with the new configuration.
+
         Returns the previous model name.
         """
         async with self._config_lock:
             old_model = self._config.model
-            self._config = LLMConfig(
+            new_config = LLMConfig(
                 provider=self._config.provider,
                 model=new_model,
                 api_key=self._config.api_key,
@@ -115,6 +128,20 @@ class OllamaProvider(LLMProvider):
                 max_tokens=self._config.max_tokens,
                 temperature=self._config.temperature,
             )
+            self._config = new_config
+
+            # Rebuild the client with the new config
+            old_client = self._client
+            self._client = httpx.AsyncClient(
+                timeout=httpx.Timeout(
+                    connect=10.0,
+                    read=new_config.timeout,
+                    write=30.0,
+                    pool=10.0,
+                ),
+            )
+            await old_client.aclose()
+
         return old_model
 
     # ------------------------------------------------------------------

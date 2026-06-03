@@ -30,7 +30,7 @@ fn test_app() -> Router {
     let wal = Arc::new(Mutex::new(WAL::new("./data/test-wal")));
     let auth_store = Arc::new(Mutex::new(AuthStore::new("test-jwt-secret")));
 
-    let state = AppState::for_test_with(
+    let state = AppState::new(
         board,
         wal,
         TestOverrides {
@@ -48,7 +48,7 @@ fn test_app_with_agents() -> Router {
     let wal = Arc::new(Mutex::new(WAL::new("./data/test-wal")));
     let auth_store = Arc::new(Mutex::new(AuthStore::new("test-jwt-secret")));
 
-    let state = AppState::for_test_with(
+    let state = AppState::new(
         board,
         wal,
         TestOverrides {

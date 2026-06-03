@@ -31,7 +31,7 @@ fn build_app() -> (
     let collector = GovernanceMetricsCollector::new(&event_bus);
     let metrics = Arc::new(Mutex::new(collector));
 
-    let state = AppState::for_test_with(
+    let state = AppState::new(
         board,
         wal,
         TestOverrides {
@@ -269,7 +269,7 @@ async fn governance_endpoints_503_when_not_configured() {
     let board = Arc::new(Mutex::new(TaskBoard::new()));
     let wal = Arc::new(Mutex::new(WAL::new(dir.path())));
 
-    let state = AppState::for_test(board, wal);
+    let state = AppState::new(board, wal, TestOverrides::default());
     let app = agent_world_engine::api::build_full_router(state);
     let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
     let port = listener.local_addr().unwrap().port();

@@ -1123,7 +1123,7 @@ mod tests {
         let board = Arc::new(Mutex::new(crate::economy::task::TaskBoard::new()));
         let tmp = tempfile::tempdir().expect("tempdir");
         let wal = Arc::new(Mutex::new(crate::wal::WAL::new(tmp.path())));
-        let state = AppState::for_test_with(
+        let state = AppState::new(
             board,
             wal,
             crate::api::TestOverrides {
@@ -1139,7 +1139,7 @@ mod tests {
         let board = Arc::new(Mutex::new(crate::economy::task::TaskBoard::new()));
         let tmp = tempfile::tempdir().expect("tempdir");
         let wal = Arc::new(Mutex::new(crate::wal::WAL::new(tmp.path())));
-        AppState::for_test_with(
+        AppState::new(
             board,
             wal,
             crate::api::TestOverrides {

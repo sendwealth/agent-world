@@ -409,6 +409,7 @@ class ThinkLoop:
         group_identity: GroupIdentityProvider | None = None,
         cultural_hook: CulturalInfluenceHook | None = None,
         social_context_provider: SocialContextProvider | None = None,
+        social_nearby_cache: list[dict[str, Any]] | None = None,
         social_engine_hook: SocialEngineHook | None = None,
         emotion_hook: EmotionHook | None = None,
         model_registry: Any | None = None,
@@ -435,6 +436,7 @@ class ThinkLoop:
         # into the decision layer. If provided and the decision_provider has
         # a settable social_provider attribute, inject it automatically.
         self._social_context_provider = social_context_provider
+        self._social_nearby_cache = social_nearby_cache
         if social_context_provider is not None:
             self._inject_social_provider(social_context_provider)
 
@@ -745,6 +747,12 @@ class ThinkLoop:
             perception.health,
             self.state.phase.value,
         )
+
+        # 1c. Feed nearby agents into the social context provider cache
+        if self._social_nearby_cache is not None:
+            nearby = perception.market_state.get("nearby_agents", [])
+            self._social_nearby_cache.clear()
+            self._social_nearby_cache.extend(nearby)
 
         # 2. Survival assessment (synchronous, no LLM)
         survival_action = self.survival.assess(self.state)

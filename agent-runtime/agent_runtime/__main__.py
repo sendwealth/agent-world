@@ -776,7 +776,11 @@ async def run_agent(config: RuntimeConfig) -> RunStats:
 
         # Build ThinkLoop with all providers wired in via constructor
         # Create social context provider to wire social/cultural modules into decisions
-        social_context_provider = _create_social_context_provider(state)
+        social_context_result = _create_social_context_provider(state)
+        social_context_provider: Any | None = None
+        _social_nearby_cache: list[dict[str, Any]] = []
+        if social_context_result is not None:
+            social_context_provider, _social_nearby_cache = social_context_result
 
         think_loop = ThinkLoop(
             state=state,
@@ -788,6 +792,7 @@ async def run_agent(config: RuntimeConfig) -> RunStats:
             world_client=world_client,
             heartbeat_provider=heartbeat_provider,
             social_context_provider=social_context_provider,
+            social_nearby_cache=_social_nearby_cache,
         )
 
         # Graceful shutdown on SIGINT
@@ -1120,12 +1125,18 @@ def _create_llm_decision_provider(config: RuntimeConfig) -> Any | None:
         return None
 
 
-def _create_social_context_provider(state: AgentState) -> Any:
+def _create_social_context_provider(
+    state: AgentState,
+) -> tuple[Any, list[dict[str, Any]]] | None:
     """Create a DefaultSocialContextProvider wired to the agent's state.
 
     The provider bridges social/ modules (trust, cultural diffusion, imitation,
     language emergence) into the decision prompt. It reads the agent's
     personality and values from AgentState to build social context each tick.
+
+    Returns a ``(provider, nearby_cache)`` tuple so the caller can feed
+    perception data into the nearby_source each tick.  Returns ``None``
+    if the provider cannot be created.
     """
     try:
         from agent_runtime.models.personality import PersonalityVector
@@ -1149,9 +1160,22 @@ def _create_social_context_provider(state: AgentState) -> Any:
                 group_ids=[],
             )
 
-        provider = DefaultSocialContextProvider(profile_source=_profile_source)
+        # Mutable cache updated by the think loop after each perception.
+        # The nearby_source closure reads from this list.
+        nearby_cache: list[dict[str, Any]] = []
+
+        def _nearby_source(
+            aid: str, tick: int  # noqa: ARG001
+        ) -> list[dict[str, Any]]:
+            """Return cached nearby agents from the latest perception."""
+            return list(nearby_cache)
+
+        provider = DefaultSocialContextProvider(
+            profile_source=_profile_source,
+            nearby_source=_nearby_source,
+        )
         logger.info("SocialContextProvider created for agent %s", state.name)
-        return provider
+        return provider, nearby_cache
     except Exception:
         logger.debug(
             "SocialContextProvider creation failed (non-fatal), "

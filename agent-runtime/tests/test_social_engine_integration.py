@@ -427,7 +427,11 @@ class _ProfileTracker:
 
     def __call__(self, agent_id: str) -> AgentProfile | None:
         return AgentProfile(
-            personality=_extraverted_personality() if agent_id == "agent-a" else _make_personality(),
+            personality=(
+                _extraverted_personality()
+                if agent_id == "agent-a"
+                else _make_personality()
+            ),
             values=ValueWeights(),
             group_ids=["group-1"],
         )

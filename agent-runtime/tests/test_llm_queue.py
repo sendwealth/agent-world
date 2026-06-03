@@ -89,13 +89,11 @@ class TestQueueConfig:
         cfg = QueueConfig()
         assert cfg.max_concurrency == 2
         assert cfg.timeout_seconds == 120.0
-        assert cfg.fallback_on_timeout is True
 
     def test_custom(self):
-        cfg = QueueConfig(max_concurrency=5, timeout_seconds=10.0, fallback_on_timeout=False)
+        cfg = QueueConfig(max_concurrency=5, timeout_seconds=10.0)
         assert cfg.max_concurrency == 5
         assert cfg.timeout_seconds == 10.0
-        assert cfg.fallback_on_timeout is False
 
 
 # ---------------------------------------------------------------------------
@@ -155,25 +153,11 @@ class TestLLMQueue:
         await queue.stop()
 
     @pytest.mark.asyncio
-    async def test_timeout_returns_fallback(self):
+    async def test_timeout_propagates_to_caller(self):
+        """Timeout should propagate as asyncio.TimeoutError so that
+        DecisionEngine can apply its own validated fallback."""
         mock = SlowLLMProvider()
-        config = QueueConfig(timeout_seconds=0.05, fallback_on_timeout=True)
-        queue = LLMQueue(provider=mock, config=config)
-        await queue.start()
-
-        request = LLMRequest(messages=[LLMMessage(role="user", content="test")])
-        response = await queue.enqueue(request)
-
-        # Fallback response has model="fallback" — verify via public behavior
-        assert response.model == "fallback"
-        stats = queue.stats()
-        assert stats.timed_out_requests == 1
-        await queue.stop()
-
-    @pytest.mark.asyncio
-    async def test_timeout_raises_when_no_fallback(self):
-        mock = SlowLLMProvider()
-        config = QueueConfig(timeout_seconds=0.05, fallback_on_timeout=False)
+        config = QueueConfig(timeout_seconds=0.05)
         queue = LLMQueue(provider=mock, config=config)
         await queue.start()
 
@@ -181,26 +165,15 @@ class TestLLMQueue:
         with pytest.raises(asyncio.TimeoutError):
             await queue.enqueue(request)
 
+        stats = queue.stats()
+        assert stats.timed_out_requests == 1
         await queue.stop()
 
     @pytest.mark.asyncio
-    async def test_failed_request_returns_fallback(self):
+    async def test_failed_request_propagates_exception(self):
+        """Provider errors should propagate so callers can handle them."""
         mock = FailingLLMProvider()
-        config = QueueConfig(fallback_on_timeout=True)
-        queue = LLMQueue(provider=mock, config=config)
-        await queue.start()
-
-        request = LLMRequest(messages=[LLMMessage(role="user", content="test")])
-        response = await queue.enqueue(request)
-
-        # Fallback response has model="fallback" — verify via public behavior
-        assert response.model == "fallback"
-        await queue.stop()
-
-    @pytest.mark.asyncio
-    async def test_failed_request_raises_when_no_fallback(self):
-        mock = FailingLLMProvider()
-        config = QueueConfig(fallback_on_timeout=False)
+        config = QueueConfig()
         queue = LLMQueue(provider=mock, config=config)
         await queue.start()
 

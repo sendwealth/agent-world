@@ -615,3 +615,91 @@ class TestDataClasses:
         assert AutoRestartPolicy.NEVER.value == "never"
         assert AutoRestartPolicy.ON_FAILURE.value == "on_failure"
         assert AutoRestartPolicy.ALWAYS.value == "always"
+
+
+# ---------------------------------------------------------------------------
+# File handle leak regression tests
+# ---------------------------------------------------------------------------
+
+
+class TestFileHandleLeak:
+    @patch("agent_runtime.pool.os.killpg")
+    @patch("agent_runtime.pool.subprocess.Popen")
+    def test_no_file_handle_leak_after_10_restarts(
+        self, mock_popen_cls, mock_killpg, manager: AgentProcessManager
+    ) -> None:
+        """Verify that restarting an agent 10 times does not leak file handles.
+
+        Each restart creates a new log file handle in _start_process().
+        _kill_locked() must close the previous handle. If it doesn't,
+        the number of open file descriptors will grow with each restart.
+        """
+        # Build 11 mock procs (1 spawn + 10 restarts) with distinct log files
+        procs = [_mock_popen(pid=i) for i in range(11)]
+        for p in procs:
+            p.wait.return_value = 0
+            p.returncode = 0
+        mock_popen_cls.side_effect = procs
+
+        # Collect all log file handles that _start_process creates
+        log_handles: list = []
+
+        original_open = open
+
+        def _tracking_open(path, *args, **kwargs):
+            fh = original_open(path, *args, **kwargs)
+            log_handles.append(fh)
+            return fh
+
+        with patch("agent_runtime.pool.open", side_effect=_tracking_open):
+            manager.spawn("leaky")
+
+            for i in range(10):
+                manager.restart("leaky")
+
+        # We should have 11 log handles total (1 spawn + 10 restarts)
+        assert len(log_handles) == 11
+
+        # All handles except the last should be closed by _kill_locked
+        closed_count = sum(1 for fh in log_handles[:-1] if fh.closed)
+        assert closed_count == 10, (
+            f"Expected 10 closed file handles, got {closed_count}"
+        )
+
+        # The last handle should still be open (current process)
+        assert not log_handles[-1].closed, "Current log file should still be open"
+
+        # Cleanup
+        for fh in log_handles:
+            if not fh.closed:
+                fh.close()
+
+    @patch("agent_runtime.pool.os.killpg")
+    @patch("agent_runtime.pool.subprocess.Popen")
+    def test_kill_closes_log_file_handle(
+        self, mock_popen_cls, mock_killpg, manager: AgentProcessManager
+    ) -> None:
+        """Verify that kill() closes the associated log file handle."""
+        mock_proc = _mock_popen()
+        mock_proc.wait.return_value = 0
+        mock_proc.returncode = 0
+        mock_popen_cls.return_value = mock_proc
+
+        log_handles: list = []
+        original_open = open
+
+        def _tracking_open(path, *args, **kwargs):
+            fh = original_open(path, *args, **kwargs)
+            log_handles.append(fh)
+            return fh
+
+        with patch("agent_runtime.pool.open", side_effect=_tracking_open):
+            manager.spawn("test-agent")
+
+        assert len(log_handles) == 1
+        assert not log_handles[0].closed
+
+        manager.kill("test-agent")
+
+        assert log_handles[0].closed, "Log file should be closed after kill()"
+

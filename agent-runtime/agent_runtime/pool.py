@@ -77,6 +77,7 @@ class ManagedProcess:
     restart_count: int = 0
     last_health_check: float = 0.0
     started_at: float = 0.0
+    log_file: Any = None
 
 
 @dataclass
@@ -179,7 +180,7 @@ class AgentProcessManager:
             # Initialize data files for the agent
             self._init_data_files(data_dir, name)
 
-            proc = self._start_process(name, config, data_dir, log_path)
+            proc, log_fh = self._start_process(name, config, data_dir, log_path)
 
             mp = ManagedProcess(
                 name=name,
@@ -189,6 +190,7 @@ class AgentProcessManager:
                 status=AgentStatus.RUNNING,
                 started_at=time.monotonic(),
                 last_health_check=time.monotonic(),
+                log_file=log_fh,
             )
             self._processes[name] = mp
 
@@ -230,7 +232,7 @@ class AgentProcessManager:
             self._kill_locked(mp)
 
             log_path = self._base_dir / "logs" / f"{name}.log"
-            proc = self._start_process(name, saved_config, data_dir, log_path)
+            proc, log_fh = self._start_process(name, saved_config, data_dir, log_path)
 
             new_mp = ManagedProcess(
                 name=name,
@@ -241,6 +243,7 @@ class AgentProcessManager:
                 restart_count=saved_restart_count + 1,
                 started_at=time.monotonic(),
                 last_health_check=time.monotonic(),
+                log_file=log_fh,
             )
             self._processes[name] = new_mp
 
@@ -423,8 +426,10 @@ class AgentProcessManager:
 
     def _start_process(
         self, name: str, config: dict[str, Any], data_dir: Path, log_path: Path,
-    ) -> subprocess.Popen:
+    ) -> tuple[subprocess.Popen, Any]:
         """Start a single agent subprocess.
+
+        Returns a tuple of (Popen, log_file_handle).
 
         Raises:
             RuntimeError: If the subprocess cannot be launched.
@@ -434,13 +439,14 @@ class AgentProcessManager:
         log_file = open(log_path, "a")
 
         try:
-            return subprocess.Popen(
+            proc = subprocess.Popen(
                 cmd,
                 stdout=log_file,
                 stderr=log_file,
                 env=env,
                 start_new_session=True,
             )
+            return proc, log_file
         except Exception:
             log_file.close()
             raise RuntimeError(f"Failed to start agent {name!r}: {cmd}") from None
@@ -476,6 +482,15 @@ class AgentProcessManager:
 
         mp.exit_code = proc.returncode
         mp.status = AgentStatus.STOPPED
+
+        # Close the log file handle to prevent FD leak
+        if mp.log_file is not None:
+            try:
+                mp.log_file.close()
+            except Exception:
+                pass
+            mp.log_file = None
+
         logger.info("Agent %s stopped  exit_code=%s", mp.name, mp.exit_code)
 
     def _shutdown_all(self) -> None:

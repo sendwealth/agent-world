@@ -92,8 +92,8 @@ pub async fn inheritance_stats(State(state): State<AppState>) -> impl IntoRespon
 
 pub fn inheritance_routes() -> axum::Router<AppState> {
     axum::Router::new()
-        .route("/api/v1/inheritance/will", post(inheritance_create_will))
-        .route("/api/v1/inheritance/will/:agent_id", get(inheritance_get_will))
-        .route("/api/v1/inheritance/has_will/:agent_id", get(inheritance_has_will))
-        .route("/api/v1/inheritance/stats", get(inheritance_stats))
+        .route("/inheritance/will", post(inheritance_create_will))
+        .route("/inheritance/will/:agent_id", get(inheritance_get_will))
+        .route("/inheritance/has_will/:agent_id", get(inheritance_has_will))
+        .route("/inheritance/stats", get(inheritance_stats))
 }

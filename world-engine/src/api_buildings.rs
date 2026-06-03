@@ -230,10 +230,10 @@ pub async fn demolish_building(
 /// Building management routes.
 pub fn building_routes() -> axum::Router<AppState> {
     axum::Router::new()
-        .route("/api/v1/agents/:id/build", post(build_building))
-        .route("/api/v1/map/buildings", get(list_buildings))
-        .route("/api/v1/map/:x/:y/buildings", get(list_buildings_at))
-        .route("/api/v1/buildings/:id", get(get_building))
-        .route("/api/v1/buildings/:id/maintain", post(maintain_building))
-        .route("/api/v1/buildings/:id/demolish", post(demolish_building))
+        .route("/agents/:id/build", post(build_building))
+        .route("/map/buildings", get(list_buildings))
+        .route("/map/:x/:y/buildings", get(list_buildings_at))
+        .route("/buildings/:id", get(get_building))
+        .route("/buildings/:id/maintain", post(maintain_building))
+        .route("/buildings/:id/demolish", post(demolish_building))
 }

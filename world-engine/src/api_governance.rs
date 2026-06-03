@@ -897,30 +897,30 @@ pub async fn governance_org_legislation(
 pub fn governance_routes() -> axum::Router<AppState> {
     axum::Router::new()
         .route(
-            "/api/v1/orgs/:id/distribution",
+            "/orgs/:id/distribution",
             post(calculate_distribution),
         )
-        .route("/api/v1/orgs/:id/proposals", post(create_proposal))
-        .route("/api/v1/orgs/:id/proposals", get(list_proposals))
-        .route("/api/v1/proposals/:id", get(get_proposal))
-        .route("/api/v1/proposals/:id/vote", post(vote_proposal))
-        .route("/api/v1/proposals/:id/start-voting", post(start_voting))
-        .route("/api/v1/proposals/:id/tally", post(tally_proposal))
-        .route("/api/v1/proposals/:id/cancel", post(cancel_proposal))
-        .route("/api/v1/proposals/:id/arguments", post(add_argument))
-        .route("/api/v1/proposals/:id/arguments", get(list_arguments))
-        .route("/api/v1/governance/summary", get(governance_summary))
+        .route("/orgs/:id/proposals", post(create_proposal))
+        .route("/orgs/:id/proposals", get(list_proposals))
+        .route("/proposals/:id", get(get_proposal))
+        .route("/proposals/:id/vote", post(vote_proposal))
+        .route("/proposals/:id/start-voting", post(start_voting))
+        .route("/proposals/:id/tally", post(tally_proposal))
+        .route("/proposals/:id/cancel", post(cancel_proposal))
+        .route("/proposals/:id/arguments", post(add_argument))
+        .route("/proposals/:id/arguments", get(list_arguments))
+        .route("/governance/summary", get(governance_summary))
         .route(
-            "/api/v1/governance/orgs/:org_id",
+            "/governance/orgs/:org_id",
             get(governance_org_metrics),
         )
         .route(
-            "/api/v1/governance/orgs/:org_id/timeline",
+            "/governance/orgs/:org_id/timeline",
             get(governance_org_timeline),
         )
-        .route("/api/v1/governance/comparison", get(governance_comparison))
+        .route("/governance/comparison", get(governance_comparison))
         .route(
-            "/api/v1/governance/orgs/:org_id/legislation",
+            "/governance/orgs/:org_id/legislation",
             get(governance_org_legislation),
         )
 }

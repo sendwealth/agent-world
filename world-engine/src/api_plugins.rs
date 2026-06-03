@@ -176,12 +176,12 @@ pub async fn plugin_stats(State(state): State<AppState>) -> axum::response::Resp
 /// Build the plugin API sub-router.
 pub fn plugin_routes() -> Router<AppState> {
     Router::new()
-        .route("/api/v1/plugins", get(list_plugins))
-        .route("/api/v1/plugins/stats", get(plugin_stats))
-        .route("/api/v1/plugins/:id", get(get_plugin))
-        .route("/api/v1/plugins/:id/enable", post(enable_plugin))
-        .route("/api/v1/plugins/:id/disable", post(disable_plugin))
-        .route("/api/v1/plugins/:id/unload", post(unload_plugin))
+        .route("/plugins", get(list_plugins))
+        .route("/plugins/stats", get(plugin_stats))
+        .route("/plugins/:id", get(get_plugin))
+        .route("/plugins/:id/enable", post(enable_plugin))
+        .route("/plugins/:id/disable", post(disable_plugin))
+        .route("/plugins/:id/unload", post(unload_plugin))
 }
 
 // ── Helpers ────────────────────────────────────────────────────

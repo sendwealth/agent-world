@@ -251,7 +251,7 @@ async fn test_e2e_smoke_2_agent_conversation_with_dashboard() {
 
     println!("[E2E] Phase 6: Task lifecycle...");
     let create_task_resp = client
-        .post(format!("{}/tasks", base_url))
+        .post(format!("{}/api/v1/tasks", base_url))
         .json(&serde_json::json!({
             "title": "Gather Resources",
             "description": "Collect 50 wood and 30 stone",
@@ -278,7 +278,7 @@ async fn test_e2e_smoke_2_agent_conversation_with_dashboard() {
 
     // Claim task
     let claim_resp = client
-        .post(format!("{}/tasks/{}/claim", base_url, task_id))
+        .post(format!("{}/api/v1/tasks/{}/claim", base_url, task_id))
         .json(&serde_json::json!({ "assignee_id": bob.id }))
         .send()
         .await
@@ -288,7 +288,7 @@ async fn test_e2e_smoke_2_agent_conversation_with_dashboard() {
 
     // Start task
     let start_resp = client
-        .post(format!("{}/tasks/{}/start", base_url, task_id))
+        .post(format!("{}/api/v1/tasks/{}/start", base_url, task_id))
         .send()
         .await
         .unwrap();
@@ -297,7 +297,7 @@ async fn test_e2e_smoke_2_agent_conversation_with_dashboard() {
 
     // Submit result
     let submit_resp = client
-        .post(format!("{}/tasks/{}/submit", base_url, task_id))
+        .post(format!("{}/api/v1/tasks/{}/submit", base_url, task_id))
         .json(&serde_json::json!({ "result": "Gathered 52 wood and 35 stone" }))
         .send()
         .await
@@ -307,7 +307,7 @@ async fn test_e2e_smoke_2_agent_conversation_with_dashboard() {
 
     // Review (approve)
     let review_resp = client
-        .post(format!("{}/tasks/{}/review", base_url, task_id))
+        .post(format!("{}/api/v1/tasks/{}/review", base_url, task_id))
         .json(&serde_json::json!({ "approved": true, "reviewer_id": alice.id }))
         .send()
         .await
@@ -317,7 +317,7 @@ async fn test_e2e_smoke_2_agent_conversation_with_dashboard() {
 
     // Complete task
     let complete_resp = client
-        .post(format!("{}/tasks/{}/complete", base_url, task_id))
+        .post(format!("{}/api/v1/tasks/{}/complete", base_url, task_id))
         .send()
         .await
         .unwrap();
@@ -351,7 +351,7 @@ async fn test_e2e_smoke_2_agent_conversation_with_dashboard() {
 
     // Verify via WAL consistency endpoint
     let wal_verify_resp = client
-        .get(format!("{}/wal/verify", base_url))
+        .get(format!("{}/api/v1/wal/verify", base_url))
         .send()
         .await
         .unwrap();
@@ -368,7 +368,7 @@ async fn test_e2e_smoke_2_agent_conversation_with_dashboard() {
     println!("[E2E] Phase 8: WAL snapshot...");
 
     let snapshot_resp = client
-        .post(format!("{}/wal/snapshot", base_url))
+        .post(format!("{}/api/v1/wal/snapshot", base_url))
         .send()
         .await
         .unwrap();
@@ -527,7 +527,7 @@ async fn test_e2e_ledger_consistency_with_rewards() {
 
     // Verify WAL consistency
     let wal: serde_json::Value = client
-        .get(format!("{}/wal/verify", base_url))
+        .get(format!("{}/api/v1/wal/verify", base_url))
         .send()
         .await
         .unwrap()

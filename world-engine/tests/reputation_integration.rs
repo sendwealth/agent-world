@@ -124,7 +124,7 @@ async fn create_task(
 
     let client = reqwest::Client::new();
     let resp = client
-        .post(format!("http://127.0.0.1:{}/tasks", port))
+        .post(format!("http://127.0.0.1:{}/api/v1/tasks", port))
         .json(&body)
         .send()
         .await
@@ -142,7 +142,7 @@ async fn complete_task_via_api(port: u16, reward: u64, publisher: &str, worker: 
 
     // Claim
     let resp = client
-        .post(format!("http://127.0.0.1:{}/tasks/{}/claim", port, task_id))
+        .post(format!("http://127.0.0.1:{}/api/v1/tasks/{}/claim", port, task_id))
         .json(&serde_json::json!({ "assignee_id": worker }))
         .send()
         .await
@@ -151,7 +151,7 @@ async fn complete_task_via_api(port: u16, reward: u64, publisher: &str, worker: 
 
     // Start
     let resp = client
-        .post(format!("http://127.0.0.1:{}/tasks/{}/start", port, task_id))
+        .post(format!("http://127.0.0.1:{}/api/v1/tasks/{}/start", port, task_id))
         .send()
         .await
         .unwrap();
@@ -160,7 +160,7 @@ async fn complete_task_via_api(port: u16, reward: u64, publisher: &str, worker: 
     // Submit
     let resp = client
         .post(format!(
-            "http://127.0.0.1:{}/tasks/{}/submit",
+            "http://127.0.0.1:{}/api/v1/tasks/{}/submit",
             port, task_id
         ))
         .json(&serde_json::json!({ "result": "done" }))
@@ -172,7 +172,7 @@ async fn complete_task_via_api(port: u16, reward: u64, publisher: &str, worker: 
     // Review
     let resp = client
         .post(format!(
-            "http://127.0.0.1:{}/tasks/{}/review",
+            "http://127.0.0.1:{}/api/v1/tasks/{}/review",
             port, task_id
         ))
         .json(&serde_json::json!({ "approved": true, "reviewer_id": publisher }))
@@ -184,7 +184,7 @@ async fn complete_task_via_api(port: u16, reward: u64, publisher: &str, worker: 
     // Complete
     let resp = client
         .post(format!(
-            "http://127.0.0.1:{}/tasks/{}/complete",
+            "http://127.0.0.1:{}/api/v1/tasks/{}/complete",
             port, task_id
         ))
         .send()
@@ -331,7 +331,7 @@ async fn test_reputation_decreases_on_task_breach() {
 
     // Claim the task
     let resp = client
-        .post(format!("http://127.0.0.1:{}/tasks/{}/claim", port, task_id))
+        .post(format!("http://127.0.0.1:{}/api/v1/tasks/{}/claim", port, task_id))
         .json(&serde_json::json!({ "assignee_id": "worker-1" }))
         .send()
         .await
@@ -341,7 +341,7 @@ async fn test_reputation_decreases_on_task_breach() {
     // Expire the claimed task
     let resp = client
         .post(format!(
-            "http://127.0.0.1:{}/tasks/{}/expire",
+            "http://127.0.0.1:{}/api/v1/tasks/{}/expire",
             port, task_id
         ))
         .send()
@@ -374,7 +374,7 @@ async fn test_reputation_decreases_on_published_task_expiry() {
     // Expire the published task (no assignee)
     let resp = client
         .post(format!(
-            "http://127.0.0.1:{}/tasks/{}/expire",
+            "http://127.0.0.1:{}/api/v1/tasks/{}/expire",
             port, task_id
         ))
         .send()
@@ -405,7 +405,7 @@ async fn test_high_value_claim_blocked_for_low_reputation() {
     // Worker has 0 reputation (below min_reputation_for_high_value = 10.0)
     let client = reqwest::Client::new();
     let resp = client
-        .post(format!("http://127.0.0.1:{}/tasks/{}/claim", port, task_id))
+        .post(format!("http://127.0.0.1:{}/api/v1/tasks/{}/claim", port, task_id))
         .json(&serde_json::json!({ "assignee_id": "newbie" }))
         .send()
         .await
@@ -447,7 +447,7 @@ async fn test_high_value_claim_allowed_for_high_reputation() {
     // worker-1 should be allowed to claim
     let client = reqwest::Client::new();
     let resp = client
-        .post(format!("http://127.0.0.1:{}/tasks/{}/claim", port, task_id))
+        .post(format!("http://127.0.0.1:{}/api/v1/tasks/{}/claim", port, task_id))
         .json(&serde_json::json!({ "assignee_id": "worker-1" }))
         .send()
         .await
@@ -585,7 +585,7 @@ async fn test_low_value_task_claim_always_allowed() {
     // Any agent should be able to claim it, even with 0 reputation
     let client = reqwest::Client::new();
     let resp = client
-        .post(format!("http://127.0.0.1:{}/tasks/{}/claim", port, task_id))
+        .post(format!("http://127.0.0.1:{}/api/v1/tasks/{}/claim", port, task_id))
         .json(&serde_json::json!({ "assignee_id": "newbie" }))
         .send()
         .await

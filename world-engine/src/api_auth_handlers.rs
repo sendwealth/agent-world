@@ -103,9 +103,9 @@ pub struct UpdateRoleRequest {
 /// Auth routes.
 pub fn auth_routes() -> axum::Router<AppState> {
     axum::Router::new()
-        .route("/api/v1/auth/register", post(auth_register))
-        .route("/api/v1/auth/login", post(auth_login))
-        .route("/api/v1/auth/me", get(auth_me))
-        .route("/api/v1/auth/users", get(auth_list_users))
-        .route("/api/v1/auth/users/:id/role", post(auth_update_role))
+        .route("/auth/register", post(auth_register))
+        .route("/auth/login", post(auth_login))
+        .route("/auth/me", get(auth_me))
+        .route("/auth/users", get(auth_list_users))
+        .route("/auth/users/:id/role", post(auth_update_role))
 }

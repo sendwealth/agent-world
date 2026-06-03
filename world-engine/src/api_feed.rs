@@ -302,15 +302,15 @@ impl From<&Post> for PostSummary {
 
 pub fn feed_routes() -> Router<AppState> {
     Router::new()
-        .route("/api/v1/feed/posts", post(create_post))
-        .route("/api/v1/feed", get(list_feed))
-        .route("/api/v1/feed/trending", get(get_trending))
-        .route("/api/v1/feed/posts/:id", get(get_post_detail))
-        .route("/api/v1/feed/posts/:id/like", post(like_post_handler))
-        .route("/api/v1/feed/posts/:id/unlike", post(unlike_post_handler))
-        .route("/api/v1/feed/comments", post(create_comment))
-        .route("/api/v1/feed/comments/:id/like", post(like_comment_handler))
-        .route("/api/v1/feed/posts/:id/comments", get(list_comments_handler))
+        .route("/feed/posts", post(create_post))
+        .route("/feed", get(list_feed))
+        .route("/feed/trending", get(get_trending))
+        .route("/feed/posts/:id", get(get_post_detail))
+        .route("/feed/posts/:id/like", post(like_post_handler))
+        .route("/feed/posts/:id/unlike", post(unlike_post_handler))
+        .route("/feed/comments", post(create_comment))
+        .route("/feed/comments/:id/like", post(like_comment_handler))
+        .route("/feed/posts/:id/comments", get(list_comments_handler))
 }
 
 // ── Handlers ──────────────────────────────────────────────

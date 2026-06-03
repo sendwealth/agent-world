@@ -54,7 +54,7 @@ fn default_true() -> bool {
 // ── Router ───────────────────────────────────────────────
 
 pub fn export_v1_routes() -> Router<AppState> {
-    Router::new().route("/api/v1/export/{export_type}", get(export_handler))
+    Router::new().route("/export/{export_type}", get(export_handler))
 }
 
 // ── CSV Escape ───────────────────────────────────────────

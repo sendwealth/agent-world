@@ -21,6 +21,10 @@ use agent_world_engine::api::{self, AppState};
 use agent_world_engine::api_auth::ApiKeyStore;
 use agent_world_engine::config::{ConfigManager, GenesisConfig};
 use agent_world_engine::economy::banking::{BankingSystem, CentralBankConfig};
+use agent_world_engine::economy::escrow::EscrowManager;
+use agent_world_engine::economy::inheritance::{InheritanceConfig, InheritanceSystem};
+use agent_world_engine::economy::mentorship::{MentorshipConfig, MentorshipSystem};
+use agent_world_engine::economy::trust::{TrustConfig, TrustNetwork};
 use agent_world_engine::economy::investment::InvestmentSystem;
 use agent_world_engine::economy::marketplace::Marketplace;
 use agent_world_engine::economy::reputation::{ReputationConfig, ReputationSystem};
@@ -35,8 +39,9 @@ use agent_world_engine::world::event::WorldEvent;
 use agent_world_engine::world::state::EventBus;
 use agent_world_engine::world::subsystem::SubsystemRegistry;
 use agent_world_engine::world::subsystems::{
-    DeathJudgmentSubsystem, EventBroadcastSubsystem, LifecycleAgingSubsystem,
-    ReputationDecaySubsystem, TokenBurnSubsystem,
+    DeathJudgmentSubsystem, EscrowExpirySubsystem, EventBroadcastSubsystem,
+    LifecycleAgingSubsystem, MentorshipProgressSubsystem, ReputationDecaySubsystem,
+    TokenBurnSubsystem, TrustDecaySubsystem,
 };
 use agent_world_engine::evolution::{EvolutionSubsystem, subsystem::EvolutionSubsystemConfig};
 use agent_world_engine::evolution::mutation::OffspringMutationConfig;
@@ -216,6 +221,28 @@ async fn main() {
     // ── Initialize Plugin System ────────────────────────────
     let plugin_manager: agent_world_engine::plugin::SharedPluginManager =
         Arc::new(Mutex::new(agent_world_engine::plugin::PluginManager::new(event_bus.clone())));
+
+    // ── Register Economy Tick Subsystems ──────────────────
+    let trust_decay = TrustDecaySubsystem::new_with_event_bus(
+        TrustConfig::default(),
+        event_bus.as_ref().clone(),
+    );
+    subsystem_registry.register(Box::new(trust_decay));
+
+    let mentorship_progress = MentorshipProgressSubsystem::new_with_event_bus(
+        MentorshipConfig::default(),
+        event_bus.as_ref().clone(),
+    );
+    subsystem_registry.register(Box::new(mentorship_progress));
+
+    let escrow_expiry = EscrowExpirySubsystem::new_with_event_bus(
+        event_bus.as_ref().clone(),
+    );
+    subsystem_registry.register(Box::new(escrow_expiry));
+    println!(
+        "   SubsystemRegistry: {} subsystems registered (with economy tick subsystems)",
+        subsystem_registry.len()
+    );
 
     // Register the plugin bridge as the last subsystem so plugin tick hooks
     // can observe state set by all built-in subsystems.
@@ -468,6 +495,33 @@ async fn main() {
     )));
     println!("   InvestmentSystem: initialized");
 
+    // ── Initialize EscrowManager ────────────────────────
+    let escrow_manager = Arc::new(Mutex::new(EscrowManager::with_event_bus(
+        event_bus.as_ref().clone(),
+    )));
+    println!("   EscrowManager: initialized");
+
+    // ── Initialize TrustNetwork ─────────────────────────
+    let trust_network = Arc::new(Mutex::new(TrustNetwork::with_event_bus(
+        TrustConfig::default(),
+        event_bus.as_ref().clone(),
+    )));
+    println!("   TrustNetwork: initialized");
+
+    // ── Initialize MentorshipSystem ─────────────────────
+    let mentorship_system = Arc::new(Mutex::new(MentorshipSystem::with_event_bus(
+        MentorshipConfig::default(),
+        event_bus.as_ref().clone(),
+    )));
+    println!("   MentorshipSystem: initialized");
+
+    // ── Initialize InheritanceSystem ─────────────────────
+    let inheritance_system = Arc::new(Mutex::new(InheritanceSystem::with_event_bus(
+        InheritanceConfig::default(),
+        event_bus.as_ref().clone(),
+    )));
+    println!("   InheritanceSystem: initialized");
+
     // ── Initialize Federation Engine ──────────────────────
     let federation = Arc::new(Mutex::new(FederationEngine::with_shared_event_bus(
         event_bus.clone(),
@@ -586,6 +640,10 @@ async fn main() {
         feed_store: Some(std::sync::Arc::new(tokio::sync::Mutex::new(
             agent_world_engine::api_feed::FeedStore::new(),
         ))),
+        escrow_manager: Some(escrow_manager),
+        trust_network: Some(trust_network),
+        mentorship_system: Some(mentorship_system),
+        inheritance_system: Some(inheritance_system),
     });
     // Wire the WorldMessageRouter into the AppState for Oracle/Bounty delivery
     app_state.world_msg_router = Some(world_msg_router);

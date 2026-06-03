@@ -31,6 +31,10 @@ use crate::economy::reputation::{ReputationConfig, ReputationSystem};
 use crate::economy::stock_market::StockMarket;
 use crate::economy::task::TaskBoard;
 use crate::economy::tool_marketplace::ToolMarketplace;
+use crate::economy::escrow::EscrowManager;
+use crate::economy::inheritance::InheritanceSystem;
+use crate::economy::mentorship::MentorshipSystem;
+use crate::economy::trust::TrustNetwork;
 use crate::federation::{MigrationManager, MigrationPolicy, WorldRegistry};
 use crate::a2a::world_message_router::WorldMessageRouter;
 use crate::human::store::HumanParticipationStore;
@@ -59,6 +63,10 @@ pub type SharedGovernanceMetricsCollector = Arc<Mutex<GovernanceMetricsCollector
 pub type SharedInvestmentSystem = Arc<Mutex<InvestmentSystem>>;
 pub type SharedRuleEngine = Arc<Mutex<RuleEngine>>;
 pub type SharedToolMarketplace = Arc<Mutex<ToolMarketplace>>;
+pub type SharedEscrowManager = Arc<Mutex<EscrowManager>>;
+pub type SharedTrustNetwork = Arc<Mutex<TrustNetwork>>;
+pub type SharedMentorshipSystem = Arc<Mutex<MentorshipSystem>>;
+pub type SharedInheritanceSystem = Arc<Mutex<InheritanceSystem>>;
 pub type SharedAuthStore = Arc<Mutex<AuthStore>>;
 pub type SharedABExperimentStore = Arc<Mutex<Vec<crate::api_ab_experiment::ABExperiment>>>;
 
@@ -210,6 +218,10 @@ pub struct AppState {
     pub agent_models: crate::api_providers::SharedAgentModelStore,
     pub diary_store: Option<crate::api_diary::SharedDiaryStore>,
     pub feed_store: Option<crate::api_feed::SharedFeedStore>,
+    pub escrow_manager: Option<SharedEscrowManager>,
+    pub trust_network: Option<SharedTrustNetwork>,
+    pub mentorship_system: Option<SharedMentorshipSystem>,
+    pub inheritance_system: Option<SharedInheritanceSystem>,
 }
 
 /// Optional subsystem overrides for test AppState construction.
@@ -243,6 +255,10 @@ pub struct TestOverrides {
     pub agent_models: Option<crate::api_providers::SharedAgentModelStore>,
     pub diary_store: Option<crate::api_diary::SharedDiaryStore>,
     pub feed_store: Option<crate::api_feed::SharedFeedStore>,
+    pub escrow_manager: Option<SharedEscrowManager>,
+    pub trust_network: Option<SharedTrustNetwork>,
+    pub mentorship_system: Option<SharedMentorshipSystem>,
+    pub inheritance_system: Option<SharedInheritanceSystem>,
 }
 
 impl AppState {
@@ -301,6 +317,10 @@ impl AppState {
             agent_models: overrides.agent_models.unwrap_or_else(|| Arc::new(Mutex::new(HashMap::new()))),
             diary_store: overrides.diary_store,
             feed_store: overrides.feed_store,
+            escrow_manager: overrides.escrow_manager,
+            trust_network: overrides.trust_network,
+            mentorship_system: overrides.mentorship_system,
+            inheritance_system: overrides.inheritance_system,
         }
     }
 }
@@ -377,6 +397,10 @@ fn make_test_state(
         agent_models: Arc::new(Mutex::new(HashMap::new())),
         diary_store: None,
         feed_store: None,
+        escrow_manager: None,
+        trust_network: None,
+        mentorship_system: None,
+        inheritance_system: None,
     }
 }
 
@@ -427,6 +451,10 @@ pub fn build_full_router(state: AppState) -> Router {
         .merge(crate::api_marketplace::marketplace_routes())
         .merge(crate::api_tool_marketplace::tool_marketplace_routes())
         .merge(crate::api_reputation::reputation_routes())
+        .merge(crate::api_escrow::escrow_routes())
+        .merge(crate::api_trust::trust_routes())
+        .merge(crate::api_mentorship::mentorship_routes())
+        .merge(crate::api_inheritance::inheritance_routes())
         // V1 unified export API
         .merge(crate::api_export_v1::export_v1_routes())
         .merge(crate::api_plugins::plugin_routes())

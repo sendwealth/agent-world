@@ -84,14 +84,14 @@ impl InterventionCheckerSubsystem {
     pub fn record_broadcast(&self, agent_id: &str, current_tick: u64) -> bool {
         // Reset counts if we're in a new tick
         {
-            let mut last = self.last_tick.lock().unwrap();
+            let mut last = self.last_tick.lock().unwrap_or_else(|e| { tracing::error!("intervention last_tick lock poisoned: {}", e); e.into_inner() });
             if *last != current_tick {
-                self.broadcast_counts.lock().unwrap().clear();
+                self.broadcast_counts.lock().unwrap_or_else(|e| { tracing::error!("intervention broadcast_counts lock poisoned: {}", e); e.into_inner() }).clear();
                 *last = current_tick;
             }
         }
 
-        let mut counts = self.broadcast_counts.lock().unwrap();
+        let mut counts = self.broadcast_counts.lock().unwrap_or_else(|e| { tracing::error!("intervention broadcast_counts lock poisoned: {}", e); e.into_inner() });
         let count = counts.entry(agent_id.to_string()).or_insert(0);
         if *count >= self.config.broadcast_max_per_tick {
             return false;
@@ -111,9 +111,9 @@ impl Subsystem for InterventionCheckerSubsystem {
 
         // Reset broadcast tracking for new tick
         {
-            let mut last = self.last_tick.lock().unwrap();
+            let mut last = self.last_tick.lock().unwrap_or_else(|e| { tracing::error!("intervention last_tick lock poisoned: {}", e); e.into_inner() });
             if *last != tick {
-                self.broadcast_counts.lock().unwrap().clear();
+                self.broadcast_counts.lock().unwrap_or_else(|e| { tracing::error!("intervention broadcast_counts lock poisoned: {}", e); e.into_inner() }).clear();
                 *last = tick;
             }
         }

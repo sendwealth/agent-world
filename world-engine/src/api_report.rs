@@ -137,8 +137,9 @@ fn build_html_report(
 
     // Trend indicators
     let population_trend = if population_series.len() >= 2 {
-        let last = population_series.last().unwrap();
-        let first = population_series.first().unwrap();
+        let (Some(last), Some(first)) = (population_series.last(), population_series.first()) else {
+            return "<p>No population data available</p>".to_string();
+        };
         let delta = last - first;
         if delta > 0.0 {
             format!("<span style=\"color: #4CAF50;\">↑ +{:.0}</span>", delta)
@@ -591,8 +592,9 @@ fn compute_trends(snapshots: &[crate::time_capsule::WorldSnapshotData]) -> Vec<s
         return trends;
     }
 
-    let first = snapshots.first().unwrap();
-    let last = snapshots.last().unwrap();
+    let (Some(first), Some(last)) = (snapshots.first(), snapshots.last()) else {
+        return vec![serde_json::json!({"error": "no snapshot data available"})];
+    };
 
     let metrics: Vec<(&str, f64, f64)> = vec![
         ("population", first.active_agents as f64, last.active_agents as f64),
@@ -638,7 +640,9 @@ fn detect_emergent_patterns(snapshots: &[crate::time_capsule::WorldSnapshotData]
         return patterns;
     }
 
-    let latest = snapshots.last().unwrap();
+    let Some(latest) = snapshots.last() else {
+        return vec![serde_json::json!({"error": "no snapshot data available"})];
+    };
 
     // 1. Wealth inequality spike
     if latest.gini_coefficient > 0.8 {

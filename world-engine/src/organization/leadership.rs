@@ -359,7 +359,7 @@ impl LeadershipEngine {
             }
         };
 
-        let election = self.elections.get_mut(&election_id).unwrap();
+        let election = self.elections.get_mut(&election_id).expect("election must exist after creation");
 
         // Check for duplicate vote
         if election.ballots.iter().any(|b| b.voter_id == voter_id) {
@@ -447,7 +447,7 @@ impl LeadershipEngine {
 
         // If only one remaining member, they become leader without election
         if remaining_members.len() == 1 {
-            let new_leader = remaining_members.into_iter().next().unwrap();
+            let new_leader = remaining_members.into_iter().next().expect("at least one remaining member required");
             self.current_leaders.insert(org_id, new_leader.clone());
 
             self.emit(WorldEvent::LeadershipChanged {
@@ -463,12 +463,12 @@ impl LeadershipEngine {
         let election_id = self.initiate_election(org_id, remaining_members, voting_method, tick)?;
 
         // Move election out of Voting temporarily to get a mutable reference
-        let election = self.elections.get_mut(&election_id).unwrap();
+        let election = self.elections.get_mut(&election_id).expect("election must exist after creation");
 
         // Auto-cast ballots: all candidates vote for the first candidate to ensure a majority.
         // This avoids a tie (e.g. 2 candidates each voting for themselves → no winner).
         let candidates = election.candidates.clone();
-        let first_candidate = candidates.first().unwrap().clone();
+        let first_candidate = candidates.first().expect("at least one candidate required").clone();
         for candidate in &candidates {
             let ballot = Ballot {
                 voter_id: candidate.clone(),

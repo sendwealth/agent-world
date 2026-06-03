@@ -117,7 +117,10 @@ pub async fn create_task(
         body.expires_at,
     ) {
         Ok(id) => {
-            let task = board.get(id).unwrap();
+            let task = match board.get(id) {
+                Some(t) => t,
+                None => return (StatusCode::NOT_FOUND, Json(ErrorResponse { error: "task not found".into() })).into_response(),
+            };
             (StatusCode::CREATED, Json(TaskResponse::from(task))).into_response()
         }
         Err(e) => (
@@ -181,7 +184,10 @@ pub async fn claim_task(
     let mut board = board.lock().await;
     match board.claim_task(uuid, body.assignee_id) {
         Ok(()) => {
-            let task = board.get(uuid).unwrap();
+            let task = match board.get(uuid) {
+                Some(t) => t,
+                None => return (StatusCode::NOT_FOUND, Json(ErrorResponse { error: "task not found".into() })).into_response(),
+            };
             Json(TaskResponse::from(task)).into_response()
         }
         Err(e) => {
@@ -218,7 +224,10 @@ pub async fn start_task(
     let mut board = board.lock().await;
     match board.start_task(uuid) {
         Ok(()) => {
-            let task = board.get(uuid).unwrap();
+            let task = match board.get(uuid) {
+                Some(t) => t,
+                None => return (StatusCode::NOT_FOUND, Json(ErrorResponse { error: "task not found".into() })).into_response(),
+            };
             Json(TaskResponse::from(task)).into_response()
         }
         Err(e) => {
@@ -256,7 +265,10 @@ pub async fn submit_task(
     let mut board = board.lock().await;
     match board.submit_result(uuid, body.result) {
         Ok(()) => {
-            let task = board.get(uuid).unwrap();
+            let task = match board.get(uuid) {
+                Some(t) => t,
+                None => return (StatusCode::NOT_FOUND, Json(ErrorResponse { error: "task not found".into() })).into_response(),
+            };
             Json(TaskResponse::from(task)).into_response()
         }
         Err(e) => {
@@ -295,7 +307,10 @@ pub async fn review_task(
     let mut board = board.lock().await;
     match board.review_task(uuid, &body.reviewer_id, body.approved) {
         Ok(()) => {
-            let task = board.get(uuid).unwrap();
+            let task = match board.get(uuid) {
+                Some(t) => t,
+                None => return (StatusCode::NOT_FOUND, Json(ErrorResponse { error: "task not found".into() })).into_response(),
+            };
             Json(TaskResponse::from(task)).into_response()
         }
         Err(e) => {
@@ -333,7 +348,10 @@ pub async fn complete_task(
     let mut board = board.lock().await;
     match board.complete_task(uuid, 0) {
         Ok(_) => {
-            let task = board.get(uuid).unwrap();
+            let task = match board.get(uuid) {
+                Some(t) => t,
+                None => return (StatusCode::NOT_FOUND, Json(ErrorResponse { error: "task not found".into() })).into_response(),
+            };
             Json(TaskResponse::from(task)).into_response()
         }
         Err(e) => {
@@ -370,7 +388,10 @@ pub async fn expire_task(
     let mut board = board.lock().await;
     match board.expire_task(uuid) {
         Ok(()) => {
-            let task = board.get(uuid).unwrap();
+            let task = match board.get(uuid) {
+                Some(t) => t,
+                None => return (StatusCode::NOT_FOUND, Json(ErrorResponse { error: "task not found".into() })).into_response(),
+            };
             Json(TaskResponse::from(task)).into_response()
         }
         Err(e) => {

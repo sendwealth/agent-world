@@ -266,9 +266,9 @@ impl RuleEngine {
             voter_id: voter_id.clone(),
             in_favor: support,
         };
-        self.votes.get_mut(rule_id).unwrap().push(vote);
+        self.votes.get_mut(rule_id).expect("rule votes entry must exist").push(vote);
 
-        let rule = self.rules.get_mut(rule_id).unwrap();
+        let rule = self.rules.get_mut(rule_id).expect("rule must exist");
         if support {
             rule.votes_for += 1;
         } else {
@@ -425,7 +425,7 @@ impl RuleEngine {
         }
 
         // Threshold met — activate
-        let rule = self.rules.get_mut(rule_id).unwrap();
+        let rule = self.rules.get_mut(rule_id).expect("rule must exist");
         rule.status = RuleStatus::Active;
 
         if let Some(ref bus) = self.event_bus {

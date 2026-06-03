@@ -214,7 +214,10 @@ pub async fn create_coordination_task(
         body.org_id,
     ) {
         Ok(id) => {
-            let task = board.get_coordination_task(id).unwrap();
+            let task = match board.get_coordination_task(id) {
+                Some(t) => t,
+                None => return (StatusCode::NOT_FOUND, Json(ErrorResponse { error: "coordination task not found".into() })).into_response(),
+            };
             (
                 StatusCode::CREATED,
                 Json(CoordinationTaskResponse::from(task)),
@@ -329,7 +332,10 @@ pub async fn join_coordination_task(
     let mut board = state.board.lock().await;
     match board.join_coordination_task(uuid, body.agent_id.clone(), |_a, _o| true) {
         Ok(()) => {
-            let task = board.get_coordination_task(uuid).unwrap();
+            let task = match board.get_coordination_task(uuid) {
+                Some(t) => t,
+                None => return (StatusCode::NOT_FOUND, Json(ErrorResponse { error: "coordination task not found".into() })).into_response(),
+            };
             Json(CoordinationTaskResponse::from(task)).into_response()
         }
         Err(e) => {
@@ -391,7 +397,10 @@ pub async fn submit_contribution(
     let mut board = state.board.lock().await;
     match board.submit_coordination_contribution(uuid, &body.agent_id, body.content, tick) {
         Ok(()) => {
-            let task = board.get_coordination_task(uuid).unwrap();
+            let task = match board.get_coordination_task(uuid) {
+                Some(t) => t,
+                None => return (StatusCode::NOT_FOUND, Json(ErrorResponse { error: "coordination task not found".into() })).into_response(),
+            };
             Json(CoordinationTaskResponse::from(task)).into_response()
         }
         Err(e) => {

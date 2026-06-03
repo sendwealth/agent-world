@@ -142,13 +142,10 @@ pub async fn fed_register_world(
     let id = body.id.clone();
     match fed.register_world(body.id, body.name, body.endpoint, body.tick) {
         Ok(()) => {
-            let world = fed
-                .list_worlds()
-                .into_iter()
-                .find(|w| w.id == id)
-                .unwrap()
-                .clone();
-            (StatusCode::CREATED, Json(serde_json::json!(world))).into_response()
+            match fed.list_worlds().into_iter().find(|w| w.id == id) {
+                Some(world) => (StatusCode::CREATED, Json(serde_json::json!(world))).into_response(),
+                None => (StatusCode::INTERNAL_SERVER_ERROR, Json(serde_json::json!({"error": "world registered but not found on read-back"}))).into_response(),
+            }
         }
         Err(e) => (
             fed_error_to_status(&e),
@@ -209,8 +206,10 @@ pub async fn fed_establish_relations(
     let mut fed = fed.lock().await;
     match fed.establish_relations(&body.world_id, body.tick) {
         Ok(()) => {
-            let world = fed.get_world(&body.world_id).unwrap().clone();
-            (StatusCode::OK, Json(serde_json::json!(world))).into_response()
+            match fed.get_world(&body.world_id) {
+                Some(world) => (StatusCode::OK, Json(serde_json::json!(world))).into_response(),
+                None => (StatusCode::INTERNAL_SERVER_ERROR, Json(serde_json::json!({"error": "operation succeeded but world not found on read-back"}))).into_response(),
+            }
         }
         Err(e) => (
             fed_error_to_status(&e),
@@ -256,8 +255,10 @@ pub async fn fed_propose_treaty(
         body.terms.clone(),
     ) {
         Ok(id) => {
-            let treaty = fed.get_treaty(&id).unwrap().clone();
-            (StatusCode::CREATED, Json(serde_json::json!(treaty))).into_response()
+            match fed.get_treaty(&id) {
+                Some(treaty) => (StatusCode::CREATED, Json(serde_json::json!(treaty))).into_response(),
+                None => (StatusCode::INTERNAL_SERVER_ERROR, Json(serde_json::json!({"error": "treaty created but not found on read-back"}))).into_response(),
+            }
         }
         Err(e) => (
             fed_error_to_status(&e),
@@ -292,8 +293,10 @@ pub async fn fed_accept_treaty(
     let mut fed = fed.lock().await;
     match fed.accept_treaty(&id, body.tick) {
         Ok(()) => {
-            let treaty = fed.get_treaty(&id).unwrap().clone();
-            (StatusCode::OK, Json(serde_json::json!(treaty))).into_response()
+            match fed.get_treaty(&id) {
+                Some(treaty) => (StatusCode::OK, Json(serde_json::json!(treaty))).into_response(),
+                None => (StatusCode::INTERNAL_SERVER_ERROR, Json(serde_json::json!({"error": "operation succeeded but treaty not found on read-back"}))).into_response(),
+            }
         }
         Err(e) => (
             fed_error_to_status(&e),
@@ -312,8 +315,10 @@ pub async fn fed_reject_treaty(
     let mut fed = fed.lock().await;
     match fed.reject_treaty(&id) {
         Ok(()) => {
-            let treaty = fed.get_treaty(&id).unwrap().clone();
-            (StatusCode::OK, Json(serde_json::json!(treaty))).into_response()
+            match fed.get_treaty(&id) {
+                Some(treaty) => (StatusCode::OK, Json(serde_json::json!(treaty))).into_response(),
+                None => (StatusCode::INTERNAL_SERVER_ERROR, Json(serde_json::json!({"error": "operation succeeded but treaty not found on read-back"}))).into_response(),
+            }
         }
         Err(e) => (
             fed_error_to_status(&e),
@@ -332,8 +337,10 @@ pub async fn fed_break_treaty(
     let mut fed = fed.lock().await;
     match fed.break_treaty(&id, body.tick) {
         Ok(()) => {
-            let treaty = fed.get_treaty(&id).unwrap().clone();
-            (StatusCode::OK, Json(serde_json::json!(treaty))).into_response()
+            match fed.get_treaty(&id) {
+                Some(treaty) => (StatusCode::OK, Json(serde_json::json!(treaty))).into_response(),
+                None => (StatusCode::INTERNAL_SERVER_ERROR, Json(serde_json::json!({"error": "operation succeeded but treaty not found on read-back"}))).into_response(),
+            }
         }
         Err(e) => (
             fed_error_to_status(&e),
@@ -351,8 +358,10 @@ pub async fn fed_impose_sanctions(
     let mut fed = fed.lock().await;
     match fed.impose_sanctions(&body.world_id, body.reason.clone(), body.tick) {
         Ok(()) => {
-            let world = fed.get_world(&body.world_id).unwrap().clone();
-            (StatusCode::OK, Json(serde_json::json!(world))).into_response()
+            match fed.get_world(&body.world_id) {
+                Some(world) => (StatusCode::OK, Json(serde_json::json!(world))).into_response(),
+                None => (StatusCode::INTERNAL_SERVER_ERROR, Json(serde_json::json!({"error": "operation succeeded but world not found on read-back"}))).into_response(),
+            }
         }
         Err(e) => (
             fed_error_to_status(&e),
@@ -390,8 +399,10 @@ pub async fn fed_sever_ties(
     let mut fed = fed.lock().await;
     match fed.sever_ties(&body.world_id, body.tick) {
         Ok(()) => {
-            let world = fed.get_world(&body.world_id).unwrap().clone();
-            (StatusCode::OK, Json(serde_json::json!(world))).into_response()
+            match fed.get_world(&body.world_id) {
+                Some(world) => (StatusCode::OK, Json(serde_json::json!(world))).into_response(),
+                None => (StatusCode::INTERNAL_SERVER_ERROR, Json(serde_json::json!({"error": "operation succeeded but world not found on read-back"}))).into_response(),
+            }
         }
         Err(e) => (
             fed_error_to_status(&e),
@@ -409,8 +420,10 @@ pub async fn fed_declare_war(
     let mut fed = fed.lock().await;
     match fed.declare_war(&body.world_id, body.tick) {
         Ok(()) => {
-            let world = fed.get_world(&body.world_id).unwrap().clone();
-            (StatusCode::OK, Json(serde_json::json!(world))).into_response()
+            match fed.get_world(&body.world_id) {
+                Some(world) => (StatusCode::OK, Json(serde_json::json!(world))).into_response(),
+                None => (StatusCode::INTERNAL_SERVER_ERROR, Json(serde_json::json!({"error": "operation succeeded but world not found on read-back"}))).into_response(),
+            }
         }
         Err(e) => (
             fed_error_to_status(&e),
@@ -440,8 +453,10 @@ pub async fn fed_accept_peace(
     let mut fed = fed.lock().await;
     match fed.accept_peace(&id, 0) {
         Ok(()) => {
-            let world = fed.get_world(&id).unwrap().clone();
-            (StatusCode::OK, Json(serde_json::json!(world))).into_response()
+            match fed.get_world(&id) {
+                Some(world) => (StatusCode::OK, Json(serde_json::json!(world))).into_response(),
+                None => (StatusCode::INTERNAL_SERVER_ERROR, Json(serde_json::json!({"error": "operation succeeded but world not found on read-back"}))).into_response(),
+            }
         }
         Err(e) => (
             fed_error_to_status(&e),

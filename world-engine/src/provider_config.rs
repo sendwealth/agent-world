@@ -226,7 +226,7 @@ impl ProviderConfigStore {
         )?;
 
         drop(conn);
-        self.get(&id).map(|opt| opt.context("failed to read back created provider")).map(|r| r.unwrap())
+        self.get(&id)?.context("failed to read back created provider")
     }
 
     /// Get a provider by ID.
@@ -375,7 +375,8 @@ impl ProviderConfigStore {
 
     /// Get raw encrypted key bytes (test only).
     pub fn get_raw_encrypted_key(&self, id: &str) -> anyhow::Result<Option<Vec<u8>>> {
-        let conn = self.conn.lock().unwrap();
+        let conn = self.conn.lock().map_err(|e| anyhow::anyhow!("lock poisoned: {}", e))?
+        ;
         let result = conn.query_row(
             "SELECT api_key_encrypted FROM provider_configs WHERE id = ?1", params![id], |row| row.get::<_, Vec<u8>>(0),
         );

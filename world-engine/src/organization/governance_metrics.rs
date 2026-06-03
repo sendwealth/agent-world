@@ -179,7 +179,7 @@ impl GovernanceMetricsCollector {
 
     /// Get metrics snapshot for a specific organization.
     pub fn get_org_metrics(&self, org_id: Uuid) -> OrgMetrics {
-        let data = self.org_data.lock().unwrap();
+        let data = self.org_data.lock().unwrap_or_else(|e| { tracing::error!("governance_metrics lock poisoned: {}", e); e.into_inner() });
         let acc = data.get(&org_id);
 
         match acc {
@@ -210,7 +210,7 @@ impl GovernanceMetricsCollector {
 
     /// Get a world-wide governance summary across all tracked organizations.
     pub fn get_world_governance_summary(&self) -> WorldGovernanceSummary {
-        let data = self.org_data.lock().unwrap();
+        let data = self.org_data.lock().unwrap_or_else(|e| { tracing::error!("governance_metrics lock poisoned: {}", e); e.into_inner() });
 
         let total_orgs = data.len();
         if total_orgs == 0 {
@@ -276,7 +276,7 @@ impl GovernanceMetricsCollector {
         event_type: Option<EventType>,
         range: (u64, u64),
     ) -> Vec<GovernanceEvent> {
-        let data = self.org_data.lock().unwrap();
+        let data = self.org_data.lock().unwrap_or_else(|e| { tracing::error!("governance_metrics lock poisoned: {}", e); e.into_inner() });
         match data.get(&org_id) {
             Some(acc) => acc
                 .timeline
@@ -321,7 +321,7 @@ fn process_event(data: &Arc<std::sync::Mutex<HashMap<Uuid, OrgAccumulator>>>, ev
             let org_uuid = parse_org_id(org_id);
             let tax = *tax_amount;
             let t = *tick;
-            let mut data = data.lock().unwrap();
+            let mut data = data.lock().unwrap_or_else(|e| { tracing::error!("governance_metrics lock poisoned: {}", e); e.into_inner() });
             let acc = data.entry(org_uuid).or_insert_with(OrgAccumulator::new);
             acc.total_tax_collected += tax;
             acc.tax_collection_count += 1;
@@ -342,7 +342,7 @@ fn process_event(data: &Arc<std::sync::Mutex<HashMap<Uuid, OrgAccumulator>>>, ev
             let org_uuid = parse_org_id(org_id);
             let amount = *total_amount;
             let t = *tick;
-            let mut data = data.lock().unwrap();
+            let mut data = data.lock().unwrap_or_else(|e| { tracing::error!("governance_metrics lock poisoned: {}", e); e.into_inner() });
             let acc = data.entry(org_uuid).or_insert_with(OrgAccumulator::new);
             acc.total_distributed += amount;
             acc.timeline.push(GovernanceEvent {
@@ -358,7 +358,7 @@ fn process_event(data: &Arc<std::sync::Mutex<HashMap<Uuid, OrgAccumulator>>>, ev
         } => {
             let org_uuid = *org_id;
             let count = candidates.len();
-            let mut data = data.lock().unwrap();
+            let mut data = data.lock().unwrap_or_else(|e| { tracing::error!("governance_metrics lock poisoned: {}", e); e.into_inner() });
             let acc = data.entry(org_uuid).or_insert_with(OrgAccumulator::new);
             acc.election_count += 1;
             acc.total_candidates += count;
@@ -376,7 +376,7 @@ fn process_event(data: &Arc<std::sync::Mutex<HashMap<Uuid, OrgAccumulator>>>, ev
             new_leader_id,
         } => {
             let org_uuid = *org_id;
-            let mut data = data.lock().unwrap();
+            let mut data = data.lock().unwrap_or_else(|e| { tracing::error!("governance_metrics lock poisoned: {}", e); e.into_inner() });
             let acc = data.entry(org_uuid).or_insert_with(OrgAccumulator::new);
             acc.leader_changes += 1;
             acc.timeline.push(GovernanceEvent {
@@ -398,7 +398,7 @@ fn process_event(data: &Arc<std::sync::Mutex<HashMap<Uuid, OrgAccumulator>>>, ev
             let uuid_a = parse_org_id(org_a);
             let uuid_b = parse_org_id(org_b);
             let tid = treaty_id.clone();
-            let mut data = data.lock().unwrap();
+            let mut data = data.lock().unwrap_or_else(|e| { tracing::error!("governance_metrics lock poisoned: {}", e); e.into_inner() });
 
             let acc_a = data.entry(uuid_a).or_insert_with(OrgAccumulator::new);
             acc_a.treaties_signed += 1;
@@ -433,7 +433,7 @@ fn process_event(data: &Arc<std::sync::Mutex<HashMap<Uuid, OrgAccumulator>>>, ev
             // so we record it against a UUID derived from the breaker.
             // The breaker field is an org_id string.
             let breaker_uuid = parse_org_id(&brk);
-            let mut data = data.lock().unwrap();
+            let mut data = data.lock().unwrap_or_else(|e| { tracing::error!("governance_metrics lock poisoned: {}", e); e.into_inner() });
             let acc = data.entry(breaker_uuid).or_insert_with(OrgAccumulator::new);
             acc.treaties_broken += 1;
             acc.timeline.push(GovernanceEvent {
@@ -454,7 +454,7 @@ fn process_event(data: &Arc<std::sync::Mutex<HashMap<Uuid, OrgAccumulator>>>, ev
             let uuid_b = parse_org_id(org_b);
             let tid = treaty_id.clone();
             let tt = treaty_type.clone();
-            let mut data = data.lock().unwrap();
+            let mut data = data.lock().unwrap_or_else(|e| { tracing::error!("governance_metrics lock poisoned: {}", e); e.into_inner() });
 
             let acc_a = data.entry(uuid_a).or_insert_with(OrgAccumulator::new);
             acc_a.timeline.push(GovernanceEvent {
@@ -485,7 +485,7 @@ fn process_event(data: &Arc<std::sync::Mutex<HashMap<Uuid, OrgAccumulator>>>, ev
             let nl = *new_level;
             let b_str = org_b.clone();
             let a_str = org_a.clone();
-            let mut data = data.lock().unwrap();
+            let mut data = data.lock().unwrap_or_else(|e| { tracing::error!("governance_metrics lock poisoned: {}", e); e.into_inner() });
 
             let acc_a = data.entry(uuid_a).or_insert_with(OrgAccumulator::new);
             acc_a.relation_partners.insert(org_b.clone());
@@ -511,7 +511,7 @@ fn process_event(data: &Arc<std::sync::Mutex<HashMap<Uuid, OrgAccumulator>>>, ev
         } => {
             let org_uuid = *org_id;
             let aid = agent_id.clone();
-            let mut data = data.lock().unwrap();
+            let mut data = data.lock().unwrap_or_else(|e| { tracing::error!("governance_metrics lock poisoned: {}", e); e.into_inner() });
             let acc = data.entry(org_uuid).or_insert_with(OrgAccumulator::new);
             acc.member_count += 1;
             acc.timeline.push(GovernanceEvent {
@@ -525,7 +525,7 @@ fn process_event(data: &Arc<std::sync::Mutex<HashMap<Uuid, OrgAccumulator>>>, ev
         WorldEvent::OrganizationMemberLeft { org_id, agent_id } => {
             let org_uuid = *org_id;
             let aid = agent_id.clone();
-            let mut data = data.lock().unwrap();
+            let mut data = data.lock().unwrap_or_else(|e| { tracing::error!("governance_metrics lock poisoned: {}", e); e.into_inner() });
             let acc = data.entry(org_uuid).or_insert_with(OrgAccumulator::new);
             acc.member_count = acc.member_count.saturating_sub(1);
             acc.timeline.push(GovernanceEvent {
@@ -545,7 +545,7 @@ fn process_event(data: &Arc<std::sync::Mutex<HashMap<Uuid, OrgAccumulator>>>, ev
             let org_uuid = parse_org_id(org_id);
             let aid = agent_id.clone();
             let total = *total_members;
-            let mut data = data.lock().unwrap();
+            let mut data = data.lock().unwrap_or_else(|e| { tracing::error!("governance_metrics lock poisoned: {}", e); e.into_inner() });
             let acc = data.entry(org_uuid).or_insert_with(OrgAccumulator::new);
             acc.member_count = total;
             acc.timeline.push(GovernanceEvent {
@@ -564,7 +564,7 @@ fn process_event(data: &Arc<std::sync::Mutex<HashMap<Uuid, OrgAccumulator>>>, ev
             let org_uuid = parse_org_id(org_id);
             let aid = agent_id.clone();
             let remaining = *remaining_members;
-            let mut data = data.lock().unwrap();
+            let mut data = data.lock().unwrap_or_else(|e| { tracing::error!("governance_metrics lock poisoned: {}", e); e.into_inner() });
             let acc = data.entry(org_uuid).or_insert_with(OrgAccumulator::new);
             acc.member_count = remaining;
             acc.timeline.push(GovernanceEvent {
@@ -587,7 +587,7 @@ fn process_event(data: &Arc<std::sync::Mutex<HashMap<Uuid, OrgAccumulator>>>, ev
             let rid = rule_id.clone();
             let pid = proposer_id.clone();
             let t = title.clone();
-            let mut data = data.lock().unwrap();
+            let mut data = data.lock().unwrap_or_else(|e| { tracing::error!("governance_metrics lock poisoned: {}", e); e.into_inner() });
             let acc = data.entry(org_uuid).or_insert_with(OrgAccumulator::new);
             acc.rules_proposed += 1;
             acc.timeline.push(GovernanceEvent {
@@ -604,7 +604,7 @@ fn process_event(data: &Arc<std::sync::Mutex<HashMap<Uuid, OrgAccumulator>>>, ev
         } => {
             let org_uuid = parse_org_id(org_id);
             let rid = rule_id.clone();
-            let mut data = data.lock().unwrap();
+            let mut data = data.lock().unwrap_or_else(|e| { tracing::error!("governance_metrics lock poisoned: {}", e); e.into_inner() });
             let acc = data.entry(org_uuid).or_insert_with(OrgAccumulator::new);
             acc.rules_activated += 1;
             acc.timeline.push(GovernanceEvent {
@@ -623,7 +623,7 @@ fn process_event(data: &Arc<std::sync::Mutex<HashMap<Uuid, OrgAccumulator>>>, ev
             let org_uuid = parse_org_id(org_id);
             let rid = rule_id.clone();
             let t = *tick;
-            let mut data = data.lock().unwrap();
+            let mut data = data.lock().unwrap_or_else(|e| { tracing::error!("governance_metrics lock poisoned: {}", e); e.into_inner() });
             let acc = data.entry(org_uuid).or_insert_with(OrgAccumulator::new);
             acc.rules_expired += 1;
             acc.timeline.push(GovernanceEvent {
@@ -642,7 +642,7 @@ fn process_event(data: &Arc<std::sync::Mutex<HashMap<Uuid, OrgAccumulator>>>, ev
             let org_uuid = parse_org_id(org_id);
             let rid = rule_id.clone();
             let t = *tick;
-            let mut data = data.lock().unwrap();
+            let mut data = data.lock().unwrap_or_else(|e| { tracing::error!("governance_metrics lock poisoned: {}", e); e.into_inner() });
             let acc = data.entry(org_uuid).or_insert_with(OrgAccumulator::new);
             acc.rules_repealed += 1;
             acc.timeline.push(GovernanceEvent {

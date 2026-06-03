@@ -131,7 +131,7 @@ impl EvolutionSubsystem {
     /// Call this before an evaluation tick with the number of social
     /// connections (trust edges, organization memberships, etc.) per agent.
     pub fn update_social_connections(&self, connections: HashMap<String, usize>) {
-        let mut sc = self.social_connections.lock().unwrap();
+        let mut sc = self.social_connections.lock().unwrap_or_else(|e| { tracing::error!("evolution social_connections lock poisoned: {}", e); e.into_inner() });
         *sc = connections;
     }
 
@@ -191,7 +191,7 @@ impl EvolutionSubsystem {
         let current_tokens: u64 = agents.iter().map(|(_, _, a)| a.tokens).sum();
 
         let prev_tokens = {
-            let mut prev = self.prev_world_tokens.lock().unwrap();
+            let mut prev = self.prev_world_tokens.lock().unwrap_or_else(|e| { tracing::error!("evolution prev_world_tokens lock poisoned: {}", e); e.into_inner() });
             let old = *prev;
             *prev = current_tokens;
             old
@@ -199,7 +199,7 @@ impl EvolutionSubsystem {
 
         // Phase 1: Mutations
         {
-            let mut rng = self.rng.lock().unwrap();
+            let mut rng = self.rng.lock().unwrap_or_else(|e| { tracing::error!("evolution rng lock poisoned: {}", e); e.into_inner() });
             for (_, _, agent) in agents.iter_mut() {
                 if agent.phase == AgentPhase::Dead || agent.phase == AgentPhase::Birth {
                     continue;
@@ -253,8 +253,8 @@ impl EvolutionSubsystem {
 
         // Phase 2: Natural selection
         {
-            let mut selection = self.selection.lock().unwrap();
-            let social = self.social_connections.lock().unwrap();
+            let mut selection = self.selection.lock().unwrap_or_else(|e| { tracing::error!("evolution selection lock poisoned: {}", e); e.into_inner() });
+            let social = self.social_connections.lock().unwrap_or_else(|e| { tracing::error!("evolution social_connections lock poisoned: {}", e); e.into_inner() });
             let (reports, to_cull) =
                 selection.evaluate_cycle(tick, agents, current_tokens, prev_tokens, &social);
 
@@ -295,7 +295,7 @@ impl EvolutionSubsystem {
 
         // Update last-active tracking
         {
-            let mut selection = self.selection.lock().unwrap();
+            let mut selection = self.selection.lock().unwrap_or_else(|e| { tracing::error!("evolution selection lock poisoned: {}", e); e.into_inner() });
             for (_, _, agent) in agents.iter() {
                 if agent.phase != AgentPhase::Dead && agent.phase != AgentPhase::Birth {
                     selection.mark_active(&agent.id.to_string(), tick);

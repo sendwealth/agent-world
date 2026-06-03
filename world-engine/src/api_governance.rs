@@ -241,8 +241,10 @@ pub async fn create_proposal(
         body.payload,
     ) {
         Ok(proposal_id) => {
-            let proposal = gov.get_proposal(proposal_id).unwrap();
-            (StatusCode::CREATED, Json(proposal_to_response(proposal))).into_response()
+            match gov.get_proposal(proposal_id) {
+                Some(proposal) => (StatusCode::CREATED, Json(proposal_to_response(proposal))).into_response(),
+                None => (StatusCode::INTERNAL_SERVER_ERROR, Json(ErrorResponse { error: "proposal created but not found on read-back".into() })).into_response(),
+            }
         }
         Err(e) => (
             governance_error_status(&e),
@@ -362,8 +364,10 @@ pub async fn vote_proposal(
     let mut gov = governance.lock().await;
     match gov.vote(uuid, body.voter_id, body.in_favor, tick) {
         Ok(()) => {
-            let proposal = gov.get_proposal(uuid).unwrap();
-            Json(proposal_to_response(proposal)).into_response()
+            match gov.get_proposal(uuid) {
+                Some(proposal) => Json(proposal_to_response(proposal)).into_response(),
+                None => (StatusCode::INTERNAL_SERVER_ERROR, Json(ErrorResponse { error: "operation succeeded but proposal not found on read-back".into() })).into_response(),
+            }
         }
         Err(e) => (
             governance_error_status(&e),
@@ -407,8 +411,10 @@ pub async fn start_voting(
     let mut gov = governance.lock().await;
     match gov.start_voting(uuid, &body.requester_id, current_tick) {
         Ok(()) => {
-            let proposal = gov.get_proposal(uuid).unwrap();
-            Json(proposal_to_response(proposal)).into_response()
+            match gov.get_proposal(uuid) {
+                Some(proposal) => Json(proposal_to_response(proposal)).into_response(),
+                None => (StatusCode::INTERNAL_SERVER_ERROR, Json(ErrorResponse { error: "operation succeeded but proposal not found on read-back".into() })).into_response(),
+            }
         }
         Err(e) => (
             governance_error_status(&e),
@@ -450,8 +456,10 @@ pub async fn tally_proposal(
     let mut gov = governance.lock().await;
     match gov.tally_proposal(uuid) {
         Ok(_status) => {
-            let proposal = gov.get_proposal(uuid).unwrap();
-            Json(proposal_to_response(proposal)).into_response()
+            match gov.get_proposal(uuid) {
+                Some(proposal) => Json(proposal_to_response(proposal)).into_response(),
+                None => (StatusCode::INTERNAL_SERVER_ERROR, Json(ErrorResponse { error: "operation succeeded but proposal not found on read-back".into() })).into_response(),
+            }
         }
         Err(e) => (
             governance_error_status(&e),
@@ -494,8 +502,10 @@ pub async fn cancel_proposal(
     let mut gov = governance.lock().await;
     match gov.cancel_proposal(uuid, &body.requester_id) {
         Ok(()) => {
-            let proposal = gov.get_proposal(uuid).unwrap();
-            Json(proposal_to_response(proposal)).into_response()
+            match gov.get_proposal(uuid) {
+                Some(proposal) => Json(proposal_to_response(proposal)).into_response(),
+                None => (StatusCode::INTERNAL_SERVER_ERROR, Json(ErrorResponse { error: "operation succeeded but proposal not found on read-back".into() })).into_response(),
+            }
         }
         Err(e) => (
             governance_error_status(&e),
@@ -592,9 +602,15 @@ pub async fn add_argument(
 
     match result {
         Ok(arg_id) => {
-            let proposal = gov.get_proposal(uuid).unwrap();
-            let arg = proposal.arguments.iter().find(|a| a.id == arg_id).unwrap();
-            Json(argument_to_response(arg)).into_response()
+            match gov.get_proposal(uuid) {
+                Some(proposal) => {
+                    match proposal.arguments.iter().find(|a| a.id == arg_id) {
+                        Some(arg) => Json(argument_to_response(arg)).into_response(),
+                        None => (StatusCode::INTERNAL_SERVER_ERROR, Json(ErrorResponse { error: "argument added but not found on read-back".into() })).into_response(),
+                    }
+                }
+                None => (StatusCode::INTERNAL_SERVER_ERROR, Json(ErrorResponse { error: "argument added but proposal not found on read-back".into() })).into_response(),
+            }
         }
         Err(e) => (
             governance_error_status(&e),

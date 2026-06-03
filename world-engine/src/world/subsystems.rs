@@ -285,7 +285,7 @@ impl Subsystem for ReputationDecaySubsystem {
     }
 
     fn on_tick(&self, tick: u64, _agents: &mut [(Uuid, u64, AgentRecord)]) -> Vec<WorldEvent> {
-        let mut system = self.system.lock().unwrap();
+        let mut system = self.system.lock().unwrap_or_else(|e| { tracing::error!("subsystems lock poisoned: {}", e); e.into_inner() });
         let _changes = system.process_time_decay(tick);
         // Reputation changes are emitted internally by ReputationSystem
         Vec::new()

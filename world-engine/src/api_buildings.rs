@@ -114,7 +114,10 @@ pub async fn build_building(
             });
             (
                 StatusCode::CREATED,
-                Json(serde_json::to_value(&building).unwrap()),
+                Json(serde_json::to_value(&building).unwrap_or_else(|e| {
+                    tracing::error!("failed to serialize building: {}", e);
+                    serde_json::json!({"error": "serialization failed"})
+                })),
             )
                 .into_response()
         }
@@ -150,7 +153,13 @@ pub async fn get_building(
 ) -> impl IntoResponse {
     let mgr = state.building_manager.lock().await;
     match mgr.get(&id) {
-        Some(b) => (StatusCode::OK, Json(serde_json::to_value(b).unwrap())).into_response(),
+        Some(b) => match serde_json::to_value(b) {
+            Ok(v) => (StatusCode::OK, Json(v)).into_response(),
+            Err(e) => {
+                tracing::error!("failed to serialize building: {}", e);
+                (StatusCode::INTERNAL_SERVER_ERROR, Json(serde_json::json!({"error": "serialization failed"}))).into_response()
+            }
+        },
         None => (
             StatusCode::NOT_FOUND,
             Json(ErrorResponse {
@@ -182,7 +191,10 @@ pub async fn maintain_building(
             });
             (
                 StatusCode::OK,
-                Json(serde_json::to_value(&building).unwrap()),
+                Json(serde_json::to_value(&building).unwrap_or_else(|e| {
+                    tracing::error!("failed to serialize building: {}", e);
+                    serde_json::json!({"error": "serialization failed"})
+                })),
             )
                 .into_response()
         }
@@ -204,7 +216,10 @@ pub async fn demolish_building(
             });
             (
                 StatusCode::OK,
-                Json(serde_json::to_value(&building).unwrap()),
+                Json(serde_json::to_value(&building).unwrap_or_else(|e| {
+                    tracing::error!("failed to serialize building: {}", e);
+                    serde_json::json!({"error": "serialization failed"})
+                })),
             )
                 .into_response()
         }

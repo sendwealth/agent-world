@@ -178,15 +178,15 @@ pub async fn auth_middleware(
                 let hdrs = response.headers_mut();
                 hdrs.insert(
                     "X-RateLimit-Limit",
-                    headers.limit.to_string().parse().unwrap(),
+                    headers.limit.to_string().parse().expect("valid header value"),
                 );
                 hdrs.insert(
                     "X-RateLimit-Remaining",
-                    headers.remaining.to_string().parse().unwrap(),
+                    headers.remaining.to_string().parse().expect("valid header value"),
                 );
                 hdrs.insert(
                     "X-RateLimit-Reset",
-                    headers.reset.to_string().parse().unwrap(),
+                    headers.reset.to_string().parse().expect("valid header value"),
                 );
                 response
             }

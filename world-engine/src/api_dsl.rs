@@ -364,7 +364,10 @@ pub async fn dsl_vote_rule(
     let mut engine = rule_engine.lock().await;
     match engine.vote_on_rule(&id, body.voter_id, body.support) {
         Ok(()) => {
-            let rule = engine.get_rule(&id).unwrap();
+            let rule = match engine.get_rule(&id) {
+                Some(r) => r,
+                None => return (StatusCode::NOT_FOUND, Json(ErrorResponse { error: "rule not found".into() })).into_response(),
+            };
             (StatusCode::OK, Json(dsl_rule_to_response(rule))).into_response()
         }
         Err(e) => (
@@ -398,7 +401,10 @@ pub async fn dsl_activate_rule(
     let mut engine = rule_engine.lock().await;
     match engine.activate_rule(&id) {
         Ok(()) => {
-            let rule = engine.get_rule(&id).unwrap();
+            let rule = match engine.get_rule(&id) {
+                Some(r) => r,
+                None => return (StatusCode::NOT_FOUND, Json(ErrorResponse { error: "rule not found".into() })).into_response(),
+            };
             (StatusCode::OK, Json(dsl_rule_to_response(rule))).into_response()
         }
         Err(e) => (
@@ -432,7 +438,10 @@ pub async fn dsl_suspend_rule(
     let mut engine = rule_engine.lock().await;
     match engine.suspend_rule(&id) {
         Ok(()) => {
-            let rule = engine.get_rule(&id).unwrap();
+            let rule = match engine.get_rule(&id) {
+                Some(r) => r,
+                None => return (StatusCode::NOT_FOUND, Json(ErrorResponse { error: "rule not found".into() })).into_response(),
+            };
             (StatusCode::OK, Json(dsl_rule_to_response(rule))).into_response()
         }
         Err(e) => (
@@ -467,7 +476,10 @@ pub async fn dsl_repeal_rule(
     let tick = *state.tick_rx.borrow();
     match engine.repeal_rule(&id, tick) {
         Ok(()) => {
-            let rule = engine.get_rule(&id).unwrap();
+            let rule = match engine.get_rule(&id) {
+                Some(r) => r,
+                None => return (StatusCode::NOT_FOUND, Json(ErrorResponse { error: "rule not found".into() })).into_response(),
+            };
             (StatusCode::OK, Json(dsl_rule_to_response(rule))).into_response()
         }
         Err(e) => (

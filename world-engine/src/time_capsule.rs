@@ -144,7 +144,9 @@ impl SnapshotStore {
 
     /// Save a snapshot to the database.
     pub fn save(&self, snapshot: &WorldSnapshotData) -> Result<i64, rusqlite::Error> {
-        let json = serde_json::to_string(snapshot).unwrap();
+        let json = serde_json::to_string(snapshot).map_err(|e| {
+            rusqlite::Error::ToSqlConversionFailure(Box::new(e))
+        })?;
         self.conn.execute(
             "INSERT INTO snapshots (tick, timestamp, total_population, active_agents, gdp, gini_coefficient, snapshot_data)
              VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)",
@@ -170,7 +172,9 @@ impl SnapshotStore {
         match rows.next()? {
             Some(row) => {
                 let json: String = row.get(0)?;
-                let snapshot: WorldSnapshotData = serde_json::from_str(&json).unwrap();
+                let snapshot: WorldSnapshotData = serde_json::from_str(&json).map_err(|e| {
+                    rusqlite::Error::FromSqlConversionFailure(0, rusqlite::types::Type::Text, Box::new(e))
+                })?;
                 Ok(Some(snapshot))
             }
             None => Ok(None),
@@ -221,7 +225,9 @@ impl SnapshotStore {
         let mut results = Vec::new();
         while let Some(row) = rows.next()? {
             let json: String = row.get(0)?;
-            let snapshot: WorldSnapshotData = serde_json::from_str(&json).unwrap();
+            let snapshot: WorldSnapshotData = serde_json::from_str(&json).map_err(|e| {
+                rusqlite::Error::FromSqlConversionFailure(0, rusqlite::types::Type::Text, Box::new(e))
+            })?;
             results.push(snapshot);
         }
         Ok(results)
@@ -236,7 +242,9 @@ impl SnapshotStore {
         match rows.next()? {
             Some(row) => {
                 let json: String = row.get(0)?;
-                let snapshot: WorldSnapshotData = serde_json::from_str(&json).unwrap();
+                let snapshot: WorldSnapshotData = serde_json::from_str(&json).map_err(|e| {
+                    rusqlite::Error::FromSqlConversionFailure(0, rusqlite::types::Type::Text, Box::new(e))
+                })?;
                 Ok(Some(snapshot))
             }
             None => Ok(None),
@@ -254,7 +262,10 @@ impl SnapshotStore {
     /// Export all snapshots as JSON string.
     pub fn export_json(&self) -> Result<String, rusqlite::Error> {
         let snapshots = self.list(None, None, None)?;
-        Ok(serde_json::to_string_pretty(&snapshots).unwrap())
+        Ok(serde_json::to_string_pretty(&snapshots).unwrap_or_else(|e| {
+            tracing::error!("failed to serialize snapshots: {}", e);
+            serde_json::json!({"error": format!("serialization failed: {}", e)}).to_string()
+        }))
     }
 
     /// Export all snapshots as CSV string.
@@ -262,7 +273,10 @@ impl SnapshotStore {
         let snapshots = self.list(None, None, None)?;
         let mut csv = String::from("tick,timestamp,total_population,active_agents,gdp,gini_coefficient,skill_distribution_top5,key_events_count\n");
         for snap in &snapshots {
-            let skills_json = serde_json::to_string(&snap.skill_distribution_top5).unwrap();
+            let skills_json = serde_json::to_string(&snap.skill_distribution_top5).unwrap_or_else(|e| {
+                tracing::warn!("failed to serialize skills: {}", e);
+                serde_json::json!({"error": e.to_string()}).to_string()
+            });
             csv.push_str(&format!(
                 "{},{},{},{},{},{:.4},{},{}\n",
                 snap.tick,

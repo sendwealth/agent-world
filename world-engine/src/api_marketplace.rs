@@ -56,8 +56,10 @@ pub async fn mp_publish_listing(
         body.tick,
     ) {
         Ok(id) => {
-            let listing = mp.get(id).unwrap().clone();
-            api_ok(listing)
+            match mp.get(id) {
+                Some(listing) => api_ok(listing),
+                None => api_err(StatusCode::INTERNAL_SERVER_ERROR, "operation succeeded but listing not found on read-back"),
+            }
         }
         Err(e) => api_err(StatusCode::BAD_REQUEST, e.to_string()),
     }
@@ -160,8 +162,10 @@ pub async fn mp_update_listing(
     let mut mp = mp.lock().await;
     match mp.update_listing(id, &body.publisher_id, body.price, body.status, body.tags) {
         Ok(()) => {
-            let listing = mp.get(id).unwrap().clone();
-            api_ok(listing)
+            match mp.get(id) {
+                Some(listing) => api_ok(listing),
+                None => api_err(StatusCode::INTERNAL_SERVER_ERROR, "operation succeeded but listing not found on read-back"),
+            }
         }
         Err(e) => api_err(StatusCode::BAD_REQUEST, e.to_string()),
     }

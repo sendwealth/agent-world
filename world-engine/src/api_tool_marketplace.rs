@@ -60,7 +60,10 @@ pub async fn tm_list_tool(
         body.created_tick,
     ) {
         Ok(id) => {
-            let listing = mp.get(id).unwrap().clone();
+            let listing = match mp.get(id) {
+                Some(l) => l.clone(),
+                None => return (StatusCode::NOT_FOUND, Json(serde_json::json!({"error": "listing not found"}))).into_response(),
+            };
             api_ok(listing)
         }
         Err(e) => api_err(StatusCode::BAD_REQUEST, e.to_string()),
@@ -178,7 +181,10 @@ pub async fn tm_update_tool(
         body.tags,
     ) {
         Ok(()) => {
-            let listing = mp.get(id).unwrap().clone();
+            let listing = match mp.get(id) {
+                Some(l) => l.clone(),
+                None => return (StatusCode::NOT_FOUND, Json(serde_json::json!({"error": "listing not found"}))).into_response(),
+            };
             api_ok(listing)
         }
         Err(e) => api_err(StatusCode::BAD_REQUEST, e.to_string()),

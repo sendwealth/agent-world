@@ -263,7 +263,7 @@ mod tests {
         assert_eq!(loaded.tick, 50);
 
         // Verify we only kept 2 (the latest should be tick 50 and 40)
-        let conn = db.conn.lock().unwrap();
+        let conn = db.conn.lock().unwrap_or_else(|e| { tracing::error!("persistence conn lock poisoned: {}", e); e.into_inner() });
         let count: i64 = conn
             .query_row("SELECT COUNT(*) FROM snapshots", [], |row| row.get(0))
             .unwrap();
@@ -359,7 +359,7 @@ mod tests {
         }
 
         // Verify we have 3 snapshots, 3 agent rows (same agent, 3 snapshots), 3 ledger rows
-        let conn = db.conn.lock().unwrap();
+        let conn = db.conn.lock().unwrap_or_else(|e| { tracing::error!("persistence conn lock poisoned: {}", e); e.into_inner() });
         let snap_count: i64 = conn
             .query_row("SELECT COUNT(*) FROM snapshots", [], |row| row.get(0))
             .unwrap();
@@ -378,7 +378,7 @@ mod tests {
         db.prune_snapshots(1).unwrap();
 
         // Verify CASCADE deleted agents and ledger for pruned snapshots
-        let conn = db.conn.lock().unwrap();
+        let conn = db.conn.lock().unwrap_or_else(|e| { tracing::error!("persistence conn lock poisoned: {}", e); e.into_inner() });
         let snap_count: i64 = conn
             .query_row("SELECT COUNT(*) FROM snapshots", [], |row| row.get(0))
             .unwrap();
@@ -437,7 +437,7 @@ mod tests {
         db.save_snapshot(&s2).unwrap();
 
         // Load each snapshot and verify the agent appears with correct phase
-        let conn = db.conn.lock().unwrap();
+        let conn = db.conn.lock().unwrap_or_else(|e| { tracing::error!("persistence conn lock poisoned: {}", e); e.into_inner() });
         let phase_at_10: String = conn
             .query_row(
                 "SELECT a.phase FROM agents a JOIN snapshots s ON a.snapshot_id = s.id WHERE s.tick = 10",
@@ -466,7 +466,7 @@ mod tests {
         // First insert
         let s1 = SerializableWorldState::from_world_state(42, &[]);
         db.save_snapshot(&s1).unwrap();
-        let conn = db.conn.lock().unwrap();
+        let conn = db.conn.lock().unwrap_or_else(|e| { tracing::error!("persistence conn lock poisoned: {}", e); e.into_inner() });
         let id_v1: i64 = conn
             .query_row("SELECT id FROM snapshots WHERE tick = 42", [], |row| {
                 row.get(0)
@@ -477,7 +477,7 @@ mod tests {
         // Upsert same tick — ON CONFLICT DO UPDATE should return same id
         let s2 = SerializableWorldState::from_world_state(42, &[]);
         db.save_snapshot(&s2).unwrap();
-        let conn = db.conn.lock().unwrap();
+        let conn = db.conn.lock().unwrap_or_else(|e| { tracing::error!("persistence conn lock poisoned: {}", e); e.into_inner() });
         let id_v2: i64 = conn
             .query_row("SELECT id FROM snapshots WHERE tick = 42", [], |row| {
                 row.get(0)

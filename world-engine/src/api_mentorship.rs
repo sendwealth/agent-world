@@ -92,8 +92,8 @@ pub async fn mentorship_stats(State(state): State<AppState>) -> impl IntoRespons
 
 pub fn mentorship_routes() -> axum::Router<AppState> {
     axum::Router::new()
-        .route("/api/v1/mentorship/establish", post(mentorship_establish))
-        .route("/api/v1/mentorship/mentor/:mentor_id", get(mentorship_mentor_sessions))
-        .route("/api/v1/mentorship/apprentice/:apprentice_id", get(mentorship_apprentice_sessions))
-        .route("/api/v1/mentorship/stats", get(mentorship_stats))
+        .route("/mentorship/establish", post(mentorship_establish))
+        .route("/mentorship/mentor/:mentor_id", get(mentorship_mentor_sessions))
+        .route("/mentorship/apprentice/:apprentice_id", get(mentorship_apprentice_sessions))
+        .route("/mentorship/stats", get(mentorship_stats))
 }

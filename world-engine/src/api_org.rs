@@ -588,10 +588,10 @@ pub async fn dissolve_org(
 /// Organization CRUD routes.
 pub fn org_routes() -> axum::Router<AppState> {
     axum::Router::new()
-        .route("/api/v1/orgs", post(create_org))
-        .route("/api/v1/orgs", get(list_orgs))
-        .route("/api/v1/orgs/:id", get(get_org))
-        .route("/api/v1/orgs/:id/join", post(join_org))
-        .route("/api/v1/orgs/:id/leave", post(leave_org))
-        .route("/api/v1/orgs/:id/dissolve", post(dissolve_org))
+        .route("/orgs", post(create_org))
+        .route("/orgs", get(list_orgs))
+        .route("/orgs/:id", get(get_org))
+        .route("/orgs/:id/join", post(join_org))
+        .route("/orgs/:id/leave", post(leave_org))
+        .route("/orgs/:id/dissolve", post(dissolve_org))
 }

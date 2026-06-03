@@ -476,43 +476,43 @@ pub async fn fed_summary(State(state): State<AppState>) -> impl IntoResponse {
 /// Cross-world diplomacy routes.
 pub fn diplomacy_routes() -> axum::Router<AppState> {
     axum::Router::new()
-        .route("/api/v1/federation/worlds", post(fed_register_world))
-        .route("/api/v1/federation/worlds", get(fed_list_worlds))
-        .route("/api/v1/federation/worlds/:id", get(fed_get_world))
+        .route("/federation/worlds", post(fed_register_world))
+        .route("/federation/worlds", get(fed_list_worlds))
+        .route("/federation/worlds/:id", get(fed_get_world))
         .route(
-            "/api/v1/federation/worlds/:id",
+            "/federation/worlds/:id",
             delete(fed_deregister_world),
         )
         .route(
-            "/api/v1/federation/establish-relations",
+            "/federation/establish-relations",
             post(fed_establish_relations),
         )
-        .route("/api/v1/federation/treaties", get(fed_list_treaties))
-        .route("/api/v1/federation/treaties", post(fed_propose_treaty))
-        .route("/api/v1/federation/treaties/:id", get(fed_get_treaty))
+        .route("/federation/treaties", get(fed_list_treaties))
+        .route("/federation/treaties", post(fed_propose_treaty))
+        .route("/federation/treaties/:id", get(fed_get_treaty))
         .route(
-            "/api/v1/federation/treaties/:id/accept",
+            "/federation/treaties/:id/accept",
             post(fed_accept_treaty),
         )
         .route(
-            "/api/v1/federation/treaties/:id/reject",
+            "/federation/treaties/:id/reject",
             post(fed_reject_treaty),
         )
         .route(
-            "/api/v1/federation/treaties/:id/break",
+            "/federation/treaties/:id/break",
             post(fed_break_treaty),
         )
-        .route("/api/v1/federation/sanctions", post(fed_impose_sanctions))
+        .route("/federation/sanctions", post(fed_impose_sanctions))
         .route(
-            "/api/v1/federation/sanctions/:id/lift",
+            "/federation/sanctions/:id/lift",
             post(fed_lift_sanctions),
         )
-        .route("/api/v1/federation/sever-ties", post(fed_sever_ties))
-        .route("/api/v1/federation/declare-war", post(fed_declare_war))
-        .route("/api/v1/federation/propose-peace", post(fed_propose_peace))
+        .route("/federation/sever-ties", post(fed_sever_ties))
+        .route("/federation/declare-war", post(fed_declare_war))
+        .route("/federation/propose-peace", post(fed_propose_peace))
         .route(
-            "/api/v1/federation/accept-peace/:id",
+            "/federation/accept-peace/:id",
             post(fed_accept_peace),
         )
-        .route("/api/v1/federation/summary", get(fed_summary))
+        .route("/federation/summary", get(fed_summary))
 }

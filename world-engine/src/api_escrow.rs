@@ -248,13 +248,13 @@ pub async fn escrow_set_balance(
 
 pub fn escrow_routes() -> axum::Router<AppState> {
     axum::Router::new()
-        .route("/api/v1/escrow", post(escrow_create))
-        .route("/api/v1/escrow", get(escrow_list))
-        .route("/api/v1/escrow/:id", get(escrow_get))
-        .route("/api/v1/escrow/:id/claim", post(escrow_claim))
-        .route("/api/v1/escrow/:id/complete", post(escrow_complete))
-        .route("/api/v1/escrow/:id/refund", post(escrow_refund))
-        .route("/api/v1/escrow/:id/dispute", post(escrow_dispute))
-        .route("/api/v1/escrow/:id/resolve", post(escrow_resolve_dispute))
-        .route("/api/v1/escrow/balance", post(escrow_set_balance))
+        .route("/escrow", post(escrow_create))
+        .route("/escrow", get(escrow_list))
+        .route("/escrow/:id", get(escrow_get))
+        .route("/escrow/:id/claim", post(escrow_claim))
+        .route("/escrow/:id/complete", post(escrow_complete))
+        .route("/escrow/:id/refund", post(escrow_refund))
+        .route("/escrow/:id/dispute", post(escrow_dispute))
+        .route("/escrow/:id/resolve", post(escrow_resolve_dispute))
+        .route("/escrow/balance", post(escrow_set_balance))
 }

@@ -242,6 +242,6 @@ pub async fn submit_diary(
 /// Diary routes.
 pub fn diary_routes() -> axum::Router<AppState> {
     axum::Router::new()
-        .route("/api/v1/agents/:id/diary", get(list_diary).post(submit_diary))
-        .route("/api/v1/agents/:id/diary/search", get(search_diary))
+        .route("/agents/:id/diary", get(list_diary).post(submit_diary))
+        .route("/agents/:id/diary/search", get(search_diary))
 }

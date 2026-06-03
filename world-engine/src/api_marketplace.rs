@@ -352,27 +352,27 @@ pub async fn mp_transfer(
 /// Marketplace routes.
 pub fn marketplace_routes() -> axum::Router<AppState> {
     axum::Router::new()
-        .route("/api/v1/marketplace/listings", post(mp_publish_listing))
-        .route("/api/v1/marketplace/listings", get(mp_list_listings))
-        .route("/api/v1/marketplace/listings/:id", get(mp_get_listing))
-        .route("/api/v1/marketplace/listings/:id", put(mp_update_listing))
+        .route("/marketplace/listings", post(mp_publish_listing))
+        .route("/marketplace/listings", get(mp_list_listings))
+        .route("/marketplace/listings/:id", get(mp_get_listing))
+        .route("/marketplace/listings/:id", put(mp_update_listing))
         .route(
-            "/api/v1/marketplace/listings/:id/delist",
+            "/marketplace/listings/:id/delist",
             post(mp_delist_listing),
         )
         .route(
-            "/api/v1/marketplace/listings/:id/purchase",
+            "/marketplace/listings/:id/purchase",
             post(mp_purchase_listing),
         )
         .route(
-            "/api/v1/marketplace/listings/:id/rate",
+            "/marketplace/listings/:id/rate",
             post(mp_rate_listing),
         )
         .route(
-            "/api/v1/marketplace/listings/:id/ratings",
+            "/marketplace/listings/:id/ratings",
             get(mp_list_ratings),
         )
-        .route("/api/v1/marketplace/balance/:agent_id", get(mp_get_balance))
-        .route("/api/v1/marketplace/balance", post(mp_set_balance))
-        .route("/api/v1/marketplace/transfer", post(mp_transfer))
+        .route("/marketplace/balance/:agent_id", get(mp_get_balance))
+        .route("/marketplace/balance", post(mp_set_balance))
+        .route("/marketplace/transfer", post(mp_transfer))
 }

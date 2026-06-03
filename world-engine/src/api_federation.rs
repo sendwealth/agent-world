@@ -406,29 +406,29 @@ pub async fn agent_immigration_status(
 pub fn federation_routes() -> axum::Router<AppState> {
     axum::Router::new()
         .route(
-            "/api/v1/federation/worlds/:world_id/heartbeat",
+            "/federation/worlds/:world_id/heartbeat",
             post(federation_heartbeat),
         )
-        .route("/api/v1/migration/submit", post(migration_submit))
+        .route("/migration/submit", post(migration_submit))
         .route(
-            "/api/v1/migration/:migration_id/review",
+            "/migration/:migration_id/review",
             post(migration_review),
         )
         .route(
-            "/api/v1/migration/:migration_id/execute",
+            "/migration/:migration_id/execute",
             post(migration_execute),
         )
         .route(
-            "/api/v1/migration/:migration_id/cancel",
+            "/migration/:migration_id/cancel",
             post(migration_cancel),
         )
-        .route("/api/v1/migration/:migration_id", get(migration_get_status))
-        .route("/api/v1/migration/list", post(migration_list))
-        .route("/api/v1/migration/policy", get(migration_get_policy))
-        .route("/api/v1/migration/policy", put(migration_update_policy))
-        .route("/api/v1/migration/stats", get(migration_stats))
+        .route("/migration/:migration_id", get(migration_get_status))
+        .route("/migration/list", post(migration_list))
+        .route("/migration/policy", get(migration_get_policy))
+        .route("/migration/policy", put(migration_update_policy))
+        .route("/migration/stats", get(migration_stats))
         .route(
-            "/api/v1/agents/:id/immigration-status",
+            "/agents/:id/immigration-status",
             get(agent_immigration_status),
         )
 }

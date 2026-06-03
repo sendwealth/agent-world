@@ -515,59 +515,59 @@ pub async fn tm_list_purchases(
 pub fn tool_marketplace_routes() -> axum::Router<AppState> {
     axum::Router::new()
         // Tool CRUD
-        .route("/api/v1/tool-marketplace/tools", post(tm_list_tool))
-        .route("/api/v1/tool-marketplace/tools", get(tm_search_tools))
-        .route("/api/v1/tool-marketplace/tools/:id", get(tm_get_tool))
-        .route("/api/v1/tool-marketplace/tools/:id", put(tm_update_tool))
+        .route("/tool-marketplace/tools", post(tm_list_tool))
+        .route("/tool-marketplace/tools", get(tm_search_tools))
+        .route("/tool-marketplace/tools/:id", get(tm_get_tool))
+        .route("/tool-marketplace/tools/:id", put(tm_update_tool))
         .route(
-            "/api/v1/tool-marketplace/tools/:id/delist",
+            "/tool-marketplace/tools/:id/delist",
             post(tm_delist_tool),
         )
         // Purchase / Rent
         .route(
-            "/api/v1/tool-marketplace/tools/:id/purchase",
+            "/tool-marketplace/tools/:id/purchase",
             post(tm_purchase_tool),
         )
         .route(
-            "/api/v1/tool-marketplace/tools/:id/rent",
+            "/tool-marketplace/tools/:id/rent",
             post(tm_rent_tool),
         )
         // Purchase history
         .route(
-            "/api/v1/tool-marketplace/tools/:id/purchases",
+            "/tool-marketplace/tools/:id/purchases",
             get(tm_list_purchases),
         )
         // Ratings
         .route(
-            "/api/v1/tool-marketplace/tools/:id/rate",
+            "/tool-marketplace/tools/:id/rate",
             post(tm_rate_tool),
         )
         .route(
-            "/api/v1/tool-marketplace/tools/:id/ratings",
+            "/tool-marketplace/tools/:id/ratings",
             get(tm_list_ratings),
         )
         // Ownership check
         .route(
-            "/api/v1/tool-marketplace/tools/:id/ownership/:agent_id",
+            "/tool-marketplace/tools/:id/ownership/:agent_id",
             get(tm_check_ownership),
         )
         // Rentals
         .route(
-            "/api/v1/tool-marketplace/rentals/:id/cancel",
+            "/tool-marketplace/rentals/:id/cancel",
             post(tm_cancel_rental),
         )
         .route(
-            "/api/v1/tool-marketplace/rentals/active/:agent_id",
+            "/tool-marketplace/rentals/active/:agent_id",
             get(tm_active_rentals),
         )
         .route(
-            "/api/v1/tool-marketplace/rentals/expire",
+            "/tool-marketplace/rentals/expire",
             post(tm_expire_rentals),
         )
         // Balance
         .route(
-            "/api/v1/tool-marketplace/balance/:agent_id",
+            "/tool-marketplace/balance/:agent_id",
             get(tm_get_balance),
         )
-        .route("/api/v1/tool-marketplace/balance", post(tm_set_balance))
+        .route("/tool-marketplace/balance", post(tm_set_balance))
 }

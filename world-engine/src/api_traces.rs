@@ -533,15 +533,15 @@ pub async fn export_query(
 /// Trace + data export routes.
 pub fn trace_routes() -> axum::Router<AppState> {
     axum::Router::new()
-        .route("/api/v1/agents/:id/traces", get(list_agent_traces))
-        .route("/api/v1/agents/:id/traces/latest", get(get_latest_trace))
-        .route("/api/v1/agents/:id/traces/:tick", get(get_trace_by_tick))
-        .route("/api/v1/agents/:id/traces", post(submit_trace))
-        .route("/api/v1/export/snapshot", get(export_snapshot))
+        .route("/agents/:id/traces", get(list_agent_traces))
+        .route("/agents/:id/traces/latest", get(get_latest_trace))
+        .route("/agents/:id/traces/:tick", get(get_trace_by_tick))
+        .route("/agents/:id/traces", post(submit_trace))
+        .route("/export/snapshot", get(export_snapshot))
         .route(
-            "/api/v1/export/snapshot/:tick",
+            "/export/snapshot/:tick",
             get(export_snapshot_by_tick),
         )
-        .route("/api/v1/export/economy", get(export_economy))
-        .route("/api/v1/export/query", post(export_query))
+        .route("/export/economy", get(export_economy))
+        .route("/export/query", post(export_query))
 }

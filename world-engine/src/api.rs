@@ -483,10 +483,14 @@ fn build_cors_layer() -> CorsLayer {
 }
 
 /// Build the full router by merging all domain sub-routers.
+///
+/// All v1 route modules define bare paths (e.g. `/tasks`, `/world/stats`).
+/// They are nested under `/api/v1` here so that the final paths are
+/// `/api/v1/tasks`, `/api/v1/world/stats`, etc.
 pub fn build_full_router(state: AppState) -> Router {
     let cors = build_cors_layer();
 
-    Router::new()
+    let v1_routes = Router::new()
         .merge(crate::api_tasks::task_routes())
         .merge(crate::api_coordination_tasks::coordination_task_routes())
         .merge(crate::api_world::world_routes())
@@ -511,13 +515,16 @@ pub fn build_full_router(state: AppState) -> Router {
         .merge(crate::api_trust::trust_routes())
         .merge(crate::api_mentorship::mentorship_routes())
         .merge(crate::api_inheritance::inheritance_routes())
-        // V1 unified export API
         .merge(crate::api_export_v1::export_v1_routes())
         .merge(crate::api_plugins::plugin_routes())
         .merge(crate::api_providers::provider_routes())
         .merge(crate::api_diary::diary_routes())
-        .merge(crate::api_feed::feed_routes())
-        // Prometheus metrics endpoint
+        .merge(crate::api_feed::feed_routes());
+
+    Router::new()
+        // All v1 routes nested under /api/v1
+        .nest("/api/v1", v1_routes)
+        // Prometheus metrics endpoint (outside /api/v1 — scraped directly by Prometheus)
         .route("/metrics", get(crate::observability::metrics_handler))
         // Research API v2 (with optional auth middleware)
         .merge(v2_router(&state))

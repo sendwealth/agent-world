@@ -574,14 +574,14 @@ pub async fn population_export_csv(State(state): State<AppState>) -> impl IntoRe
 /// Population evolution routes.
 pub fn population_routes() -> axum::Router<AppState> {
     axum::Router::new()
-        .route("/api/v1/population/stats", get(population_stats))
-        .route("/api/v1/population/species", get(population_species))
-        .route("/api/v1/population/diversity", get(population_diversity))
-        .route("/api/v1/population/events", get(population_events))
+        .route("/population/stats", get(population_stats))
+        .route("/population/species", get(population_species))
+        .route("/population/diversity", get(population_diversity))
+        .route("/population/events", get(population_events))
         .route(
-            "/api/v1/population/genealogy/:id",
+            "/population/genealogy/:id",
             get(population_genealogy),
         )
-        .route("/api/v1/population/timeline", get(population_timeline))
-        .route("/api/v1/population/export/csv", get(population_export_csv))
+        .route("/population/timeline", get(population_timeline))
+        .route("/population/export/csv", get(population_export_csv))
 }

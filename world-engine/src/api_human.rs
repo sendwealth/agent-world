@@ -568,37 +568,37 @@ pub async fn human_recharge_history(
 /// Human participation routes.
 pub fn human_routes() -> axum::Router<AppState> {
     axum::Router::new()
-        .route("/api/v1/human/stats", get(human_stats))
-        .route("/api/v1/human/agents", get(human_list_claimed_agents))
-        .route("/api/v1/human/agents/claim", post(human_claim_agent))
-        .route("/api/v1/human/oracles", get(human_list_oracles))
-        .route("/api/v1/human/oracles", post(human_send_oracle))
-        .route("/api/v1/human/oracles/:id", get(human_get_oracle))
+        .route("/human/stats", get(human_stats))
+        .route("/human/agents", get(human_list_claimed_agents))
+        .route("/human/agents/claim", post(human_claim_agent))
+        .route("/human/oracles", get(human_list_oracles))
+        .route("/human/oracles", post(human_send_oracle))
+        .route("/human/oracles/:id", get(human_get_oracle))
         .route(
-            "/api/v1/agents/:id/oracle-response",
+            "/agents/:id/oracle-response",
             post(human_oracle_response),
         )
-        .route("/api/v1/human/bounties", get(human_list_bounties))
-        .route("/api/v1/human/bounties", post(human_create_bounty))
-        .route("/api/v1/human/bounties/:id", get(human_get_bounty))
-        .route("/api/v1/human/bounties/:id/claim", post(human_claim_bounty))
+        .route("/human/bounties", get(human_list_bounties))
+        .route("/human/bounties", post(human_create_bounty))
+        .route("/human/bounties/:id", get(human_get_bounty))
+        .route("/human/bounties/:id/claim", post(human_claim_bounty))
         .route(
-            "/api/v1/human/bounties/:id/complete",
+            "/human/bounties/:id/complete",
             post(human_complete_bounty),
         )
         .route(
-            "/api/v1/human/bounties/:id/cancel",
+            "/human/bounties/:id/cancel",
             post(human_cancel_bounty),
         )
         .route(
-            "/api/v1/human/portfolio/:human_id",
+            "/human/portfolio/:human_id",
             get(human_get_portfolio),
         )
-        .route("/api/v1/human/portfolio/invest", post(human_invest))
-        .route("/api/v1/human/rankings", get(human_rankings))
-        .route("/api/v1/human/interventions", get(human_list_interventions))
+        .route("/human/portfolio/invest", post(human_invest))
+        .route("/human/rankings", get(human_rankings))
+        .route("/human/interventions", get(human_list_interventions))
         // Token recharge endpoints
-        .route("/api/v1/human/agents/:id/recharge", post(human_recharge_agent))
-        .route("/api/v1/human/agents/:id/energy", get(human_agent_energy))
-        .route("/api/v1/human/agents/:id/recharge-history", get(human_recharge_history))
+        .route("/human/agents/:id/recharge", post(human_recharge_agent))
+        .route("/human/agents/:id/energy", get(human_agent_energy))
+        .route("/human/agents/:id/recharge-history", get(human_recharge_history))
 }

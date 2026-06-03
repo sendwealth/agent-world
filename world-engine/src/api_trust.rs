@@ -108,10 +108,10 @@ pub async fn trust_stats(State(state): State<AppState>) -> impl IntoResponse {
 
 pub fn trust_routes() -> axum::Router<AppState> {
     axum::Router::new()
-        .route("/api/v1/trust/interact", post(trust_record_interaction))
-        .route("/api/v1/trust/:from/:to", get(trust_get))
-        .route("/api/v1/trust/relationships/:agent_id", get(trust_relationships))
-        .route("/api/v1/trust/allies/:agent_id", get(trust_allies))
-        .route("/api/v1/trust/enemies/:agent_id", get(trust_enemies))
-        .route("/api/v1/trust/stats", get(trust_stats))
+        .route("/trust/interact", post(trust_record_interaction))
+        .route("/trust/:from/:to", get(trust_get))
+        .route("/trust/relationships/:agent_id", get(trust_relationships))
+        .route("/trust/allies/:agent_id", get(trust_allies))
+        .route("/trust/enemies/:agent_id", get(trust_enemies))
+        .route("/trust/stats", get(trust_stats))
 }

@@ -495,20 +495,20 @@ pub async fn dsl_repeal_rule(
 /// DSL rule engine routes.
 pub fn dsl_routes() -> axum::Router<AppState> {
     axum::Router::new()
-        .route("/api/v1/rules/dsl/parse", post(dsl_parse_rule))
-        .route("/api/v1/rules/dsl/submit", post(dsl_submit_rule))
-        .route("/api/v1/rules/dsl/templates", get(dsl_list_templates))
-        .route("/api/v1/rules/dsl/templates/:name", get(dsl_get_template))
-        .route("/api/v1/rules/dsl/rules", get(dsl_list_rules))
-        .route("/api/v1/rules/dsl/rules/:id", get(dsl_get_rule))
-        .route("/api/v1/rules/dsl/rules/:id/vote", post(dsl_vote_rule))
+        .route("/rules/dsl/parse", post(dsl_parse_rule))
+        .route("/rules/dsl/submit", post(dsl_submit_rule))
+        .route("/rules/dsl/templates", get(dsl_list_templates))
+        .route("/rules/dsl/templates/:name", get(dsl_get_template))
+        .route("/rules/dsl/rules", get(dsl_list_rules))
+        .route("/rules/dsl/rules/:id", get(dsl_get_rule))
+        .route("/rules/dsl/rules/:id/vote", post(dsl_vote_rule))
         .route(
-            "/api/v1/rules/dsl/rules/:id/activate",
+            "/rules/dsl/rules/:id/activate",
             post(dsl_activate_rule),
         )
         .route(
-            "/api/v1/rules/dsl/rules/:id/suspend",
+            "/rules/dsl/rules/:id/suspend",
             post(dsl_suspend_rule),
         )
-        .route("/api/v1/rules/dsl/rules/:id/repeal", post(dsl_repeal_rule))
+        .route("/rules/dsl/rules/:id/repeal", post(dsl_repeal_rule))
 }

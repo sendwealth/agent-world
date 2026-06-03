@@ -333,13 +333,13 @@ pub async fn get_agent_model(
 
 pub fn provider_routes() -> Router<AppState> {
     Router::new()
-        .route("/api/v1/providers", post(create_provider))
-        .route("/api/v1/providers", get(list_providers))
-        .route("/api/v1/providers/:id", get(get_provider))
-        .route("/api/v1/providers/:id", put(update_provider))
-        .route("/api/v1/providers/:id", delete(delete_provider))
-        .route("/api/v1/providers/:id/test", post(test_provider_connection))
-        .route("/api/v1/providers/:id/models", get(discover_provider_models))
-        .route("/api/v1/agents/:id/model", put(set_agent_model))
-        .route("/api/v1/agents/:id/model", get(get_agent_model))
+        .route("/providers", post(create_provider))
+        .route("/providers", get(list_providers))
+        .route("/providers/:id", get(get_provider))
+        .route("/providers/:id", put(update_provider))
+        .route("/providers/:id", delete(delete_provider))
+        .route("/providers/:id/test", post(test_provider_connection))
+        .route("/providers/:id/models", get(discover_provider_models))
+        .route("/agents/:id/model", put(set_agent_model))
+        .route("/agents/:id/model", get(get_agent_model))
 }

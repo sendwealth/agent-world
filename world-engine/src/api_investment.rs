@@ -274,35 +274,35 @@ pub async fn inv_list_dividends(
 /// Investment system routes.
 pub fn investment_routes() -> axum::Router<AppState> {
     axum::Router::new()
-        .route("/api/v1/investments/products", post(inv_create_product))
-        .route("/api/v1/investments/products", get(inv_list_products))
-        .route("/api/v1/investments/products/:id", get(inv_get_product))
-        .route("/api/v1/investments/buy", post(inv_buy_shares))
-        .route("/api/v1/investments/sell", post(inv_sell_shares))
+        .route("/investments/products", post(inv_create_product))
+        .route("/investments/products", get(inv_list_products))
+        .route("/investments/products/:id", get(inv_get_product))
+        .route("/investments/buy", post(inv_buy_shares))
+        .route("/investments/sell", post(inv_sell_shares))
         .route(
-            "/api/v1/investments/portfolio/:investor_id",
+            "/investments/portfolio/:investor_id",
             get(inv_get_portfolio),
         )
-        .route("/api/v1/investments/leaderboard", get(inv_leaderboard))
+        .route("/investments/leaderboard", get(inv_leaderboard))
         .route(
-            "/api/v1/investments/products/:id/close",
+            "/investments/products/:id/close",
             post(inv_close_investment),
         )
         .route(
-            "/api/v1/investments/products/:id/distribute-returns",
+            "/investments/products/:id/distribute-returns",
             post(inv_distribute_returns),
         )
         .route(
-            "/api/v1/investments/products/:id/performance",
+            "/investments/products/:id/performance",
             post(inv_update_performance),
         )
         .route(
-            "/api/v1/investments/products/:id/freeze",
+            "/investments/products/:id/freeze",
             post(inv_freeze_product),
         )
         .route(
-            "/api/v1/investments/transactions",
+            "/investments/transactions",
             get(inv_list_transactions),
         )
-        .route("/api/v1/investments/dividends", get(inv_list_dividends))
+        .route("/investments/dividends", get(inv_list_dividends))
 }

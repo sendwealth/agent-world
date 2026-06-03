@@ -351,9 +351,9 @@ pub async fn get_agent_status(
 /// Third-party agent API routes.
 pub fn agents_ext_routes() -> axum::Router<AppState> {
     axum::Router::new()
-        .route("/api/v1/agents/register", post(register_external_agent))
-        .route("/api/v1/agents/:id", delete(deregister_external_agent))
-        .route("/api/v1/agents/:id/action", post(execute_agent_action))
-        .route("/api/v1/agents/:id/perception", get(get_agent_perception))
-        .route("/api/v1/agents/:id/status", get(get_agent_status))
+        .route("/agents/register", post(register_external_agent))
+        .route("/agents/:id", delete(deregister_external_agent))
+        .route("/agents/:id/action", post(execute_agent_action))
+        .route("/agents/:id/perception", get(get_agent_perception))
+        .route("/agents/:id/status", get(get_agent_status))
 }

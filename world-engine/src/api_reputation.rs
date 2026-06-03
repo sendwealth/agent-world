@@ -99,8 +99,8 @@ pub async fn rep_get_config(State(state): State<AppState>) -> impl IntoResponse 
 /// Reputation routes.
 pub fn reputation_routes() -> axum::Router<AppState> {
     axum::Router::new()
-        .route("/api/v1/reputation/:agent_id", get(rep_get_reputation))
-        .route("/api/v1/reputation/rankings", get(rep_rankings))
-        .route("/api/v1/reputation/low-reputation", get(rep_low_reputation))
-        .route("/api/v1/reputation/config", get(rep_get_config))
+        .route("/reputation/:agent_id", get(rep_get_reputation))
+        .route("/reputation/rankings", get(rep_rankings))
+        .route("/reputation/low-reputation", get(rep_low_reputation))
+        .route("/reputation/config", get(rep_get_config))
 }

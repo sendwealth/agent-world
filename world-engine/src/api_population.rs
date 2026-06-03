@@ -9,7 +9,7 @@ use axum::{
 };
 use serde::{Deserialize, Serialize};
 
-use crate::api::{AgentRecord, AppState, ErrorResponse};
+use crate::api::{AgentDto, AppState, ErrorResponse};
 
 // ── Population Evolution Handlers ────────────────────────────────
 
@@ -72,12 +72,12 @@ pub struct SpeciesEntry {
 /// Genealogy node for the lineage tree.
 #[derive(Debug, Serialize)]
 pub struct GenealogyNode {
-    pub agent: AgentRecord,
+    pub agent: AgentDto,
     pub children: Vec<GenealogyNode>,
 }
 
 /// Compute skill distribution from agents' skills maps.
-pub fn compute_skill_distribution(agents: &[AgentRecord]) -> Vec<SkillDistribution> {
+pub fn compute_skill_distribution(agents: &[AgentDto]) -> Vec<SkillDistribution> {
     let mut skill_map: HashMap<String, (usize, f64, u32)> = HashMap::new();
     for agent in agents {
         if !agent.alive {
@@ -110,7 +110,7 @@ pub fn compute_skill_distribution(agents: &[AgentRecord]) -> Vec<SkillDistributi
 }
 
 /// Compute phase distribution from agents list.
-pub fn compute_phase_distribution(agents: &[AgentRecord]) -> Vec<PhaseDistribution> {
+pub fn compute_phase_distribution(agents: &[AgentDto]) -> Vec<PhaseDistribution> {
     let mut phase_map: HashMap<String, usize> = HashMap::new();
     for agent in agents {
         if !agent.alive {
@@ -175,7 +175,7 @@ pub async fn population_stats(State(state): State<AppState>) -> impl IntoRespons
     let agents = state.agents.lock().await;
     let tick = *state.tick_rx.borrow();
 
-    let alive_agents: Vec<&AgentRecord> = agents.iter().filter(|a| a.alive).collect();
+    let alive_agents: Vec<&AgentDto> = agents.iter().filter(|a| a.alive).collect();
     let dead_count = agents.iter().filter(|a| !a.alive).count();
     let alive_count = alive_agents.len();
 
@@ -327,7 +327,7 @@ pub async fn population_species(State(state): State<AppState>) -> impl IntoRespo
     let agents = state.agents.lock().await;
 
     // Group agents by their sorted skill signature
-    let mut species_map: HashMap<String, Vec<&AgentRecord>> = HashMap::new();
+    let mut species_map: HashMap<String, Vec<&AgentDto>> = HashMap::new();
     for agent in agents.iter().filter(|a| a.alive) {
         let mut skills: Vec<&String> = agent.skills.keys().collect();
         skills.sort();
@@ -473,7 +473,7 @@ pub async fn population_genealogy(
     };
 
     // Build genealogy by recursively finding parents (max depth 10)
-    fn build_tree(agents: &[AgentRecord], agent: &AgentRecord, depth: usize) -> GenealogyNode {
+    fn build_tree(agents: &[AgentDto], agent: &AgentDto, depth: usize) -> GenealogyNode {
         let children: Vec<GenealogyNode> = if depth < 10 {
             agents
                 .iter()
@@ -490,7 +490,7 @@ pub async fn population_genealogy(
     }
 
     // Find all ancestors up the tree
-    let mut all_ancestors: Vec<AgentRecord> = Vec::new();
+    let mut all_ancestors: Vec<AgentDto> = Vec::new();
     let mut queue: Vec<String> = target.parent_ids.clone();
     let mut visited: std::collections::HashSet<String> = std::collections::HashSet::new();
     while let Some(pid) = queue.pop() {
@@ -510,7 +510,7 @@ pub async fn population_genealogy(
     #[derive(Serialize)]
     struct GenealogyResponse {
         target: GenealogyNode,
-        ancestors: Vec<AgentRecord>,
+        ancestors: Vec<AgentDto>,
     }
 
     Json(GenealogyResponse {

@@ -6,7 +6,7 @@ use std::sync::Arc;
 
 use tokio::sync::{watch, Mutex};
 
-use agent_world_engine::api::{self, AgentRecord};
+use agent_world_engine::api::{self, AgentDto};
 use agent_world_engine::economy::TaskBoard;
 use agent_world_engine::wal::WAL;
 use agent_world_engine::world::state::EventBus;
@@ -40,7 +40,7 @@ async fn start_server() -> String {
 }
 
 /// Spawn a single agent and return its record.
-async fn spawn_one(base: &str, name: &str) -> AgentRecord {
+async fn spawn_one(base: &str, name: &str) -> AgentDto {
     let client = Client::new();
     let resp = client
         .post(format!("{}/api/v1/agents", base))

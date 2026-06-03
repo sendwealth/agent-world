@@ -20,7 +20,7 @@ use serde::{Deserialize, Serialize};
 use tokio_stream::wrappers::BroadcastStream;
 use tokio_stream::StreamExt;
 
-use crate::api::{parse_event_types, AgentRecord, AppState, ErrorResponse, SseQuery};
+use crate::api::{parse_event_types, AgentDto, AppState, ErrorResponse, SseQuery};
 
 // ── Response Types ────────────────────────────────────────
 
@@ -467,7 +467,7 @@ async fn research_events_sse(
 // ── Helpers ───────────────────────────────────────────────
 
 /// Compute the Gini coefficient for token distribution among alive agents.
-fn compute_gini(agents: &[AgentRecord]) -> Option<f64> {
+fn compute_gini(agents: &[AgentDto]) -> Option<f64> {
     let alive: Vec<u64> = agents
         .iter()
         .filter(|a| a.alive)
@@ -495,7 +495,7 @@ fn compute_gini(agents: &[AgentRecord]) -> Option<f64> {
 }
 
 /// Compute the share of total tokens held by the top `pct` of agents.
-fn compute_top_percent_share(agents: &[AgentRecord], pct: f64) -> Option<f64> {
+fn compute_top_percent_share(agents: &[AgentDto], pct: f64) -> Option<f64> {
     let mut amounts: Vec<u64> = agents
         .iter()
         .filter(|a| a.alive)
@@ -525,8 +525,8 @@ mod tests {
     use super::*;
     use std::collections::HashMap;
 
-    fn make_agent(id: &str, tokens: u64, alive: bool) -> AgentRecord {
-        AgentRecord {
+    fn make_agent(id: &str, tokens: u64, alive: bool) -> AgentDto {
+        AgentDto {
             id: id.to_string(),
             name: format!("Agent-{}", id),
             phase: "adult".to_string(),
@@ -543,7 +543,7 @@ mod tests {
 
     #[test]
     fn gini_perfect_equality() {
-        let agents: Vec<AgentRecord> = (0..10)
+        let agents: Vec<AgentDto> = (0..10)
             .map(|i| make_agent(&i.to_string(), 100, true))
             .collect();
         let gini = compute_gini(&agents).unwrap();
@@ -552,7 +552,7 @@ mod tests {
 
     #[test]
     fn gini_perfect_inequality() {
-        let mut agents: Vec<AgentRecord> = (0..10)
+        let mut agents: Vec<AgentDto> = (0..10)
             .map(|i| make_agent(&i.to_string(), 0, true))
             .collect();
         agents[0].tokens = 1000;
@@ -568,7 +568,7 @@ mod tests {
 
     #[test]
     fn top_percent_share_basic() {
-        let agents: Vec<AgentRecord> = (0..10)
+        let agents: Vec<AgentDto> = (0..10)
             .map(|i| make_agent(&i.to_string(), (i as u64 + 1) * 10, true))
             .collect();
         let share = compute_top_percent_share(&agents, 0.1).unwrap();

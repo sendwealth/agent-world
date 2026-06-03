@@ -10,7 +10,7 @@ use axum::{
 use serde::Deserialize;
 use uuid::Uuid;
 
-use crate::api::{AgentRecord, AppState, ErrorResponse, ExternalAgent, Position, ALLOWED_ACTIONS};
+use crate::api::{AgentDto, AppState, ErrorResponse, ExternalAgent, Position, ALLOWED_ACTIONS};
 use crate::world::event::WorldEvent;
 
 // ── Request Types ──────────────────────────────────────
@@ -76,7 +76,7 @@ pub async fn register_external_agent(
     // Also add to the shared agents list for world_stats compatibility
     {
         let mut agents = state.agents.lock().await;
-        agents.push(AgentRecord {
+        agents.push(AgentDto {
             id: agent_id.clone(),
             name: name.clone(),
             phase: "exploration".to_string(),

@@ -3,7 +3,7 @@
 //! 6764-line REST API serving all simulation operations: agents, organizations,
 //! economy (banking/stocks/marketplace), tasks, snapshots, world state, and traces.
 //!
-//! Key types: AppState, AgentRecord, A2AMessage, SpawnAgentRequest,
+//! Key types: AppState, AgentDto, A2AMessage, SpawnAgentRequest,
 //!            TaskResponse, WorldStatsResponse, ErrorResponse
 //! Depends on: world, economy, organization, auth, federation, tracing, snapshot
 //!
@@ -73,9 +73,9 @@ pub type SharedABExperimentStore = Arc<Mutex<Vec<crate::api_ab_experiment::ABExp
 
 // ── Shared Data Types ───────────────────────────────────
 
-/// Agent record tracked by the world engine.
+/// Agent DTO for API responses (maps from world::agent::AgentRecord).
 #[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct AgentRecord {
+pub struct AgentDto {
     pub id: String,
     pub name: String,
     pub phase: String,
@@ -89,8 +89,26 @@ pub struct AgentRecord {
     pub parent_ids: Vec<String>,
     #[serde(default)]
     pub generation: u32,
-    #[serde(default)]
+#[serde(default)]
     pub skills: HashMap<String, u32>,
+}
+
+impl From<crate::world::agent::AgentRecord> for AgentDto {
+    fn from(rec: crate::world::agent::AgentRecord) -> Self {
+        Self {
+            id: rec.id.to_string(),
+            name: rec.name,
+            phase: format!("{:?}", rec.phase).to_lowercase(),
+            tokens: rec.tokens,
+            money: 0,
+            alive: !matches!(rec.phase, crate::world::enums::AgentPhase::Dead),
+            ticks_survived: 0,
+            personality: rec.personality,
+            parent_ids: Vec::new(),
+            generation: 0,
+            skills: rec.skills.values().map(|s| (s.name.clone(), s.level)).collect(),
+        }
+    }
 }
 
 /// A2A message record.
@@ -187,7 +205,7 @@ pub struct AppState {
     pub board: SharedTaskBoard,
     pub wal: SharedWAL,
     pub event_bus: Arc<EventBus>,
-    pub agents: Arc<Mutex<Vec<AgentRecord>>>,
+    pub agents: Arc<Mutex<Vec<AgentDto>>>,
     pub messages: Arc<Mutex<Vec<A2AMessage>>>,
     pub tick_tx: watch::Sender<u64>,
     pub tick_rx: watch::Receiver<u64>,

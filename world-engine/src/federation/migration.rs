@@ -447,7 +447,7 @@ impl MigrationManager {
     pub async fn execute(
         &self,
         migration_id: &str,
-        agents: &Arc<tokio::sync::Mutex<Vec<crate::api::AgentRecord>>>,
+        agents: &Arc<tokio::sync::Mutex<Vec<crate::api::AgentDto>>>,
     ) -> Result<MigrationApplication, String> {
         // Phase 1: Validate and mark as Executing
         {
@@ -499,7 +499,7 @@ impl MigrationManager {
             // Check if agent already exists in target (idempotent guard)
             let exists = agents_list.iter().any(|a| a.id == snapshot.agent_id);
             if !exists {
-                let new_agent = crate::api::AgentRecord {
+                let new_agent = crate::api::AgentDto {
                     id: snapshot.agent_id.clone(),
                     name: snapshot.name.clone(),
                     phase: snapshot.phase.clone(),

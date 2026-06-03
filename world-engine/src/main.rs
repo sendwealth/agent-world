@@ -607,7 +607,7 @@ async fn main() {
         Arc::new(Mutex::new(Vec::new()));
     println!("   ABExperimentStore: initialized");
 
-    let mut app_state = AppState::for_test_with(task_board, wal_writer.clone(), api::TestOverrides {
+    let mut app_state = AppState::new(task_board, wal_writer.clone(), api::TestOverrides {
         event_bus: Some(event_bus.clone()),
         tick_tx: Some(tick_tx),
         tick_rx: Some(tick_rx),
@@ -632,8 +632,8 @@ async fn main() {
         api_key_store,
         ab_experiment_store: Some(ab_experiment_store),
         plugin_manager: Some(plugin_manager),
-        providers: None,
-        agent_models: None,
+        providers: Some(std::sync::Arc::new(tokio::sync::Mutex::new(std::collections::HashMap::new()))),
+        agent_models: Some(std::sync::Arc::new(tokio::sync::Mutex::new(std::collections::HashMap::new()))),
         diary_store: Some(std::sync::Arc::new(tokio::sync::Mutex::new(
             agent_world_engine::api_diary::DiaryStore::new(2000),
         ))),

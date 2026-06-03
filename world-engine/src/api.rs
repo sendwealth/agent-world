@@ -281,13 +281,11 @@ pub struct TestOverrides {
 }
 
 impl AppState {
-    /// Build a minimal test AppState.
-    pub fn for_test(board: SharedTaskBoard, wal: SharedWAL) -> Self {
-        Self::for_test_with(board, wal, TestOverrides::default())
-    }
-
-    /// Build a test AppState with selected subsystem overrides.
-    pub fn for_test_with(board: SharedTaskBoard, wal: SharedWAL, overrides: TestOverrides) -> Self {
+    /// Build an AppState with selected subsystem overrides.
+    ///
+    /// Used by both production (`main.rs`) and test code. Fields left as `None`
+    /// in the overrides are initialised with safe defaults.
+    pub fn new(board: SharedTaskBoard, wal: SharedWAL, overrides: TestOverrides) -> Self {
         let event_bus = overrides
             .event_bus
             .unwrap_or_else(|| Arc::new(EventBus::new(256)));
@@ -341,6 +339,12 @@ impl AppState {
             mentorship_system: overrides.mentorship_system,
             inheritance_system: overrides.inheritance_system,
         }
+    }
+
+    /// Build a minimal test AppState (test-only).
+    #[cfg(test)]
+    pub fn for_test(board: SharedTaskBoard, wal: SharedWAL) -> Self {
+        Self::new(board, wal, TestOverrides::default())
     }
 }
 
@@ -575,7 +579,7 @@ mod tests {
         let tmp = tempfile::tempdir().expect("tempdir");
         let wal = Arc::new(Mutex::new(WAL::new(tmp.path())));
 
-        let state = AppState::for_test_with(
+        let state = AppState::new(
             board,
             wal,
             TestOverrides {
@@ -931,7 +935,7 @@ mod tests {
             None,
         );
 
-        let state = AppState::for_test_with(
+        let state = AppState::new(
             board,
             wal,
             TestOverrides {

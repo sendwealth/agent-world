@@ -207,12 +207,12 @@ pub struct LeaderboardResponse {
 
 pub async fn world_leaderboard(State(state): State<AppState>) -> impl IntoResponse {
     let agents = state.agents.lock().await;
-    let alive_agents: Vec<&AgentRecord> = agents.iter().filter(|a| a.alive).collect();
+    let alive_agents: Vec<&AgentDto> = agents.iter().filter(|a| a.alive).collect();
     let limit = 10usize;
 
     // Richest by money
-    let mut by_money: Vec<&AgentRecord> = alive_agents.iter().copied().collect();
-    by_money.sort_by(|a, b| b.money.cmp(&a.money));
+    let mut by_money: Vec<&AgentDto> = alive_agents.to_vec();
+    by_money.sort_by_key(|b| std::cmp::Reverse(b.money));
     let richest: Vec<LeaderboardEntry> = by_money
         .iter()
         .take(limit)
@@ -226,8 +226,8 @@ pub async fn world_leaderboard(State(state): State<AppState>) -> impl IntoRespon
         .collect();
 
     // Longest lived by ticks_survived
-    let mut by_age: Vec<&AgentRecord> = alive_agents.iter().copied().collect();
-    by_age.sort_by(|a, b| b.ticks_survived.cmp(&a.ticks_survived));
+    let mut by_age: Vec<&AgentDto> = alive_agents.to_vec();
+    by_age.sort_by_key(|b| std::cmp::Reverse(b.ticks_survived));
     let longest_lived: Vec<LeaderboardEntry> = by_age
         .iter()
         .take(limit)
@@ -241,7 +241,8 @@ pub async fn world_leaderboard(State(state): State<AppState>) -> impl IntoRespon
         .collect();
 
     // Highest skill (max skill level across all skills)
-    let mut by_skill: Vec<&AgentRecord> = alive_agents.iter().copied().collect();
+    let mut by_skill: Vec<&AgentDto> = alive_agents.to_vec();
+    #[allow(clippy::unnecessary_sort_by)]
     by_skill.sort_by(|a, b| {
         let max_a = a.skills.values().max().copied().unwrap_or(0);
         let max_b = b.skills.values().max().copied().unwrap_or(0);

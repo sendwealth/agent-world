@@ -21,7 +21,7 @@ fn build_test_app() -> axum::Router {
     let wal = Arc::new(Mutex::new(WAL::new(tmp.path())));
     let bus = Arc::new(EventBus::new(256));
 
-    let state = AppState::for_test_with(
+    let state = AppState::new(
         board,
         wal,
         TestOverrides {

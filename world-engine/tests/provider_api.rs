@@ -11,7 +11,7 @@ use http_body_util::BodyExt;
 use serde_json::{json, Value};
 use tokio::sync::Mutex;
 
-use agent_world_engine::api::{AppState, build_full_router};
+use agent_world_engine::api::{AppState, TestOverrides, build_full_router};
 use agent_world_engine::economy::task::TaskBoard;
 use agent_world_engine::wal::WAL;
 
@@ -22,7 +22,7 @@ fn create_test_state() -> AppState {
     let dir = tempfile::TempDir::new().unwrap();
     let wal = Arc::new(Mutex::new(WAL::new(dir.path())));
     std::mem::forget(dir);
-    AppState::for_test(board, wal)
+    AppState::new(board, wal, TestOverrides::default())
 }
 
 async fn body_json(body: Body) -> Value {

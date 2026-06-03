@@ -41,7 +41,7 @@ fn build_app_with_reputation() -> (
         event_bus.as_ref().clone(),
     )));
 
-    let state = AppState::for_test_with(
+    let state = AppState::new(
         board.clone(),
         wal,
         TestOverrides {
@@ -61,7 +61,7 @@ fn build_app_without_reputation() -> axum::Router {
     let board = Arc::new(Mutex::new(TaskBoard::with_event_bus((*event_bus).clone())));
     let wal = Arc::new(Mutex::new(WAL::new(dir.path())));
 
-    let state = AppState::for_test_with(
+    let state = AppState::new(
         board,
         wal,
         TestOverrides {

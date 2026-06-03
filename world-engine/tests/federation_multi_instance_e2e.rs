@@ -42,7 +42,7 @@ fn make_instance() -> axum::Router {
     let wal = Arc::new(Mutex::new(WAL::new(tmp.path())));
     let event_bus = Arc::new(EventBus::new(256));
 
-    let state = api::AppState::for_test_with(
+    let state = api::AppState::new(
         board,
         wal,
         api::TestOverrides {

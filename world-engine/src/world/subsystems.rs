@@ -379,6 +379,12 @@ pub struct EscrowExpirySubsystem {
     manager: std::sync::Mutex<EscrowManager>,
 }
 
+impl Default for EscrowExpirySubsystem {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl EscrowExpirySubsystem {
     pub fn new() -> Self {
         Self {

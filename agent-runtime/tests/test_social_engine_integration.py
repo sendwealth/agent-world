@@ -6,6 +6,7 @@ Covers:
 - SOCIALIZE ActionType in act.py — handler dispatch and token cost
 - Social context injection into decide.py prompt
 - SOCIALIZE mapping in llm_decide.py
+- End-to-end socialize action through ThinkLoop
 """
 
 from __future__ import annotations
@@ -24,11 +25,20 @@ from agent_runtime.core.decide import (
     SurvivalAssessment,
     build_prompt,
 )
+from agent_runtime.core.think_loop import (
+    Decision,
+    ThinkLoop,
+    ThinkLoopConfig,
+)
 from agent_runtime.models.agent_state import AgentState
 from agent_runtime.models.enums import AgentPhase
 from agent_runtime.models.personality import PersonalityVector
 from agent_runtime.models.values import ValueWeights
 from agent_runtime.social.engine import SocialEngine
+from agent_runtime.social.provider import (
+    AgentProfile,
+    DefaultSocialEngineHook,
+)
 
 # ---------------------------------------------------------------------------
 # Fixtures
@@ -304,11 +314,6 @@ class _MockWorldClient:
 
 
 @pytest.mark.asyncio
-@pytest.mark.xfail(
-    reason="Known failure: _MockWorldClient missing send_message method; "
-    "ActionExecutor retries exhaust before success. "
-    "Requires ActionExecutor or mock to be updated."
-)
 async def test_socialize_action_execution():
     """Full execution path for SOCIALIZE action."""
     state = _make_state(tokens=100)
@@ -392,3 +397,193 @@ class TestLlmDecideSocializeMapping:
     def test_socialize_maps_correctly(self):
         from agent_runtime.core.llm_decide import _DECISION_TO_ACTION
         assert _DECISION_TO_ACTION[DecisionAction.SOCIALIZE] == ActionType.SOCIALIZE
+
+
+# ---------------------------------------------------------------------------
+# End-to-end: SOCIALIZE through ThinkLoop
+# ---------------------------------------------------------------------------
+
+
+class _FixedDecisionProvider:
+    """Decision provider that always returns a SOCIALIZE action."""
+
+    def __init__(self, target_id: str = "agent-b") -> None:
+        self._target_id = target_id
+
+    async def decide(self, state, perception, survival):
+        return Decision(
+            action_type=ActionType.SOCIALIZE,
+            parameters={"target_agent_id": self._target_id, "message": "Hi!"},
+            reasoning="Testing socialize e2e",
+        )
+
+
+class _ProfileTracker:
+    """Records which agents had process_socialize called."""
+
+    def __init__(self) -> None:
+        self.interactions: list[tuple[str, str, int]] = []
+        self.diffusion_calls: int = 0
+
+    def __call__(self, agent_id: str) -> AgentProfile | None:
+        return AgentProfile(
+            personality=(
+                _extraverted_personality()
+                if agent_id == "agent-a"
+                else _make_personality()
+            ),
+            values=ValueWeights(),
+            group_ids=["group-1"],
+        )
+
+
+@pytest.mark.asyncio
+async def test_e2e_socialize_through_think_loop():
+    """End-to-end: ThinkLoop executes SOCIALIZE and triggers SocialEngineHook."""
+    state = _make_state(name="agent-a", tokens=500)
+    executor = ActionExecutor()
+
+    # Build a social engine hook with a profile source and region source
+    engine = SocialEngine()
+    profiles = {
+        "agent-a": AgentProfile(
+            personality=_extraverted_personality(),
+            values=ValueWeights(cooperation_weight=0.8),
+            group_ids=["group-1"],
+        ),
+        "agent-b": AgentProfile(
+            personality=_make_personality(),
+            values=ValueWeights(),
+            group_ids=["group-1"],
+        ),
+    }
+    diffusion_data = {
+        "region-1": [
+            {
+                "agent_id": "agent-a",
+                "values": ValueWeights(),
+                "personality": _extraverted_personality(),
+            },
+            {
+                "agent_id": "agent-b",
+                "values": ValueWeights(),
+                "personality": _make_personality(),
+            },
+        ],
+    }
+
+    hook = DefaultSocialEngineHook(
+        engine=engine,
+        profile_source=lambda aid: profiles.get(aid),
+        region_agent_source=lambda: diffusion_data,
+    )
+
+    loop = ThinkLoop(
+        state=state,
+        survival=__import__(
+            "agent_runtime.survival.instinct",
+            fromlist=["SurvivalInstinct"],
+        ).SurvivalInstinct(),
+        executor=executor,
+        config=ThinkLoopConfig(tick_interval=0.0),
+        decision_provider=_FixedDecisionProvider("agent-b"),
+        world_client=_MockWorldClient(),
+        social_engine_hook=hook,
+    )
+
+    await loop.run(max_ticks=1)
+
+    # Verify the action was executed
+    history = executor.history
+    assert len(history) == 1
+    assert history[0].action_type == ActionType.SOCIALIZE
+    assert history[0].status.value == "success"
+    assert history[0].data["target_agent_id"] == "agent-b"
+
+
+@pytest.mark.asyncio
+async def test_e2e_socialize_updates_trust():
+    """End-to-end: SOCIALIZE through ThinkLoop triggers trust update in engine."""
+    engine = SocialEngine()
+    profiles = {
+        "agent-a": AgentProfile(
+            personality=_extraverted_personality(),
+            values=ValueWeights(cooperation_weight=0.8),
+            group_ids=["group-1"],
+        ),
+        "agent-b": AgentProfile(
+            personality=_make_personality(),
+            values=ValueWeights(),
+            group_ids=["group-1"],
+        ),
+    }
+
+    hook = DefaultSocialEngineHook(
+        engine=engine,
+        profile_source=lambda aid: profiles.get(aid),
+    )
+
+    result = hook.process_socialize(
+        agent_id="agent-a",
+        target_id="agent-b",
+        tick=1,
+    )
+
+    assert result is not None
+    assert result["trust_update"]["event"] == "cooperation"
+    assert result["trust_update"]["new_trust"] > 0.3
+
+
+@pytest.mark.asyncio
+async def test_e2e_tick_diffusion_called_each_tick():
+    """End-to-end: apply_tick_diffusion is called each tick in ThinkLoop."""
+    engine = SocialEngine()
+    diffusion_data = {
+        "region-1": [
+            {
+                "agent_id": "agent-a",
+                "values": ValueWeights(),
+                "personality": _extraverted_personality(),
+            },
+            {
+                "agent_id": "agent-b",
+                "values": ValueWeights(),
+                "personality": _make_personality(),
+            },
+        ],
+    }
+
+    hook = DefaultSocialEngineHook(
+        engine=engine,
+        region_agent_source=lambda: diffusion_data,
+    )
+
+    state = _make_state(name="agent-a", tokens=500)
+    executor = ActionExecutor()
+
+    loop = ThinkLoop(
+        state=state,
+        survival=__import__(
+            "agent_runtime.survival.instinct",
+            fromlist=["SurvivalInstinct"],
+        ).SurvivalInstinct(),
+        executor=executor,
+        config=ThinkLoopConfig(tick_interval=0.0),
+        decision_provider=_FixedDecisionProvider("agent-b"),
+        world_client=_MockWorldClient(),
+        social_engine_hook=hook,
+    )
+
+    await loop.run(max_ticks=2)
+
+    # Verify that both ticks executed (REST fallback if SOCIALIZE exhausted tokens)
+    assert loop.tick == 2
+
+
+@pytest.mark.asyncio
+async def test_e2e_social_engine_hook_degrades_without_sources():
+    """Hook returns None/empty when sources are not configured."""
+    hook = DefaultSocialEngineHook()
+
+    assert hook.process_socialize("a", "b", 1) is None
+    assert hook.apply_tick_diffusion() == []

@@ -6,6 +6,10 @@ the :class:`agent_runtime.core.decide.SocialContextProvider` protocol. It wraps
 ``SocialContext`` output into the lighter ``decide.SocialContext`` dataclass that
 the decision prompt consumes.
 
+Also provides ``DefaultSocialEngineHook`` that implements the
+:class:`agent_runtime.core.think_loop.SocialEngineHook` protocol for processing
+socialize interactions and tick-level cultural diffusion.
+
 Usage::
 
     from agent_runtime.social.provider import DefaultSocialContextProvider
@@ -194,3 +198,115 @@ class DefaultSocialContextProvider:
                     exc_info=True,
                 )
         return []
+
+
+# ---------------------------------------------------------------------------
+# Data source protocols for social engine hook
+# ---------------------------------------------------------------------------
+
+
+class RegionAgentSource(Protocol):
+    """Callable that provides agents grouped by region for tick diffusion.
+
+    Called once per tick by ``DefaultSocialEngineHook.apply_tick_diffusion()``.
+    Returns a mapping of region_id -> list of agent dicts.
+    """
+
+    def __call__(self) -> Dict[str, List[Dict[str, Any]]]: ...
+
+
+# ---------------------------------------------------------------------------
+# DefaultSocialEngineHook
+# ---------------------------------------------------------------------------
+
+
+class DefaultSocialEngineHook:
+    """Concrete ``SocialEngineHook`` that processes socialize actions and
+    tick-level cultural diffusion.
+
+    Implements the ``SocialEngineHook`` protocol from ``think_loop.py``.
+
+    Args:
+        engine: Optional pre-configured SocialEngine. If not provided a fresh
+            instance is created.
+        profile_source: Callable that returns the agent's own profile
+            (personality, values, group_ids). Required for ``process_socialize``
+            to look up both initiator and target profiles.
+        region_agent_source: Callable that returns agents grouped by region.
+            Required for ``apply_tick_diffusion`` to run regional cultural
+            diffusion.
+    """
+
+    def __init__(
+        self,
+        engine: SocialEngine | None = None,
+        profile_source: AgentProfileSource | None = None,
+        region_agent_source: RegionAgentSource | None = None,
+    ) -> None:
+        self._engine = engine or SocialEngine()
+        self._profile_source = profile_source
+        self._region_agent_source = region_agent_source
+
+    def process_socialize(
+        self,
+        agent_id: str,
+        target_id: str,
+        tick: int,
+    ) -> dict[str, Any] | None:
+        """Process a SOCIALIZE action — run trust update, imitation, conflict.
+
+        Looks up both agent and target profiles from the profile source and
+        delegates to ``SocialEngine.execute_socialize()``.
+
+        Args:
+            agent_id: The initiating agent's ID.
+            target_id: The target agent's ID.
+            tick: Current tick.
+
+        Returns:
+            Dict with interaction results, or ``None`` if profiles unavailable.
+        """
+        if self._profile_source is None:
+            logger.debug(
+                "No profile_source configured — skipping process_socialize"
+            )
+            return None
+
+        agent_profile = self._profile_source(agent_id)
+        target_profile = self._profile_source(target_id)
+
+        if agent_profile is None or target_profile is None:
+            logger.debug(
+                "process_socialize: missing profile for %s or %s — skipping",
+                agent_id,
+                target_id,
+            )
+            return None
+
+        return self._engine.execute_socialize(
+            agent_id=agent_id,
+            target_id=target_id,
+            personality=agent_profile.personality,
+            values=agent_profile.values,
+            target_personality=target_profile.personality,
+            target_values=target_profile.values,
+            tick=tick,
+        )
+
+    def apply_tick_diffusion(self) -> list[dict[str, Any]]:
+        """Apply regional cultural diffusion for the current tick.
+
+        Delegates to ``SocialEngine.apply_tick_diffusion()`` using agents
+        grouped by region from the ``region_agent_source``.
+
+        Returns:
+            List of diffusion result dicts, one per region.
+        """
+        if self._region_agent_source is None:
+            return []
+
+        agents_by_region = self._region_agent_source()
+        if not agents_by_region:
+            return []
+
+        return self._engine.apply_tick_diffusion(agents_by_region)

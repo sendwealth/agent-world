@@ -193,6 +193,30 @@ class GRPCWorldClient:
             logger.exception("build failed")
             raise
 
+    async def socialize(
+        self, target_agent_id: str, message: str = ""
+    ) -> dict[str, Any]:
+        """Socialize with a nearby agent — sent as a WILL message."""
+        try:
+            ack = await self._client.send_message(
+                to_agent=target_agent_id,
+                message_type=a2a_pb2.WILL,
+                payload={
+                    "action": "socialize",
+                    "target_agent_id": target_agent_id,
+                    "message": message,
+                },
+            )
+            return {
+                "status": "ok",
+                "action": "socialize",
+                "target_agent_id": target_agent_id,
+                "received": ack.received,
+            }
+        except Exception:
+            logger.exception("socialize failed")
+            raise
+
     # ------------------------------------------------------------------
     # Oracle & Bounty methods (Human Participation integration)
     # ------------------------------------------------------------------

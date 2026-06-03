@@ -201,6 +201,25 @@ class CulturalInfluenceHook(Protocol):
     def apply(self, state: AgentState, tick: int) -> None: ...
 
 
+class SocialEngineHook(Protocol):
+    """Optional hook for processing social interactions and tick-level diffusion.
+
+    Called in two places:
+      1. After a successful SOCIALIZE action — processes trust updates,
+         imitation, and cultural conflict detection.
+      2. Once per tick — applies regional cultural diffusion across all agents.
+    """
+
+    def process_socialize(
+        self,
+        agent_id: str,
+        target_id: str,
+        tick: int,
+    ) -> dict[str, Any] | None: ...
+
+    def apply_tick_diffusion(self) -> list[dict[str, Any]]: ...
+
+
 class EmotionHook(Protocol):
     """Optional hook for emotion updates during the think cycle.
 
@@ -390,6 +409,7 @@ class ThinkLoop:
         group_identity: GroupIdentityProvider | None = None,
         cultural_hook: CulturalInfluenceHook | None = None,
         social_context_provider: SocialContextProvider | None = None,
+        social_engine_hook: SocialEngineHook | None = None,
         emotion_hook: EmotionHook | None = None,
         model_registry: Any | None = None,
         diary_provider: DiaryProvider | None = None,
@@ -428,6 +448,8 @@ class ThinkLoop:
         self._group_identity = group_identity
         # Cultural influence hook — optional, nudges values/personality each tick
         self._cultural_hook = cultural_hook
+        # Social engine hook — optional, processes social interactions and diffusion
+        self._social_engine_hook = social_engine_hook
         # Model registry — optional, enables runtime model hot-swap
         self._model_registry = model_registry
         self._last_model_version: int = 0
@@ -770,6 +792,27 @@ class ThinkLoop:
                     exc_info=True,
                 )
 
+        # 5c. Social engine — process socialize interaction (optional)
+        if self._social_engine_hook is not None and action_result is not None:
+            try:
+                if (
+                    decision.action_type == ActionType.SOCIALIZE
+                    and action_result.status == ActionStatus.SUCCESS
+                ):
+                    target_id = decision.parameters.get("target_agent_id", "")
+                    if target_id:
+                        self._social_engine_hook.process_socialize(
+                            agent_id=str(self.state.id),
+                            target_id=target_id,
+                            tick=self._tick,
+                        )
+            except Exception:
+                logger.debug(
+                    "Tick %d: social engine process_socialize error (non-fatal)",
+                    self._tick,
+                    exc_info=True,
+                )
+
         # 6. Reflect (periodic)
         if self.config.reflect_interval > 0 and self._tick % self.config.reflect_interval == 0:
             await self._reflection.reflect(self.state, self._tick)
@@ -781,6 +824,17 @@ class ThinkLoop:
             except Exception:
                 logger.debug(
                     "Tick %d: cultural hook error (non-fatal)",
+                    self._tick,
+                    exc_info=True,
+                )
+
+        # 7a. Social engine tick-level diffusion (every tick, no-op if not configured)
+        if self._social_engine_hook is not None:
+            try:
+                self._social_engine_hook.apply_tick_diffusion()
+            except Exception:
+                logger.debug(
+                    "Tick %d: social engine tick diffusion error (non-fatal)",
                     self._tick,
                     exc_info=True,
                 )

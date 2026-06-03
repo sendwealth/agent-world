@@ -41,6 +41,9 @@ pub struct EvolutionSubsystem {
     config: EvolutionSubsystemConfig,
     /// Tracks previous world token total for culling pressure detection.
     prev_world_tokens: Mutex<u64>,
+    /// Social connection counts per agent (trust edges + org memberships).
+    /// Updated externally via `update_social_connections`.
+    social_connections: Mutex<HashMap<String, usize>>,
 }
 
 /// Configuration for the evolution subsystem.
@@ -77,7 +80,7 @@ impl Default for EvolutionSubsystemConfig {
             skill_max_level: 10,
             mutation_rate: 0.05,
             evaluation_interval: 1000,
-            max_agents: 10,
+            max_agents: 100,
             inactivity_threshold: 500,
             initial_tokens: 100_000,
             passive_xp_per_tick: 1.0,
@@ -118,7 +121,17 @@ impl EvolutionSubsystem {
             rng: Mutex::new(StdRng::from_entropy()),
             config,
             prev_world_tokens: Mutex::new(0),
+            social_connections: Mutex::new(HashMap::new()),
         }
+    }
+
+    /// Update the social connection counts used during fitness evaluation.
+    ///
+    /// Call this before an evaluation tick with the number of social
+    /// connections (trust edges, organization memberships, etc.) per agent.
+    pub fn update_social_connections(&self, connections: HashMap<String, usize>) {
+        let mut sc = self.social_connections.lock().unwrap();
+        *sc = connections;
     }
 
     /// Award passive XP to all living agents' skills.
@@ -240,8 +253,9 @@ impl EvolutionSubsystem {
         // Phase 2: Natural selection
         {
             let mut selection = self.selection.lock().unwrap();
+            let social = self.social_connections.lock().unwrap();
             let (reports, to_cull) =
-                selection.evaluate_cycle(tick, agents, current_tokens, prev_tokens);
+                selection.evaluate_cycle(tick, agents, current_tokens, prev_tokens, &social);
 
             // Emit fitness reports for all evaluated agents
             for report in reports {

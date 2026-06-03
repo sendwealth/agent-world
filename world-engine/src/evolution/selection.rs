@@ -4,7 +4,7 @@
 //! - Token efficiency (tokens remaining vs. initial)
 //! - Survival duration (ticks alive)
 //! - Task completion rate (completed / attempted)
-//! - Social network size (number of skills as proxy)
+//! - Social network size (trust edges + org membership count)
 //! - Skill diversity (number of distinct skills)
 //!
 //! Culling pressure increases when:
@@ -77,7 +77,7 @@ impl Default for SelectionConfig {
             evaluation_interval: 1000,
             inactivity_threshold: 500,
             weights: FitnessWeights::default(),
-            max_agents: 10,
+            max_agents: 100,
             base_cull_rate: 0.1,
             over_capacity_cull_rate: 0.3,
         }
@@ -103,12 +103,15 @@ impl FitnessEvaluator {
     /// `spawn_tick` is the tick when the agent was created, used to compute
     /// survival duration. `current_tick` is the current simulation tick.
     /// `last_active_tick` is the last tick the agent had any state change.
+    /// `social_connections` is the number of social connections (trust edges +
+    /// organization memberships) for this agent.
     pub fn evaluate(
         &self,
         agent: &AgentRecord,
         spawn_tick: u64,
         current_tick: u64,
         _last_active_tick: u64,
+        social_connections: usize,
     ) -> FitnessReport {
         let token_efficiency = if self.initial_tokens > 0 {
             agent.tokens as f64 / self.initial_tokens as f64
@@ -122,18 +125,19 @@ impl FitnessEvaluator {
             (age / 1000.0).min(1.0)
         };
 
-        // Task completion rate: based on actual tracked data
+        // Task completion rate: based on actual tracked data, capped at 1.0
         let task_completion = if agent.tasks_attempted > 0 {
-            agent.tasks_completed as f64 / agent.tasks_attempted as f64
+            (agent.tasks_completed as f64 / agent.tasks_attempted as f64).min(1.0)
         } else {
             0.0
         };
 
-        // Social network: use number of skills as a proxy
+        // Social network: use actual social connection data (trust edges,
+        // organization memberships, mentorship relationships, etc.)
         let social_network = {
-            let count = agent.skills.len() as f64;
-            // Normalize: 5 skills = score of 1.0, caps at 1.0
-            (count / 5.0).min(1.0)
+            let count = social_connections as f64;
+            // Normalize: 10 connections = score of 1.0, caps at 1.0
+            (count / 10.0).min(1.0)
         };
 
         // Skill diversity: count distinct skills
@@ -202,12 +206,16 @@ impl SelectionEngine {
     /// Also returns a list of agent IDs that should be culled due to:
     /// 1. Inactivity beyond threshold
     /// 2. Low fitness score (bottom percentile) when under culling pressure
+    ///
+    /// `social_connections` maps agent IDs to their social connection count
+    /// (trust edges, organization memberships, etc.).
     pub fn evaluate_cycle(
         &mut self,
         tick: u64,
         agents: &[(uuid::Uuid, u64, AgentRecord)],
         total_world_tokens: u64,
         previous_world_tokens: u64,
+        social_connections: &HashMap<String, usize>,
     ) -> (Vec<FitnessReport>, Vec<String>) {
         let mut reports = Vec::new();
         let mut to_cull = Vec::new();
@@ -225,9 +233,13 @@ impl SelectionEngine {
                 .get(&id.to_string())
                 .copied()
                 .unwrap_or(*spawn_tick);
+            let conn_count = social_connections
+                .get(&id.to_string())
+                .copied()
+                .unwrap_or(0);
             let report = self
                 .evaluator
-                .evaluate(agent, *spawn_tick, tick, last_active);
+                .evaluate(agent, *spawn_tick, tick, last_active, conn_count);
             reports.push(report);
         }
 
@@ -313,7 +325,7 @@ mod tests {
         let weights = FitnessWeights::default();
         let evaluator = FitnessEvaluator::new(weights, 100_000);
         let agent = make_agent(AgentPhase::Adult, 50_000, 3).2;
-        let report = evaluator.evaluate(&agent, 0, 500, 500);
+        let report = evaluator.evaluate(&agent, 0, 500, 500, 3);
 
         assert!((report.token_efficiency - 0.5).abs() < f64::EPSILON);
         assert!(report.score > 0.0);
@@ -325,7 +337,7 @@ mod tests {
         let weights = FitnessWeights::default();
         let evaluator = FitnessEvaluator::new(weights, 100_000);
         let agent = make_agent(AgentPhase::Adult, 0, 0).2;
-        let report = evaluator.evaluate(&agent, 0, 100, 100);
+        let report = evaluator.evaluate(&agent, 0, 100, 100, 0);
         assert!((report.token_efficiency).abs() < f64::EPSILON);
     }
 
@@ -373,7 +385,8 @@ mod tests {
         engine.mark_active(&a2.0.to_string(), 0);
 
         let agents = vec![a1, a2];
-        let (reports, culled) = engine.evaluate_cycle(1000, &agents, 100_000, 100_000);
+        let social: HashMap<String, usize> = HashMap::new();
+        let (reports, culled) = engine.evaluate_cycle(1000, &agents, 100_000, 100_000, &social);
 
         assert_eq!(reports.len(), 2);
         // Lowest score first
@@ -398,7 +411,8 @@ mod tests {
         engine.mark_active(&a1.0.to_string(), 100);
 
         let agents = vec![a1];
-        let (_, culled) = engine.evaluate_cycle(1000, &agents, 100_000, 100_000);
+        let social: HashMap<String, usize> = HashMap::new();
+        let (_, culled) = engine.evaluate_cycle(1000, &agents, 100_000, 100_000, &social);
 
         assert!(culled.contains(&agents[0].0.to_string()));
     }
@@ -421,7 +435,8 @@ mod tests {
         engine.mark_active(&a1.0.to_string(), 600); // recently active (within threshold)
 
         let agents = vec![a1];
-        let (_, culled) = engine.evaluate_cycle(1000, &agents, 100_000, 100_000);
+        let social: HashMap<String, usize> = HashMap::new();
+        let (_, culled) = engine.evaluate_cycle(1000, &agents, 100_000, 100_000, &social);
 
         assert!(culled.is_empty());
     }
@@ -433,14 +448,14 @@ mod tests {
 
         // Agent with no tasks attempted — task_completion should be 0.0
         let agent_no_tasks = make_agent(AgentPhase::Adult, 50_000, 3).2;
-        let report_no_tasks = evaluator.evaluate(&agent_no_tasks, 0, 500, 500);
+        let report_no_tasks = evaluator.evaluate(&agent_no_tasks, 0, 500, 500, 0);
         assert!((report_no_tasks.task_completion - 0.0).abs() < f64::EPSILON);
 
         // Agent with 5 attempted, 3 completed — task_completion = 0.6
         let mut agent_with_tasks = make_agent(AgentPhase::Adult, 50_000, 3).2;
         agent_with_tasks.tasks_attempted = 5;
         agent_with_tasks.tasks_completed = 3;
-        let report_with_tasks = evaluator.evaluate(&agent_with_tasks, 0, 500, 500);
+        let report_with_tasks = evaluator.evaluate(&agent_with_tasks, 0, 500, 500, 0);
         assert!((report_with_tasks.task_completion - 0.6).abs() < f64::EPSILON);
 
         // Agent with tasks should have a higher overall score
@@ -453,12 +468,53 @@ mod tests {
         let evaluator = FitnessEvaluator::new(weights, 100_000);
 
         // 10 completed out of 5 attempted (more completed than attempted — shouldn't happen
-        // in practice, but the rate formula should still cap at 1.0 or handle gracefully)
+        // in practice, but the rate formula should still cap at 1.0)
         let mut agent = make_agent(AgentPhase::Adult, 50_000, 3).2;
         agent.tasks_completed = 10;
         agent.tasks_attempted = 5;
-        let report = evaluator.evaluate(&agent, 0, 500, 500);
-        // rate = 10/5 = 2.0, but fitness weights handle it — just verify it's > 0
-        assert!(report.task_completion > 0.0);
+        let report = evaluator.evaluate(&agent, 0, 500, 500, 0);
+        // rate = 10/5 = 2.0, capped at 1.0
+        assert!((report.task_completion - 1.0).abs() < f64::EPSILON);
+    }
+
+    #[test]
+    fn social_network_uses_connection_count() {
+        let weights = FitnessWeights::default();
+        let evaluator = FitnessEvaluator::new(weights, 100_000);
+
+        // Agent with 0 social connections
+        let agent_no_connections = make_agent(AgentPhase::Adult, 50_000, 3).2;
+        let report_no_connections = evaluator.evaluate(&agent_no_connections, 0, 500, 500, 0);
+        assert!((report_no_connections.social_network - 0.0).abs() < f64::EPSILON);
+
+        // Agent with 5 social connections = 5/10 = 0.5
+        let report_5 = evaluator.evaluate(&agent_no_connections, 0, 500, 500, 5);
+        assert!((report_5.social_network - 0.5).abs() < f64::EPSILON);
+
+        // Agent with 10+ social connections = capped at 1.0
+        let report_15 = evaluator.evaluate(&agent_no_connections, 0, 500, 500, 15);
+        assert!((report_15.social_network - 1.0).abs() < f64::EPSILON);
+
+        // More connections should yield higher fitness
+        assert!(report_15.score > report_5.score);
+        assert!(report_5.score > report_no_connections.score);
+    }
+
+    #[test]
+    fn social_network_differs_from_skill_diversity() {
+        let weights = FitnessWeights::default();
+        let evaluator = FitnessEvaluator::new(weights, 100_000);
+
+        // Two agents with same skills (3) but different social connections
+        let agent_base = make_agent(AgentPhase::Adult, 50_000, 3).2;
+        let report_few_connections = evaluator.evaluate(&agent_base, 0, 500, 500, 2);
+        let report_many_connections = evaluator.evaluate(&agent_base, 0, 500, 500, 10);
+
+        // Skill diversity should be the same
+        assert!((report_few_connections.skill_diversity - report_many_connections.skill_diversity).abs() < f64::EPSILON);
+        // Social network should differ
+        assert!(report_many_connections.social_network > report_few_connections.social_network);
+        // Overall fitness should differ
+        assert!(report_many_connections.score > report_few_connections.score);
     }
 }

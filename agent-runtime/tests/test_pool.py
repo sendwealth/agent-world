@@ -652,10 +652,10 @@ class TestFileHandleLeak:
             return fh
 
         with patch("agent_runtime.pool.open", side_effect=_tracking_open):
-            mp = manager.spawn("leaky")
+            manager.spawn("leaky")
 
             for i in range(10):
-                mp = manager.restart("leaky")
+                manager.restart("leaky")
 
         # We should have 11 log handles total (1 spawn + 10 restarts)
         assert len(log_handles) == 11

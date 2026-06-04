@@ -1,0 +1,40 @@
+# skills.yaml — Data Analysis Plugin Manifest
+apiVersion: v1
+
+plugin:
+  id: "community/data-analysis"
+  name: "Economy Data Analysis Plugin"
+  version: "1.0.0"
+  description: "Collects and analyzes agent economy data — GDP, average wealth, Gini coefficient"
+  author: "Agent World Community"
+  min_engine_version: "1.0.0"
+  tags:
+    - analytics
+    - economy
+
+  skills:
+    - id: "economy_analysis"
+      name: "Economy Analysis"
+      description: "Analyze the current state of the agent economy (GDP, wealth distribution, inequality)"
+
+  required_skills: []
+
+  config:
+    type: object
+    properties:
+      include_transaction_log:
+        type: boolean
+        default: false
+        description: "Include per-agent transaction breakdown in results"
+      gini_precision:
+        type: integer
+        default: 4
+        description: "Decimal places for Gini coefficient output"
+    required: []
+
+  subscribe:
+    - "tick_advanced"
+
+  resources:
+    max_memory_mb: 32
+    max_execution_time_s: 15

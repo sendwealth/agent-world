@@ -1,0 +1,40 @@
+# skills.yaml — Custom Action Plugin Manifest
+apiVersion: v1
+
+plugin:
+  id: "community/custom-emote"
+  name: "Custom Emote Plugin"
+  version: "1.0.0"
+  description: "Lets agents perform custom emote actions with configurable prefix and style"
+  author: "Agent World Community"
+  min_engine_version: "1.0.0"
+  tags:
+    - action
+    - social
+
+  skills:
+    - id: "custom_emote"
+      name: "Custom Emote"
+      description: "Perform a custom emote action visible to nearby agents"
+
+  required_skills: []
+
+  config:
+    type: object
+    properties:
+      emote_prefix:
+        type: string
+        default: "*"
+        description: "Prefix character(s) for emote text output (e.g. '*', '/me', '~')"
+      max_emote_length:
+        type: integer
+        default: 200
+        description: "Maximum character length for an emote message"
+    required: []
+
+  subscribe:
+    - "agent_interact"
+
+  resources:
+    max_memory_mb: 8
+    max_execution_time_s: 5

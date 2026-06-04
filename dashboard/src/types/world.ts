@@ -654,3 +654,53 @@ export interface ChatMessage {
   urgent?: boolean;
 }
 
+// Plugin types — mirrors Rust API response shapes
+
+export type PluginState =
+  | "registered"
+  | "active"
+  | "disabled"
+  | "error"
+  | "unloaded";
+
+export interface PluginInfo {
+  id: string;
+  name: string;
+  version: string;
+  description: string;
+  author: string;
+  priority: number;
+  state: PluginState;
+  permissions: string[];
+  hooks: string[];
+}
+
+export interface PluginListResponse {
+  plugins: PluginInfo[];
+  total: number;
+  active: number;
+}
+
+export interface PluginActionResponse {
+  id: string;
+  action: string;
+  success: boolean;
+  message: string;
+}
+
+export interface RegisterPluginRequest {
+  id: string;
+  name: string;
+  version: string;
+  description: string;
+  author: string;
+  priority?: number;
+  permissions?: string[];
+}
+
+export interface SandboxListResponse {
+  plugins: Record<string, unknown>[];
+  total: number;
+  active: number;
+}
+

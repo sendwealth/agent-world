@@ -78,6 +78,38 @@ pub struct CandidateRule {
     pub expires_tick: Option<u64>,
 }
 
+/// Type of candidate rule proposal.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum CandidateRuleType {
+    NewRule,
+    RepealRule,
+    AmendRule,
+}
+
+impl Default for CandidateRuleType {
+    fn default() -> Self { CandidateRuleType::NewRule }
+}
+
+impl CandidateRule {
+    /// Create a repeal proposal targeting an existing rule.
+    pub fn repeal(proposer_id: String, target_rule_id: String, reason: String) -> Self {
+        CandidateRule {
+            proposer_id,
+            title: format!("Repeal rule {}", target_rule_id),
+            description: reason,
+            rule_type: RuleType::Custom,
+            conditions: vec![],
+            effects: vec![RuleEffect {
+                target: format!("rule.{}", target_rule_id),
+                action: "repeal".to_string(),
+                value: serde_json::json!(true),
+            }],
+            expires_tick: None,
+        }
+    }
+}
+
 // ── Cycle Record ──────────────────────────────────────────
 
 /// Record of a single legislation cycle for an organization.
@@ -162,10 +194,16 @@ pub struct LegislationCycleConfig {
     pub min_proposals: usize,
     /// Quorum for auto-activation (number of votes).
     pub quorum: usize,
-    /// Auto-trigger: if true, start a new cycle automatically after election.
+    /// Auto-trigger: if true, start a new cycle automatically when conditions are met.
     pub auto_trigger: bool,
     /// Voting method for the leadership election.
     pub election_method: VotingMethod,
+    /// Interval in ticks between automatic election triggers (0 = disabled).
+    pub election_interval_ticks: u64,
+    /// Minimum number of members required to auto-trigger a cycle.
+    pub min_members_for_auto_trigger: usize,
+    /// Whether to allow rule repeal proposals through the legislation cycle.
+    pub allow_repeal_proposals: bool,
 }
 
 impl Default for LegislationCycleConfig {
@@ -175,6 +213,9 @@ impl Default for LegislationCycleConfig {
             quorum: 3,
             auto_trigger: true,
             election_method: VotingMethod::SimpleMajority,
+            election_interval_ticks: 100,
+            min_members_for_auto_trigger: 3,
+            allow_repeal_proposals: true,
         }
     }
 }
@@ -739,7 +780,109 @@ impl LegislationCycleEngine {
         summary
     }
 
-    // ── Query ──────────────────────────────────────────────
+    // ── Auto-Trigger ────────────────────────────────────────
+
+    /// Check if auto-trigger conditions are met for an organization.
+    pub fn should_auto_trigger(&self, org_id: Uuid, current_tick: u64, member_count: usize) -> Option<String> {
+        if !self.config.auto_trigger { return None; }
+        if member_count < self.config.min_members_for_auto_trigger { return None; }
+        if let Some(cycle) = self.cycles.get(&org_id) {
+            if !matches!(cycle.status,
+                CycleStatus::Enacted | CycleStatus::Rejected | CycleStatus::Failed | CycleStatus::Idle
+            ) { return None; }
+        }
+        if self.config.election_interval_ticks == 0 { return None; }
+        let last_tick = self.cycles.get(&org_id).and_then(|c| c.completed_at_tick);
+        match last_tick {
+            None => {
+                if current_tick >= self.config.election_interval_ticks {
+                    Some(format!("auto-trigger: first cycle at tick {}", current_tick))
+                } else { None }
+            }
+            Some(completed) => {
+                let elapsed = current_tick.saturating_sub(completed);
+                if elapsed >= self.config.election_interval_ticks {
+                    Some(format!("auto-trigger: {} ticks since last cycle", elapsed))
+                } else { None }
+            }
+        }
+    }
+
+    /// Batch auto-trigger for multiple organizations.
+    pub fn tick_auto_trigger(&mut self, current_tick: u64, org_member_counts: &[(Uuid, usize)]) -> Vec<(Uuid, String)> {
+        let mut triggered = Vec::new();
+        for &(org_id, mc) in org_member_counts {
+            if let Some(reason) = self.should_auto_trigger(org_id, current_tick, mc) {
+                if self.start_cycle(org_id, vec![], current_tick, &reason).is_ok() {
+                    triggered.push((org_id, reason));
+                }
+            }
+        }
+        triggered
+    }
+
+    /// Tick-based trigger for a single organization.
+    pub fn tick_org(&mut self, org_id: Uuid, current_tick: u64, member_count: usize, candidates: Vec<String>) -> Option<Uuid> {
+        let reason = self.should_auto_trigger(org_id, current_tick, member_count)?;
+        self.start_cycle(org_id, candidates, current_tick, &reason).ok()
+    }
+
+    /// Event-based trigger: start a cycle in response to a governance event.
+    pub fn trigger_from_event(&mut self, org_id: Uuid, event_description: &str, tick: u64, candidates: Vec<String>) -> Result<Uuid, LegislationCycleError> {
+        let reason = format!("event-trigger: {}", event_description);
+        self.start_cycle(org_id, candidates, tick, &reason)
+    }
+
+    /// Full auto-trigger pipeline: check -> start -> elect -> resolve.
+    pub fn auto_trigger_and_elect(
+        &mut self, _governance: &mut GovernanceSystem, leadership: &mut LeadershipEngine,
+        org_id: Uuid, current_tick: u64, member_count: usize, candidates: Vec<String>,
+    ) -> Option<(Uuid, String)> {
+        let reason = self.should_auto_trigger(org_id, current_tick, member_count)?;
+        let cycle_id = self.start_cycle(org_id, candidates.clone(), current_tick, &reason).ok()?;
+        leadership.initiate_election(org_id, candidates.clone(), self.config.election_method, current_tick).ok()?;
+        let first_candidate = leadership.get_active_election(org_id).and_then(|e| e.candidates.first().cloned());
+        if let Some(ref first) = first_candidate {
+            let election_candidates: Vec<String> = leadership.get_active_election(org_id).unwrap().candidates.clone();
+            for candidate in &election_candidates {
+                leadership.cast_vote(org_id, candidate.clone(), vec![first.clone()]).ok();
+            }
+        }
+        leadership.resolve_election(org_id).ok()?;
+        self.resolve_election(leadership, org_id).ok()?;
+        let leader_id = self.cycles.get(&org_id).and_then(|c| c.leader_id.clone())?;
+        Some((cycle_id, leader_id))
+    }
+
+    // ── Rule Repeal via Cycle ───────────────────────────────
+
+    /// Submit a repeal proposal for an existing rule.
+    pub fn submit_repeal_proposal(&mut self, org_id: Uuid, proposer_id: String, target_rule_id: String, reason: String) -> Result<(), LegislationCycleError> {
+        if !self.config.allow_repeal_proposals {
+            return Err(LegislationCycleError::GovernanceError("repeal proposals are not allowed by the current configuration".to_string()));
+        }
+        self.submit_candidate_rule(org_id, CandidateRule::repeal(proposer_id, target_rule_id, reason))
+    }
+
+    /// Process repeal effects after enactment.
+    pub fn process_repeal_effects(&self, rule_engine: &mut RuleEngine, org_id: Uuid, current_tick: u64) -> Vec<String> {
+        let record = match self.cycles.get(&org_id) { Some(r) => r, None => return Vec::new() };
+        let mut repealed = Vec::new();
+        for rule in &record.candidate_rules {
+            for effect in &rule.effects {
+                if effect.action == "repeal" {
+                    if let Some(target_id) = effect.target.strip_prefix("rule.") {
+                        if rule_engine.repeal_rule(target_id, current_tick).is_ok() {
+                            repealed.push(target_id.to_string());
+                        }
+                    }
+                }
+            }
+        }
+        repealed
+    }
+
+        // ── Query ──────────────────────────────────────────────
 
     /// Get the current cycle record for an organization.
     pub fn get_cycle(&self, org_id: Uuid) -> Option<&LegislationCycleRecord> {
@@ -848,6 +991,9 @@ mod tests {
             quorum: 2,
             auto_trigger: true,
             election_method: VotingMethod::SimpleMajority,
+            election_interval_ticks: 100,
+            min_members_for_auto_trigger: 3,
+            allow_repeal_proposals: true,
         };
         let cycle_engine = LegislationCycleEngine::new(config);
         let governance = GovernanceSystem::new();
@@ -1222,5 +1368,116 @@ mod tests {
         // No rules submitted — should fail
         let result = engine.start_voting_phase(&mut governance, gov_org_id, 15);
         assert!(result.is_err());
+    }
+
+    // ── Auto-Trigger Tests ─────────────────────────────────
+
+    #[test]
+    fn test_auto_trigger_time_based() {
+        let (mut engine, _, _) = setup_engines();
+        let org_id = Uuid::new_v4();
+        assert!(engine.should_auto_trigger(org_id, 50, 5).is_none());
+        let reason = engine.should_auto_trigger(org_id, 100, 5);
+        assert!(reason.is_some());
+        assert!(reason.unwrap().contains("first cycle"));
+    }
+
+    #[test]
+    fn test_auto_trigger_minimum_members() {
+        let (mut engine, _, _) = setup_engines();
+        let org_id = Uuid::new_v4();
+        assert!(engine.should_auto_trigger(org_id, 100, 2).is_none());
+        assert!(engine.should_auto_trigger(org_id, 100, 3).is_some());
+    }
+
+    #[test]
+    fn test_auto_trigger_after_completed_cycle() {
+        let (mut engine, mut governance, _) = setup_engines();
+        let gov_org_id = governance.create_org("Test".to_string(), "founder".to_string(), DecisionMode::Vote, 0).unwrap();
+        governance.join_org(gov_org_id, "leader".to_string(), 1).unwrap();
+        governance.join_org(gov_org_id, "voter1".to_string(), 1).unwrap();
+        engine.start_cycle_with_leader(gov_org_id, "leader".to_string(), 10, "test").unwrap();
+        engine.submit_candidate_rule(gov_org_id, make_candidate_rule("leader", "Rule 1")).unwrap();
+        engine.start_voting_phase(&mut governance, gov_org_id, 15).unwrap();
+        engine.cast_vote(&mut governance, gov_org_id, "founder".to_string(), true, 16).unwrap();
+        engine.cast_vote(&mut governance, gov_org_id, "leader".to_string(), true, 16).unwrap();
+        engine.tally_and_enact(&mut governance, gov_org_id, 20).unwrap();
+        assert!(engine.should_auto_trigger(gov_org_id, 119, 5).is_none());
+        let reason = engine.should_auto_trigger(gov_org_id, 120, 5);
+        assert!(reason.is_some());
+        assert!(reason.unwrap().contains("ticks since last cycle"));
+    }
+
+    #[test]
+    fn test_auto_trigger_no_double_trigger() {
+        let (mut engine, _, _) = setup_engines();
+        let org_id = Uuid::new_v4();
+        engine.start_cycle(org_id, vec!["a".to_string()], 100, "test").unwrap();
+        assert!(engine.should_auto_trigger(org_id, 200, 5).is_none());
+    }
+
+    #[test]
+    fn test_tick_auto_trigger_batch() {
+        let (mut engine, _, _) = setup_engines();
+        let org1 = Uuid::new_v4();
+        let org2 = Uuid::new_v4();
+        let triggered = engine.tick_auto_trigger(100, &[(org1, 5), (org2, 2)]);
+        assert_eq!(triggered.len(), 1);
+        assert_eq!(triggered[0].0, org1);
+    }
+
+    #[test]
+    fn test_event_based_trigger() {
+        let (mut engine, _, _) = setup_engines();
+        let org_id = Uuid::new_v4();
+        let cycle_id = engine.trigger_from_event(org_id, "crisis: treasury depletion", 50, vec!["a".to_string()]).unwrap();
+        let record = engine.get_cycle(org_id).unwrap();
+        assert_eq!(record.cycle_id, cycle_id);
+        assert!(record.trigger_reason.contains("event-trigger"));
+    }
+
+    #[test]
+    fn test_submit_repeal_proposal() {
+        let (mut engine, _, _) = setup_engines();
+        let org_id = Uuid::new_v4();
+        engine.start_cycle_with_leader(org_id, "leader".to_string(), 10, "repeal test").unwrap();
+        engine.submit_repeal_proposal(org_id, "leader".to_string(), "rule-123".to_string(), "economic harm".to_string()).unwrap();
+        let rules = engine.get_candidate_rules(org_id).unwrap();
+        assert_eq!(rules.len(), 1);
+        assert!(rules[0].title.contains("rule-123"));
+    }
+
+    #[test]
+    fn test_process_repeal_effects() {
+        let (mut engine, _, _) = setup_engines();
+        let org_id = Uuid::new_v4();
+        let mut rule_engine = RuleEngine::new();
+        let rule_id = rule_engine.propose_rule("proposer".to_string(), org_id.to_string(),
+            "Test Rule".to_string(), "A rule to repeal".to_string(), RuleType::Tax, vec![], vec![], 0, None);
+        rule_engine.activate_rule(&rule_id).unwrap();
+        assert_eq!(rule_engine.active_rule_count(), 1);
+        engine.start_cycle_with_leader(org_id, "leader".to_string(), 10, "repeal").unwrap();
+        engine.submit_repeal_proposal(org_id, "leader".to_string(), rule_id.clone(), "outdated".to_string()).unwrap();
+        let repealed = engine.process_repeal_effects(&mut rule_engine, org_id, 20);
+        assert_eq!(repealed.len(), 1);
+        assert_eq!(repealed[0], rule_id);
+        assert_eq!(rule_engine.active_rule_count(), 0);
+    }
+
+    #[test]
+    fn test_auto_trigger_and_elect_pipeline() {
+        let (mut engine, mut governance, mut leadership) = setup_engines();
+        let gov_org_id = governance.create_org("Auto Org".to_string(), "founder".to_string(), DecisionMode::Vote, 0).unwrap();
+        governance.join_org(gov_org_id, "member1".to_string(), 1).unwrap();
+        governance.join_org(gov_org_id, "member2".to_string(), 1).unwrap();
+        let result = engine.auto_trigger_and_elect(&mut governance, &mut leadership, gov_org_id, 100, 5,
+            vec!["founder".to_string(), "member1".to_string(), "member2".to_string()]);
+        assert!(result.is_some());
+        let (cycle_id, leader_id) = result.unwrap();
+        assert!(!cycle_id.is_nil());
+        assert!(!leader_id.is_empty());
+        let record = engine.get_cycle(gov_org_id).unwrap();
+        assert_eq!(record.status, CycleStatus::CollectingProposals);
+        assert!(record.leader_id.is_some());
     }
 }

@@ -32,6 +32,28 @@ from agent_runtime.tools import (
 
 # _RegistryEntry is internal to registry.py; not imported here
 
+# ============================================================
+# Async helper -- safe event-loop usage for Python 3.9
+# ============================================================
+
+
+def _run_async(coro):
+    """Run an async coroutine without polluting the event loop policy.
+
+    ``asyncio.run()`` in Python 3.9 leaves ``_set_called=True`` in the
+    thread-local event-loop policy, preventing subsequent code from
+    creating new loops.  This helper creates a fresh loop via
+    ``new_event_loop()``, runs the coroutine, and closes the loop
+    *without* calling ``asyncio.run()``, so the global policy state
+    remains untouched.
+    """
+    loop = asyncio.new_event_loop()
+    try:
+        return loop.run_until_complete(coro)
+    finally:
+        loop.close()
+
+
 
 # ============================================================
 # Helpers
@@ -206,12 +228,12 @@ class TestToolBase:
     def test_run_validates_params(self):
         tool = EchoTool()
         # Missing required type but extra=allow so it passes
-        result = asyncio.run(tool.run({"message": "test"}))
+        result = _run_async(tool.run({"message": "test"}))
         assert result.success
 
     def test_run_catches_exception(self):
         tool = FailingTool()
-        result = asyncio.run(tool.run({}))
+        result = _run_async(tool.run({}))
         assert result.status == ToolStatus.ERROR
         assert "Intentional failure" in result.error
 
@@ -300,7 +322,7 @@ class TestToolRegistryEnableDisable:
 
     def test_invoke_disabled_returns_error(self):
         self.registry.disable("echo")
-        result = asyncio.run(
+        result = _run_async(
             self.registry.invoke("echo", {"message": "hi"})
         )
         assert result.status == ToolStatus.ERROR
@@ -362,7 +384,7 @@ class TestToolRegistryQuery:
 class TestToolRegistryInvoke:
     def test_invoke_echo(self):
         registry = _make_registry()
-        result = asyncio.run(
+        result = _run_async(
             registry.invoke("echo", {"message": "hello"})
         )
         assert result.success
@@ -371,12 +393,12 @@ class TestToolRegistryInvoke:
     def test_invoke_nonexistent_raises(self):
         registry = ToolRegistry()
         with pytest.raises(KeyError, match="not registered"):
-            asyncio.run(registry.invoke("nope", {}))
+            _run_async(registry.invoke("nope", {}))
 
     def test_invoke_tracks_stats(self):
         registry = _make_registry()
-        asyncio.run(registry.invoke("echo", {"message": "a"}))
-        asyncio.run(registry.invoke("echo", {"message": "b"}))
+        _run_async(registry.invoke("echo", {"message": "a"}))
+        _run_async(registry.invoke("echo", {"message": "b"}))
         stats = registry.get_stats()
         assert stats["echo"]["invoke_count"] == 2
         assert stats["echo"]["error_count"] == 0
@@ -384,7 +406,7 @@ class TestToolRegistryInvoke:
     def test_invoke_tracks_errors(self):
         registry = ToolRegistry()
         registry.register(FailingTool())
-        asyncio.run(registry.invoke("failing", {}))
+        _run_async(registry.invoke("failing", {}))
         stats = registry.get_stats()
         assert stats["failing"]["error_count"] == 1
 
@@ -393,7 +415,7 @@ class TestToolRegistryPermissions:
     def test_allowed_tools_permits(self):
         registry = ToolRegistry(allowed_tools={"echo"})
         registry.register(EchoTool())
-        result = asyncio.run(
+        result = _run_async(
             registry.invoke("echo", {"message": "hi"})
         )
         assert result.success
@@ -402,7 +424,7 @@ class TestToolRegistryPermissions:
         registry = ToolRegistry(allowed_tools={"echo"})
         registry.register(EchoTool())
         registry.register(FailingTool())
-        result = asyncio.run(
+        result = _run_async(
             registry.invoke("failing", {})
         )
         assert result.status == ToolStatus.PERMISSION_DENIED
@@ -410,13 +432,13 @@ class TestToolRegistryPermissions:
     def test_requires_permission_blocked(self):
         registry = ToolRegistry(allowed_tools=set())  # empty allowlist
         registry.register(PermissionTool())
-        result = asyncio.run(registry.invoke("dangerous", {}))
+        result = _run_async(registry.invoke("dangerous", {}))
         assert result.status == ToolStatus.PERMISSION_DENIED
 
     def test_requires_permission_allowed(self):
         registry = ToolRegistry(allowed_tools={"dangerous"})
         registry.register(PermissionTool())
-        result = asyncio.run(
+        result = _run_async(
             registry.invoke("dangerous", {}, skip_permission_check=True)
         )
         assert result.success
@@ -424,7 +446,7 @@ class TestToolRegistryPermissions:
     def test_skip_permission_check(self):
         registry = ToolRegistry(allowed_tools={"other"})
         registry.register(EchoTool())
-        result = asyncio.run(
+        result = _run_async(
             registry.invoke("echo", {"message": "hi"}, skip_permission_check=True)
         )
         assert result.success
@@ -472,7 +494,7 @@ class TestToolRegistryStats:
 class TestHttpRequestTool:
     def test_sandbox_mode(self):
         tool = HttpRequestTool(sandbox=True)
-        result = asyncio.run(
+        result = _run_async(
             tool.run({"url": "https://example.com", "method": "GET"})
         )
         assert result.success
@@ -481,7 +503,7 @@ class TestHttpRequestTool:
 
     def test_sandbox_post(self):
         tool = HttpRequestTool(sandbox=True)
-        result = asyncio.run(
+        result = _run_async(
             tool.run({
                 "url": "https://api.example.com/data",
                 "method": "POST",
@@ -493,7 +515,7 @@ class TestHttpRequestTool:
 
     def test_invalid_method(self):
         tool = HttpRequestTool(sandbox=True)
-        result = asyncio.run(
+        result = _run_async(
             tool.run({"url": "https://example.com", "method": "INVALID"})
         )
         assert result.status == ToolStatus.ERROR
@@ -518,7 +540,7 @@ class TestFileOpsTool:
         self.tool = FileOpsTool(base_dir=self.tmpdir)
 
     def test_write_and_read(self):
-        result = asyncio.run(
+        result = _run_async(
             self.tool.run({
                 "operation": "write",
                 "path": "test.txt",
@@ -528,14 +550,14 @@ class TestFileOpsTool:
         assert result.success
         assert result.output["written"] is True
 
-        result = asyncio.run(
+        result = _run_async(
             self.tool.run({"operation": "read", "path": "test.txt"})
         )
         assert result.success
         assert result.output["content"] == "Hello, Agent!"
 
     def test_write_creates_dirs(self):
-        result = asyncio.run(
+        result = _run_async(
             self.tool.run({
                 "operation": "write",
                 "path": "nested/deep/file.txt",
@@ -545,7 +567,7 @@ class TestFileOpsTool:
         )
         assert result.success
 
-        result = asyncio.run(
+        result = _run_async(
             self.tool.run({"operation": "read", "path": "nested/deep/file.txt"})
         )
         assert result.success
@@ -554,7 +576,7 @@ class TestFileOpsTool:
     def test_list_directory(self):
         # Create a few files
         for name in ["a.txt", "b.txt"]:
-            asyncio.run(
+            _run_async(
                 self.tool.run({
                     "operation": "write",
                     "path": name,
@@ -562,14 +584,14 @@ class TestFileOpsTool:
                 })
             )
 
-        result = asyncio.run(
+        result = _run_async(
             self.tool.run({"operation": "list", "path": "."})
         )
         assert result.success
         assert result.output["count"] == 2
 
     def test_exists(self):
-        asyncio.run(
+        _run_async(
             self.tool.run({
                 "operation": "write",
                 "path": "exists.txt",
@@ -577,21 +599,21 @@ class TestFileOpsTool:
             })
         )
 
-        result = asyncio.run(
+        result = _run_async(
             self.tool.run({"operation": "exists", "path": "exists.txt"})
         )
         assert result.success
         assert result.output["exists"] is True
         assert result.output["is_file"] is True
 
-        result = asyncio.run(
+        result = _run_async(
             self.tool.run({"operation": "exists", "path": "nope.txt"})
         )
         assert result.success
         assert result.output["exists"] is False
 
     def test_delete(self):
-        asyncio.run(
+        _run_async(
             self.tool.run({
                 "operation": "write",
                 "path": "delete_me.txt",
@@ -599,47 +621,47 @@ class TestFileOpsTool:
             })
         )
 
-        result = asyncio.run(
+        result = _run_async(
             self.tool.run({"operation": "delete", "path": "delete_me.txt"})
         )
         assert result.success
         assert result.output["deleted"] is True
 
         # Verify it's gone
-        result = asyncio.run(
+        result = _run_async(
             self.tool.run({"operation": "exists", "path": "delete_me.txt"})
         )
         assert result.output["exists"] is False
 
     def test_read_nonexistent(self):
-        result = asyncio.run(
+        result = _run_async(
             self.tool.run({"operation": "read", "path": "nonexistent.txt"})
         )
         assert result.status == ToolStatus.ERROR
         assert "not found" in result.error
 
     def test_delete_nonexistent(self):
-        result = asyncio.run(
+        result = _run_async(
             self.tool.run({"operation": "delete", "path": "nonexistent.txt"})
         )
         assert result.status == ToolStatus.ERROR
 
     def test_write_without_content(self):
-        result = asyncio.run(
+        result = _run_async(
             self.tool.run({"operation": "write", "path": "test.txt"})
         )
         assert result.status == ToolStatus.ERROR
         assert "content is required" in result.error
 
     def test_unknown_operation(self):
-        result = asyncio.run(
+        result = _run_async(
             self.tool.run({"operation": "chmod", "path": "test.txt"})
         )
         assert result.status == ToolStatus.ERROR
         assert "Unknown operation" in result.error
 
     def test_path_traversal_blocked(self):
-        result = asyncio.run(
+        result = _run_async(
             self.tool.run({"operation": "read", "path": "../../../etc/passwd"})
         )
         assert result.status == ToolStatus.PERMISSION_DENIED
@@ -660,7 +682,7 @@ class TestFileOpsTool:
 class TestCodeExecTool:
     def test_simple_calculation(self):
         tool = CodeExecTool()
-        result = asyncio.run(
+        result = _run_async(
             tool.run({"code": "result = 2 + 3"})
         )
         assert result.success
@@ -668,7 +690,7 @@ class TestCodeExecTool:
 
     def test_print_output(self):
         tool = CodeExecTool()
-        result = asyncio.run(
+        result = _run_async(
             tool.run({"code": "print('hello from agent')"})
         )
         assert result.success
@@ -676,7 +698,7 @@ class TestCodeExecTool:
 
     def test_variables_captured(self):
         tool = CodeExecTool()
-        result = asyncio.run(
+        result = _run_async(
             tool.run({"code": "x = 10\ny = 20\nresult = x + y"})
         )
         assert result.success
@@ -686,7 +708,7 @@ class TestCodeExecTool:
 
     def test_execution_error(self):
         tool = CodeExecTool()
-        result = asyncio.run(
+        result = _run_async(
             tool.run({"code": "1 / 0"})
         )
         assert result.status == ToolStatus.ERROR
@@ -694,7 +716,7 @@ class TestCodeExecTool:
 
     def test_unsupported_language(self):
         tool = CodeExecTool()
-        result = asyncio.run(
+        result = _run_async(
             tool.run({"code": "console.log('hi')", "language": "javascript"})
         )
         assert result.status == ToolStatus.ERROR
@@ -727,7 +749,7 @@ class TestIntegration:
             )
 
             # 1. HTTP request (sandbox)
-            result = asyncio.run(
+            result = _run_async(
                 registry.invoke(
                     "http_request",
                     {"url": "https://example.com", "method": "GET"},
@@ -736,7 +758,7 @@ class TestIntegration:
             assert result.success
 
             # 2. File ops
-            result = asyncio.run(
+            result = _run_async(
                 registry.invoke(
                     "file_ops",
                     {"operation": "write", "path": "data.txt", "content": "test"},
@@ -744,7 +766,7 @@ class TestIntegration:
             )
             assert result.success
 
-            result = asyncio.run(
+            result = _run_async(
                 registry.invoke(
                     "file_ops",
                     {"operation": "read", "path": "data.txt"},
@@ -754,7 +776,7 @@ class TestIntegration:
             assert result.output["content"] == "test"
 
             # 3. Code exec
-            result = asyncio.run(
+            result = _run_async(
                 registry.invoke(
                     "code_exec",
                     {"code": "result = 42"},
@@ -798,7 +820,7 @@ class TestIntegration:
         registry = ToolRegistry()
         registry.register(EchoTool())
 
-        result = asyncio.run(
+        result = _run_async(
             registry.invoke("echo", {"message": "custom", "uppercase": True})
         )
         assert result.success

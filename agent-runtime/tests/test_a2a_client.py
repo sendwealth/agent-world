@@ -476,8 +476,8 @@ class TestA2AClientStreaming:
         client = A2AClient(make_config())
         msg1 = build_a2a_message(from_agent="bob")
         msg2 = build_a2a_message(from_agent="carol")
-        client._incoming_queue.put_nowait(msg1)
-        client._incoming_queue.put_nowait(msg2)
+        client._get_incoming_queue().put_nowait(msg1)
+        client._get_incoming_queue().put_nowait(msg2)
 
         drained = client.drain_incoming()
         assert len(drained) == 2

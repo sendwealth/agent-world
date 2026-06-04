@@ -68,7 +68,12 @@ class BatchA2AClient:
         self._client = client
         self._max_batch_size = max_batch_size
         self._message_queue: list[a2a_pb2.A2AMessage] = []
-        self._lock = asyncio.Lock()
+        self._lock: asyncio.Lock | None = None
+
+    def _get_lock(self) -> asyncio.Lock:
+        if self._lock is None:
+            self._lock = asyncio.Lock()
+        return self._lock
 
     # ------------------------------------------------------------------
     # Queue operations
@@ -92,7 +97,7 @@ class BatchA2AClient:
             message_type=message_type,
             payload=payload,
         )
-        async with self._lock:
+        async with self._get_lock():
             self._message_queue.append(msg)
             if len(self._message_queue) >= self._max_batch_size:
                 await self._flush_locked()
@@ -105,7 +110,7 @@ class BatchA2AClient:
         Returns:
             BatchResult with success/failure counts.
         """
-        async with self._lock:
+        async with self._get_lock():
             return await self._flush_locked()
 
     async def _flush_locked(self) -> BatchResult:

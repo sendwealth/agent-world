@@ -59,14 +59,24 @@ class A2AClient:
         self._config = config
         self._channel: grpc.aio.Channel | None = None
         self._stub: a2a_pb2_grpc.A2AServiceStub | None = None
-        self._incoming_queue: asyncio.Queue[a2a_pb2.A2AMessage] = asyncio.Queue()
+        self._incoming_queue: asyncio.Queue[a2a_pb2.A2AMessage] | None = None
         self._stream_task: asyncio.Task[None] | None = None
-        self._send_queue: asyncio.Queue[a2a_pb2.A2AMessage] = asyncio.Queue()
+        self._send_queue: asyncio.Queue[a2a_pb2.A2AMessage] | None = None
         self._streaming = False
         # World message (Oracle/Bounty) streaming
         self._consume_task: asyncio.Task[None] | None = None
         self._consuming = False
         self._message_queue: MessageQueue | None = None
+
+    def _get_incoming_queue(self) -> asyncio.Queue[a2a_pb2.A2AMessage]:
+        if self._incoming_queue is None:
+            self._incoming_queue = asyncio.Queue()
+        return self._incoming_queue
+
+    def _get_send_queue(self) -> asyncio.Queue[a2a_pb2.A2AMessage]:
+        if self._send_queue is None:
+            self._send_queue = asyncio.Queue()
+        return self._send_queue
 
     # ------------------------------------------------------------------
     # Connection lifecycle
@@ -227,10 +237,10 @@ class A2AClient:
 
     async def incoming_messages(self) -> AsyncIterator[a2a_pb2.A2AMessage]:
         """Yield incoming messages from the streaming queue."""
-        while self._streaming or not self._incoming_queue.empty():
+        while self._streaming or not self._get_incoming_queue().empty():
             try:
                 msg = await asyncio.wait_for(
-                    self._incoming_queue.get(), timeout=1.0
+                    self._get_incoming_queue().get(), timeout=1.0
                 )
                 yield msg
             except asyncio.TimeoutError:
@@ -246,7 +256,7 @@ class A2AClient:
         messages: list[a2a_pb2.A2AMessage] = []
         while True:
             try:
-                messages.append(self._incoming_queue.get_nowait())
+                messages.append(self._get_incoming_queue().get_nowait())
             except asyncio.QueueEmpty:
                 break
         return messages
@@ -259,7 +269,7 @@ class A2AClient:
         """
         if not self._streaming:
             raise RuntimeError("Streaming is not active — call start_streaming() first")
-        await self._send_queue.put(msg)
+        await self._get_send_queue().put(msg)
 
     @property
     def streaming(self) -> bool:
@@ -332,7 +342,7 @@ class A2AClient:
             while self._streaming:
                 try:
                     msg = await asyncio.wait_for(
-                        self._send_queue.get(), timeout=1.0
+                        self._get_send_queue().get(), timeout=1.0
                     )
                     yield msg
                 except asyncio.TimeoutError:
@@ -342,7 +352,7 @@ class A2AClient:
         async for response in call:
             if not self._streaming:
                 break
-            await self._incoming_queue.put(response)
+            await self._get_incoming_queue().put(response)
 
     async def _consume_loop(self) -> None:
         """Background task that maintains the ConsumeMessages stream."""

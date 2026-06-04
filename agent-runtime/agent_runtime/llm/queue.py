@@ -156,14 +156,24 @@ class LLMQueue:
     def __init__(self, provider: LLMProvider, config: QueueConfig | None = None) -> None:
         self._provider = provider
         self._config = config or QueueConfig()
-        self._semaphore = asyncio.Semaphore(self._config.max_concurrency)
-        self._queue: asyncio.PriorityQueue[_QueueEntry] = asyncio.PriorityQueue()
+        self._semaphore: asyncio.Semaphore | None = None
+        self._queue: asyncio.PriorityQueue[_QueueEntry] | None = None
         self._stats = QueueStats()
         self._running = False
         self._entry_counter = 0
         self._worker_task: asyncio.Task[None] | None = None
         self._active_count = 0
         self._dispatch_tasks: set[asyncio.Task[None]] = set()
+
+    def _get_semaphore(self) -> asyncio.Semaphore:
+        if self._semaphore is None:
+            self._semaphore = asyncio.Semaphore(self._config.max_concurrency)
+        return self._semaphore
+
+    def _get_queue(self) -> asyncio.PriorityQueue[_QueueEntry]:
+        if self._queue is None:
+            self._queue = asyncio.PriorityQueue()
+        return self._queue
 
     # ------------------------------------------------------------------
     # Lifecycle
@@ -202,9 +212,9 @@ class LLMQueue:
         self._dispatch_tasks.clear()
 
         # Drain remaining queue entries and resolve them with fallback
-        while not self._queue.empty():
+        while not self._get_queue().empty():
             try:
-                entry = self._queue.get_nowait()
+                entry = self._get_queue().get_nowait()
                 if not entry.future.done():
                     entry.future.set_result(_FALLBACK_RESPONSE)
             except asyncio.QueueEmpty:
@@ -228,7 +238,7 @@ class LLMQueue:
         while self._running:
             try:
                 entry = await asyncio.wait_for(
-                    self._queue.get(), timeout=1.0,
+                    self._get_queue().get(), timeout=1.0,
                 )
             except asyncio.TimeoutError:
                 # No items in the queue — loop back and check _running
@@ -280,7 +290,7 @@ class LLMQueue:
 
     async def _execute_with_semaphore(self, entry: _QueueEntry) -> None:
         """Acquire semaphore and execute the LLM call."""
-        async with self._semaphore:
+        async with self._get_semaphore():
             self._active_count += 1
             self._stats.active_requests = self._active_count
             try:
@@ -336,7 +346,7 @@ class LLMQueue:
         )
         self._entry_counter += 1
 
-        await self._queue.put(entry)
+        await self._get_queue().put(entry)
 
         # Wait for the result
         return await future

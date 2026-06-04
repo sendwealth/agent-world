@@ -60,7 +60,7 @@ class OllamaProvider(LLMProvider):
         super().__init__(config)
         self._base_url = (config.base_url or _DEFAULT_BASE_URL).rstrip("/")
         self._num_parallel = int(os.environ.get("OLLAMA_NUM_PARALLEL", "1"))
-        self._config_lock = asyncio.Lock()
+        self._config_lock: asyncio.Lock | None = None
 
         # Override the client with fine-grained timeouts for long text generation
         self._client = httpx.AsyncClient(
@@ -71,6 +71,11 @@ class OllamaProvider(LLMProvider):
                 pool=10.0,
             ),
         )
+
+    def _get_config_lock(self) -> asyncio.Lock:
+        if self._config_lock is None:
+            self._config_lock = asyncio.Lock()
+        return self._config_lock
 
     @property
     def active_model(self) -> str:
@@ -117,7 +122,7 @@ class OllamaProvider(LLMProvider):
 
         Returns the previous model name.
         """
-        async with self._config_lock:
+        async with self._get_config_lock():
             old_model = self._config.model
             new_config = LLMConfig(
                 provider=self._config.provider,
@@ -156,7 +161,7 @@ class OllamaProvider(LLMProvider):
         temperature: float | None = None,
     ) -> LLMResponse:
         # Snapshot config under lock to avoid TOCTOU with switch_model
-        async with self._config_lock:
+        async with self._get_config_lock():
             payload = self._build_payload(
                 messages,
                 stream=False,
@@ -191,7 +196,7 @@ class OllamaProvider(LLMProvider):
         temperature: float | None = None,
     ) -> AsyncIterator[LLMStreamChunk]:
         # Snapshot config under lock to avoid TOCTOU with switch_model
-        async with self._config_lock:
+        async with self._get_config_lock():
             payload = self._build_payload(
                 messages,
                 stream=True,

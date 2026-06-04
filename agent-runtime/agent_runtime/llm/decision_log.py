@@ -60,7 +60,12 @@ class DecisionLogStore:
         self._logs: list[DecisionLog] = []
         self._path = Path(path) if path else None
         self._fh: object | None = None  # TextIO when open
-        self._lock = asyncio.Lock()
+        self._lock: asyncio.Lock | None = None
+
+    def _get_lock(self) -> asyncio.Lock:
+        if self._lock is None:
+            self._lock = asyncio.Lock()
+        return self._lock
 
     # -- Context manager --------------------------------------------------
 
@@ -77,7 +82,7 @@ class DecisionLogStore:
 
     async def append(self, log: DecisionLog) -> None:
         """Add a decision log entry (in-memory + optional JSONL flush)."""
-        async with self._lock:
+        async with self._get_lock():
             self._logs.append(log)
             self._write_line(log.to_dict())
 

@@ -1830,8 +1830,13 @@ class AgentPool:
         self._api_port = api_port
         self._spawn_args = spawn_args or []
         self._agents: list[PoolAgentInfo] = []
-        self._shutdown = asyncio.Event()
+        self._shutdown: asyncio.Event | None = None
         self._api_server: asyncio.Server | None = None
+
+    def _get_shutdown_event(self) -> asyncio.Event:
+        if self._shutdown is None:
+            self._shutdown = asyncio.Event()
+        return self._shutdown
 
     async def run(self) -> dict[str, Any]:
         """Start all agents and monitor until shutdown."""
@@ -1862,10 +1867,10 @@ class AgentPool:
 
         # Health monitor loop
         try:
-            while not self._shutdown.is_set():
+            while not self._get_shutdown_event().is_set():
                 try:
                     await asyncio.wait_for(
-                        self._shutdown.wait(), timeout=self._health_interval
+                        self._get_shutdown_event().wait(), timeout=self._health_interval
                     )
                 except asyncio.TimeoutError:
                     pass
@@ -1906,7 +1911,7 @@ class AgentPool:
 
     def request_shutdown(self) -> None:
         """Signal the pool to shut down gracefully."""
-        self._shutdown.set()
+        self._get_shutdown_event().set()
 
     def _build_from_count(self) -> list[PoolAgentInfo]:
         """Build agent list from --count with auto-naming (Agent-1..N)."""
@@ -2120,7 +2125,7 @@ class AgentPool:
         """Return pool health summary."""
         running = sum(1 for a in self._agents if a.status == "running")
         return {
-            "status": "running" if not self._shutdown.is_set() else "stopping",
+            "status": "running" if not self._get_shutdown_event().is_set() else "stopping",
             "total": len(self._agents),
             "running": running,
             "crashed": sum(1 for a in self._agents if a.status == "crashed"),

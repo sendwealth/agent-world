@@ -139,9 +139,14 @@ class MessageQueue:
     """
 
     def __init__(self) -> None:
-        self._queue: asyncio.Queue[WorldQueueMessage] = asyncio.Queue()
+        self._queue: asyncio.Queue[WorldQueueMessage] | None = None
         self._acknowledged: set[str] = set()
         self._pending: list[WorldQueueMessage] = []
+
+    def _get_queue(self) -> asyncio.Queue[WorldQueueMessage]:
+        if self._queue is None:
+            self._queue = asyncio.Queue()
+        return self._queue
 
     def enqueue(self, msg: WorldQueueMessage) -> None:
         """Add a message to the queue (thread-safe via asyncio.Queue).
@@ -150,7 +155,7 @@ class MessageQueue:
             msg: An OracleMessage or BountyMessage to enqueue.
         """
         try:
-            self._queue.put_nowait(msg)
+            self._get_queue().put_nowait(msg)
         except asyncio.QueueFull:
             logger.warning("MessageQueue full, dropping message: %s", msg.id)
 
@@ -176,7 +181,7 @@ class MessageQueue:
         messages: list[WorldQueueMessage] = []
         while True:
             try:
-                messages.append(self._queue.get_nowait())
+                messages.append(self._get_queue().get_nowait())
             except asyncio.QueueEmpty:
                 break
         self._pending.extend(messages)
@@ -194,7 +199,7 @@ class MessageQueue:
         # Drain the queue to peek
         while True:
             try:
-                msg = self._queue.get_nowait()
+                msg = self._get_queue().get_nowait()
                 messages.append(msg)
                 temp.append(msg)
             except asyncio.QueueEmpty:
@@ -203,7 +208,7 @@ class MessageQueue:
         # Put them back
         for msg in temp:
             try:
-                self._queue.put_nowait(msg)
+                self._get_queue().put_nowait(msg)
             except asyncio.QueueFull:
                 break
 
@@ -232,7 +237,7 @@ class MessageQueue:
     @property
     def size(self) -> int:
         """Number of messages currently in the queue."""
-        return self._queue.qsize()
+        return self._get_queue().qsize()
 
     @property
     def pending_count(self) -> int:

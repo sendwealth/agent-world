@@ -182,7 +182,19 @@ class SurvivalInstinct:
         self._last_action_time: dict[EmergencyActionType, float | None] = {}
         self._action_cooldown = action_cooldown
         self.loan_terms = loan_terms or LoanTerms()
-        self._lock = asyncio.Lock()
+        self._lock: asyncio.Lock | None = None
+
+    def _get_lock(self) -> asyncio.Lock:
+        """Lazily create the asyncio.Lock on first use.
+
+        Creating an ``asyncio.Lock`` in ``__init__`` binds it to the
+        current event loop.  If no loop is running (e.g. during import or
+        in a synchronous test), this raises on Python 3.9.  Deferring
+        creation to first use avoids the issue entirely.
+        """
+        if self._lock is None:
+            self._lock = asyncio.Lock()
+        return self._lock
 
     # ------------------------------------------------------------------
     # Core assessment (synchronous — no LLM, no I/O)
@@ -252,7 +264,7 @@ class SurvivalInstinct:
         This method is serialised with an ``asyncio.Lock`` so that
         concurrent calls do not bypass the cooldown check.
         """
-        async with self._lock:
+        async with self._get_lock():
             results: list[dict[str, object]] = []
             now = time.monotonic()
 

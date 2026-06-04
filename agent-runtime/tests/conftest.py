@@ -14,13 +14,13 @@ if sys.version_info < (3, 10):
 
     @pytest.fixture(autouse=True)
     def _reset_event_loop_policy():
-        """Reset event-loop policy state after each test (Python 3.9 compat).
+        """Reset event-loop policy state after each test (Python < 3.10 compat).
 
-        In Python 3.9, ``asyncio.set_event_loop()`` (called by asyncio.run()
-        and some pytest-asyncio versions) leaves ``_set_called=True`` in the
-        thread-local event-loop policy.  This prevents subsequent code from
-        creating new loops, causing ``RuntimeError: There is no current event
-        loop`` in downstream tests that instantiate ``asyncio.Lock()`` etc.
+        In Python < 3.10, ``asyncio.run()`` and ``set_event_loop()`` leave
+        ``_set_called=True`` in the thread-local event-loop policy after the
+        loop is closed.  This prevents subsequent code from creating new loops,
+        causing ``RuntimeError: There is no current event loop`` in downstream
+        tests that instantiate ``asyncio.Lock()`` etc.
 
         The fixture resets the policy state after every test so that later
         tests always start with a clean slate.

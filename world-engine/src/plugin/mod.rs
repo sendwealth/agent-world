@@ -53,6 +53,7 @@ mod manager;
 mod metadata;
 mod permission;
 mod registry;
+pub mod sandbox;
 
 pub use context::{
     AgentActionContext, AgentSpawnContext, EventContext, PluginContext, ShutdownContext,
@@ -67,3 +68,7 @@ pub use manager::{PluginManager, PluginSubsystemBridge, SharedPluginManager};
 pub use metadata::{PluginMetadata, PluginState};
 pub use permission::{Permission, PermissionSet};
 pub use registry::{PluginHooks, PluginInfo, PluginRegistry};
+pub use sandbox::{
+    SandboxConfig, SharedWasmSandbox, WasmExecutionResult, WasmPluginInfo, WasmPluginPhase,
+    WasmSandbox,
+};

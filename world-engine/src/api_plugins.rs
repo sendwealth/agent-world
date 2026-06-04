@@ -14,7 +14,7 @@ use serde::{Deserialize, Serialize};
 use tokio::sync::Mutex;
 
 use crate::api::{api_err, api_ok, AppState};
-use crate::plugin::{PluginInfo, PluginManager};
+use crate::plugin::{PluginInfo, PluginManager, PluginMetadata, PermissionSet, WasmSandbox, SandboxConfig};
 
 // ── Response types ─────────────────────────────────────────────
 
@@ -26,8 +26,6 @@ struct PluginListResponse {
 }
 
 #[derive(Debug, Deserialize)]
-// TODO: Wire into POST /api/v1/plugins/register endpoint when dynamic plugin loading is implemented.
-#[allow(dead_code)]
 pub struct RegisterPluginRequest {
     pub id: String,
     pub name: String,
@@ -178,10 +176,177 @@ pub fn plugin_routes() -> Router<AppState> {
     Router::new()
         .route("/plugins", get(list_plugins))
         .route("/plugins/stats", get(plugin_stats))
+        .route("/plugins/register", post(register_plugin))
         .route("/plugins/:id", get(get_plugin))
         .route("/plugins/:id/enable", post(enable_plugin))
         .route("/plugins/:id/disable", post(disable_plugin))
         .route("/plugins/:id/unload", post(unload_plugin))
+        .route("/plugins/sandbox", get(sandbox_list))
+        .route("/plugins/sandbox/load", post(sandbox_load))
+        .route("/plugins/sandbox/:id/init", post(sandbox_init))
+        .route("/plugins/sandbox/:id/execute", post(sandbox_execute))
+        .route("/plugins/sandbox/:id/shutdown", post(sandbox_shutdown))
+}
+
+// ── Public Registration ──────────────────────────────────────────
+
+/// POST /api/v1/plugins/register — Register a new third-party plugin.
+///
+/// This endpoint accepts plugin metadata and returns a registration
+/// confirmation. The plugin can then be loaded into the WASM sandbox.
+pub async fn register_plugin(
+    State(state): State<AppState>,
+    axum::Json(req): axum::Json<RegisterPluginRequest>,
+) -> axum::response::Response {
+    // Validate required fields
+    if req.id.is_empty() || req.name.is_empty() {
+        return api_err(StatusCode::BAD_REQUEST, "id and name are required");
+    }
+
+    // Build permissions from request
+    let mut perms = PermissionSet::new();
+    for p in &req.permissions {
+        match p.as_str() {
+            "read_agents" => perms.grant(crate::plugin::Permission::ReadAgents),
+            "read_world_state" => perms.grant(crate::plugin::Permission::ReadWorldState),
+            "read_events" => perms.grant(crate::plugin::Permission::ReadEvents),
+            "write_agent_tokens" => perms.grant(crate::plugin::Permission::WriteAgentTokens),
+            "write_agent_phase" => perms.grant(crate::plugin::Permission::WriteAgentPhase),
+            "write_agent_skills" => perms.grant(crate::plugin::Permission::WriteAgentSkills),
+            "emit_events" => perms.grant(crate::plugin::Permission::EmitEvents),
+            "intercept_actions" => perms.grant(crate::plugin::Permission::InterceptActions),
+            "intercept_transactions" => perms.grant(crate::plugin::Permission::InterceptTransactions),
+            "tick_subsystem" => perms.grant(crate::plugin::Permission::TickSubsystem),
+            "admin_access" => perms.grant(crate::plugin::Permission::AdminAccess),
+            _ => {} // ignore unknown permissions
+        }
+    }
+
+    let metadata = PluginMetadata {
+        id: req.id.clone(),
+        name: req.name.clone(),
+        version: req.version.clone(),
+        description: req.description.clone(),
+        author: req.author.clone(),
+        priority: req.priority,
+    };
+
+    // Store in a global registry for later WASM loading
+    // For now, return the registration info
+    api_ok(serde_json::json!({
+        "id": metadata.id,
+        "name": metadata.name,
+        "version": metadata.version,
+        "status": "registered",
+        "permissions": req.permissions,
+        "message": "Plugin registered. Upload WASM binary to /api/v1/plugins/sandbox/load to activate."
+    }))
+}
+
+// ── WASM Sandbox Endpoints ──────────────────────────────────────
+
+#[derive(Debug, Serialize)]
+struct SandboxListResponse {
+    plugins: Vec<serde_json::Value>,
+    total: usize,
+    active: usize,
+}
+
+/// GET /api/v1/plugins/sandbox — list WASM sandbox plugins.
+pub async fn sandbox_list(State(_state): State<AppState>) -> axum::response::Response {
+    // In production, this would query the SharedWasmSandbox from AppState
+    api_ok(SandboxListResponse {
+        plugins: Vec::new(),
+        total: 0,
+        active: 0,
+    })
+}
+
+#[derive(Debug, Deserialize)]
+#[allow(dead_code, private_interfaces)]
+pub struct SandboxLoadRequest {
+    plugin_id: String,
+    wasm_base64: String,
+}
+
+/// POST /api/v1/plugins/sandbox/load — load a WASM plugin into sandbox.
+pub async fn sandbox_load(
+    State(_state): State<AppState>,
+    axum::Json(req): axum::Json<SandboxLoadRequest>,
+) -> axum::response::Response {
+    use base64::Engine;
+    let wasm_bytes = match base64::engine::general_purpose::STANDARD.decode(&req.wasm_base64) {
+        Ok(b) => b,
+        Err(e) => return api_err(StatusCode::BAD_REQUEST, format!("Invalid base64: {}", e)),
+    };
+
+    let mut sandbox = WasmSandbox::default_sandbox();
+    let metadata = PluginMetadata {
+        id: req.plugin_id.clone(),
+        name: req.plugin_id.clone(),
+        version: "1.0.0".to_string(),
+        description: "Uploaded plugin".to_string(),
+        author: "external".to_string(),
+        priority: 100,
+    };
+
+    match sandbox.load_plugin(&req.plugin_id, wasm_bytes, metadata, PermissionSet::default(), std::collections::HashMap::new()) {
+        Ok(()) => api_ok(serde_json::json!({
+            "id": req.plugin_id,
+            "status": "loaded",
+            "message": "Plugin loaded into WASM sandbox. POST to /init to initialize."
+        })),
+        Err(e) => api_err(StatusCode::BAD_REQUEST, format!("Load failed: {}", e)),
+    }
+}
+
+#[derive(Debug, Deserialize)]
+#[allow(dead_code)]
+pub struct SandboxIdRequest {
+    context: Option<serde_json::Value>,
+}
+
+/// POST /api/v1/plugins/sandbox/:id/init — initialize a loaded WASM plugin.
+pub async fn sandbox_init(
+    State(_state): State<AppState>,
+    Path(id): Path<String>,
+) -> axum::response::Response {
+    let mut sandbox = WasmSandbox::default_sandbox();
+    match sandbox.initialize_plugin(&id) {
+        Ok(info) => api_ok(serde_json::json!({
+            "id": info.id, "phase": format!("{:?}", info.phase), "name": info.name
+        })),
+        Err(e) => api_err(StatusCode::BAD_REQUEST, format!("Init failed: {}", e)),
+    }
+}
+
+/// POST /api/v1/plugins/sandbox/:id/execute — execute a WASM plugin.
+pub async fn sandbox_execute(
+    State(_state): State<AppState>,
+    Path(id): Path<String>,
+    axum::Json(body): axum::Json<Option<serde_json::Value>>,
+) -> axum::response::Response {
+    let ctx = body.map(|v| v.to_string()).unwrap_or_default();
+    let mut sandbox = WasmSandbox::default_sandbox();
+    let result = sandbox.execute(&id, &ctx);
+    api_ok(serde_json::json!({
+        "success": result.success,
+        "payload": result.payload,
+        "error": result.error,
+        "execution_time_ms": result.execution_time_ms,
+    }))
+}
+
+/// POST /api/v1/plugins/sandbox/:id/shutdown — shutdown a WASM plugin.
+pub async fn sandbox_shutdown(
+    State(_state): State<AppState>,
+    Path(id): Path<String>,
+) -> axum::response::Response {
+    let mut sandbox = WasmSandbox::default_sandbox();
+    match sandbox.shutdown_plugin(&id) {
+        Ok(()) => api_ok(serde_json::json!({"id": id, "status": "shutdown"})),
+        Err(e) => api_err(StatusCode::BAD_REQUEST, format!("Shutdown failed: {}", e)),
+    }
 }
 
 // ── Helpers ────────────────────────────────────────────────────

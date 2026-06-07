@@ -704,3 +704,278 @@ export interface SandboxListResponse {
   active: number;
 }
 
+// ── Legislation Cycle types ──
+
+export type LegislationCyclePhase = "election" | "proposal" | "voting" | "enactment" | "completed";
+export type RuleType = "soft" | "hard" | "constitutional";
+export type RuleConditionOperator = "gt" | "lt" | "eq" | "gte" | "lte" | "ne";
+
+export interface RuleCondition {
+  field: string;
+  operator: RuleConditionOperator;
+  value: number;
+}
+
+export interface RuleEffect {
+  target: string;
+  action: string;
+  params: Record<string, unknown>;
+}
+
+export interface CandidateRule {
+  id: string;
+  proposer_id: string;
+  title: string;
+  description: string;
+  rule_type: RuleType;
+  conditions: RuleCondition[];
+  effects: RuleEffect[];
+  vote_count: number;
+  enacted: boolean;
+  created_tick: number;
+  expires_tick: number | null;
+}
+
+export interface LegislationCycleRecord {
+  cycle_id: string;
+  org_id: string;
+  phase: LegislationCyclePhase;
+  leader_id: string | null;
+  candidates: CandidateRule[];
+  enacted_rules: CandidateRule[];
+  created_tick: number;
+  completed_tick: number | null;
+  vote_deadline_tick: number | null;
+}
+
+export interface CycleResponse {
+  cycle: LegislationCycleRecord | null;
+}
+
+export interface StartCycleResultResponse {
+  cycle_id: string;
+  message: string;
+}
+
+export interface EnactedRulesResponse {
+  rules: CandidateRule[];
+}
+
+export interface CandidateRulesResponse {
+  rules: CandidateRule[];
+}
+
+export interface FullCycleResultResponse {
+  cycle_id: string;
+  enacted: CandidateRule[];
+  failed: CandidateRule[];
+  message: string;
+}
+
+// ── Federation / Diplomacy types ──
+
+export type RelationStatus = "neutral" | "friendly" | "hostile" | "allied" | "at_war";
+export type CrossWorldTreatyType = "trade" | "non_aggression" | "alliance" | "cultural" | "technology" | "migration";
+export type CrossWorldTreatyStatus = "proposed" | "active" | "rejected" | "broken" | "expired";
+
+export interface FederatedWorld {
+  id: string;
+  name: string;
+  endpoint: string;
+  registered_tick: number;
+  relation_status?: RelationStatus;
+}
+
+export interface CrossWorldTreaty {
+  id: string;
+  proposer_world_id: string;
+  target_world_id: string;
+  treaty_type: CrossWorldTreatyType;
+  status: CrossWorldTreatyStatus;
+  duration_ticks: number;
+  terms: string;
+  proposed_tick: number;
+  accepted_tick: number | null;
+  expires_tick: number | null;
+}
+
+export interface FederationSummary {
+  total_worlds: number;
+  active_treaties: number;
+  pending_treaties: number;
+  active_sanctions: number;
+  wars: number;
+}
+
+// ── Investment types ──
+
+export type InvestmentProductStatus = "open" | "closed" | "frozen";
+export type InvestmentProductType = "bond" | "fund" | "derivative" | "fixed_deposit";
+
+export interface InvestmentProduct {
+  id: string;
+  name: string;
+  product_type: InvestmentProductType;
+  manager_id: string;
+  total_shares: number;
+  available_shares: number;
+  price_per_share: number;
+  currency: string;
+  min_investment: number;
+  performance_score: number;
+  status: InvestmentProductStatus;
+  return_rate: number;
+  created_tick: number;
+  closed_tick: number | null;
+}
+
+export interface InvestmentPortfolio {
+  investor_id: string;
+  holdings: PortfolioHolding[];
+  total_invested: number;
+  total_value: number;
+  total_pnl: number;
+}
+
+export interface PortfolioHolding {
+  product_id: string;
+  product_name: string;
+  shares: number;
+  avg_buy_price: number;
+  current_value: number;
+  pnl: number;
+}
+
+export interface InvestmentTransaction {
+  id: string;
+  investor_id: string;
+  product_id: string;
+  transaction_type: "buy" | "sell" | "dividend";
+  shares: number;
+  price: number;
+  total: number;
+  tick: number;
+}
+
+export interface InvestmentLeaderboardEntry {
+  investor_id: string;
+  total_value: number;
+  total_pnl: number;
+  pnl_percent: number;
+  rank: number;
+}
+
+// ── Escrow types ──
+
+export type EscrowStatus = "open" | "claimed" | "completed" | "refunded" | "disputed" | "resolved";
+
+export interface EscrowRecord {
+  id: string;
+  publisher: string;
+  claimant: string | null;
+  reward: number;
+  deposit: number;
+  currency: string;
+  status: EscrowStatus;
+  created_tick: number;
+  expires_at: number | null;
+  resolved_at: number | null;
+  dispute_reason: string | null;
+  award_to_claimant: boolean | null;
+}
+
+// ── Trust Network types ──
+
+export type TrustInteractionType = "trade" | "cooperation" | "betrayal" | "gift" | "deception" | "defense";
+
+export interface TrustRelationship {
+  from_agent: string;
+  to_agent: string;
+  score: number;
+  interaction_count: number;
+  last_interaction_tick: number;
+}
+
+export interface TrustStats {
+  total_relationships: number;
+  avg_trust_score: number;
+  allies_count: number;
+  enemies_count: number;
+  top_allies: TrustRelationship[];
+  top_enemies: TrustRelationship[];
+}
+
+// ── Mentorship types ──
+
+export type MentorshipStatus = "active" | "completed" | "dropped";
+
+export interface MentorshipSession {
+  id: string;
+  mentor_id: string;
+  apprentice_id: string;
+  skill_name: string;
+  mentor_skill_level: number;
+  status: MentorshipStatus;
+  established_tick: number;
+  completed_tick: number | null;
+}
+
+export interface MentorshipStats {
+  total_sessions: number;
+  active_sessions: number;
+  completed_sessions: number;
+  avg_skill_transfer_rate: number;
+  popular_skills: { skill: string; count: number }[];
+}
+
+// ── Inheritance types ──
+
+export interface Beneficiary {
+  agent_id: string;
+  share: number;
+}
+
+export interface Will {
+  testator_id: string;
+  beneficiaries: Beneficiary[];
+  created_tick: number;
+  executed: boolean;
+  executed_tick: number | null;
+}
+
+export interface InheritanceStats {
+  total_wills: number;
+  executed_wills: number;
+  pending_wills: number;
+  total_inherited: number;
+  avg_beneficiaries: number;
+}
+
+// ── Building types ──
+
+export type BuildingType = "warehouse" | "market" | "workshop" | "defense_tower" | "housing";
+export type OwnerType = "personal" | "organization";
+
+export interface Building {
+  id: string;
+  building_type: BuildingType;
+  x: number;
+  y: number;
+  owner_id: string;
+  owner_type: OwnerType;
+  health: number;
+  max_health: number;
+  level: number;
+  created_tick: number;
+}
+
+// ── Export types ──
+
+export type ExportFormat = "json" | "csv" | "graphml" | "dot" | "gexf";
+
+export interface ExportTypeInfo {
+  key: string;
+  label: string;
+  description: string;
+}
+

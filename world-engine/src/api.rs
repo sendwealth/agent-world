@@ -42,6 +42,7 @@ use crate::a2a::world_message_router::WorldMessageRouter;
 use crate::human::store::HumanParticipationStore;
 use crate::organization::governance::GovernanceSystem;
 use crate::organization::governance_metrics::GovernanceMetricsCollector;
+use crate::organization::legislation_cycle::LegislationCycleEngine;
 use crate::organization::org::OrganizationStore;
 use crate::organization::rule_engine::RuleEngine;
 use crate::time_capsule::SnapshotStore;
@@ -69,6 +70,7 @@ pub type SharedEscrowManager = Arc<Mutex<EscrowManager>>;
 pub type SharedTrustNetwork = Arc<Mutex<TrustNetwork>>;
 pub type SharedMentorshipSystem = Arc<Mutex<MentorshipSystem>>;
 pub type SharedInheritanceSystem = Arc<Mutex<InheritanceSystem>>;
+pub type SharedLegislationCycleEngine = Arc<Mutex<LegislationCycleEngine>>;
 pub type SharedAuthStore = Arc<Mutex<AuthStore>>;
 pub type SharedABExperimentStore = Arc<Mutex<Vec<crate::api_ab_experiment::ABExperiment>>>;
 
@@ -242,6 +244,7 @@ pub struct AppState {
     pub trust_network: Option<SharedTrustNetwork>,
     pub mentorship_system: Option<SharedMentorshipSystem>,
     pub inheritance_system: Option<SharedInheritanceSystem>,
+    pub legislation_cycle_engine: Option<SharedLegislationCycleEngine>,
 }
 
 /// Optional subsystem overrides for test AppState construction.
@@ -279,6 +282,7 @@ pub struct TestOverrides {
     pub trust_network: Option<SharedTrustNetwork>,
     pub mentorship_system: Option<SharedMentorshipSystem>,
     pub inheritance_system: Option<SharedInheritanceSystem>,
+    pub legislation_cycle_engine: Option<SharedLegislationCycleEngine>,
 }
 
 impl AppState {
@@ -352,6 +356,7 @@ impl AppState {
             trust_network: overrides.trust_network,
             mentorship_system: overrides.mentorship_system,
             inheritance_system: overrides.inheritance_system,
+            legislation_cycle_engine: overrides.legislation_cycle_engine,
         }
     }
 
@@ -451,6 +456,7 @@ fn make_test_state(
         trust_network: None,
         mentorship_system: None,
         inheritance_system: None,
+        legislation_cycle_engine: None,
     }
 }
 
@@ -542,6 +548,7 @@ pub fn build_full_router(state: AppState) -> Router {
         .merge(crate::api_trust::trust_routes())
         .merge(crate::api_mentorship::mentorship_routes())
         .merge(crate::api_inheritance::inheritance_routes())
+        .merge(crate::api_legislation::legislation_routes())
         .merge(crate::api_export_v1::export_v1_routes())
         .merge(crate::api_plugins::plugin_routes())
         .merge(crate::api_providers::provider_routes())

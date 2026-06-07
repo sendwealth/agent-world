@@ -33,6 +33,7 @@ use agent_world_engine::economy::task::TaskBoard;
 use agent_world_engine::economy::token_burn::TokenBurnEngine;
 use agent_world_engine::organization::org::OrganizationStore;
 use agent_world_engine::organization::governance::GovernanceSystem;
+use agent_world_engine::organization::legislation_cycle::{LegislationCycleConfig, LegislationCycleEngine};
 use agent_world_engine::time_capsule::SnapshotStore;
 use agent_world_engine::wal::WAL;
 use agent_world_engine::world::event::WorldEvent;
@@ -482,6 +483,15 @@ async fn main() {
     )));
     println!("   GovernanceSystem: initialized");
 
+    // ── Initialize LegislationCycleEngine ──────────────────
+    let legislation_cycle_engine = Arc::new(Mutex::new(
+        LegislationCycleEngine::with_event_bus(
+            LegislationCycleConfig::default(),
+            event_bus.clone(),
+        ),
+    ));
+    println!("   LegislationCycleEngine: initialized");
+
     // ── Initialize Banking System ──────────────────────────
     let banking_system = Arc::new(Mutex::new(BankingSystem::with_event_bus(
         CentralBankConfig::default(),
@@ -656,6 +666,7 @@ async fn main() {
         trust_network: Some(trust_network),
         mentorship_system: Some(mentorship_system),
         inheritance_system: Some(inheritance_system),
+        legislation_cycle_engine: Some(legislation_cycle_engine),
     });
     // Wire the WorldMessageRouter into the AppState for Oracle/Bounty delivery
     app_state.world_msg_router = Some(world_msg_router);

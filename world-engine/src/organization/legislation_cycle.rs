@@ -225,6 +225,7 @@ impl Default for LegislationCycleConfig {
 ///
 /// Usage:
 /// ```ignore
+/// // Ignored: requires external types (leadership, governance) not constructible inline.
 /// let engine = LegislationCycleEngine::new(config);
 /// // Start a cycle (triggers election)
 /// engine.start_cycle(org_id, candidates, tick)?;

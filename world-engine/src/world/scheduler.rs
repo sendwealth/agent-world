@@ -49,10 +49,11 @@ impl Scheduler {
     ///
     /// This method is designed to be spawned on a tokio task:
     /// ```ignore
+    /// // Requires a Scheduler with async runtime; shown as usage sketch.
     /// let handle = tokio::spawn(scheduler.run());
     /// // ... later ...
     /// scheduler.cancel_token().cancel();
-    /// handle.await?;
+    /// handle.await.unwrap();
     /// ```
     pub async fn run(self) {
         let mut ticker = tokio::time::interval(self.interval);

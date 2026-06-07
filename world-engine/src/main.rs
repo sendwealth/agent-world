@@ -95,8 +95,8 @@ async fn main() {
     let tick_interval = Duration::from_millis(genesis_config.world.tick_interval_ms);
 
     // ── Initialize EventBus ─────────────────────────────────
-    let event_bus = Arc::new(EventBus::new(256));
-    println!("   EventBus: created (capacity: 256)");
+    let event_bus = Arc::new(EventBus::new(genesis_config.world.event_bus_capacity));
+    println!("   EventBus: created (capacity: {})", genesis_config.world.event_bus_capacity);
 
     // ── Initialize WAL ──────────────────────────────────────
     let wal_dir = std::env::var("WAL_DIR").unwrap_or_else(|_| "./data".to_string());
@@ -196,9 +196,9 @@ async fn main() {
         inactivity_threshold: genesis_config.evolution.inactivity_threshold,
         initial_tokens: genesis_config.economy.initial_tokens,
         passive_xp_per_tick: genesis_config.evolution.passive_xp_per_tick,
-        mutation_boost_xp: 75.0,
-        mutation_decay_xp: 30.0,
-        mutation_new_skill_xp: 50.0,
+        mutation_boost_xp: genesis_config.evolution.mutation_boost_xp,
+        mutation_decay_xp: genesis_config.evolution.mutation_decay_xp,
+        mutation_new_skill_xp: genesis_config.evolution.mutation_new_skill_xp,
         offspring_mutation: OffspringMutationConfig {
             base_offspring_mutation_rate: genesis_config.evolution.offspring_mutation_rate,
             max_offspring_mutations: genesis_config.evolution.max_offspring_mutations,
@@ -210,7 +210,7 @@ async fn main() {
             heritable_strengthen_chance: genesis_config.evolution.heritable_strengthen_chance,
             heritable_disappear_chance: genesis_config.evolution.heritable_disappear_chance,
         },
-        crossover_personality_blend: 0.5,
+        crossover_personality_blend: genesis_config.evolution.crossover_personality_blend,
     };
     subsystem_registry.register(Box::new(EvolutionSubsystem::new(evolution_config)));
     println!(

@@ -5,6 +5,7 @@ world:
   name: "agent-world-v1"
   tick_interval_ms: 1000      # 世界时钟节拍
   max_agents: 10              # Phase 1 限制
+  event_bus_capacity: 256     # EventBus 广播容量
 
 economy:
   # Token（生存资源）
@@ -34,6 +35,11 @@ evolution:
   evaluation_interval: 1000   # 每1000 tick评估一次
   inactivity_threshold: 500   # 500 tick无活动进入衰退
   passive_xp_per_tick: 1.0    # 每tick被动获得的经验值
+  # 突变 XP 参数
+  mutation_boost_xp: 75.0         # 技能突变增强获得的经验值
+  mutation_decay_xp: 30.0         # 技能突变衰减失去的经验值
+  mutation_new_skill_xp: 50.0     # 获得新技能时的初始经验值
+  crossover_personality_blend: 0.5  # 杂交时人格混合比例
   # 后代突变配置
   offspring_mutation_rate: 0.15   # 后代基础突变率 15%
   max_offspring_mutations: 3      # 每个后代最多3个突变

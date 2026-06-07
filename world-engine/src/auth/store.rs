@@ -82,7 +82,7 @@ impl AuthStore {
         }
 
         let id = Uuid::new_v4().to_string();
-        let password_hash = Self::hash_password(password);
+        let password_hash = Self::hash_password_argon2(password)?;
 
         let user = HumanUser {
             id: id.clone(),
@@ -112,8 +112,23 @@ impl AuthStore {
             .get_mut(&user_id)
             .ok_or("Invalid username or password")?;
 
-        if !Self::verify_password(password, &user.password_hash) {
+        let verified = if user.password_hash.starts_with("argon2$") {
+            Self::verify_password_argon2(password, &user.password_hash)
+        } else if user.password_hash.starts_with("sha256$") {
+            // Legacy SHA-256 hash: verify and flag for migration
+            Self::verify_password_sha256(password, &user.password_hash)
+        } else {
+            false
+        };
+
+        if !verified {
             return Err("Invalid username or password".into());
+        }
+
+        // Auto-migrate legacy SHA-256 hashes to argon2 on successful login
+        if user.password_hash.starts_with("sha256$") {
+            user.password_hash = Self::hash_password_argon2(password)
+                .map_err(|e| format!("Password migration error: {}", e))?;
         }
 
         user.last_login = Some(Utc::now().timestamp());
@@ -169,23 +184,48 @@ impl AuthStore {
         self.users.values().cloned().collect()
     }
 
-    // ── Password hashing (SHA-256 with per-user salt) ────────
-    // Note: For a simulation platform this is adequate.
-    // Production should migrate to argon2. The hash format is:
-    //   sha256$<salt_hex>$<hash_hex>
+    // ── Password hashing (argon2) ────────────────────────────
+    // New hashes use argon2 with format: argon2$<encoded_hash_string>
+    // Legacy SHA-256 hashes (sha256$<salt>$<hash>) are auto-migrated on login.
 
-    fn hash_password(password: &str) -> String {
-        use sha2::{Digest, Sha256};
-        let salt = Uuid::new_v4().to_string();
-        let mut hasher = Sha256::new();
-        hasher.update(salt.as_bytes());
-        hasher.update(password.as_bytes());
-        let hash = format!("{:x}", hasher.finalize());
-        format!("sha256${}${}", salt, hash)
+    fn hash_password_argon2(password: &str) -> Result<String, String> {
+        use argon2::password_hash::rand_core::OsRng;
+        use argon2::password_hash::SaltString;
+        use argon2::{Argon2, PasswordHasher};
+
+        let salt = SaltString::generate(&mut OsRng);
+        let argon2 = Argon2::default();
+        let hash = argon2
+            .hash_password(password.as_bytes(), &salt)
+            .map_err(|e| format!("Argon2 hash error: {}", e))?;
+        Ok(format!("argon2${}", hash))
     }
 
-    fn verify_password(password: &str, stored: &str) -> bool {
+    fn verify_password_argon2(password: &str, stored: &str) -> bool {
+        use argon2::password_hash::PasswordVerifier;
+        use argon2::Argon2;
+
+        // stored format: argon2$<PHC hash string>
+        let hash_str = match stored.strip_prefix("argon2$") {
+            Some(h) => h,
+            None => return false,
+        };
+
+        let parsed_hash = match argon2::password_hash::PasswordHash::new(hash_str) {
+            Ok(h) => h,
+            Err(_) => return false,
+        };
+
+        Argon2::default()
+            .verify_password(password.as_bytes(), &parsed_hash)
+            .is_ok()
+    }
+
+    // ── Legacy SHA-256 verification (for migration) ──────────
+
+    fn verify_password_sha256(password: &str, stored: &str) -> bool {
         use sha2::{Digest, Sha256};
+
         let parts: Vec<&str> = stored.splitn(3, '$').collect();
         if parts.len() != 3 || parts[0] != "sha256" {
             return false;
@@ -196,23 +236,7 @@ impl AuthStore {
         hasher.update(salt.as_bytes());
         hasher.update(password.as_bytes());
         let actual = format!("{:x}", hasher.finalize());
-        // Constant-time comparison to prevent timing attacks
         constant_time_eq::constant_time_eq(actual.as_bytes(), expected.as_bytes())
-    }
-}
-
-// We only need constant_time_eq for password verification.
-// Since it's a small dep, we inline a simple implementation.
-mod constant_time_eq {
-    pub fn constant_time_eq(a: &[u8], b: &[u8]) -> bool {
-        if a.len() != b.len() {
-            return false;
-        }
-        let mut result: u8 = 0;
-        for (x, y) in a.iter().zip(b.iter()) {
-            result |= x ^ y;
-        }
-        result == 0
     }
 }
 
@@ -232,6 +256,8 @@ mod tests {
             .unwrap();
         assert_eq!(user.username, "alice");
         assert_eq!(user.role, HumanRole::Investor);
+        // New registrations use argon2
+        assert!(user.password_hash.starts_with("argon2$"));
 
         let (logged_in, token) = store.login("alice", "password123").unwrap();
         assert_eq!(logged_in.id, user.id);
@@ -310,8 +336,7 @@ mod tests {
     }
 
     #[test]
-    fn test_password_hash_constant_time() {
-        // Verify our constant_time_eq works correctly
+    fn test_constant_time_eq() {
         assert!(constant_time_eq::constant_time_eq(b"hello", b"hello"));
         assert!(!constant_time_eq::constant_time_eq(b"hello", b"world"));
         assert!(!constant_time_eq::constant_time_eq(b"hello", b"hella"));
@@ -361,5 +386,66 @@ mod tests {
             .unwrap();
         // Same password, different hashes due to unique salts
         assert_ne!(u1.password_hash, u2.password_hash);
+    }
+
+    #[test]
+    fn test_legacy_sha256_migration_on_login() {
+        use sha2::{Digest, Sha256};
+
+        let mut store = test_store();
+
+        // Manually insert a user with a legacy SHA-256 hash
+        let salt = "test-salt-123".to_string();
+        let mut hasher = Sha256::new();
+        hasher.update(salt.as_bytes());
+        hasher.update(b"mypass123");
+        let hash_hex = format!("{:x}", hasher.finalize());
+        let legacy_hash = format!("sha256${}${}", salt, hash_hex);
+
+        let user_id = Uuid::new_v4().to_string();
+        let user = HumanUser {
+            id: user_id.clone(),
+            username: "legacy_user".to_string(),
+            password_hash: legacy_hash.clone(),
+            role: HumanRole::Observer,
+            created_at: Utc::now().timestamp(),
+            last_login: None,
+        };
+        store.username_index.insert("legacy_user".to_string(), user_id.clone());
+        store.users.insert(user_id.clone(), user);
+
+        // Login should succeed and auto-migrate to argon2
+        let (logged_in, _token) = store.login("legacy_user", "mypass123").unwrap();
+        assert!(logged_in.password_hash.starts_with("argon2$"),
+            "Password should have been migrated to argon2, got: {}", logged_in.password_hash);
+
+        // Verify the stored user was also updated
+        let stored_user = store.users.get(&user_id).unwrap();
+        assert!(stored_user.password_hash.starts_with("argon2$"));
+
+        // Can still login with the same password after migration
+        let (_, token2) = store.login("legacy_user", "mypass123").unwrap();
+        assert!(!token2.is_empty());
+    }
+
+    #[test]
+    fn test_legacy_sha256_wrong_password_fails() {
+        let mut store = test_store();
+
+        let legacy_hash = "sha256$some-salt$deadbeef".to_string();
+        let user_id = Uuid::new_v4().to_string();
+        let user = HumanUser {
+            id: user_id.clone(),
+            username: "legacy_fail".to_string(),
+            password_hash: legacy_hash,
+            role: HumanRole::Observer,
+            created_at: Utc::now().timestamp(),
+            last_login: None,
+        };
+        store.username_index.insert("legacy_fail".to_string(), user_id.clone());
+        store.users.insert(user_id, user);
+
+        let err = store.login("legacy_fail", "wrongpassword").unwrap_err();
+        assert!(err.contains("Invalid"));
     }
 }

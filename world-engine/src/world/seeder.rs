@@ -6,7 +6,7 @@
 //!
 //! # Usage
 //!
-//! ```rust,ignore
+//! ```
 //! use agent_world_engine::world::seeder::WorldSeeder;
 //!
 //! let mut seeder = WorldSeeder::new(42);

@@ -17,6 +17,7 @@
 //! # Usage
 //!
 //! ```ignore
+//! // Ignored: async API requiring tokio runtime + filesystem path.
 //! let config = SnapshotConfig::default();
 //! let (handle, storage) = SnapshotEngine::spawn(config, path, 256)?;
 //!

@@ -167,23 +167,19 @@ pub struct TickProfileReport {
 ///
 /// # Usage
 ///
-/// ```ignore
+/// ```
+/// use agent_world_engine::world::tick_profiler::{TickProfiler, TickPhase};
+///
 /// let mut profiler = TickProfiler::new();
-/// for _ in 0..100 {
+/// for tick in 0..3 {
 ///     profiler.start_tick(tick);
-///     // phase 1
 ///     profiler.start_phase(TickPhase::Subsystems);
-///     run_subsystems();
 ///     profiler.end_phase();
-///     // phase 2
 ///     profiler.start_phase(TickPhase::Rules);
-///     run_rules();
 ///     profiler.end_phase();
-///     // ...
 ///     profiler.end_tick();
 /// }
 /// let report = profiler.report(10);
-/// println!("{}", serde_json::to_string_pretty(&report).unwrap());
 /// ```
 pub struct TickProfiler {
     current_tick: u64,

@@ -10,7 +10,7 @@
 //!
 //! # Example
 //!
-//! ```rust,ignore
+//! ```
 //! use agent_world_engine::world::map::{WorldMap, HexPos, TerrainType, Tile};
 //!
 //! let mut map = WorldMap::with_radius(10);

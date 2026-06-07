@@ -179,10 +179,12 @@ pub async fn metrics_handler() -> Response<Body> {
 
 /// RAII guard that observes tick duration on drop.
 ///
-/// ```ignore
+/// ```
+/// use agent_world_engine::observability::MetricsGuard;
+///
 /// {
 ///     let _guard = MetricsGuard::new();
-///     state.tick();
+///     // tick work happens here...
 /// } // duration automatically recorded
 /// ```
 pub struct MetricsGuard {

@@ -26,7 +26,8 @@
 //!
 //! ## Example
 //!
-//! ```rust,ignore
+//! ```ignore
+//! // Ignored: references Plugin trait not yet in public API.
 //! use agent_world_engine::plugin::*;
 //!
 //! struct TaxPlugin { rate: f64 }

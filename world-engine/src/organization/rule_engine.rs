@@ -409,7 +409,7 @@ impl RuleEngine {
             .iter()
             .filter(|(_, rule)| {
                 rule.status == RuleStatus::Active
-                    && rule.expires_tick.map_or(false, |ex| current_tick >= ex)
+                    && rule.expires_tick.is_some_and(|ex| current_tick >= ex)
             })
             .map(|(id, _)| id.clone())
             .collect();

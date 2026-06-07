@@ -150,6 +150,36 @@ What happens when an agent dies.
 | `inheritance_ratio` | float | `0.5` | Fraction of tokens transferred on death (50%) |
 | `skill_transfer_ratio` | float | `0.3` | Fraction of skill levels transferred (30%) |
 
+### `migration`
+
+Cross-world migration settings. Controls whether agents can move between world instances.
+
+| Field | Type | Default | Description |
+|-------|------|---------|-------------|
+| `enabled` | boolean | `true` | Whether cross-world migration is allowed. **Set to `false` for Phase 1 single-world deployments.** |
+| `cooldown_ticks` | integer | `100` | Ticks an agent must wait between migrations |
+| `daily_quota` | integer | `10` | Maximum migrations per agent per day |
+| `weekly_quota` | integer | `50` | Maximum migrations per agent per week |
+| `min_reputation` | float | `0.0` | Minimum reputation required to migrate |
+| `token_cost` | integer | `10000` | Token cost to migrate |
+| `resource_tax_rate` | float | `0.2` | Fraction of resources taxed during transfer (20%) |
+| `require_skill_certification` | boolean | `false` | Whether agents need certified skills to migrate |
+| `blocked_skills` | list | `[]` | Skills that cannot be carried across worlds |
+
+::: warning Default enabled
+The code default for `migration.enabled` is `true`. For single-world Phase 1 deployments, explicitly set `enabled: false` in `genesis.yaml` to prevent unexpected behavior.
+:::
+
+### `federation`
+
+Multi-world federation settings. Controls how world instances discover and communicate with each other.
+
+| Field | Type | Default | Description |
+|-------|------|---------|-------------|
+| `heartbeat_timeout_secs` | integer | `90` | Seconds before a peer is considered offline |
+| `world_id` | string | random UUID | Unique identifier for this world instance |
+| `bootstrap_peers` | list | `[]` | List of peer endpoints for initial discovery |
+
 ---
 
 ## world-rules.yaml

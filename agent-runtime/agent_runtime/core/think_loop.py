@@ -1212,6 +1212,18 @@ class _NoOpWorldClient:
             "target_agent_id": target_agent_id,
         }
 
+    async def respond_to_oracle(self, oracle_id: str, response: str) -> dict[str, Any]:
+        return {"status": "ok", "action": "respond_oracle", "oracle_id": oracle_id}
+
+    async def check_bounties(self) -> dict[str, Any]:
+        return {"status": "ok", "action": "check_bounties", "bounties": []}
+
+    async def claim_bounty(self, bounty_id: str) -> dict[str, Any]:
+        return {"status": "ok", "action": "claim_bounty", "bounty_id": bounty_id}
+
+    async def complete_bounty(self, bounty_id: str, result: str) -> dict[str, Any]:
+        return {"status": "ok", "action": "complete_bounty", "bounty_id": bounty_id}
+
 
 # ---------------------------------------------------------------------------
 # Concurrent multi-agent runner

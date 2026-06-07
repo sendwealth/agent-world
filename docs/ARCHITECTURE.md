@@ -1096,6 +1096,14 @@
 1092|8. explore - Look for opportunities
 1093|9. create_tool - Build a reusable tool
 1094|10. publish_knowledge - Share knowledge for profit
+1095|11. respond_oracle - Respond to an Oracle from a Human (3 tokens)
+1096|12. check_bounties - Check available bounties (2 tokens)
+1097|13. accept_bounty - Accept a bounty (10 tokens)
+1098|14. complete_bounty - Complete a bounty (8 tokens)
+1095|11. respond_oracle - Respond to an Oracle from a Human (3 tokens)
+1096|12. check_bounties - Check available bounties (2 tokens)
+1097|13. accept_bounty - Accept a bounty (10 tokens)
+1098|14. complete_bounty - Complete a bounty (8 tokens)
 1095|
 1096|Choose your action. Respond in JSON:
 1097|{
@@ -1109,7 +1117,47 @@
 1105|```
 1106|
 1107|---
-1108|
+
+### 4.5 Oracle → Agent 集成流程
+
+Oracle（神谕）是 Human 观察者向 Agent 发送指令/引导的双向交互机制。完整的闭环路径：
+
+```
+Human Dashboard
+    ↓ POST /api/v1/human/oracles
+World Engine (Rust)
+    ↓ 存储 Oracle (SQLite human_oracles 表)
+    ↓ WorldMessageRouter.deliver() → ConsumeMessages gRPC stream
+Agent Runtime (Python)
+    ↓ MessageQueue.enqueue_world_message() → OracleMessage
+    ↓ GRPCPerceptionProvider._drain_world_messages()
+    ↓ Perception.messages (kind="oracle")
+    ↓ _perception_to_decision() → DecisionPerception.pending_oracles
+    ↓ DecisionEngine prompt 包含 "Pending Oracles" 区块
+    ↓ LLM 决策: respond_oracle (3 tokens)
+    ↓ ActionExecutor._handle_respond_oracle()
+    ↓ GRPCWorldClient.respond_to_oracle()
+    ↓ gRPC INFORM message → World Engine
+    ↓ POST /agents/:id/oracle-response → 更新 status=acknowledged
+Human Dashboard 可见 Agent 响应
+```
+
+**关键文件：**
+
+| 文件 | 职责 |
+|------|------|
+| `world-engine/src/human/store.rs` | Oracle 存储、列表查询、响应记录 |
+| `world-engine/src/api_human.rs` | REST API: POST /human/oracles, GET /human/oracles |
+| `agent_runtime/core/message_queue.py` | OracleMessage 数据类 + MessageQueue 缓冲区 |
+| `agent_runtime/a2a/perception.py` | GRPCPerceptionProvider: 排空 Oracle 消息注入 Perception |
+| `agent_runtime/core/llm_decide.py` | _perception_to_decision(): 提取 Oracle 到 DecisionPerception |
+| `agent_runtime/core/decide.py` | DecisionPerception.pending_oracles + prompt "Pending Oracles" |
+| `agent_runtime/actions/oracle_responder.py` | OracleResponder: 策略化响应 (guidance/warning/blessing/curse) |
+| `agent_runtime/core/act.py` | ActionType.RESPOND_ORACLE handler |
+| `agent_runtime/a2a/world_client.py` | GRPCWorldClient.respond_to_oracle() |
+
+---
+
 1109|## 5. A2A Protocol 详细设计
 1110|
 1111|### 5.1 协议栈

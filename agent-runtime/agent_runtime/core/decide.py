@@ -139,6 +139,8 @@ class DecisionPerception:
     available_tasks: list[str] = field(default_factory=list)
     visible_resources: list[str] = field(default_factory=list)
     recent_events: list[str] = field(default_factory=list)
+    pending_oracles: list[dict[str, Any]] = field(default_factory=list)
+    pending_bounties: list[dict[str, Any]] = field(default_factory=list)
 
 
 @dataclass(frozen=True)
@@ -267,6 +269,12 @@ state and choose the best action.
 - Should socialize: {should_socialize}
 {social_targets_section}
 
+## Pending Oracles
+{oracles_section}
+
+## Pending Bounties
+{bounties_section}
+
 ## Available Actions
 {actions_section}
 
@@ -390,6 +398,34 @@ def build_prompt(
         f"  - {a.value} (cost: {a.token_cost()} tokens)" for a in available_actions
     )
 
+    # Pending Oracles
+    if perception.pending_oracles:
+        oracle_lines = []
+        for o in perception.pending_oracles:
+            oracle_lines.append(
+                f"  - ID: {o.get('oracle_id', '?')} | "
+                f"Type: {o.get('type', '?')} | "
+                f"From: {o.get('human_id', '?')} | "
+                f"Content: {o.get('content', '')}"
+            )
+        oracles_section = "\n".join(oracle_lines)
+    else:
+        oracles_section = "  No pending oracles."
+
+    # Pending Bounties
+    if perception.pending_bounties:
+        bounty_lines = []
+        for b in perception.pending_bounties:
+            bounty_lines.append(
+                f"  - ID: {b.get('bounty_id', '?')} | "
+                f"Title: {b.get('title', '?')} | "
+                f"Reward: {b.get('reward', 0)} | "
+                f"Description: {b.get('description', '')}"
+            )
+        bounties_section = "\n".join(bounty_lines)
+    else:
+        bounties_section = "  No pending bounties."
+
     phase_value = state.phase.value if hasattr(state.phase, "value") else str(state.phase)
 
     # Reputation constraint note
@@ -460,6 +496,8 @@ def build_prompt(
         should_socialize=should_socialize,
         social_targets_section=social_targets_section,
         actions_section=actions_section,
+        oracles_section=oracles_section,
+        bounties_section=bounties_section,
         reputation_note=reputation_note,
     )
 

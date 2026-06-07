@@ -68,6 +68,8 @@ pub struct WorldConfig {
     pub tick_interval_ms: u64,
     #[serde(default = "default_max_agents")]
     pub max_agents: u32,
+    #[serde(default = "default_event_bus_capacity")]
+    pub event_bus_capacity: usize,
 }
 
 impl Default for WorldConfig {
@@ -76,6 +78,7 @@ impl Default for WorldConfig {
             name: default_world_name(),
             tick_interval_ms: default_tick_interval_ms(),
             max_agents: default_max_agents(),
+            event_bus_capacity: default_event_bus_capacity(),
         }
     }
 }
@@ -88,6 +91,9 @@ fn default_tick_interval_ms() -> u64 {
 }
 fn default_max_agents() -> u32 {
     10
+}
+fn default_event_bus_capacity() -> usize {
+    256
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
@@ -197,6 +203,15 @@ pub struct EvolutionConfig {
     pub inactivity_threshold: u64,
     #[serde(default = "default_passive_xp_per_tick")]
     pub passive_xp_per_tick: f64,
+    // Mutation XP parameters
+    #[serde(default = "default_mutation_boost_xp")]
+    pub mutation_boost_xp: f64,
+    #[serde(default = "default_mutation_decay_xp")]
+    pub mutation_decay_xp: f64,
+    #[serde(default = "default_mutation_new_skill_xp")]
+    pub mutation_new_skill_xp: f64,
+    #[serde(default = "default_crossover_personality_blend")]
+    pub crossover_personality_blend: f64,
     // Offspring mutation parameters
     #[serde(default = "default_offspring_mutation_rate")]
     pub offspring_mutation_rate: f64,
@@ -227,6 +242,10 @@ impl Default for EvolutionConfig {
             evaluation_interval: default_evaluation_interval(),
             inactivity_threshold: default_inactivity_threshold(),
             passive_xp_per_tick: default_passive_xp_per_tick(),
+            mutation_boost_xp: default_mutation_boost_xp(),
+            mutation_decay_xp: default_mutation_decay_xp(),
+            mutation_new_skill_xp: default_mutation_new_skill_xp(),
+            crossover_personality_blend: default_crossover_personality_blend(),
             offspring_mutation_rate: default_offspring_mutation_rate(),
             max_offspring_mutations: default_max_offspring_mutations(),
             personality_dimensions: default_personality_dimensions(),
@@ -257,6 +276,18 @@ fn default_inactivity_threshold() -> u64 {
 }
 fn default_passive_xp_per_tick() -> f64 {
     1.0
+}
+fn default_mutation_boost_xp() -> f64 {
+    75.0
+}
+fn default_mutation_decay_xp() -> f64 {
+    30.0
+}
+fn default_mutation_new_skill_xp() -> f64 {
+    50.0
+}
+fn default_crossover_personality_blend() -> f64 {
+    0.5
 }
 fn default_offspring_mutation_rate() -> f64 {
     0.15

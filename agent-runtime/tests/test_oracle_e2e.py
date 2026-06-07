@@ -20,14 +20,12 @@ Also covers:
 from __future__ import annotations
 
 from typing import Any
-from unittest.mock import AsyncMock
 
 import pytest
 
 from agent_runtime.actions.oracle_responder import (
     OracleResponder,
     OracleResponseStrategy,
-    OracleType,
 )
 from agent_runtime.core.act import (
     ActionContext,
@@ -37,7 +35,6 @@ from agent_runtime.core.act import (
 )
 from agent_runtime.core.decide import (
     DecisionAction,
-    DecisionEngine,
     DecisionPerception,
     SurvivalAssessment,
     build_prompt,
@@ -46,7 +43,8 @@ from agent_runtime.core.llm_decide import (
     _DECISION_TO_ACTION,
     _perception_to_decision,
 )
-from agent_runtime.core.message_queue import MessageQueue, OracleMessage, OracleType as MQOracleType
+from agent_runtime.core.message_queue import MessageQueue, OracleMessage
+from agent_runtime.core.message_queue import OracleType as MQOracleType
 from agent_runtime.core.think_loop import (
     Decision,
     Perception,
@@ -59,9 +57,7 @@ from agent_runtime.models.enums import AgentPhase
 from agent_runtime.survival.instinct import (
     SurvivalAction,
     SurvivalInstinct,
-    SurvivalMode,
 )
-
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -398,7 +394,8 @@ class TestOracleE2EFlow:
         assert len(world_client.responded_oracles) == 1
         oracle_id, response = world_client.responded_oracles[0]
         assert oracle_id == "oracle-e2e"
-        assert "guidance" in response.lower() or "Thank you" in response or "advice" in response.lower()
+        lower = response.lower()
+        assert "guidance" in lower or "Thank you" in response or "advice" in lower
         # Verify token was deducted (RESPOND_ORACLE costs 3)
         assert state.tokens == 497  # 500 - 3
 
@@ -494,7 +491,12 @@ class TestOracleE2EFlow:
         # Perception provider that returns NO messages
         class EmptyPerceptionProvider:
             async def perceive(self, state: AgentState, tick: int) -> Perception:
-                return Perception(messages=[], tick=tick, token_balance=state.tokens, health=state.health)
+                return Perception(
+                    messages=[],
+                    tick=tick,
+                    token_balance=state.tokens,
+                    health=state.health,
+                )
 
         world_client = _TrackingWorldClient()
 

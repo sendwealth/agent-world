@@ -11,8 +11,6 @@ from __future__ import annotations
 import asyncio
 import json
 
-import pytest
-
 from agent_runtime.tools import (
     BankTool,
     DiplomacyTool,
@@ -25,13 +23,11 @@ from agent_runtime.tools import (
     ReputationTool,
     StocksTool,
     TaskTool,
-    ToolRegistry,
     ToolStatus,
     TrustTool,
     create_builtin_tools,
     create_registry_with_builtins,
 )
-
 
 # ============================================================
 # Async helper

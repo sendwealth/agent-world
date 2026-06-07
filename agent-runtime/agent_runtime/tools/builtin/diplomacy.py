@@ -6,7 +6,7 @@ propose/accept/reject treaties, impose sanctions, declare war, propose peace.
 
 from __future__ import annotations
 
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, Optional
 
 from ..base import ToolParameters, ToolResult, ToolStatus
 from .world_engine_base import WorldEngineTool
@@ -26,7 +26,9 @@ class DiplomacyParams(ToolParameters):
     to_world_id: Optional[str] = None
     relation_type: Optional[str] = None
     # Treaties
-    treaty_type: Optional[str] = None  # non_aggression, trade_pact, military_alliance, research_exchange, cultural_exchange
+    # non_aggression, trade_pact, military_alliance, research_exchange,
+    # cultural_exchange
+    treaty_type: Optional[str] = None
     treaty_id: Optional[str] = None
     terms: Optional[str] = None
     proposer_world_id: Optional[str] = None

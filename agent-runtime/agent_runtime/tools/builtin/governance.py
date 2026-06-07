@@ -15,10 +15,15 @@ from .world_engine_base import WorldEngineTool
 class GovernanceParams(ToolParameters):
     """Parameters for the governance tool."""
 
-    action: str  # create_proposal, vote, start_voting, tally, cancel_proposal, add_argument, list_proposals, get_proposal, summary, org_metrics, timeline, comparison, list_legislation
+    # create_proposal, vote, start_voting, tally, cancel_proposal,
+    # add_argument, list_proposals, get_proposal, summary, org_metrics,
+    # timeline, comparison, list_legislation
+    action: str
     org_id: Optional[str] = None
     proposal_id: Optional[str] = None
-    proposal_type: Optional[str] = None  # amend_charter, accept_member, expel_member, dissolve_org, change_profit_sharing
+    # amend_charter, accept_member, expel_member, dissolve_org,
+    # change_profit_sharing
+    proposal_type: Optional[str] = None
     title: Optional[str] = None
     description: Optional[str] = None
     vote: Optional[str] = None  # for, against, abstain
@@ -56,7 +61,10 @@ class GovernanceTool(WorldEngineTool):
 
     @property
     def description(self) -> str:
-        return "Participate in organizational governance: create proposals, vote, tally, query metrics"
+        return (
+            "Participate in organizational governance:"
+            " create proposals, vote, tally, query metrics"
+        )
 
     @property
     def category(self) -> str:

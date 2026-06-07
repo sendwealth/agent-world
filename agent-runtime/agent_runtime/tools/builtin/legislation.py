@@ -6,7 +6,7 @@ vote, tally, and query legislation effects.
 
 from __future__ import annotations
 
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, Optional
 
 from ..base import ToolParameters, ToolResult, ToolStatus
 from .world_engine_base import WorldEngineTool

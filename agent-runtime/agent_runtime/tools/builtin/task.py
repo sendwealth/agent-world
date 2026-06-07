@@ -6,7 +6,7 @@ in the world-engine task system.
 
 from __future__ import annotations
 
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, Optional
 
 from ..base import ToolParameters, ToolResult, ToolStatus
 from .world_engine_base import WorldEngineTool
@@ -15,7 +15,10 @@ from .world_engine_base import WorldEngineTool
 class TaskParams(ToolParameters):
     """Parameters for the task tool."""
 
-    action: str  # create, list, get, claim, start, submit, review, complete, expire, delete, list_coordination, join_coordination, contribute_coordination, complete_coordination, cancel_coordination
+    # create, list, get, claim, start, submit, review, complete, expire,
+    # delete, list_coordination, join_coordination, contribute_coordination,
+    # complete_coordination, cancel_coordination
+    action: str
     task_id: Optional[str] = None
     coordination_task_id: Optional[str] = None
     title: Optional[str] = None
@@ -209,7 +212,10 @@ class TaskTool(WorldEngineTool):
         body: Dict[str, Any] = {}
         if params.claimer_id:
             body["agent_id"] = params.claimer_id
-        data = await self._post(f"/coordination-tasks/{params.coordination_task_id}/join", json=body)
+        data = await self._post(
+            f"/coordination-tasks/{params.coordination_task_id}/join",
+            json=body,
+        )
         return ToolResult(tool_name=self.name, status=ToolStatus.SUCCESS, output=data)
 
     async def _contribute_coordination(self, params: TaskParams) -> ToolResult:
@@ -218,13 +224,22 @@ class TaskTool(WorldEngineTool):
             body["contribution"] = params.contribution_data
         if params.contributor_id:
             body["agent_id"] = params.contributor_id
-        data = await self._post(f"/coordination-tasks/{params.coordination_task_id}/contribute", json=body)
+        data = await self._post(
+            f"/coordination-tasks/{params.coordination_task_id}/contribute",
+            json=body,
+        )
         return ToolResult(tool_name=self.name, status=ToolStatus.SUCCESS, output=data)
 
     async def _complete_coordination(self, params: TaskParams) -> ToolResult:
-        data = await self._post(f"/coordination-tasks/{params.coordination_task_id}/complete", json={})
+        data = await self._post(
+            f"/coordination-tasks/{params.coordination_task_id}/complete",
+            json={},
+        )
         return ToolResult(tool_name=self.name, status=ToolStatus.SUCCESS, output=data)
 
     async def _cancel_coordination(self, params: TaskParams) -> ToolResult:
-        data = await self._post(f"/coordination-tasks/{params.coordination_task_id}/cancel", json={})
+        data = await self._post(
+            f"/coordination-tasks/{params.coordination_task_id}/cancel",
+            json={},
+        )
         return ToolResult(tool_name=self.name, status=ToolStatus.SUCCESS, output=data)

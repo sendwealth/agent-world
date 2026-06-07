@@ -200,9 +200,10 @@ pub enum HumanInterventionType {
 }
 
 impl HumanInterventionType {
-    // TODO: Use when serialising intervention type for persistence/API responses.
+    /// Returns the string representation for manual (non-serde) serialization.
+    /// For serde-based serialization, `#[serde(rename_all = "snake_case")]` handles this automatically.
     #[allow(dead_code)]
-    fn as_str(&self) -> &'static str {
+    pub fn as_str(&self) -> &'static str {
         match self {
             HumanInterventionType::DirectControl => "direct_control",
             HumanInterventionType::Guidance => "guidance",

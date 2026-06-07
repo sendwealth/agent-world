@@ -173,8 +173,6 @@ struct RuleVote {
 pub struct RuleEngine {
     rules: HashMap<String, SoftRule>,
     votes: HashMap<String, Vec<RuleVote>>,
-    // TODO: Use for broadcasting RuleProposed/RuleVoted events.
-    #[allow(dead_code)]
     event_bus: Option<Arc<EventBus>>,
 }
 
@@ -229,8 +227,16 @@ impl RuleEngine {
             votes_against: 0,
             expires_tick,
         };
-        self.rules.insert(id.clone(), rule);
+        self.rules.insert(id.clone(), rule.clone());
         self.votes.insert(id.clone(), Vec::new());
+
+        self.emit(WorldEvent::SoftRuleProposed {
+            rule_id: id.clone(),
+            org_id: rule.org_id,
+            proposer_id: rule.proposer_id,
+            title: rule.title,
+        });
+
         id
     }
 
@@ -280,19 +286,28 @@ impl RuleEngine {
 
     /// Activate a proposed rule (called after governance vote passes).
     pub fn activate_rule(&mut self, rule_id: &str) -> Result<(), RuleEngineError> {
-        let rule = self
-            .rules
-            .get_mut(rule_id)
-            .ok_or_else(|| RuleEngineError::NotFound(rule_id.to_string()))?;
+        {
+            let rule = self
+                .rules
+                .get_mut(rule_id)
+                .ok_or_else(|| RuleEngineError::NotFound(rule_id.to_string()))?;
 
-        if rule.status == RuleStatus::Active {
-            return Err(RuleEngineError::AlreadyActive(rule_id.to_string()));
-        }
-        if rule.status == RuleStatus::Repealed {
-            return Err(RuleEngineError::Repealed(rule_id.to_string()));
+            if rule.status == RuleStatus::Active {
+                return Err(RuleEngineError::AlreadyActive(rule_id.to_string()));
+            }
+            if rule.status == RuleStatus::Repealed {
+                return Err(RuleEngineError::Repealed(rule_id.to_string()));
+            }
+
+            rule.status = RuleStatus::Active;
         }
 
-        rule.status = RuleStatus::Active;
+        let org_id = self.rules.get(rule_id).expect("rule must exist").org_id.clone();
+        self.emit(WorldEvent::SoftRuleActivated {
+            rule_id: rule_id.to_string(),
+            org_id,
+        });
+
         Ok(())
     }
 
@@ -343,12 +358,22 @@ impl RuleEngine {
     // ── Repeal / Suspend / Expire ──────────────────────────
 
     /// Repeal a rule permanently.
-    pub fn repeal_rule(&mut self, rule_id: &str, _repeal_tick: u64) -> Result<(), RuleEngineError> {
-        let rule = self
-            .rules
-            .get_mut(rule_id)
-            .ok_or_else(|| RuleEngineError::NotFound(rule_id.to_string()))?;
-        rule.status = RuleStatus::Repealed;
+    pub fn repeal_rule(&mut self, rule_id: &str, repeal_tick: u64) -> Result<(), RuleEngineError> {
+        {
+            let rule = self
+                .rules
+                .get_mut(rule_id)
+                .ok_or_else(|| RuleEngineError::NotFound(rule_id.to_string()))?;
+            rule.status = RuleStatus::Repealed;
+        }
+
+        let org_id = self.rules.get(rule_id).expect("rule must exist").org_id.clone();
+        self.emit(WorldEvent::SoftRuleRepealed {
+            rule_id: rule_id.to_string(),
+            org_id,
+            tick: repeal_tick,
+        });
+
         Ok(())
     }
 
@@ -378,16 +403,29 @@ impl RuleEngine {
 
     /// Expire rules whose `expires_tick` has passed.
     pub fn expire_rules(&mut self, current_tick: u64) -> Vec<String> {
+        // Collect IDs of rules to expire
+        let to_expire: Vec<String> = self
+            .rules
+            .iter()
+            .filter(|(_, rule)| {
+                rule.status == RuleStatus::Active
+                    && rule.expires_tick.is_some_and(|ex| current_tick >= ex)
+            })
+            .map(|(id, _)| id.clone())
+            .collect();
+
         let mut expired = Vec::new();
-        for rule in self.rules.values_mut() {
-            if rule.status == RuleStatus::Active {
-                if let Some(expires) = rule.expires_tick {
-                    if current_tick >= expires {
-                        rule.status = RuleStatus::Repealed;
-                        expired.push(rule.id.clone());
-                    }
-                }
+        for rule_id in &to_expire {
+            if let Some(rule) = self.rules.get_mut(rule_id) {
+                rule.status = RuleStatus::Repealed;
             }
+            let org_id = self.rules.get(rule_id).expect("rule must exist").org_id.clone();
+            self.emit(WorldEvent::SoftRuleExpired {
+                rule_id: rule_id.clone(),
+                org_id,
+                tick: current_tick,
+            });
+            expired.push(rule_id.clone());
         }
         expired
     }
@@ -425,15 +463,16 @@ impl RuleEngine {
         }
 
         // Threshold met — activate
-        let rule = self.rules.get_mut(rule_id).expect("rule must exist");
-        rule.status = RuleStatus::Active;
-
-        if let Some(ref bus) = self.event_bus {
-            bus.emit(WorldEvent::SoftRuleActivated {
-                rule_id: rule.id.clone(),
-                org_id: rule.org_id.clone(),
-            });
+        {
+            let rule = self.rules.get_mut(rule_id).expect("rule must exist");
+            rule.status = RuleStatus::Active;
         }
+
+        let org_id = self.rules.get(rule_id).expect("rule must exist").org_id.clone();
+        self.emit(WorldEvent::SoftRuleActivated {
+            rule_id: rule_id.to_string(),
+            org_id,
+        });
 
         Ok(true)
     }
@@ -488,11 +527,9 @@ impl RuleEngine {
 
     // ── Helpers ────────────────────────────────────────────
 
-    // TODO: Call from rule proposal/vote/apply methods to broadcast events.
-    #[allow(dead_code)]
-    fn emit(&self, _event: WorldEvent) {
+    fn emit(&self, event: WorldEvent) {
         if let Some(ref bus) = self.event_bus {
-            bus.emit(_event);
+            bus.emit(event);
         }
     }
 }

@@ -82,7 +82,8 @@ pub struct WAL {
     writer: Option<BufWriter<fs::File>>,
     entry_count: usize,
     current_sequence: u64,
-    // TODO: Use for WAL recovery and compaction operations.
+    /// Root WAL directory. Subdirectories (`snapshots/`, `wal-archive/`) are derived from this.
+    /// Retained for potential future use in advanced compaction or multi-file recovery.
     #[allow(dead_code)]
     data_dir: PathBuf,
     snapshot_dir: PathBuf,

@@ -31,7 +31,7 @@ pub struct EvolutionSubsystem {
     /// Mutation engine (internally holds the skill tree).
     mutation: MutationEngine,
     /// Crossover engine for offspring generation.
-    // TODO: Use for offspring generation when reproduction events are implemented.
+    /// Reserved for reproduction events (agent-offspring creation via parent skill crossover).
     #[allow(dead_code)]
     crossover: CrossoverEngine,
     /// Natural selection engine.

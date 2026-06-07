@@ -9,12 +9,13 @@ use crate::federation::migration::{MigrationManager, MigrationPolicy};
 use crate::federation::registry::WorldRegistry;
 
 /// Federation gRPC service combining WorldRegistry + Migration RPCs.
+///
+/// Fields will be consumed by gRPC service method implementations once
+/// the protobuf codegen layer is wired in.
 #[derive(Clone)]
 pub struct FederationServiceImpl {
-    // TODO: Used by gRPC service methods when federation RPCs are wired.
     #[allow(dead_code)]
     world_registry: Arc<WorldRegistry>,
-    // TODO: Used by gRPC service methods when federation RPCs are wired.
     #[allow(dead_code)]
     migration_manager: Arc<MigrationManager>,
 }

@@ -14,7 +14,7 @@ use serde::{Deserialize, Serialize};
 use tokio::sync::Mutex;
 
 use crate::api::{api_err, api_ok, AppState};
-use crate::plugin::{PluginInfo, PluginManager, PluginMetadata, PermissionSet, WasmSandbox, SandboxConfig};
+use crate::plugin::{PluginInfo, PluginManager, PluginMetadata, PermissionSet, WasmSandbox};
 
 // ── Response types ─────────────────────────────────────────────
 
@@ -195,7 +195,7 @@ pub fn plugin_routes() -> Router<AppState> {
 /// This endpoint accepts plugin metadata and returns a registration
 /// confirmation. The plugin can then be loaded into the WASM sandbox.
 pub async fn register_plugin(
-    State(state): State<AppState>,
+    State(_state): State<AppState>,
     axum::Json(req): axum::Json<RegisterPluginRequest>,
 ) -> axum::response::Response {
     // Validate required fields

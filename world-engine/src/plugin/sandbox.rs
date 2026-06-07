@@ -7,7 +7,7 @@ use std::collections::HashMap;
 use std::path::PathBuf;
 
 use serde::{Deserialize, Serialize};
-use tracing::{debug, info, warn};
+use tracing::{info, warn};
 use uuid::Uuid;
 
 use super::error::PluginError;
@@ -76,7 +76,7 @@ impl WasmSandbox {
 
     pub fn load_plugin(&mut self, plugin_id: &str, wasm_bytes: Vec<u8>, metadata: PluginMetadata,
         permissions: PermissionSet, config: HashMap<String, String>) -> Result<(), PluginError> {
-        if wasm_bytes.len() < 8 || &wasm_bytes[0..4] != &[0x00, 0x61, 0x73, 0x6d] {
+        if wasm_bytes.len() < 8 || wasm_bytes[0..4] != [0x00, 0x61, 0x73, 0x6d] {
             return Err(PluginError::InitFailed(format!("Invalid WASM binary for plugin '{}'", plugin_id)));
         }
         if self.instances.contains_key(plugin_id) {

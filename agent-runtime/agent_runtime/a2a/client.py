@@ -94,9 +94,13 @@ class A2AClient:
 
         # Verify channel connectivity before returning so callers get a fast
         # error instead of waiting for the first RPC to time out.
+        # Use the native async channel_ready() coroutine instead of
+        # grpc.channel_ready_future() which creates a _ChannelReadyFuture
+        # whose __del__ calls subscribe/unsubscribe on grpc.aio.Channel,
+        # raising PytestUnraisableExceptionWarning on GC.
         try:
             await asyncio.wait_for(
-                grpc.channel_ready_future(self._channel),
+                self._channel.channel_ready(),  # type: ignore[union-attr]
                 timeout=self._config.timeout,
             )
         except asyncio.TimeoutError:

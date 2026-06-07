@@ -7,7 +7,7 @@
 # decisions (policy checks, resource tax, blocked skills, quotas) by
 # reimplementing the core rules in Python.
 from dataclasses import dataclass, field
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Dict, List, Optional
 from uuid import uuid4
 
@@ -92,7 +92,7 @@ class PyMigrationManager:
                 raise ValueError("Agent is in migration cooldown")
 
         # Check daily quota
-        today = datetime.utcnow().strftime("%Y-%m-%d")
+        today = datetime.now(timezone.utc).strftime("%Y-%m-%d")
         if self.daily_count.get(today, 0) >= p.daily_quota:
             raise ValueError("Daily migration quota reached")
         self.daily_count[today] = self.daily_count.get(today, 0) + 1
@@ -128,7 +128,7 @@ class PyMigrationManager:
             target_world_id=target_world_id,
             status="pending",
             agent_snapshot=new_snapshot,
-            submitted_at=datetime.utcnow().isoformat(),
+            submitted_at=datetime.now(timezone.utc).isoformat(),
             token_cost=p.token_cost,
             resource_tax_rate=p.resource_tax_rate,
         )
@@ -147,7 +147,7 @@ class PyMigrationManager:
 
         app.status = "approved" if approved else "rejected"
         app.rejection_reason = rejection_reason
-        app.reviewed_at = datetime.utcnow().isoformat()
+        app.reviewed_at = datetime.now(timezone.utc).isoformat()
         return app
 
     def execute(self, migration_id: str) -> MigrationApplication:
@@ -158,7 +158,7 @@ class PyMigrationManager:
             raise ValueError(f"Migration must be approved, current: {app.status}")
 
         app.status = "completed"
-        app.completed_at = datetime.utcnow().isoformat()
+        app.completed_at = datetime.now(timezone.utc).isoformat()
         self.agent_last_migration[app.agent_id] = self.current_tick
         return app
 
@@ -172,7 +172,7 @@ class PyMigrationManager:
 
         app.status = "cancelled"
         app.rejection_reason = reason
-        app.completed_at = datetime.utcnow().isoformat()
+        app.completed_at = datetime.now(timezone.utc).isoformat()
         return app
 
     def get(self, migration_id: str) -> Optional[MigrationApplication]:

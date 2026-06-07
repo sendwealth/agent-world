@@ -21,6 +21,7 @@ use uuid::Uuid;
 use crate::api_auth::SharedApiKeyStore;
 
 /// Hardcoded JWT secret for test/dev helpers only. Production reads `JWT_SECRET` from env.
+#[cfg(test)]
 const _TEST_JWT_SECRET: &str = "test-only-jwt-secret";
 
 use crate::api_experiment::SharedExperimentStore;
@@ -316,7 +317,20 @@ impl AppState {
             human_store: Arc::new(Mutex::new(HumanParticipationStore::new())),
             auth_store: overrides
                 .auth_store
-                .unwrap_or_else(|| Arc::new(Mutex::new(AuthStore::new(_TEST_JWT_SECRET)))),
+                .unwrap_or_else(|| {
+                    #[cfg(test)]
+                    { Arc::new(Mutex::new(AuthStore::new(_TEST_JWT_SECRET))) }
+                    #[cfg(not(test))]
+                    {
+                        use rand::Rng;
+                        let secret: String = rand::thread_rng()
+                            .sample_iter(&rand::distributions::Alphanumeric)
+                            .take(48)
+                            .map(char::from)
+                            .collect();
+                        Arc::new(Mutex::new(AuthStore::new(&secret)))
+                    }
+                }),
             investment_system: overrides.investment_system,
             rule_engine: overrides.rule_engine,
             tool_marketplace: overrides.tool_marketplace,
@@ -399,7 +413,20 @@ fn make_test_state(
         governance_metrics: None,
         building_manager: Arc::new(Mutex::new(BuildingManager::new())),
         human_store: Arc::new(Mutex::new(HumanParticipationStore::new())),
-        auth_store: Arc::new(Mutex::new(AuthStore::new(_TEST_JWT_SECRET))),
+        auth_store: {
+            #[cfg(test)]
+            { Arc::new(Mutex::new(AuthStore::new(_TEST_JWT_SECRET))) }
+            #[cfg(not(test))]
+            {
+                use rand::Rng;
+                let secret: String = rand::thread_rng()
+                    .sample_iter(&rand::distributions::Alphanumeric)
+                    .take(48)
+                    .map(char::from)
+                    .collect();
+                Arc::new(Mutex::new(AuthStore::new(&secret)))
+            }
+        },
         investment_system: None,
         rule_engine: None,
         tool_marketplace: None,

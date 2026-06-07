@@ -627,7 +627,19 @@ async fn main() {
         federation_registry: Some(federation_registry),
         migration_manager: Some(migration_manager),
         auth_store: Some(Arc::new(Mutex::new(agent_world_engine::auth::AuthStore::new(
-            &std::env::var("JWT_SECRET").expect("FATAL: JWT_SECRET environment variable is not set. Set it to a strong random string before starting the server.")
+            &std::env::var("JWT_SECRET").unwrap_or_else(|_| {
+                use rand::Rng;
+                let secret: String = rand::thread_rng()
+                    .sample_iter(&rand::distributions::Alphanumeric)
+                    .take(48)
+                    .map(char::from)
+                    .collect();
+                tracing::warn!(
+                    "JWT_SECRET env var not set — generated a random secret for this session. \
+                     Set JWT_SECRET in your environment for production use."
+                );
+                secret
+            })
         )))),
         api_key_store,
         ab_experiment_store: Some(ab_experiment_store),
@@ -713,7 +725,15 @@ async fn main() {
     // Keep the handle alive
     tokio::spawn(async move { let _ = metrics_handle.await; });
 
-    let http_listener = tokio::net::TcpListener::bind(http_addr).await.unwrap();
+    let http_listener = tokio::net::TcpListener::bind(http_addr)
+        .await
+        .unwrap_or_else(|e| {
+            panic!(
+                "HTTP bind failed on {}: {}. Is another process using this port? \
+                 Set PORT to a different value or stop the conflicting process.",
+                http_addr, e
+            )
+        });
     let http_server = axum::serve(http_listener, app);
 
     // Spawn gRPC server as a separate task

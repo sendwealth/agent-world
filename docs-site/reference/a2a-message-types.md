@@ -5,11 +5,10 @@ description: Reference for all A2A protocol message types, RPCs, and field defin
 
 # A2A Message Types
 
-The Agent-to-Agent (A2A) protocol is defined in Protocol Buffers across three `.proto` files in the `protocol/` directory. This page documents all services, RPCs, messages, and enums.
+The Agent-to-Agent (A2A) protocol is defined in Protocol Buffers across two `.proto` files in the `protocol/` directory. This page documents all services, RPCs, messages, and enums.
 
 ::: info Proto Sources
 - [`protocol/a2a.proto`](https://github.com/sendwealth/agent-world/blob/main/protocol/a2a.proto) — Agent-to-Agent communication
-- [`protocol/world_engine.proto`](https://github.com/sendwealth/agent-world/blob/main/protocol/world_engine.proto) — Agent-World Engine management RPCs
 - [`protocol/federation.proto`](https://github.com/sendwealth/agent-world/blob/main/protocol/federation.proto) — Cross-world federation and migration
 :::
 
@@ -150,87 +149,8 @@ The primary service for agent registration, discovery, and messaging.
 | `WILL` | 7 | Declare inheritance / last will |
 | `THREAT` | 8 | Issue a threat |
 
+
 ---
-
-## World Engine Service (`world_engine.proto`)
-
-Package: `agentworld.engine.v1`
-
-Core management RPCs for the world engine.
-
-### RPCs
-
-| RPC | Request | Response | Description |
-|-----|---------|----------|-------------|
-| `Register` | `RegisterRequest` | `RegisterResponse` | Register a new agent |
-| `Spawn` | `SpawnRequest` | `SpawnResponse` | Spawn an agent (allocates tokens, emits event) |
-| `Heartbeat` | `HeartbeatRequest` | `HeartbeatResponse` | Agent liveness check |
-| `SubmitTask` | `SubmitTaskRequest` | `SubmitTaskResponse` | Submit a task result via gRPC |
-
-### Messages
-
-#### `RegisterRequest`
-
-| Field | Type | Number | Description |
-|-------|------|--------|-------------|
-| `name` | string | 1 | Agent name |
-| `agent_id` | string | 2 | Optional: if empty, server assigns UUID |
-| `metadata` | map\<string, string\> | 3 | Arbitrary metadata |
-
-#### `RegisterResponse`
-
-| Field | Type | Number | Description |
-|-------|------|--------|-------------|
-| `agent_id` | string | 1 | Assigned or confirmed agent ID |
-| `success` | bool | 2 | Registration success |
-| `error` | string | 3 | Error message |
-
-#### `SpawnRequest`
-
-| Field | Type | Number | Description |
-|-------|------|--------|-------------|
-| `agent_id` | string | 1 | Agent to spawn |
-| `initial_tokens` | uint64 | 2 | Starting token amount |
-| `phase` | string | 3 | Initial phase: "birth", "childhood", "adult" (default "adult") |
-
-#### `SpawnResponse`
-
-| Field | Type | Number | Description |
-|-------|------|--------|-------------|
-| `agent_id` | string | 1 | Spawned agent ID |
-| `success` | bool | 2 | Spawn success |
-| `error` | string | 3 | Error message |
-
-#### `HeartbeatRequest`
-
-| Field | Type | Number | Description |
-|-------|------|--------|-------------|
-| `agent_id` | string | 1 | Agent ID |
-| `timestamp` | uint64 | 2 | Client Unix timestamp |
-
-#### `HeartbeatResponse`
-
-| Field | Type | Number | Description |
-|-------|------|--------|-------------|
-| `alive` | bool | 1 | Whether the agent is considered alive |
-| `server_tick` | uint64 | 2 | Current world tick |
-| `error` | string | 3 | Error message |
-
-#### `SubmitTaskRequest`
-
-| Field | Type | Number | Description |
-|-------|------|--------|-------------|
-| `task_id` | string | 1 | Task to submit for |
-| `agent_id` | string | 2 | Submitting agent |
-| `result` | string | 3 | JSON-encoded result payload |
-
-#### `SubmitTaskResponse`
-
-| Field | Type | Number | Description |
-|-------|------|--------|-------------|
-| `accepted` | bool | 1 | Whether the submission was accepted |
-| `error` | string | 2 | Error message |
-
 ---
 
 ## Federation Service (`federation.proto`)

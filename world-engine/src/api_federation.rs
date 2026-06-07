@@ -8,112 +8,9 @@ use axum::{
 
 use crate::api::{api_err, api_ok, AppState};
 use crate::federation::migration::{AgentSnapshot, MigrationStatus as MigStatus};
-use crate::federation::registry::{WorldEndpoint, WorldEntry, WorldMetrics};
-use crate::federation::service::{RestMigrationReview, RestMigrationSubmit, RestWorldRegister};
+use crate::federation::registry::WorldMetrics;
+use crate::federation::service::{RestMigrationReview, RestMigrationSubmit};
 
-/// POST /api/v1/federation/worlds — Register a new world.
-/// Not routed — diplomacy_routes() handles this via FederationEngine.
-/// Wire here when gRPC federation replaces REST diplomacy.
-#[allow(dead_code)]
-pub async fn federation_register_world(
-    State(state): State<AppState>,
-    Json(body): Json<RestWorldRegister>,
-) -> impl IntoResponse {
-    let registry = match &state.federation_registry {
-        Some(r) => r.clone(),
-        None => {
-            return api_err(
-                StatusCode::SERVICE_UNAVAILABLE,
-                "federation registry not configured",
-            )
-        }
-    };
-    let entry = WorldEntry {
-        world_id: body.world_id,
-        name: body.name,
-        description: body.description,
-        endpoint: WorldEndpoint {
-            host: body.host,
-            grpc_port: body.grpc_port,
-            http_port: body.http_port,
-        },
-        status: crate::federation::WorldStatus::Online,
-        capabilities: body.capabilities,
-        max_agents: body.max_agents,
-        current_agents: 0,
-        labels: body.labels,
-        metrics: WorldMetrics::default(),
-        registered_at: chrono::Utc::now().to_rfc3339(),
-        last_heartbeat: chrono::Utc::now().to_rfc3339(),
-    };
-    let reg = registry.lock().await;
-    match reg.register(entry).await {
-        Ok(is_new) => api_ok(serde_json::json!({ "registered": true, "is_new": is_new })),
-        Err(e) => api_err(StatusCode::BAD_REQUEST, e),
-    }
-}
-
-/// GET /api/v1/federation/worlds — List all registered worlds.
-/// Not routed — diplomacy_routes() handles this via FederationEngine.
-#[allow(dead_code)]
-pub async fn federation_list_worlds(State(state): State<AppState>) -> impl IntoResponse {
-    let registry = match &state.federation_registry {
-        Some(r) => r.clone(),
-        None => {
-            return api_err(
-                StatusCode::SERVICE_UNAVAILABLE,
-                "federation registry not configured",
-            )
-        }
-    };
-    let reg = registry.lock().await;
-    let worlds = reg.list_all().await;
-    api_ok(&worlds)
-}
-
-/// GET /api/v1/federation/worlds/:world_id — Get a specific world.
-/// Not routed — diplomacy_routes() handles this via FederationEngine.
-#[allow(dead_code)]
-pub async fn federation_get_world(
-    State(state): State<AppState>,
-    Path(world_id): Path<String>,
-) -> impl IntoResponse {
-    let registry = match &state.federation_registry {
-        Some(r) => r.clone(),
-        None => {
-            return api_err(
-                StatusCode::SERVICE_UNAVAILABLE,
-                "federation registry not configured",
-            )
-        }
-    };
-    let reg = registry.lock().await;
-    match reg.get_world(&world_id).await {
-        Some(entry) => api_ok(&entry),
-        None => api_err(StatusCode::NOT_FOUND, "world not found"),
-    }
-}
-
-/// DELETE /api/v1/federation/worlds/:world_id — Deregister a world.
-/// Not routed — diplomacy_routes() handles this via FederationEngine.
-#[allow(dead_code)]
-pub async fn federation_deregister_world(
-    State(state): State<AppState>,
-    Path(world_id): Path<String>,
-) -> impl IntoResponse {
-    let registry = match &state.federation_registry {
-        Some(r) => r.clone(),
-        None => {
-            return api_err(
-                StatusCode::SERVICE_UNAVAILABLE,
-                "federation registry not configured",
-            )
-        }
-    };
-    let reg = registry.lock().await;
-    let removed = reg.deregister(&world_id).await;
-    api_ok(serde_json::json!({ "removed": removed }))
-}
 
 /// POST /api/v1/federation/worlds/:world_id/heartbeat — Record a heartbeat.
 pub async fn federation_heartbeat(
@@ -400,10 +297,9 @@ pub async fn agent_immigration_status(
     }
 }
 
-/// Federation + migration REST routes.
+/// Federation heartbeat + migration REST routes.
 /// Note: federation/worlds CRUD routes are registered in api_diplomacy::diplomacy_routes()
-/// which uses FederationEngine. The WorldRegistry-based handlers below are reserved for
-/// when the gRPC federation layer replaces the REST diplomacy endpoints.
+/// which uses FederationEngine.
 pub fn federation_routes() -> axum::Router<AppState> {
     axum::Router::new()
         .route(

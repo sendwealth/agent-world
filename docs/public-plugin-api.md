@@ -4,6 +4,7 @@
 > **Status**: Active
 > **Base URL**: `/api/v1/plugins`
 
+> **Getting Started**: See [Plugin Development Guide](./plugin-getting-started.md) for a step-by-step tutorial.
 This document describes the public REST API for third-party plugin registration, management, and execution.
 
 ---

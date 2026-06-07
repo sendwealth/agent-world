@@ -184,7 +184,7 @@
 184|184|- [ ] Cross-world interaction (multiple instances)
 185|185|
 186|186|### Not Implemented 🔴
-187|187|- ⚠️ **API for third-party plugin/extension** — plugin system implemented (`plugin/` with hooks, subsystems, permissions) but not yet documented for external users
+187|187|- ✅ **API for third-party plugin/extension** — plugin system implemented and documented (`plugin-interface-spec.md`, `public-plugin-api.md`, `plugin-getting-started.md`)
 188|188|- 🔴 **Academic research tools** — no data export beyond snapshot CSV/JSON export and A/B experiment framework
 189|189|
 190|190|---

@@ -83,6 +83,24 @@ impl Default for MentorshipConfig {
     }
 }
 
+/// Errors that can occur during mentorship operations.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum MentorshipError {
+    SessionNotFound(Uuid),
+}
+
+impl std::fmt::Display for MentorshipError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            MentorshipError::SessionNotFound(id) => {
+                write!(f, "mentorship session not found: {}", id)
+            }
+        }
+    }
+}
+
+impl std::error::Error for MentorshipError {}
+
 /// The mentorship system managing teaching relationships.
 pub struct MentorshipSystem {
     sessions: HashMap<Uuid, MentorshipSession>,
@@ -185,7 +203,7 @@ impl MentorshipSystem {
         &mut self,
         tick: u64,
         agents: &mut [(uuid::Uuid, u64, AgentRecord)],
-    ) -> Vec<Uuid> {
+    ) -> Result<Vec<Uuid>, MentorshipError> {
         let mut completed = Vec::new();
 
         // Build a lookup for agent records
@@ -255,7 +273,7 @@ impl MentorshipSystem {
 
             // Progress the session
             let is_complete = {
-                let session = self.sessions.get_mut(&session_id).unwrap();
+                let session = self.sessions.get_mut(&session_id).ok_or(MentorshipError::SessionNotFound(session_id))?;
                 session.current_progress += 1;
                 session.current_progress >= session.ticks_required
             };
@@ -263,7 +281,7 @@ impl MentorshipSystem {
             if is_complete {
                 // Transfer skill to apprentice
                 let (mentor_id, apprentice_id, skill_name, target_level) = {
-                    let session = self.sessions.get(&session_id).unwrap();
+                    let session = self.sessions.get(&session_id).ok_or(MentorshipError::SessionNotFound(session_id))?;
                     (
                         session.mentor_id.clone(),
                         session.apprentice_id.clone(),
@@ -287,7 +305,7 @@ impl MentorshipSystem {
 
                 // Mark completed
                 {
-                    let session = self.sessions.get_mut(&session_id).unwrap();
+                    let session = self.sessions.get_mut(&session_id).ok_or(MentorshipError::SessionNotFound(session_id))?;
                     session.status = MentorshipStatus::Completed;
                     session.completion_tick = Some(tick);
                     let key = (
@@ -309,7 +327,7 @@ impl MentorshipSystem {
             }
         }
 
-        completed
+        Ok(completed)
     }
 
     /// Get active sessions for a mentor.
@@ -495,12 +513,12 @@ mod tests {
 
         // Progress 8 ticks - not yet complete
         for tick in 1..=8 {
-            let completed = sys.progress_tick(tick, &mut agents);
+            let completed = sys.progress_tick(tick, &mut agents).unwrap();
             assert!(completed.is_empty());
         }
 
         // 9th tick should complete
-        let completed = sys.progress_tick(9, &mut agents);
+        let completed = sys.progress_tick(9, &mut agents).unwrap();
         assert_eq!(completed.len(), 1);
         assert_eq!(sys.active_count(), 0);
         assert_eq!(sys.completed_count(), 1);
@@ -557,7 +575,7 @@ mod tests {
             ),
         ];
 
-        sys.progress_tick(1, &mut agents);
+        sys.progress_tick(1, &mut agents).unwrap();
         assert_eq!(sys.active_count(), 0);
     }
 

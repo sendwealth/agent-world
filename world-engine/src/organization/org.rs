@@ -404,7 +404,7 @@ impl OrganizationStore {
         }];
 
         if should_dissolve {
-            let org = self.organizations.get_mut(org_id).unwrap();
+            let org = self.organizations.get_mut(org_id).ok_or_else(|| OrgError::NotFound(org_id.to_string()))?;
             org.status = OrgStatus::Dissolved;
             events.push(WorldEvent::OrgDissolved {
                 org_id: org_id.to_string(),

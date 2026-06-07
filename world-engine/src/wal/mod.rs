@@ -58,6 +58,8 @@ pub enum WALError {
     Io(#[from] std::io::Error),
     #[error("serialization error: {0}")]
     Serde(#[from] serde_json::Error),
+    #[error("corrupted or invalid WAL data")]
+    InvalidFormat,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -226,23 +228,47 @@ impl WAL {
             }
 
             // Read header
-            let magic = u32::from_be_bytes(buf[offset..offset + 4].try_into().unwrap());
+            let magic = match buf[offset..offset + 4].try_into() {
+                Ok(b) => u32::from_be_bytes(b),
+                Err(_) => {
+                    result.corrupted = true;
+                    break;
+                }
+            };
             if magic != MAGIC {
                 result.corrupted = true;
                 offset += 1;
                 continue;
             }
 
-            let version = u16::from_be_bytes(buf[offset + 4..offset + 6].try_into().unwrap());
+            let version = match buf[offset + 4..offset + 6].try_into() {
+                Ok(b) => u16::from_be_bytes(b),
+                Err(_) => {
+                    result.corrupted = true;
+                    offset += HEADER_SIZE;
+                    continue;
+                }
+            };
             if version != VERSION {
                 result.corrupted = true;
                 offset += HEADER_SIZE;
                 continue;
             }
 
-            let stored_crc = u32::from_be_bytes(buf[offset + 7..offset + 11].try_into().unwrap());
-            let payload_len =
-                u32::from_be_bytes(buf[offset + 11..offset + 15].try_into().unwrap()) as usize;
+            let stored_crc = match buf[offset + 7..offset + 11].try_into() {
+                Ok(b) => u32::from_be_bytes(b),
+                Err(_) => {
+                    result.corrupted = true;
+                    break;
+                }
+            };
+            let payload_len = match buf[offset + 11..offset + 15].try_into() {
+                Ok(b) => u32::from_be_bytes(b),
+                Err(_) => {
+                    result.corrupted = true;
+                    break;
+                }
+            } as usize;
 
             // Check full record available
             if offset + HEADER_SIZE + payload_len + 1 > buf.len() {
@@ -406,7 +432,7 @@ impl WAL {
         files.sort_by_key(|e| e.file_name());
         files
             .last()
-            .map(|e| e.file_name().to_str().unwrap().to_string())
+            .and_then(|e| e.file_name().to_str().map(|s| s.to_string()))
     }
 
     /// Full recovery: load latest snapshot → replay WAL.

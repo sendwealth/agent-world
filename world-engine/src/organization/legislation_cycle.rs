@@ -484,7 +484,7 @@ impl LegislationCycleEngine {
             "rules": rules_payload,
             // Intentionally omit "rule_id" so execute_proposal_side_effect
             // does NOT create a duplicate rule — we enact via enact_candidate_rules.
-            "proposer_id": leader_id,
+            "proposer_id": leader_id.clone(),
             "title": title,
             "description": description,
         });
@@ -493,7 +493,7 @@ impl LegislationCycleEngine {
         let proposal_id = governance
             .create_proposal(
                 org_id,
-                leader_id,
+                leader_id.clone(),
                 ProposalType::SoftRuleProposal,
                 title,
                 description,
@@ -504,13 +504,16 @@ impl LegislationCycleEngine {
 
         // Start voting immediately (skip discussion for auto-triggered legislation)
         governance
-            .start_voting(proposal_id, &record.leader_id.clone().unwrap(), tick)
+            .start_voting(proposal_id, &leader_id, tick)
             .map_err(|e| LegislationCycleError::VotingFailed {
                 reason: e.to_string(),
             })?;
 
         // Update cycle record
-        let record = self.cycles.get_mut(&org_id).unwrap();
+        let record = self
+            .cycles
+            .get_mut(&org_id)
+            .ok_or(LegislationCycleError::OrganizationNotFound(org_id))?;
         record.governance_proposal_id = Some(proposal_id);
         record.status = CycleStatus::VotingOpen;
 
@@ -596,7 +599,10 @@ impl LegislationCycleEngine {
             let enacted = self.enact_candidate_rules(governance, org_id, tick)?;
 
             // Update cycle record
-            let record = self.cycles.get_mut(&org_id).unwrap();
+            let record = self
+                .cycles
+                .get_mut(&org_id)
+                .ok_or(LegislationCycleError::OrganizationNotFound(org_id))?;
             let cycle_id = record.cycle_id;
             record.enacted_rule_ids = enacted.clone();
             record.status = CycleStatus::Enacted;
@@ -609,7 +615,10 @@ impl LegislationCycleEngine {
 
             Ok(enacted)
         } else {
-            let record = self.cycles.get_mut(&org_id).unwrap();
+            let record = self
+                .cycles
+                .get_mut(&org_id)
+                .ok_or(LegislationCycleError::OrganizationNotFound(org_id))?;
             record.status = CycleStatus::Rejected;
             record.completed_at_tick = Some(tick);
             Ok(Vec::new())
@@ -623,7 +632,10 @@ impl LegislationCycleEngine {
         org_id: Uuid,
         tick: u64,
     ) -> Result<Vec<String>, LegislationCycleError> {
-        let record = self.cycles.get(&org_id).unwrap();
+        let record = self
+            .cycles
+            .get(&org_id)
+            .ok_or(LegislationCycleError::OrganizationNotFound(org_id))?;
         let mut enacted_ids = Vec::new();
 
         for rule in &record.candidate_rules {
@@ -683,17 +695,12 @@ impl LegislationCycleEngine {
             .map_err(|e| LegislationCycleError::GovernanceError(e.to_string()))?;
 
         // Auto-cast election votes (each candidate votes for first candidate to ensure resolution)
-        let first_candidate = leadership
+        let election_candidates: Vec<String> = leadership
             .get_active_election(org_id)
-            .and_then(|e| e.candidates.first().cloned());
+            .map(|e| e.candidates.clone())
+            .unwrap_or_default();
 
-        if let Some(ref first) = first_candidate {
-            // Collect candidates first to avoid borrow conflict
-            let election_candidates: Vec<String> = leadership
-                .get_active_election(org_id)
-                .unwrap()
-                .candidates
-                .clone();
+        if let Some(first) = election_candidates.first() {
             for candidate in &election_candidates {
                 leadership
                     .cast_vote(org_id, candidate.clone(), vec![first.clone()])
@@ -839,9 +846,8 @@ impl LegislationCycleEngine {
         let reason = self.should_auto_trigger(org_id, current_tick, member_count)?;
         let cycle_id = self.start_cycle(org_id, candidates.clone(), current_tick, &reason).ok()?;
         leadership.initiate_election(org_id, candidates.clone(), self.config.election_method, current_tick).ok()?;
-        let first_candidate = leadership.get_active_election(org_id).and_then(|e| e.candidates.first().cloned());
-        if let Some(ref first) = first_candidate {
-            let election_candidates: Vec<String> = leadership.get_active_election(org_id).unwrap().candidates.clone();
+        let election_candidates: Vec<String> = leadership.get_active_election(org_id).map(|e| e.candidates.clone()).unwrap_or_default();
+        if let Some(first) = election_candidates.first() {
             for candidate in &election_candidates {
                 leadership.cast_vote(org_id, candidate.clone(), vec![first.clone()]).ok();
             }

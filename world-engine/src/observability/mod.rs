@@ -28,37 +28,37 @@ lazy_static::lazy_static! {
     pub static ref TICK_TOTAL: IntCounter = IntCounter::new(
         "world_tick_total",
         "Total number of ticks processed by the world engine",
-    ).unwrap();
+    ).expect("valid prometheus metric");
 
     /// Total number of transactions completed.
     pub static ref TRANSACTIONS_TOTAL: IntCounter = IntCounter::new(
         "world_transactions_total",
         "Total number of economic transactions",
-    ).unwrap();
+    ).expect("valid prometheus metric");
 
     /// Total number of agent deaths.
     pub static ref DEATHS_TOTAL: IntCounter = IntCounter::new(
         "world_deaths_total",
         "Total number of agent deaths",
-    ).unwrap();
+    ).expect("valid prometheus metric");
 
     /// Total number of events published to the EventBus.
     pub static ref EVENTS_PUBLISHED_TOTAL: IntCounter = IntCounter::new(
         "world_events_published_total",
         "Total number of events published to the EventBus",
-    ).unwrap();
+    ).expect("valid prometheus metric");
 
     /// Total number of gRPC messages routed.
     pub static ref GRPC_MESSAGES_ROUTED_TOTAL: IntCounter = IntCounter::new(
         "world_grpc_messages_routed_total",
         "Total number of gRPC A2A messages routed",
-    ).unwrap();
+    ).expect("valid prometheus metric");
 
     /// Total number of API HTTP requests.
     pub static ref HTTP_REQUESTS_TOTAL: IntCounter = IntCounter::new(
         "world_http_requests_total",
         "Total number of HTTP API requests served",
-    ).unwrap();
+    ).expect("valid prometheus metric");
 
     // --- Gauges ----------------------------------------------------------
 
@@ -66,31 +66,31 @@ lazy_static::lazy_static! {
     pub static ref AGENTS_ALIVE: IntGauge = IntGauge::new(
         "world_agents_alive",
         "Number of currently alive agents",
-    ).unwrap();
+    ).expect("valid prometheus metric");
 
     /// Current token supply in the world.
     pub static ref TOKEN_SUPPLY: IntGauge = IntGauge::new(
         "world_token_supply",
         "Current total token supply",
-    ).unwrap();
+    ).expect("valid prometheus metric");
 
     /// Current money supply in the world.
     pub static ref MONEY_SUPPLY: IntGauge = IntGauge::new(
         "world_money_supply",
         "Current total money supply",
-    ).unwrap();
+    ).expect("valid prometheus metric");
 
     /// Cumulative GDP (counter-like but stored as gauge for reset flexibility).
     pub static ref WORLD_GDP: IntGauge = IntGauge::new(
         "world_gdp",
         "Cumulative gross domestic product",
-    ).unwrap();
+    ).expect("valid prometheus metric");
 
     /// Number of open tasks on the board.
     pub static ref TASKS_OPEN: IntGauge = IntGauge::new(
         "world_tasks_open",
         "Number of currently open tasks",
-    ).unwrap();
+    ).expect("valid prometheus metric");
 
     // --- Histograms ------------------------------------------------------
 
@@ -98,19 +98,19 @@ lazy_static::lazy_static! {
     pub static ref TICK_DURATION: Histogram = Histogram::with_opts(
         HistogramOpts::new("tick_duration_seconds", "Time taken to execute a single tick")
             .buckets(vec![0.001, 0.005, 0.01, 0.025, 0.05, 0.1, 0.25, 0.5, 1.0, 2.5, 5.0]),
-    ).unwrap();
+    ).expect("valid prometheus metric");
 
     /// Duration of subsystem on_tick calls (seconds).
     pub static ref SUBSYSTEM_DURATION: Histogram = Histogram::with_opts(
         HistogramOpts::new("subsystem_duration_seconds", "Time taken per subsystem on_tick call")
             .buckets(vec![0.0001, 0.0005, 0.001, 0.005, 0.01, 0.05, 0.1, 0.5]),
-    ).unwrap();
+    ).expect("valid prometheus metric");
 
     /// Duration of gRPC message processing (seconds).
     pub static ref GRPC_MESSAGE_DURATION: Histogram = Histogram::with_opts(
         HistogramOpts::new("grpc_message_duration_seconds", "Time taken to process a gRPC message")
             .buckets(vec![0.0001, 0.0005, 0.001, 0.005, 0.01, 0.05, 0.1]),
-    ).unwrap();
+    ).expect("valid prometheus metric");
 }
 
 /// Register all metrics with the global registry.
@@ -162,7 +162,7 @@ pub async fn metrics_handler() -> Response<Body> {
         return Response::builder()
             .status(StatusCode::INTERNAL_SERVER_ERROR)
             .body(Body::from("encoding error"))
-            .unwrap();
+            .expect("valid metrics response");
     }
 
     Response::builder()
@@ -172,7 +172,7 @@ pub async fn metrics_handler() -> Response<Body> {
             "text/plain; version=0.0.4; charset=utf-8",
         )
         .body(Body::from(buffer))
-        .unwrap()
+        .expect("valid metrics response")
 }
 
 // ── RAII timing guard ────────────────────────────────────

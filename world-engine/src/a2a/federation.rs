@@ -607,7 +607,7 @@ impl FederationEngine {
         };
 
         // Update treaty status
-        let treaty = self.treaties.get_mut(treaty_id).unwrap();
+        let treaty = self.treaties.get_mut(treaty_id).ok_or_else(|| FederationError::TreatyNotFound(treaty_id.to_string()))?;
         treaty.status = CrossWorldTreatyStatus::Active;
         treaty.accepted_tick = Some(tick);
 
@@ -658,7 +658,7 @@ impl FederationEngine {
         let world_id = treaty.foreign_world_id.clone();
         let treaty_type = treaty.treaty_type;
 
-        let treaty = self.treaties.get_mut(treaty_id).unwrap();
+        let treaty = self.treaties.get_mut(treaty_id).ok_or_else(|| FederationError::TreatyNotFound(treaty_id.to_string()))?;
         treaty.status = CrossWorldTreatyStatus::Rejected;
 
         // Minor relation penalty for rejection
@@ -695,7 +695,7 @@ impl FederationEngine {
         let world_id = treaty.foreign_world_id.clone();
         let treaty_type = treaty.treaty_type;
 
-        let treaty = self.treaties.get_mut(treaty_id).unwrap();
+        let treaty = self.treaties.get_mut(treaty_id).ok_or_else(|| FederationError::TreatyNotFound(treaty_id.to_string()))?;
         treaty.status = CrossWorldTreatyStatus::Broken;
         treaty.ended_tick = Some(tick);
 

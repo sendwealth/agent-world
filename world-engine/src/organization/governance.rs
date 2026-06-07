@@ -393,8 +393,9 @@ impl Organization {
                 // Distribute remainder to first member
                 if allocated < total_profit {
                     if let Some(first_id) = self.members.keys().next() {
-                        let entry = dist.get_mut(first_id).unwrap();
-                        *entry += total_profit - allocated;
+                        if let Some(entry) = dist.get_mut(first_id) {
+                            *entry += total_profit - allocated;
+                        }
                     }
                 }
                 dist
@@ -423,8 +424,9 @@ impl Organization {
                 }
                 if allocated < total_profit {
                     if let Some(first_id) = self.members.keys().next() {
-                        let entry = dist.get_mut(first_id).unwrap();
-                        *entry += total_profit - allocated;
+                        if let Some(entry) = dist.get_mut(first_id) {
+                            *entry += total_profit - allocated;
+                        }
                     }
                 }
                 dist
@@ -617,11 +619,12 @@ impl GovernanceSystem {
 
         let org = Organization::new(name, founder_id.clone(), decision_mode, tick);
         let org_id = org.id;
+        let org_name = org.name.clone();
         self.organizations.insert(org_id, org);
 
         self.emit(crate::world::event::WorldEvent::OrganizationCreated {
             org_id,
-            name: self.organizations.get(&org_id).unwrap().name.clone(),
+            name: org_name,
             founder_id,
         });
 
@@ -669,7 +672,10 @@ impl GovernanceSystem {
             });
         }
 
-        let org = self.organizations.get_mut(&org_id).unwrap();
+        let org = self
+            .organizations
+            .get_mut(&org_id)
+            .ok_or(GovernanceError::OrganizationNotFound(org_id))?;
         org.dissolved = true;
         let name = org.name.clone();
 
@@ -727,7 +733,10 @@ impl GovernanceSystem {
             return Err(GovernanceError::CannotRemoveFounder);
         }
 
-        let org = self.organizations.get_mut(&org_id).unwrap();
+        let org = self
+            .organizations
+            .get_mut(&org_id)
+            .ok_or(GovernanceError::OrganizationNotFound(org_id))?;
         org.remove_member(agent_id);
 
         self.emit(crate::world::event::WorldEvent::OrganizationMemberLeft {
@@ -764,7 +773,10 @@ impl GovernanceSystem {
             });
         }
 
-        let org = self.organizations.get_mut(&org_id).unwrap();
+        let org = self
+            .organizations
+            .get_mut(&org_id)
+            .ok_or(GovernanceError::OrganizationNotFound(org_id))?;
         if let Some(member) = org.members.get_mut(agent_id) {
             member.role = new_role;
         }
@@ -837,18 +849,14 @@ impl GovernanceSystem {
         };
 
         let proposal_id = proposal.id;
+        let proposal_type_str = proposal.proposal_type.to_string();
         self.proposals.insert(proposal_id, proposal);
 
         self.emit(crate::world::event::WorldEvent::ProposalCreated {
             proposal_id,
             org_id,
             proposer_id,
-            proposal_type: self
-                .proposals
-                .get(&proposal_id)
-                .unwrap()
-                .proposal_type
-                .to_string(),
+            proposal_type: proposal_type_str,
         });
 
         Ok(proposal_id)
@@ -902,7 +910,10 @@ impl GovernanceSystem {
             });
         }
 
-        let proposal = self.proposals.get_mut(&proposal_id).unwrap();
+        let proposal = self
+            .proposals
+            .get_mut(&proposal_id)
+            .ok_or_else(|| GovernanceError::NotFound(proposal_id.to_string()))?;
         proposal.status = ProposalStatus::Voting;
 
         self.emit(crate::world::event::WorldEvent::ProposalVotingStarted {
@@ -951,7 +962,9 @@ impl GovernanceSystem {
             });
         }
 
-        let role = org.member_role(&voter_id).unwrap();
+        let role = org
+            .member_role(&voter_id)
+            .ok_or_else(|| GovernanceError::NotFound(voter_id.clone()))?;
         let weight = role.vote_weight();
 
         let vote = Vote {
@@ -961,7 +974,10 @@ impl GovernanceSystem {
             voted_at: tick,
         };
 
-        let proposal = self.proposals.get_mut(&proposal_id).unwrap();
+        let proposal = self
+            .proposals
+            .get_mut(&proposal_id)
+            .ok_or_else(|| GovernanceError::NotFound(proposal_id.to_string()))?;
         proposal.votes.push(vote);
 
         self.emit(crate::world::event::WorldEvent::ProposalVoted {
@@ -1005,7 +1021,10 @@ impl GovernanceSystem {
         // Check quorum
         let quorum_needed = (total_weight as f64 * gov_config.quorum_fraction).ceil() as u32;
         if total_votes < quorum_needed {
-            let proposal = self.proposals.get_mut(&proposal_id).unwrap();
+            let proposal = self
+                .proposals
+                .get_mut(&proposal_id)
+                .ok_or_else(|| GovernanceError::NotFound(proposal_id.to_string()))?;
             proposal.status = ProposalStatus::Rejected;
 
             self.emit(crate::world::event::WorldEvent::ProposalRejected {
@@ -1024,7 +1043,10 @@ impl GovernanceSystem {
         };
 
         if passed {
-            let proposal = self.proposals.get_mut(&proposal_id).unwrap();
+            let proposal = self
+                .proposals
+                .get_mut(&proposal_id)
+                .ok_or_else(|| GovernanceError::NotFound(proposal_id.to_string()))?;
             proposal.status = ProposalStatus::Executed;
 
             self.emit(crate::world::event::WorldEvent::ProposalExecuted {
@@ -1038,7 +1060,10 @@ impl GovernanceSystem {
 
             Ok(ProposalStatus::Executed)
         } else {
-            let proposal = self.proposals.get_mut(&proposal_id).unwrap();
+            let proposal = self
+                .proposals
+                .get_mut(&proposal_id)
+                .ok_or_else(|| GovernanceError::NotFound(proposal_id.to_string()))?;
             proposal.status = ProposalStatus::Rejected;
 
             self.emit(crate::world::event::WorldEvent::ProposalRejected {
@@ -1079,7 +1104,10 @@ impl GovernanceSystem {
             });
         }
 
-        let proposal = self.proposals.get_mut(&proposal_id).unwrap();
+        let proposal = self
+            .proposals
+            .get_mut(&proposal_id)
+            .ok_or_else(|| GovernanceError::NotFound(proposal_id.to_string()))?;
         proposal.status = ProposalStatus::Cancelled;
 
         Ok(())
@@ -1357,7 +1385,10 @@ impl GovernanceSystem {
         };
 
         let arg_id = argument.id;
-        let proposal = self.proposals.get_mut(&proposal_id).unwrap();
+        let proposal = self
+            .proposals
+            .get_mut(&proposal_id)
+            .ok_or_else(|| GovernanceError::NotFound(proposal_id.to_string()))?;
         proposal.arguments.push(argument);
 
         self.emit(crate::world::event::WorldEvent::ArgumentAdded {
@@ -1430,7 +1461,10 @@ impl GovernanceSystem {
 
         // Add the reply to the top-level arguments list for flat access,
         // and also push it into the parent's replies
-        let proposal = self.proposals.get_mut(&proposal_id).unwrap();
+        let proposal = self
+            .proposals
+            .get_mut(&proposal_id)
+            .ok_or_else(|| GovernanceError::NotFound(proposal_id.to_string()))?;
         if let Some(parent) = proposal
             .arguments
             .iter_mut()

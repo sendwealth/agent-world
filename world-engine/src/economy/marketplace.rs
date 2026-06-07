@@ -544,7 +544,7 @@ impl Marketplace {
             .insert(publisher_id.clone(), seller_balance + price);
 
         // Update purchase count
-        let listing = self.listings.get_mut(&listing_id).unwrap();
+        let listing = self.listings.get_mut(&listing_id).ok_or_else(|| MarketplaceError::NotFound(listing_id.to_string()))?;
         listing.purchase_count += 1;
 
         // Record purchase
@@ -614,7 +614,7 @@ impl Marketplace {
         };
 
         // Update listing rating stats
-        let listing = self.listings.get_mut(&listing_id).unwrap();
+        let listing = self.listings.get_mut(&listing_id).ok_or_else(|| MarketplaceError::NotFound(listing_id.to_string()))?;
         listing.rating_sum += score as f64;
         listing.rating_count += 1;
         let avg = listing.average_rating();

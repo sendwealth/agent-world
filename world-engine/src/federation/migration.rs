@@ -475,7 +475,7 @@ impl MigrationManager {
         let snapshot;
         {
             let apps = self.applications.read().await;
-            let app = apps.get(migration_id).unwrap();
+            let app = apps.get(migration_id).ok_or_else(|| format!("Migration {} not found", migration_id))?;
             snapshot = app.agent_snapshot.clone();
         }
 
@@ -560,7 +560,7 @@ impl MigrationManager {
         let final_result;
         {
             let mut apps = self.applications.write().await;
-            let app = apps.get_mut(migration_id).unwrap();
+            let app = apps.get_mut(migration_id).ok_or_else(|| format!("Migration {} not found", migration_id))?;
 
             // Fill in record fields from the application
             let mut full_record = record;
@@ -634,7 +634,7 @@ impl MigrationManager {
         let agent_id;
         {
             let apps = self.applications.read().await;
-            let app = apps.get(migration_id).unwrap();
+            let app = apps.get(migration_id).ok_or_else(|| format!("Migration {} not found", migration_id))?;
             agent_id = app.agent_id.clone();
         }
         {
@@ -649,7 +649,7 @@ impl MigrationManager {
         let submitted_at;
         {
             let apps = self.applications.read().await;
-            let app = apps.get(migration_id).unwrap();
+            let app = apps.get(migration_id).ok_or_else(|| format!("Migration {} not found", migration_id))?;
             snapshot = app.agent_snapshot.clone();
             target_world_id = app.target_world_id.clone();
             submitted_at = app.submitted_at.clone();
@@ -676,7 +676,7 @@ impl MigrationManager {
         let final_result;
         {
             let mut apps = self.applications.write().await;
-            let app = apps.get_mut(migration_id).unwrap();
+            let app = apps.get_mut(migration_id).ok_or_else(|| format!("Migration {} not found", migration_id))?;
             app.status = MigrationStatus::Completed;
             app.completed_at = Some(Utc::now().to_rfc3339());
             final_result = app.clone();

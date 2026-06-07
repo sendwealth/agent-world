@@ -277,7 +277,7 @@ class TestToolRegistryRegister:
         registry = ToolRegistry()
         for tool in create_builtin_tools():
             registry.register(tool)
-        assert registry.count == 3
+        assert registry.count == 15  # 3 original + 12 world-engine tools
 
 
 class TestToolRegistryUnregister:
@@ -378,7 +378,7 @@ class TestToolRegistryQuery:
         assert "compute" in cats
 
     def test_count(self):
-        assert self.registry.count == 4
+        assert self.registry.count == 16  # 15 builtins + echo
 
 
 class TestToolRegistryInvoke:
@@ -456,7 +456,7 @@ class TestToolRegistrySchemas:
     def test_get_all_schemas(self):
         registry = create_registry_with_builtins()
         schemas = registry.get_all_schemas()
-        assert len(schemas) == 3
+        assert len(schemas) == 15  # 3 original + 12 world-engine tools
         names = [s["name"] for s in schemas]
         assert "http_request" in names
         assert "file_ops" in names

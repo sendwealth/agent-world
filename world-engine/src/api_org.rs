@@ -203,7 +203,8 @@ impl From<&crate::organization::org::Organization> for OrgResponse {
     }
 }
 
-// TODO: Wire into governance-based org handlers when they are added.
+/// Convert a governance-layer `Organization` into an API response.
+/// Used by governance-based org read endpoints when available.
 pub fn org_to_response(org: &crate::organization::governance::Organization) -> OrgResponse {
     OrgResponse {
         id: org.id.to_string(),

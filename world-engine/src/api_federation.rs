@@ -12,7 +12,8 @@ use crate::federation::registry::{WorldEndpoint, WorldEntry, WorldMetrics};
 use crate::federation::service::{RestMigrationReview, RestMigrationSubmit, RestWorldRegister};
 
 /// POST /api/v1/federation/worlds — Register a new world.
-/// TODO: Not routed — diplomacy_routes() handles this via FederationEngine. Wire here when gRPC federation replaces REST diplomacy.
+/// Not routed — diplomacy_routes() handles this via FederationEngine.
+/// Wire here when gRPC federation replaces REST diplomacy.
 #[allow(dead_code)]
 pub async fn federation_register_world(
     State(state): State<AppState>,
@@ -53,7 +54,7 @@ pub async fn federation_register_world(
 }
 
 /// GET /api/v1/federation/worlds — List all registered worlds.
-/// TODO: Not routed — diplomacy_routes() handles this via FederationEngine.
+/// Not routed — diplomacy_routes() handles this via FederationEngine.
 #[allow(dead_code)]
 pub async fn federation_list_worlds(State(state): State<AppState>) -> impl IntoResponse {
     let registry = match &state.federation_registry {
@@ -71,7 +72,7 @@ pub async fn federation_list_worlds(State(state): State<AppState>) -> impl IntoR
 }
 
 /// GET /api/v1/federation/worlds/:world_id — Get a specific world.
-/// TODO: Not routed — diplomacy_routes() handles this via FederationEngine.
+/// Not routed — diplomacy_routes() handles this via FederationEngine.
 #[allow(dead_code)]
 pub async fn federation_get_world(
     State(state): State<AppState>,
@@ -94,7 +95,7 @@ pub async fn federation_get_world(
 }
 
 /// DELETE /api/v1/federation/worlds/:world_id — Deregister a world.
-/// TODO: Not routed — diplomacy_routes() handles this via FederationEngine.
+/// Not routed — diplomacy_routes() handles this via FederationEngine.
 #[allow(dead_code)]
 pub async fn federation_deregister_world(
     State(state): State<AppState>,

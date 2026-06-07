@@ -78,8 +78,6 @@ pub struct WorldEntry {
 #[derive(Clone)]
 pub struct WorldRegistry {
     worlds: Arc<RwLock<HashMap<String, WorldEntry>>>,
-    // TODO: Use for emitting WorldRegistered/Deregistered events.
-    #[allow(dead_code)]
     event_bus: Arc<EventBus>,
     heartbeat_timeout_secs: u64,
 }
@@ -101,7 +99,8 @@ impl WorldRegistry {
     /// Register a new world instance.
     pub async fn register(&self, entry: WorldEntry) -> Result<bool, String> {
         let world_id = entry.world_id.clone();
-        let _name = entry.name.clone();
+        let name = entry.name.clone();
+        let endpoint = format!("{}:{}", entry.endpoint.host, entry.endpoint.grpc_port);
         let mut worlds = self.worlds.write().await;
 
         let is_new = !worlds.contains_key(&world_id);
@@ -109,7 +108,13 @@ impl WorldRegistry {
 
         drop(worlds);
 
-        // Event: world_registered — will be added with proper FederationWorldRegistered variant
+        if is_new {
+            self.event_bus.emit(crate::world::event::WorldEvent::ForeignWorldDiscovered {
+                world_id,
+                name,
+                endpoint,
+            });
+        }
 
         Ok(is_new)
     }
@@ -117,11 +122,19 @@ impl WorldRegistry {
     /// Deregister a world instance.
     pub async fn deregister(&self, world_id: &str) -> bool {
         let mut worlds = self.worlds.write().await;
-        let removed = worlds.remove(world_id).is_some();
+        let removed = worlds.remove(world_id);
+        let was_present = removed.is_some();
+        let name = removed.map(|e| e.name).unwrap_or_default();
         drop(worlds);
 
-        // Event: world_deregistered — will be added with proper variant
-        removed
+        if was_present {
+            self.event_bus.emit(crate::world::event::WorldEvent::ForeignWorldDeregistered {
+                world_id: world_id.to_string(),
+                name,
+            });
+        }
+
+        was_present
     }
 
     /// Record a heartbeat for a world.

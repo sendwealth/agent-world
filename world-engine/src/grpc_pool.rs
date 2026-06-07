@@ -28,6 +28,8 @@ pub struct PoolConfig {
     pub health_check_interval: std::time::Duration,
     /// Maximum time a connection can be idle before being recycled.
     pub max_idle_age: std::time::Duration,
+    /// Maximum total age of a connection regardless of activity. Defaults to 1 hour.
+    pub max_connection_age: std::time::Duration,
 }
 
 impl Default for PoolConfig {
@@ -39,6 +41,7 @@ impl Default for PoolConfig {
             request_timeout: std::time::Duration::from_secs(10),
             health_check_interval: std::time::Duration::from_secs(30),
             max_idle_age: std::time::Duration::from_secs(300),
+            max_connection_age: std::time::Duration::from_secs(3600),
         }
     }
 }
@@ -46,8 +49,7 @@ impl Default for PoolConfig {
 /// A pooled gRPC connection with metadata.
 struct PooledConnection {
     channel: Channel,
-    // TODO: Use for connection max-age TTL enforcement.
-    #[allow(dead_code)]
+    /// Connection creation time, used for max-age TTL enforcement.
     created_at: std::time::Instant,
     last_used: std::time::Instant,
     use_count: usize,
@@ -64,8 +66,8 @@ impl PooledConnection {
         }
     }
 
-    fn is_expired(&self, max_idle_age: std::time::Duration) -> bool {
-        self.last_used.elapsed() > max_idle_age
+    fn is_expired(&self, max_idle_age: std::time::Duration, max_connection_age: std::time::Duration) -> bool {
+        self.last_used.elapsed() > max_idle_age || self.created_at.elapsed() > max_connection_age
     }
 }
 
@@ -102,7 +104,7 @@ impl GrpcConnectionPool {
         // Try to find a healthy, non-expired connection
         let now = std::time::Instant::now();
         while let Some(mut conn) = conns.pop_front() {
-            if conn.is_expired(self.config.max_idle_age) {
+            if conn.is_expired(self.config.max_idle_age, self.config.max_connection_age) {
                 // Connection is too old, discard and create new
                 continue;
             }
@@ -170,7 +172,7 @@ impl GrpcConnectionPool {
     pub async fn cleanup(&self) {
         let mut conns = self.connections.write().await;
         let before = conns.len();
-        conns.retain(|conn| !conn.is_expired(self.config.max_idle_age));
+        conns.retain(|conn| !conn.is_expired(self.config.max_idle_age, self.config.max_connection_age));
         let removed = before - conns.len();
         if removed > 0 {
             tracing::debug!("[gRPC Pool] Cleaned up {} expired connections", removed);
@@ -249,7 +251,7 @@ mod tests {
         // A connection just created should not be expired
         let conn =
             PooledConnection::new(Channel::from_static("http://127.0.0.1:50051").connect_lazy());
-        assert!(!conn.is_expired(config.max_idle_age));
+        assert!(!conn.is_expired(config.max_idle_age, config.max_connection_age));
     }
 
     #[tokio::test]

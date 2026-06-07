@@ -95,7 +95,8 @@ pub fn proposal_to_response(
     }
 }
 
-// TODO: Integrate into governance API when decision-mode parsing is needed in handlers.
+/// Parse a decision mode string into a `DecisionMode` enum value.
+/// Available for use in governance API handlers that need to accept decision mode parameters.
 pub fn parse_decision_mode(s: &str) -> Option<crate::organization::governance::DecisionMode> {
     use crate::organization::governance::DecisionMode;
     match s {

@@ -1,7 +1,7 @@
 # Plugin Interface Specification
 
-> **Version**: 1.0.0-draft
-> **Status**: Draft
+> **Version**: 1.0.0
+> **Status**: Active
 > **Related**: [SEN-312](https://github.com/sendwealth/agent-world/issues/312) (WASM Runtime), [SEN-314](https://github.com/sendwealth/agent-world/issues/314) (Skill Marketplace), [SEN-316](https://github.com/sendwealth/agent-world/issues/316) (Example Plugins)
 
 This document defines the standard plugin interface for Agent World's skill system. Third-party developers implement this interface to create plugins that run inside the WASM sandbox.

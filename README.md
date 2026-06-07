@@ -72,6 +72,7 @@ A hexagonal grid world with six terrain types (Plains, Forest, Mountain, Water, 
 
 ### 🔌 Plugin System
 A third-party **extension API** lets external code extend the World Engine through hooks (pre/post interceptors for ticks, actions, trades), subsystems (tick-participating components), and event handlers. Full lifecycle management with permission guards.
+> See the [Plugin Development Guide](docs/plugin-getting-started.md) to build your own plugins.
 
 ### 📊 Tick-Level Observability
 68|67|Every perception → decision → action cycle is captured as a trace. Social network graphs, emergence metrics, and interaction analytics are available in real-time via the dashboard and REST API.

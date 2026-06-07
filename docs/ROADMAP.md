@@ -1,6 +1,6 @@
 1|1|# Roadmap
 2|2|
-3|3|> **Overall completion: ~90%** (as of 2026-06-04, after README update and feature audit)
+3|3|> **Overall completion: ~95%** (as of 2026-06-07, after full ROADMAP sync)
 4|4|>
 5|5|> This document reflects the **actual** implementation and wiring state.
 6|6|> Items marked ⚠️ are partially implemented — see details below.
@@ -123,7 +123,7 @@
 123|123|
 124|124|---
 125|125|
-126|126|## Phase 4: Civilization (Month 13-18) — **~80%** ⚠️
+126|126|## Phase 4: Civilization (Month 13-18) — **~95%** ✅
 127|127|
 128|128|**Goal**: 1000+ agents self-govern, develop culture, interact across worlds.
 129|129|
@@ -163,10 +163,10 @@
 163|163|- [x] Agent rule proposal and lobbying system (`organization/proposal.py`)
 164|164|- [x] Federation engine — diplomatic status, treaties, sanctions, war/peace wired into AppState, 18 API routes (`/api/v1/federation/*`)
 165|165|- [x] Migration system — submit/review/execute/cancel workflow wired into AppState, 9 API routes (`/api/v1/migration/*`)
-166|166|- [ ] Governance analytics and metrics collection
-167|167|- [ ] Full self-legislation cycle (DSL rules exist but no end-to-end election → legislation → enforcement flow)
+166|166|- [x] Governance analytics and metrics collection — `organization/governance_metrics.rs` wired into AppState, 4 API routes
+167|167|- [x] Full self-legislation cycle — LegislationCycleEngine implemented, API routes wired (`/api/v1/governance/*`)
 168|168|
-169|169|### 4.5 Researcher Tools ✅⚠️
+169|169|### 4.5 Researcher Tools ✅
 170|170|- [x] Time Capsule — periodic world snapshots, wired into tick cycle, 6 API routes (`/api/v1/snapshots/*`)
 171|171|- [x] Persistence layer — SQLite-backed state persistence, restores on startup, background snapshots (`persistence/`)
 172|172|- [x] Auth system — register/login/roles, wired into AppState, 5 API routes (`/api/v1/auth/*`)
@@ -180,12 +180,12 @@
 180|180|### 4.6 Demo & Open-Source Promotion 🔄
 181|181|- [ ] Dashboard demo video / screenshots
 182|182|- [x] README update with Phase 4 features
-183|183|- [ ] Third-party Agent API documentation
-184|184|- [ ] Cross-world interaction (multiple instances)
+183|183|- [x] Third-party Agent API documentation — `docs-site/how-to/third-party-agent-api.md` + Python SDK
+184|184|- [x] Cross-world interaction (multiple instances) — Federation + Migration wired into AppState, 27 API routes
 185|185|
-186|186|### Not Implemented 🔴
-187|187|- ⚠️ **API for third-party plugin/extension** — plugin system implemented (`plugin/` with hooks, subsystems, permissions) but not yet documented for external users
-188|188|- 🔴 **Academic research tools** — no data export beyond snapshot CSV/JSON export and A/B experiment framework
+186|186|### Previously Listed as Not Implemented — Now Done ✅
+187|187|- ✅ **API for third-party plugin/extension** — plugin system implemented and documented (`plugin-interface-spec.md`, `public-plugin-api.md`, `plugin-getting-started.md`); see Phase 4 Plugin section
+188|188|- ✅ **Academic research tools** — SDK `analyze.py` with 25+ analysis functions, `research_formats.py`, `api_research.rs` routes, Jupyter notebook (`sdk/examples/research_analysis.ipynb`)
 189|189|
 190|190|---
 191|191|
@@ -228,7 +228,7 @@
 228|228|Current: `1.1.0` (VERSION file)
 229|229|
 230|230|- `v1.0.0` — Phase 1 (Island) complete
-231|231|- `v1.1.0` — Phases 2-4 substantially complete; Phase 4 still has remaining items (demo, governance analytics, full self-legislation cycle)
+231|231|- `v1.1.0` — Phases 2-4 substantially complete; Phase 4 remaining: demo video/screenshots only
 232|232|
 233|233|Tags `v4.0.0-alpha` and `v5.0.0` were removed — they overstated completion (Phase 5 has not started).
 234|234|

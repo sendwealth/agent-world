@@ -41,7 +41,7 @@
 39|| Agent Runtime | main.py | **已实现** | 完整 CLI 入口（__main__.py, 1358 行）：spawn、密钥生成/加载、注册、gRPC 连接、健康检查 |
 40|| Dashboard | 全部 | **已实现** | Pages: overview, agents, tasks, timeline, organizations, stocks, evolution, economy, governance, marketplace, briefing, traces; SSE 实时数据 |
 41|| Protocol | a2a.proto | **已实现** | 定义了 Discover、SendMessage、StreamMessages |
-42|| Protocol | discovery.proto | **已实现** | 发现功能集成到 world_engine.proto（Register/Spawn/Heartbeat RPCs）；discovery.proto 未单独定义 |
+42|| Protocol | discovery.proto | **已实现** | 发现功能已集成到 a2a.proto（RegisterAgent/Heartbeat RPCs）；discovery.proto 未单独定义 |
 43|| Agent Runtime | lifecycle/ | **已实现** | LifecycleSyncService：阶段同步、转换守卫、死亡处理（lifecycle/__init__.py, 338 行） |
 44|| Agent Runtime | context/ | **已实现** | ContextEnginePipeline：token 预算、优先级驱动的上下文组装（context/engine.py, 613 行） |
 45|| Agent Runtime | reflection/ | **已实现** | 反思引擎：记忆反思、自我评估、策略调整（reflection/ 模块） |

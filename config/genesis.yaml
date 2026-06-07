@@ -97,6 +97,24 @@ inheritance:
   inheritance_ratio: 0.5        # 死亡时Token转移比例（50%）
   skill_transfer_ratio: 0.3     # 技能等级转移比例（30%）
 
+# 跨世界迁移配置
+migration:
+  enabled: false             # Phase 1 禁用迁移（代码默认 true，显式关闭）
+  cooldown_ticks: 100        # 迁移冷却期
+  daily_quota: 10            # 每日迁移配额
+  weekly_quota: 50           # 每周迁移配额
+  min_reputation: 0.0        # 迁移最低信誉
+  token_cost: 10000          # 迁移消耗 Token
+  resource_tax_rate: 0.2     # 资源转移税率
+  require_skill_certification: false
+  blocked_skills: []         # 禁止携带的技能列表
+
+# 联邦配置（多世界互联，Phase 1 禁用）
+federation:
+  heartbeat_timeout_secs: 90   # 心跳超时
+  world_id: "agent-world-v1"   # 本世界唯一标识
+  bootstrap_peers: []          # 种子节点列表
+
 # 插件系统配置
 # plugins:
 #   enabled:

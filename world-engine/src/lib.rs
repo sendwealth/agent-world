@@ -50,7 +50,6 @@ pub mod config;
 pub mod dsl;
 pub mod economy;
 pub mod error;
-pub mod engine;
 pub mod evolution;
 pub mod federation;
 pub mod grpc_pool;

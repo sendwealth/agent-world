@@ -561,12 +561,12 @@ pub async fn population_export_csv(State(state): State<AppState>) -> impl IntoRe
     let mut resp = axum::response::Response::new(body);
     *resp.status_mut() = StatusCode::OK;
     resp.headers_mut()
-        .insert("content-type", "text/csv".parse().unwrap());
+        .insert("content-type", "text/csv".parse().expect("valid header value"));
     resp.headers_mut().insert(
         "content-disposition",
         format!("attachment; filename=\"population_tick_{}.csv\"", tick)
             .parse()
-            .unwrap(),
+            .expect("valid header value"),
     );
     resp
 }

@@ -393,7 +393,7 @@ impl DiplomacyEngine {
             });
         }
 
-        let treaty = self.treaties.get_mut(treaty_id).unwrap();
+        let treaty = self.treaties.get_mut(treaty_id).ok_or_else(|| DiplomacyError::TreatyNotFound(treaty_id.to_string()))?;
         treaty.status = TreatyStatus::Active;
         treaty.signed_tick = Some(tick);
 
@@ -440,7 +440,7 @@ impl DiplomacyEngine {
             });
         }
 
-        let treaty = self.treaties.get_mut(treaty_id).unwrap();
+        let treaty = self.treaties.get_mut(treaty_id).ok_or_else(|| DiplomacyError::TreatyNotFound(treaty_id.to_string()))?;
         treaty.status = TreatyStatus::Broken;
         treaty.ended_tick = Some(tick);
 

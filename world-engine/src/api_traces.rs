@@ -232,12 +232,12 @@ pub async fn export_snapshot(
             let mut resp = axum::response::Response::new(body);
             *resp.status_mut() = StatusCode::OK;
             resp.headers_mut()
-                .insert("content-type", "text/csv".parse().unwrap());
+                .insert("content-type", "text/csv".parse().expect("valid header value"));
             resp.headers_mut().insert(
                 "content-disposition",
                 "attachment; filename=\"world_snapshot.csv\""
                     .parse()
-                    .unwrap(),
+                    .expect("valid header value"),
             );
             resp
         }
@@ -247,12 +247,12 @@ pub async fn export_snapshot(
                 let mut resp = axum::response::Response::new(body);
                 *resp.status_mut() = StatusCode::OK;
                 resp.headers_mut()
-                    .insert("content-type", "application/json".parse().unwrap());
+                    .insert("content-type", "application/json".parse().expect("valid header value"));
                 resp.headers_mut().insert(
                     "content-disposition",
                     "attachment; filename=\"world_snapshot.json\""
                         .parse()
-                        .unwrap(),
+                        .expect("valid header value"),
                 );
                 resp
             }
@@ -300,12 +300,12 @@ pub async fn export_snapshot_by_tick(
             let mut resp = axum::response::Response::new(body);
             *resp.status_mut() = StatusCode::OK;
             resp.headers_mut()
-                .insert("content-type", "text/csv".parse().unwrap());
+                .insert("content-type", "text/csv".parse().expect("valid header value"));
             resp.headers_mut().insert(
                 "content-disposition",
                 "attachment; filename=\"world_snapshot.csv\""
                     .parse()
-                    .unwrap(),
+                    .expect("valid header value"),
             );
             resp
         }
@@ -315,12 +315,12 @@ pub async fn export_snapshot_by_tick(
                 let mut resp = axum::response::Response::new(body);
                 *resp.status_mut() = StatusCode::OK;
                 resp.headers_mut()
-                    .insert("content-type", "application/json".parse().unwrap());
+                    .insert("content-type", "application/json".parse().expect("valid header value"));
                 resp.headers_mut().insert(
                     "content-disposition",
                     "attachment; filename=\"world_snapshot.json\""
                         .parse()
-                        .unwrap(),
+                        .expect("valid header value"),
                 );
                 resp
             }
@@ -385,12 +385,12 @@ pub async fn export_economy(
             let mut resp = axum::response::Response::new(body);
             *resp.status_mut() = StatusCode::OK;
             resp.headers_mut()
-                .insert("content-type", "text/csv".parse().unwrap());
+                .insert("content-type", "text/csv".parse().expect("valid header value"));
             resp.headers_mut().insert(
                 "content-disposition",
                 "attachment; filename=\"economy_export.csv\""
                     .parse()
-                    .unwrap(),
+                    .expect("valid header value"),
             );
             resp
         }
@@ -400,12 +400,12 @@ pub async fn export_economy(
                 let mut resp = axum::response::Response::new(body);
                 *resp.status_mut() = StatusCode::OK;
                 resp.headers_mut()
-                    .insert("content-type", "application/json".parse().unwrap());
+                    .insert("content-type", "application/json".parse().expect("valid header value"));
                 resp.headers_mut().insert(
                     "content-disposition",
                     "attachment; filename=\"economy_export.json\""
                         .parse()
-                        .unwrap(),
+                        .expect("valid header value"),
                 );
                 resp
             }
@@ -497,10 +497,10 @@ pub async fn export_query(
             let mut resp = axum::response::Response::new(body);
             *resp.status_mut() = StatusCode::OK;
             resp.headers_mut()
-                .insert("content-type", "text/csv".parse().unwrap());
+                .insert("content-type", "text/csv".parse().expect("valid header value"));
             resp.headers_mut().insert(
                 "content-disposition",
-                "attachment; filename=\"query_export.csv\"".parse().unwrap(),
+                "attachment; filename=\"query_export.csv\"".parse().expect("valid header value"),
             );
             resp
         }
@@ -510,12 +510,12 @@ pub async fn export_query(
                 let mut resp = axum::response::Response::new(body);
                 *resp.status_mut() = StatusCode::OK;
                 resp.headers_mut()
-                    .insert("content-type", "application/json".parse().unwrap());
+                    .insert("content-type", "application/json".parse().expect("valid header value"));
                 resp.headers_mut().insert(
                     "content-disposition",
                     "attachment; filename=\"query_export.json\""
                         .parse()
-                        .unwrap(),
+                        .expect("valid header value"),
                 );
                 resp
             }

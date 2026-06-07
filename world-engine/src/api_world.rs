@@ -637,12 +637,12 @@ pub async fn export_snapshots_json(State(state): State<AppState>) -> impl IntoRe
             let mut resp = axum::response::Response::new(body);
             *resp.status_mut() = StatusCode::OK;
             resp.headers_mut()
-                .insert("content-type", "application/json".parse().unwrap());
+                .insert("content-type", "application/json".parse().expect("valid header value"));
             resp.headers_mut().insert(
                 "content-disposition",
                 "attachment; filename=\"world_snapshots.json\""
                     .parse()
-                    .unwrap(),
+                    .expect("valid header value"),
             );
             resp
         }
@@ -677,12 +677,12 @@ pub async fn export_snapshots_csv(State(state): State<AppState>) -> impl IntoRes
             let mut resp = axum::response::Response::new(body);
             *resp.status_mut() = StatusCode::OK;
             resp.headers_mut()
-                .insert("content-type", "text/csv".parse().unwrap());
+                .insert("content-type", "text/csv".parse().expect("valid header value"));
             resp.headers_mut().insert(
                 "content-disposition",
                 "attachment; filename=\"world_snapshots.csv\""
                     .parse()
-                    .unwrap(),
+                    .expect("valid header value"),
             );
             resp
         }

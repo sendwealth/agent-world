@@ -123,6 +123,7 @@ impl AgentRegistry {
 
         let agent_id = Uuid::new_v4().to_string();
         let now = current_epoch_millis();
+        let registered_name = name.clone();
 
         let profile = AgentProfile {
             agent_id: agent_id.clone(),
@@ -139,7 +140,7 @@ impl AgentRegistry {
         if let Some(ref bus) = self.event_bus {
             bus.emit(WorldEvent::AgentRegistered {
                 agent_id: agent_id.clone(),
-                name: self.agents.get(&agent_id).unwrap().name.clone(),
+                name: registered_name,
             });
         }
 

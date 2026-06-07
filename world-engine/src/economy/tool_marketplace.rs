@@ -602,7 +602,7 @@ impl ToolMarketplace {
             .insert(owner_id.clone(), seller_balance + price);
 
         // Update listing stats
-        let listing = self.listings.get_mut(&tool_id).unwrap();
+        let listing = self.listings.get_mut(&tool_id).ok_or_else(|| ToolMarketplaceError::NotFound(tool_id.to_string()))?;
         listing.total_purchases += 1;
 
         // Record purchase
@@ -694,7 +694,7 @@ impl ToolMarketplace {
             .insert(owner_id.clone(), owner_balance + total_cost);
 
         // Update listing stats
-        let listing = self.listings.get_mut(&tool_id).unwrap();
+        let listing = self.listings.get_mut(&tool_id).ok_or_else(|| ToolMarketplaceError::NotFound(tool_id.to_string()))?;
         listing.total_rentals += 1;
 
         // Create rental record
@@ -822,7 +822,7 @@ impl ToolMarketplace {
             tick,
         };
 
-        let listing = self.listings.get_mut(&tool_id).unwrap();
+        let listing = self.listings.get_mut(&tool_id).ok_or_else(|| ToolMarketplaceError::NotFound(tool_id.to_string()))?;
         listing.rating_sum += score as f64;
         listing.rating_count += 1;
 

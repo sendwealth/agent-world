@@ -325,7 +325,7 @@ impl Subsystem for TrustDecaySubsystem {
     }
 
     fn on_tick(&self, tick: u64, _agents: &mut [(Uuid, u64, AgentRecord)]) -> Vec<WorldEvent> {
-        let mut net = self.network.lock().unwrap();
+        let mut net = self.network.lock().unwrap_or_else(|poisoned| poisoned.into_inner());
         let _changes = net.decay_trust(tick);
         Vec::new()
     }
@@ -364,8 +364,8 @@ impl Subsystem for MentorshipProgressSubsystem {
     }
 
     fn on_tick(&self, tick: u64, agents: &mut [(Uuid, u64, AgentRecord)]) -> Vec<WorldEvent> {
-        let mut sys = self.system.lock().unwrap();
-        let _completed = sys.progress_tick(tick, agents);
+        let mut sys = self.system.lock().unwrap_or_else(|poisoned| poisoned.into_inner());
+        let _completed = sys.progress_tick(tick, agents).unwrap_or_default();
         Vec::new()
     }
 }
@@ -409,7 +409,7 @@ impl Subsystem for EscrowExpirySubsystem {
     }
 
     fn on_tick(&self, tick: u64, _agents: &mut [(Uuid, u64, AgentRecord)]) -> Vec<WorldEvent> {
-        let mut mgr = self.manager.lock().unwrap();
+        let mut mgr = self.manager.lock().unwrap_or_else(|poisoned| poisoned.into_inner());
         let _expired = mgr.process_expiry(tick);
         Vec::new()
     }

@@ -310,7 +310,7 @@ impl TaskBoard {
                 reward,
                 currency,
                 escrow_held: true,
-                publisher_id,
+                publisher_id: publisher_id.clone(),
                 assignee_id: None,
                 result: None,
                 expires_at,
@@ -320,7 +320,7 @@ impl TaskBoard {
 
             self.emit(WorldEvent::TaskCreated {
                 task_id: id.to_string(),
-                publisher: self.tasks.get(&id).unwrap().publisher_id.clone(),
+                publisher: publisher_id,
                 reward,
             });
 
@@ -336,7 +336,7 @@ impl TaskBoard {
             reward: 0,
             currency,
             escrow_held: false,
-            publisher_id,
+            publisher_id: publisher_id.clone(),
             assignee_id: None,
             result: None,
             expires_at,
@@ -346,7 +346,7 @@ impl TaskBoard {
 
         self.emit(WorldEvent::TaskCreated {
             task_id: id.to_string(),
-            publisher: self.tasks.get(&id).unwrap().publisher_id.clone(),
+            publisher: publisher_id,
             reward: 0,
         });
 
@@ -483,7 +483,10 @@ impl TaskBoard {
             });
         }
 
-        let task = self.tasks.get_mut(&id).unwrap();
+        let task = self
+            .tasks
+            .get_mut(&id)
+            .ok_or_else(|| TaskError::NotFound(id.to_string()))?;
 
         if approved {
             task.status = TaskStatus::Reviewed;
@@ -572,7 +575,10 @@ impl TaskBoard {
             None
         };
 
-        let task = self.tasks.get_mut(&id).unwrap();
+        let task = self
+            .tasks
+            .get_mut(&id)
+            .ok_or_else(|| TaskError::NotFound(id.to_string()))?;
         task.status = TaskStatus::Completed;
         task.escrow_held = false;
 
@@ -606,7 +612,10 @@ impl TaskBoard {
                 .insert(publisher_id.clone(), bal + escrow_amount);
         }
 
-        let task = self.tasks.get_mut(&id).unwrap();
+        let task = self
+            .tasks
+            .get_mut(&id)
+            .ok_or_else(|| TaskError::NotFound(id.to_string()))?;
         task.status = TaskStatus::Expired;
         task.escrow_held = false;
 
@@ -775,7 +784,10 @@ impl TaskBoard {
         }
 
         // Mutate
-        let task = self.coordination_tasks.get_mut(&id).unwrap();
+        let task = self
+            .coordination_tasks
+            .get_mut(&id)
+            .ok_or_else(|| CoordinationTaskError::NotFound(id.to_string()))?;
         task.participants.push(agent_id.clone());
 
         self.emit(WorldEvent::CoordinationTaskAgentJoined {
@@ -822,7 +834,10 @@ impl TaskBoard {
             });
         }
 
-        let task = self.coordination_tasks.get_mut(&id).unwrap();
+        let task = self
+            .coordination_tasks
+            .get_mut(&id)
+            .ok_or_else(|| CoordinationTaskError::NotFound(id.to_string()))?;
         task.contributions.insert(
             agent_id.to_string(),
             Contribution {
@@ -936,7 +951,10 @@ impl TaskBoard {
         }
 
         let contributor_count = distribution.len();
-        let task = self.coordination_tasks.get_mut(&id).unwrap();
+        let task = self
+            .coordination_tasks
+            .get_mut(&id)
+            .ok_or_else(|| CoordinationTaskError::NotFound(id.to_string()))?;
         task.status = CoordinationTaskStatus::Completed;
         task.escrow_held = false;
         task.reward_overrides = distribution.clone();
@@ -976,8 +994,13 @@ impl TaskBoard {
         }
 
         if !can_cancel {
+            let current_status = self
+                .coordination_tasks
+                .get(&id)
+                .map(|t| t.status)
+                .unwrap_or(CoordinationTaskStatus::Cancelled);
             return Err(CoordinationTaskError::InvalidTransition {
-                from: self.coordination_tasks.get(&id).unwrap().status,
+                from: current_status,
                 to: CoordinationTaskStatus::Cancelled,
             });
         }
@@ -990,7 +1013,10 @@ impl TaskBoard {
         }
 
         // Update status
-        let task = self.coordination_tasks.get_mut(&id).unwrap();
+        let task = self
+            .coordination_tasks
+            .get_mut(&id)
+            .ok_or_else(|| CoordinationTaskError::NotFound(id.to_string()))?;
         task.status = CoordinationTaskStatus::Cancelled;
         task.escrow_held = false;
 
@@ -1018,8 +1044,13 @@ impl TaskBoard {
         };
 
         if !can_expire {
+            let current_status = self
+                .coordination_tasks
+                .get(&id)
+                .map(|t| t.status)
+                .unwrap_or(CoordinationTaskStatus::Expired);
             return Err(CoordinationTaskError::InvalidTransition {
-                from: self.coordination_tasks.get(&id).unwrap().status,
+                from: current_status,
                 to: CoordinationTaskStatus::Expired,
             });
         }
@@ -1031,7 +1062,10 @@ impl TaskBoard {
         }
 
         // Update status
-        let task = self.coordination_tasks.get_mut(&id).unwrap();
+        let task = self
+            .coordination_tasks
+            .get_mut(&id)
+            .ok_or_else(|| CoordinationTaskError::NotFound(id.to_string()))?;
         task.status = CoordinationTaskStatus::Expired;
         task.escrow_held = false;
 

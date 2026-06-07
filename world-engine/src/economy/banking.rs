@@ -621,8 +621,8 @@ impl BankingSystem {
         loan.status = LoanStatus::Active;
         loan.outstanding_balance = principal;
         loan.disbursed_tick = Some(tick);
-        loan.due_tick = Some(tick + loan.term_ticks);
-        let due_tick = loan.due_tick.unwrap();
+        let due_tick = tick + loan.term_ticks;
+        loan.due_tick = Some(due_tick);
         let result = loan.clone();
 
         self.emit(WorldEvent::LoanDisbursed {

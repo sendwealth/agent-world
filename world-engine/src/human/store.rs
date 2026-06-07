@@ -364,7 +364,7 @@ impl HumanParticipationStore {
     }
 
     fn conn(&self) -> std::sync::MutexGuard<'_, Connection> {
-        self.conn.lock().unwrap()
+        self.conn.lock().unwrap_or_else(|poisoned| poisoned.into_inner())
     }
 
     // ── Oracle operations ────────────────────────────────────
@@ -960,10 +960,10 @@ impl HumanParticipationStore {
         let mut type_counts: HashMap<String, usize> = HashMap::new();
         let mut stmt = conn.prepare(
             "SELECT intervention_type, COUNT(*) FROM human_interventions GROUP BY intervention_type",
-        ).unwrap();
+        ).expect("valid SQL statement");
         let rows: Vec<(String, i64)> = stmt.query_map([], |row| {
             Ok((row.get::<_, String>(0)?, row.get::<_, i64>(1)?))
-        }).unwrap().filter_map(|r| r.ok()).collect();
+        }).expect("query execution").filter_map(|r| r.ok()).collect();
         for (itype, count) in rows {
             type_counts.insert(itype, count as usize);
         }

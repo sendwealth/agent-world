@@ -422,7 +422,7 @@ impl InvestmentSystem {
             return Err(InvestmentError::ProductClosed);
         }
 
-        let product = self.products.get_mut(&req.product_id).unwrap();
+        let product = self.products.get_mut(&req.product_id).ok_or_else(|| InvestmentError::ProductNotFound(req.product_id.clone()))?;
         product.status = InvestmentStatus::Frozen;
         Ok(product.clone())
     }
@@ -528,7 +528,7 @@ impl InvestmentSystem {
         let investor_id = req.investor_id.clone();
 
         // Update issued shares
-        self.products.get_mut(&product_id).unwrap().issued_shares += req.shares;
+        self.products.get_mut(&product_id).ok_or_else(|| InvestmentError::ProductNotFound(product_id.clone()))?.issued_shares += req.shares;
 
         // Update or create position
         let position = if let Some(pos_id) = self
@@ -536,7 +536,7 @@ impl InvestmentSystem {
             .get(&(product_id.clone(), investor_id.clone()))
             .cloned()
         {
-            let pos = self.positions.get_mut(&pos_id).unwrap();
+            let pos = self.positions.get_mut(&pos_id).ok_or_else(|| InvestmentError::PositionNotFound(pos_id.clone()))?;
             let new_cost = pos.cost_basis + total_amount;
             pos.shares += req.shares;
             pos.cost_basis = new_cost;
@@ -642,10 +642,10 @@ impl InvestmentSystem {
         let investor_id = req.investor_id.clone();
 
         // Update issued shares
-        self.products.get_mut(&product_id).unwrap().issued_shares -= req.shares;
+        self.products.get_mut(&product_id).ok_or_else(|| InvestmentError::ProductNotFound(product_id.clone()))?.issued_shares -= req.shares;
 
         // Update position
-        let position = self.positions.get_mut(&pos_id).unwrap();
+        let position = self.positions.get_mut(&pos_id).ok_or_else(|| InvestmentError::PositionNotFound(pos_id.clone()))?;
         position.shares -= req.shares;
         if position.shares == 0 {
             position.status = PositionStatus::Closed;
@@ -721,7 +721,7 @@ impl InvestmentSystem {
         }
 
         // Mark product as closed
-        let product = self.products.get_mut(&product_id).unwrap();
+        let product = self.products.get_mut(&product_id).ok_or_else(|| InvestmentError::ProductNotFound(product_id.clone()))?;
         product.status = InvestmentStatus::Closed;
         Ok(product.clone())
     }

@@ -233,7 +233,10 @@ impl EscrowManager {
             .insert(claimant.to_string(), available - deposit);
 
         // Update the record
-        let record = self.escrows.get_mut(&escrow_id).unwrap();
+        let record = self
+            .escrows
+            .get_mut(&escrow_id)
+            .ok_or_else(|| EscrowError::NotFound(escrow_id.to_string()))?;
         record.claimant = Some(claimant.to_string());
         record.status = EscrowStatus::Claimed;
 
@@ -269,7 +272,10 @@ impl EscrowManager {
         self.balances.insert(claimant.clone(), current + total);
 
         // Update status
-        self.escrows.get_mut(&escrow_id).unwrap().status = EscrowStatus::Completed;
+        self.escrows
+            .get_mut(&escrow_id)
+            .ok_or_else(|| EscrowError::NotFound(escrow_id.to_string()))?
+            .status = EscrowStatus::Completed;
 
         self.emit(WorldEvent::EscrowReleased {
             escrow_id: escrow_id.to_string(),
@@ -318,7 +324,10 @@ impl EscrowManager {
         }
 
         // Update status
-        self.escrows.get_mut(&escrow_id).unwrap().status = EscrowStatus::Refunded;
+        self.escrows
+            .get_mut(&escrow_id)
+            .ok_or_else(|| EscrowError::NotFound(escrow_id.to_string()))?
+            .status = EscrowStatus::Refunded;
 
         self.emit(WorldEvent::EscrowRefunded {
             escrow_id: escrow_id.to_string(),
@@ -387,7 +396,10 @@ impl EscrowManager {
             let current = self.get_balance(&claimant);
             self.balances.insert(claimant.clone(), current + total);
 
-            self.escrows.get_mut(&escrow_id).unwrap().status = EscrowStatus::Completed;
+            self.escrows
+                .get_mut(&escrow_id)
+                .ok_or_else(|| EscrowError::NotFound(escrow_id.to_string()))?
+                .status = EscrowStatus::Completed;
 
             self.emit(WorldEvent::EscrowReleased {
                 escrow_id: escrow_id.to_string(),
@@ -406,7 +418,10 @@ impl EscrowManager {
                 self.balances.insert(claimant.clone(), claim_bal + deposit);
             }
 
-            self.escrows.get_mut(&escrow_id).unwrap().status = EscrowStatus::Refunded;
+            self.escrows
+                .get_mut(&escrow_id)
+                .ok_or_else(|| EscrowError::NotFound(escrow_id.to_string()))?
+                .status = EscrowStatus::Refunded;
 
             self.emit(WorldEvent::EscrowRefunded {
                 escrow_id: escrow_id.to_string(),

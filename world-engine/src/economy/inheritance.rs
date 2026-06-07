@@ -136,7 +136,7 @@ impl InheritanceSystem {
         }
 
         if self.wills.contains_key(testator_id) {
-            let will = self.wills.get_mut(testator_id).unwrap();
+            let will = self.wills.get_mut(testator_id).ok_or_else(|| "will not found for testator".to_string())?;
             will.beneficiaries = beneficiaries;
             will.updated_tick = tick;
             let count = will.beneficiaries.len();

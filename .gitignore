@@ -39,6 +39,7 @@ Thumbs.db
 # Data (local only)
 data/
 demo/
+demo-video/
 !demo/public/data/
 *.db
 *.sqlite

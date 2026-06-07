@@ -164,7 +164,7 @@
 164|164|- [x] Federation engine — diplomatic status, treaties, sanctions, war/peace wired into AppState, 18 API routes (`/api/v1/federation/*`)
 165|165|- [x] Migration system — submit/review/execute/cancel workflow wired into AppState, 9 API routes (`/api/v1/migration/*`)
 166|166|- [ ] Governance analytics and metrics collection
-167|167|- [ ] Full self-legislation cycle (DSL rules exist but no end-to-end election → legislation → enforcement flow)
+167|167|- [x] Full self-legislation cycle — LegislationCycleEngine wired into main.rs + AppState, 13 API routes (`/api/v1/legislation/*`), end-to-end tests pass
 168|168|
 169|169|### 4.5 Researcher Tools ✅⚠️
 170|170|- [x] Time Capsule — periodic world snapshots, wired into tick cycle, 6 API routes (`/api/v1/snapshots/*`)

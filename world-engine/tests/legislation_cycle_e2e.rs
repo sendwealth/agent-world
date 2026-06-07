@@ -308,3 +308,69 @@ fn test_legislation_rule_expiry() {
     // Expired rules get status Repealed in the engine, counted as repealed
     assert_eq!(summary.repealed, 1);
 }
+
+#[test]
+fn test_legislation_cycle_engine_integrated_with_governance_and_rule_engine() {
+    // This test verifies the end-to-end integration: election → legislation → rule activation
+    // using the same wiring that main.rs uses (LegislationCycleEngine + GovernanceSystem + RuleEngine).
+    let config = LegislationCycleConfig::default();
+    let mut engine = LegislationCycleEngine::new(config);
+    let mut governance = GovernanceSystem::new();
+    let mut leadership = LeadershipEngine::new();
+
+    let org_id = governance
+        .create_org("Integrated Corp".to_string(), "founder".to_string(), DecisionMode::Vote, 0)
+        .unwrap();
+    governance.join_org(org_id, "leader".to_string(), 1).unwrap();
+    governance.join_org(org_id, "voter1".to_string(), 1).unwrap();
+    governance.join_org(org_id, "voter2".to_string(), 1).unwrap();
+
+    let candidates = vec!["founder".to_string(), "leader".to_string(), "voter1".to_string()];
+    let rules = vec![
+        make_candidate_rule("founder", "Integration Tax"),
+        make_behavior_rule("founder", "Integration Behavior"),
+    ];
+    let votes = vec![
+        ("founder".to_string(), true),
+        ("leader".to_string(), true),
+        ("voter1".to_string(), true),
+    ];
+
+    let (cycle_id, enacted) = engine
+        .run_full_cycle(
+            &mut governance,
+            &mut leadership,
+            org_id,
+            candidates,
+            &votes,
+            rules,
+            10,
+            "integration test",
+        )
+        .unwrap();
+
+    // Verify cycle completed
+    assert!(!cycle_id.is_nil());
+    assert_eq!(enacted.len(), 2);
+
+    // Verify rules are in the governance system's rule engine
+    assert_eq!(governance.active_rules.active_rule_count(), 2);
+
+    // Verify each enacted rule is active and belongs to the org
+    for rule_id in &enacted {
+        let rule = governance.active_rules.get_rule(rule_id).unwrap();
+        assert_eq!(rule.status, RuleStatus::Active);
+        assert_eq!(rule.org_id, org_id.to_string());
+    }
+
+    // Verify rules produce effects
+    let ctx = json!({"agent": {"resources": 500, "tax_bonus": 0.0, "behavior_modifier": "neutral"}, "world": {"tick": 10}});
+    let effects = governance.active_rules.evaluate_rules_for_org(&org_id.to_string(), &ctx);
+    assert_eq!(effects.len(), 2);
+
+    // Verify feedback loop
+    let summary = engine.evaluate_cycle_effects(&governance.active_rules, org_id);
+    assert_eq!(summary.total_enacted, 2);
+    assert_eq!(summary.still_active, 2);
+    assert_eq!(summary.expired, 0);
+}

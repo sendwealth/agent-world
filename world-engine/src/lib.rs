@@ -28,6 +28,7 @@ pub mod api_governance;
 pub mod api_human;
 pub mod api_inheritance;
 pub mod api_investment;
+pub mod api_legislation;
 pub mod api_mentorship;
 pub mod api_marketplace;
 pub mod api_network_graph;

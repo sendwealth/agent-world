@@ -581,7 +581,6 @@ export default function PluginsPage() {
   }, []);
 
   const loadPlugins = useCallback(() => loadRef.current(), []);
-  const loadSandbox = useCallback(() => loadSandboxRef.current(), []);
 
   const filtered = useMemo(() => {
     let result = plugins;

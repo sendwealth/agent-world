@@ -13,17 +13,12 @@ from __future__ import annotations
 
 import pytest
 
-from agent_runtime.core.act import ActionExecutor, ActionType
-from agent_runtime.core.think_loop import (
-    Decision,
-    ThinkLoop,
-    ThinkLoopConfig,
-)
+from agent_runtime.core.act import ActionExecutor
+from agent_runtime.core.think_loop import ThinkLoop, ThinkLoopConfig
 from agent_runtime.models.agent_state import AgentState
 from agent_runtime.models.enums import AgentPhase
 from agent_runtime.social.language_experiment import LanguageExperiment
 from agent_runtime.social.provider import DefaultLanguageExperimentHook
-
 
 # ---------------------------------------------------------------------------
 # Fixtures
@@ -79,8 +74,15 @@ class TestDefaultLanguageExperimentHook:
         assert len(result["violations"]) > 0
 
     def test_record_tick_tracks_messages(self, hook):
-        hook.record_tick("agent-1", tick=1, message="gather food", experiment_id="default")
-        hook.record_tick("agent-1", tick=2, message="explore unknown territory", experiment_id="default")
+        hook.record_tick(
+            "agent-1", tick=1, message="gather food", experiment_id="default"
+        )
+        hook.record_tick(
+            "agent-1",
+            tick=2,
+            message="explore unknown territory",
+            experiment_id="default",
+        )
         metrics = hook.get_efficiency_metrics("agent-1", "default")
         assert metrics.total_messages >= 0
 

@@ -6,7 +6,6 @@ import type {
   Task,
   TaskStatus,
   Organization,
-  CoordinationTask,
   CoordinationTaskStatus,
   LeaderboardEntry,
   EventType,

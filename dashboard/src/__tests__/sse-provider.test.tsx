@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
-import { render, screen, cleanup, waitFor, act } from "@testing-library/react";
+import { render, cleanup } from "@testing-library/react";
 
 vi.mock("next/navigation", () => ({
   usePathname: () => "/",
@@ -59,7 +59,7 @@ describe("SSEProvider", () => {
     );
 
     expect(subscribeFn).not.toBeNull();
-    const unsubscribe = subscribeFn!((event: unknown) => {});
+    const unsubscribe = subscribeFn!(() => {});
     expect(typeof unsubscribe).toBe("function");
     unsubscribe();
   });

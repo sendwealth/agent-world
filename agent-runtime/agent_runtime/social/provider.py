@@ -32,6 +32,7 @@ from agent_runtime.models.personality import PersonalityVector
 from agent_runtime.models.values import ValueWeights
 
 from .engine import SocialEngine
+from .language_experiment import LanguageExperiment
 
 logger = logging.getLogger(__name__)
 
@@ -310,3 +311,97 @@ class DefaultSocialEngineHook:
             return []
 
         return self._engine.apply_tick_diffusion(agents_by_region)
+
+
+class DefaultLanguageExperimentHook:
+    """Concrete ``LanguageExperimentHook`` that checks messages against
+    vocabulary constraints and records per-tick language metrics.
+
+    Implements the ``LanguageExperimentHook`` protocol from ``think_loop.py``.
+
+    Args:
+        experiment: Optional pre-configured LanguageExperiment. If not
+            provided a fresh instance is created.
+    """
+
+    def __init__(
+        self,
+        experiment: LanguageExperiment | None = None,
+    ) -> None:
+        self._experiment = experiment or LanguageExperiment()
+        # Per-agent message history for efficiency measurement.
+        self._messages_before: dict[str, list[str]] = {}
+        self._messages_after: dict[str, list[str]] = {}
+
+    @property
+    def experiment(self) -> LanguageExperiment:
+        """The underlying LanguageExperiment instance."""
+        return self._experiment
+
+    def setup_restricted_vocabulary(
+        self,
+        agent_ids: list[str],
+        allowed_words: set[str],
+        experiment_id: str = "default",
+    ) -> None:
+        """Forward vocabulary setup to the underlying experiment."""
+        self._experiment.setup_restricted_vocabulary(
+            agent_ids=agent_ids,
+            allowed_words=allowed_words,
+            experiment_id=experiment_id,
+        )
+
+    def check_message(
+        self,
+        message: str,
+        experiment_id: str = "default",
+    ) -> dict[str, Any]:
+        """Check a message against the active vocabulary constraint.
+
+        Returns:
+            Dict with keys: compliant (bool), violations (list of disallowed words).
+        """
+        return self._experiment.check_message(message, experiment_id)
+
+    def record_tick(
+        self,
+        agent_id: str,
+        tick: int,
+        message: str,
+        experiment_id: str = "default",
+    ) -> dict[str, Any]:
+        """Record a message for the agent and return compliance status.
+
+        Messages are stored in per-agent 'before' and 'after' lists,
+        enabling efficiency measurement once a vocabulary constraint is
+        activated.
+
+        Returns:
+            Dict with keys: compliant (bool), violations (list).
+        """
+        result = self._experiment.check_message(message, experiment_id)
+
+        if self._experiment.is_active(experiment_id):
+            self._messages_after.setdefault(agent_id, []).append(message)
+        else:
+            self._messages_before.setdefault(agent_id, []).append(message)
+
+        return result
+
+    def get_efficiency_metrics(
+        self,
+        agent_id: str,
+        experiment_id: str = "default",
+    ) -> Any:
+        """Measure communication efficiency for an agent.
+
+        Returns:
+            EfficiencyMetrics comparing before/after messages.
+        """
+        before = self._messages_before.get(agent_id, [])
+        after = self._messages_after.get(agent_id, [])
+        return self._experiment.measure_communication_efficiency(
+            before_messages=before,
+            after_messages=after,
+            experiment_id=experiment_id,
+        )

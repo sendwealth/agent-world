@@ -240,6 +240,29 @@ class EmotionHook(Protocol):
     def get_mood_description(self) -> str: ...
 
 
+class LanguageExperimentHook(Protocol):
+    """Optional hook for running language experiments during the think cycle.
+
+    Called once per tick after the action has been executed (and after
+    social engine processing). Implementations check messages against
+    vocabulary constraints and measure communication efficiency.
+    """
+
+    def check_message(
+        self,
+        message: str,
+        experiment_id: str,
+    ) -> dict[str, Any]: ...
+
+    def record_tick(
+        self,
+        agent_id: str,
+        tick: int,
+        message: str,
+        experiment_id: str,
+    ) -> dict[str, Any]: ...
+
+
 class DiaryProvider(Protocol):
     """Generates and persists a diary entry for the current tick.
 
@@ -415,6 +438,7 @@ class ThinkLoop:
         model_registry: Any | None = None,
         diary_provider: DiaryProvider | None = None,
         feed_integration: FeedIntegration | None = None,
+        language_experiment_hook: LanguageExperimentHook | None = None,
     ) -> None:
         self.state = state
         self.survival = survival
@@ -464,6 +488,8 @@ class ThinkLoop:
 
         # Feed integration — optional, social content posting/interaction
         self._feed = feed_integration
+        # Language experiment hook — optional, vocabulary constraints and efficiency
+        self._language_experiment_hook = language_experiment_hook
 
         # Runtime state
         self._tick: int = 0
@@ -914,6 +940,28 @@ class ThinkLoop:
             except Exception:
                 logger.debug(
                     "Tick %d: feed integration error (non-fatal)",
+                    self._tick,
+                    exc_info=True,
+                )
+
+        # 9b. Language experiment (every tick, non-fatal)
+        if self._language_experiment_hook is not None:
+            try:
+                reasoning = decision.reasoning or ""
+                experiment_id = decision.parameters.get("experiment_id", "default")
+                self._language_experiment_hook.check_message(
+                    message=reasoning,
+                    experiment_id=experiment_id,
+                )
+                self._language_experiment_hook.record_tick(
+                    agent_id=str(self.state.id),
+                    tick=self._tick,
+                    message=reasoning,
+                    experiment_id=experiment_id,
+                )
+            except Exception:
+                logger.debug(
+                    "Tick %d: language experiment hook error (non-fatal)",
                     self._tick,
                     exc_info=True,
                 )

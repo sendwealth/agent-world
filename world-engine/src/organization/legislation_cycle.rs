@@ -79,16 +79,13 @@ pub struct CandidateRule {
 }
 
 /// Type of candidate rule proposal.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize, Default)]
 #[serde(rename_all = "snake_case")]
 pub enum CandidateRuleType {
+    #[default]
     NewRule,
     RepealRule,
     AmendRule,
-}
-
-impl Default for CandidateRuleType {
-    fn default() -> Self { CandidateRuleType::NewRule }
 }
 
 impl CandidateRule {
@@ -1374,7 +1371,7 @@ mod tests {
 
     #[test]
     fn test_auto_trigger_time_based() {
-        let (mut engine, _, _) = setup_engines();
+        let (engine, _, _) = setup_engines();
         let org_id = Uuid::new_v4();
         assert!(engine.should_auto_trigger(org_id, 50, 5).is_none());
         let reason = engine.should_auto_trigger(org_id, 100, 5);
@@ -1384,7 +1381,7 @@ mod tests {
 
     #[test]
     fn test_auto_trigger_minimum_members() {
-        let (mut engine, _, _) = setup_engines();
+        let (engine, _, _) = setup_engines();
         let org_id = Uuid::new_v4();
         assert!(engine.should_auto_trigger(org_id, 100, 2).is_none());
         assert!(engine.should_auto_trigger(org_id, 100, 3).is_some());

@@ -1,7 +1,6 @@
 //! End-to-end integration test for the full self-legislation cycle.
 
 use serde_json::json;
-use uuid::Uuid;
 
 use agent_world_engine::organization::governance::{DecisionMode, GovernanceSystem};
 use agent_world_engine::organization::leadership::{LeadershipEngine, VotingMethod};
@@ -9,7 +8,7 @@ use agent_world_engine::organization::legislation_cycle::{
     CandidateRule, CycleStatus, LegislationCycleConfig, LegislationCycleEngine,
 };
 use agent_world_engine::organization::rule_engine::{
-    RuleCondition, RuleEffect, RuleEngine, RuleStatus, RuleType,
+    RuleCondition, RuleEffect, RuleStatus, RuleType,
 };
 
 fn make_candidate_rule(proposer: &str, title: &str) -> CandidateRule {

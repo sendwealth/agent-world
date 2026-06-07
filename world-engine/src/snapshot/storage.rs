@@ -143,7 +143,9 @@ impl SnapshotStorage {
         // If there's already a delta at this tick, remove it — full takes precedence
         if let Some(existing) = self.index.get(&snapshot.tick) {
             if existing.kind == SnapshotKind::Delta {
-                let _ = fs::remove_file(&existing.file_path);
+                if let Err(e) = fs::remove_file(&existing.file_path) {
+                    tracing::warn!("Failed to remove delta snapshot file: {:?}", e);
+                }
             }
         }
 
@@ -396,7 +398,9 @@ impl SnapshotStorage {
             let (_, group_ticks) = group;
             for tick in group_ticks {
                 if let Some(entry) = self.index.remove(tick) {
-                    let _ = fs::remove_file(&entry.file_path);
+                    if let Err(e) = fs::remove_file(&entry.file_path) {
+                        tracing::warn!("Failed to remove old snapshot file {:?}: {:?}", entry.file_path, e);
+                    }
                     total_count -= 1;
                 }
             }

@@ -1208,12 +1208,16 @@ impl GovernanceSystem {
                     if !rule_id.is_empty() {
                         // Try activating a pre-proposed rule first
                         if self.active_rules.get_rule(&rule_id).is_some() {
-                            let _ = self.active_rules.activate_rule(&rule_id);
+                            if let Err(e) = self.active_rules.activate_rule(&rule_id) {
+                                tracing::warn!("Failed to activate rule {}: {}", rule_id, e);
+                            }
                         } else {
                             // Rule doesn't exist yet — create it from the payload
                             self.create_and_activate_rule_from_payload(&rule_id, org_id, &payload);
                         }
-                        let _ = self.active_rules.activate_rule(&rule_id);
+                        if let Err(e) = self.active_rules.activate_rule(&rule_id) {
+                            tracing::warn!("Failed to activate rule {}: {}", rule_id, e);
+                        }
                     }
                 }
             }
@@ -1303,7 +1307,9 @@ impl GovernanceSystem {
         );
 
         // Activate immediately since the proposal already passed governance vote
-        let _ = self.active_rules.activate_rule(&new_id);
+        if let Err(e) = self.active_rules.activate_rule(&new_id) {
+            tracing::warn!("Failed to activate newly proposed rule {}: {}", new_id, e);
+        }
     }
 
     // ── Debate / Discussion Arguments ─────────────────────────

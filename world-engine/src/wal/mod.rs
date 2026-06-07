@@ -139,7 +139,9 @@ impl WAL {
     /// Close the WAL.
     pub fn close(&mut self) {
         if let Some(mut w) = self.writer.take() {
-            let _ = w.flush();
+            if let Err(e) = w.flush() {
+                tracing::warn!("WAL flush failed during shutdown: {:?}", e);
+            }
         }
     }
 

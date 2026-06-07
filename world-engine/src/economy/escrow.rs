@@ -433,7 +433,9 @@ impl EscrowManager {
             .collect();
 
         for id in &expired_ids {
-            let _ = self.refund_escrow(*id);
+            if let Err(e) = self.refund_escrow(*id) {
+                tracing::error!("Escrow refund failed for {}: {:?}", id, e);
+            }
         }
 
         expired_ids

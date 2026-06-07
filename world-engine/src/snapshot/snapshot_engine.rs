@@ -48,19 +48,24 @@ impl SnapshotEngineHandle {
         agents: Vec<(Uuid, u64, AgentRecord)>,
         events: Vec<WorldEvent>,
     ) {
-        let _ = self
+        if let Err(e) = self
             .sender
             .send(SnapshotRequest::TickCompleted {
                 tick,
                 agents,
                 events,
             })
-            .await;
+            .await
+        {
+            tracing::warn!("Failed to send tick {} notification to snapshot engine: {}", tick, e);
+        }
     }
 
     /// Request engine shutdown.
     pub async fn shutdown(&self) {
-        let _ = self.sender.send(SnapshotRequest::Shutdown).await;
+        if let Err(e) = self.sender.send(SnapshotRequest::Shutdown).await {
+            tracing::warn!("Failed to send shutdown to snapshot engine: {}", e);
+        }
     }
 }
 

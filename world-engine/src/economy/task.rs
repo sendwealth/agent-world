@@ -630,7 +630,9 @@ impl TaskBoard {
             .collect();
 
         for id in &expired_ids {
-            let _ = self.expire_task(*id);
+            if let Err(e) = self.expire_task(*id) {
+                tracing::error!("Task expiration failed for {}: {:?}", id, e);
+            }
         }
 
         expired_ids
@@ -1057,7 +1059,9 @@ impl TaskBoard {
             .collect();
 
         for id in &expired {
-            let _ = self.expire_coordination_task(*id);
+            if let Err(e) = self.expire_coordination_task(*id) {
+                tracing::error!("Coordination task expiration failed for {}: {:?}", id, e);
+            }
         }
 
         expired

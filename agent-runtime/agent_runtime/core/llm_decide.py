@@ -59,6 +59,10 @@ _DECISION_TO_ACTION: dict[DecisionAction, ActionType] = {
     DecisionAction.MOVE: ActionType.MOVE,
     DecisionAction.GATHER: ActionType.GATHER,
     DecisionAction.BUILD: ActionType.BUILD,
+    DecisionAction.RESPOND_ORACLE: ActionType.RESPOND_ORACLE,
+    DecisionAction.CHECK_BOUNTIES: ActionType.CHECK_BOUNTIES,
+    DecisionAction.ACCEPT_BOUNTY: ActionType.ACCEPT_BOUNTY,
+    DecisionAction.COMPLETE_BOUNTY: ActionType.COMPLETE_BOUNTY,
 }
 
 # DecisionActions without a direct ActionType counterpart — mapped to REST
@@ -166,10 +170,22 @@ def _perception_to_decision(perception: Perception) -> DecisionPerception:
         r if isinstance(r, str) else str(r) for r in visible_resources_raw
     ]
 
-    # Extract recent_events from messages
+    # Extract recent_events from messages (excluding Oracle/Bounty which are
+    # tracked separately)
     recent_events: list[str] = []
+    pending_oracles: list[dict[str, Any]] = []
+    pending_bounties: list[dict[str, Any]] = []
+
     for msg in perception.messages:
         if isinstance(msg, dict):
+            kind = msg.get("kind", "")
+            if kind == "oracle":
+                pending_oracles.append(msg)
+                continue
+            if kind == "bounty":
+                pending_bounties.append(msg)
+                continue
+
             msg_type = msg.get("type", "event")
             payload = msg.get("payload", {})
             if isinstance(payload, dict):
@@ -190,6 +206,8 @@ def _perception_to_decision(perception: Perception) -> DecisionPerception:
         available_tasks=available_tasks,
         visible_resources=visible_resources,
         recent_events=recent_events,
+        pending_oracles=pending_oracles,
+        pending_bounties=pending_bounties,
     )
 
 

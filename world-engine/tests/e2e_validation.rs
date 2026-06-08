@@ -267,7 +267,9 @@ fn test_e2e_10_agents_500_ticks() {
         let _tick_events = world_state.tick();
 
         // Progress mentorships
-        let completed = mentorship_system.progress_tick(tick, &mut world_state.agents);
+        let completed = mentorship_system
+            .progress_tick(tick, &mut world_state.agents)
+            .unwrap_or_default();
         if !completed.is_empty() {
             mentorship_completed = true;
         }

@@ -19,6 +19,7 @@ use crate::human::store::{
     InfluenceRankingsQuery, InvestRequest, ListBountiesQuery, ListOraclesQuery, OracleType,
     OracleResponseRequest, RechargeRequest, SendOracleRequest,
 };
+use crate::world::event::WorldEvent;
 
 // ── Human Participation API Handlers ──────────────────────
 
@@ -163,8 +164,20 @@ pub async fn human_send_oracle(
             })),
             timestamp: chrono::Utc::now().timestamp(),
         };
-        router.deliver(&oracle.target_agent_id, msg).await;
+        let delivered = router.deliver(&oracle.target_agent_id, msg).await;
+
+        if delivered {
+            // Update oracle status: Pending → Delivered
+            store.deliver_oracle(&oracle.id);
+        }
     }
+
+    // Emit OracleDelivered event for observability
+    state.event_bus.emit(WorldEvent::OracleDelivered {
+        oracle_id: oracle.id.clone(),
+        agent_id: oracle.target_agent_id.clone(),
+        content: oracle.content.clone(),
+    });
 
     (StatusCode::CREATED, Json(oracle)).into_response()
 }
@@ -278,6 +291,13 @@ pub async fn human_create_bounty(
             router.broadcast(msg).await;
         }
     }
+
+    // Emit BountyPublished event for observability
+    state.event_bus.emit(WorldEvent::BountyPublished {
+        bounty_id: bounty.id.clone(),
+        title: bounty.title.clone(),
+        reward: bounty.reward,
+    });
 
     (StatusCode::CREATED, Json(bounty)).into_response()
 }

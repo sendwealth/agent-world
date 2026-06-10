@@ -403,6 +403,23 @@ impl HumanParticipationStore {
         oracle
     }
 
+    /// Mark an oracle as delivered — transitions status from Pending → Delivered.
+    ///
+    /// Called after the WorldMessageRouter successfully pushes the Oracle
+    /// message to the agent's gRPC stream.
+    pub fn deliver_oracle(&mut self, oracle_id: &str) -> bool {
+        let conn = self.conn();
+        let tick = self.current_tick as i64;
+        let rows = conn
+            .execute(
+                "UPDATE human_oracles SET status = 'delivered', delivered_tick = ?1 \
+                 WHERE id = ?2 AND status = 'pending'",
+                params![tick, oracle_id],
+            )
+            .expect("deliver_oracle update should succeed");
+        rows > 0
+    }
+
     pub fn list_oracles(&self, query: &ListOraclesQuery) -> Vec<Oracle> {
         let conn = self.conn();
         let mut sql = String::from("SELECT id, human_id, oracle_type, target_agent_id, content, status, agent_response, created_tick, delivered_tick FROM human_oracles WHERE 1=1");

@@ -508,8 +508,12 @@ def build_prompt(
 
 
 def strip_code_fences(text: str) -> str:
-    """Strip markdown code fences from LLM output."""
+    """Strip markdown code fences and <think/> blocks from LLM output."""
     trimmed = text.strip()
+
+    # Strip <think...>...</think*> blocks (e.g. minicpm5-1b thinking mode)
+    trimmed = re.sub(r"<think[^>]*>.*?</think[^>]*>\s*", "", trimmed, flags=re.DOTALL)
+
     if not trimmed.startswith("```"):
         return trimmed
 
@@ -626,6 +630,34 @@ def validate_decision(
 # ---------------------------------------------------------------------------
 
 
+def _random_params(action: DecisionAction) -> dict[str, Any]:
+    """Generate plausible random parameters for a fallback action."""
+    if action == DecisionAction.GATHER:
+        return {"resource_type": random.choice(["food", "wood", "stone", "iron"])}
+    if action == DecisionAction.MOVE:
+        return {"direction": random.choice(["north", "south", "east", "west"])}
+    if action == DecisionAction.EXPLORE:
+        return {"explore_params": {"radius": random.randint(1, 5)}}
+    if action == DecisionAction.BUILD:
+        return {"structure_type": random.choice(["shelter", "storage", "workshop"])}
+    if action == DecisionAction.TRADE:
+        return {"resource_type": random.choice(["food", "wood", "stone"]), "amount": random.randint(1, 10)}
+    if action == DecisionAction.PRACTICE_SKILL:
+        return {"skill": random.choice(["coding", "research", "trading"])}
+    return {}
+
+
+# Actions that are safe to use in fallback (don't require target IDs or
+# complex context like a specific task_id / agent_id / message payload).
+_FALLBACK_SAFE_ACTIONS: frozenset[DecisionAction] = frozenset({
+    DecisionAction.REST,
+    DecisionAction.EXPLORE,
+    DecisionAction.GATHER,
+    DecisionAction.MOVE,
+    DecisionAction.PRACTICE_SKILL,
+})
+
+
 def fallback_decision(
     state: AgentStateProtocol,
     available_actions: list[DecisionAction],
@@ -637,17 +669,21 @@ def fallback_decision(
     """
     affordable = [a for a in available_actions if a.token_cost() <= state.tokens]
 
-    if not affordable:
+    # Only pick from safe fallback actions (no send_message, socialize, etc.
+    # which require target IDs we don't have in fallback context).
+    safe = [a for a in affordable if a in _FALLBACK_SAFE_ACTIONS]
+    if not safe:
         # REST is always free, use as ultimate fallback
         return Decision(
             action=DecisionAction.REST,
-            reasoning="Fallback: no affordable actions, resting",
+            reasoning="Fallback: no safe affordable actions, resting",
             confidence=0,
         )
 
-    chosen = random.choice(affordable)
+    chosen = random.choice(safe)
     return Decision(
         action=chosen,
+        parameters=_random_params(chosen),
         reasoning="Fallback: random decision due to LLM failure",
         confidence=0,
     )

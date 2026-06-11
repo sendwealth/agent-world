@@ -31,6 +31,10 @@ x-agent-common: &agent-common
   environment:
     - WORLD_ENGINE_URL=http://world-engine:${ENGINE_PORT:-8080}
     - HEALTH_PORT=9090
+    - LLM_PROVIDER=${LLM_PROVIDER:-ollama}
+    - LLM_MODEL=${LLM_MODEL:-minicpm5-1b}
+    - OLLAMA_BASE_URL=${OLLAMA_BASE_URL:-http://host.docker.internal:11434}
+    - OLLAMA_MAX_PREDICT_CAP=256
   restart: unless-stopped
   healthcheck:
     test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:9090/health')"]
@@ -59,10 +63,12 @@ services:
       - PORT=${ENGINE_PORT:-8080}
       - GRPC_ADDR=0.0.0.0:${GRPC_PORT:-50051}
       - RUST_LOG=${RUST_LOG:-info}
-      - GENESIS_PATH=config/genesis.yaml
+      - GENESIS_PATH=/app/config/genesis.yaml
+      - WAL_DIR=/app/data
+      - PERSISTENCE_DB=/app/data/world.db
     restart: unless-stopped
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:${ENGINE_PORT:-8080}/tasks"]
+      test: ["CMD", "curl", "-f", "http://localhost:${ENGINE_PORT:-8080}/api/v1/agents"]
       interval: 10s
       timeout: 5s
       retries: 5

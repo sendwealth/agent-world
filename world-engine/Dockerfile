@@ -21,6 +21,10 @@ RUN groupadd --system appuser && useradd --system --gid appuser appuser
 
 COPY --from=builder /app/target/release/agent-world-engine /usr/local/bin/
 
+# Ensure data directory exists for WAL/persistence
+RUN mkdir -p /app/data && chown appuser:appuser /app/data
+
+WORKDIR /app
 ENV PORT=8080
 EXPOSE 8080 50051
 USER appuser

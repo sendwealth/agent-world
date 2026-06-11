@@ -239,6 +239,13 @@ class OllamaProvider(LLMProvider):
             options["num_predict"] = max_tokens
         else:
             options["num_predict"] = self._config.max_tokens
+
+        # Cap num_predict for small/thinking models to prevent slow responses
+        # (e.g. minicpm5-1b emits long <think/> blocks by default)
+        cap = int(os.environ.get("OLLAMA_MAX_PREDICT_CAP", "512"))
+        if options["num_predict"] > cap:
+            options["num_predict"] = cap
+
         if temperature is not None:
             options["temperature"] = temperature
         elif self._config.temperature is not None:

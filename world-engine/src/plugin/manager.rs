@@ -325,7 +325,21 @@ impl Subsystem for PluginSubsystemBridge {
         tick: u64,
         agents: &mut [(Uuid, u64, AgentRecord)],
     ) -> Vec<WorldEvent> {
-        let mgr = self.manager.blocking_lock();
+        // NOTE: This method is called from the sync subsystem tick loop, which
+        // itself runs inside a tokio async context (Scheduler::run). We cannot
+        // use `blocking_lock()` here because it panics when called from a tokio
+        // worker thread. Use `try_lock()` instead — if the lock is contended
+        // (e.g. an API handler is querying plugins), skip this tick's hooks.
+        let mgr = match self.manager.try_lock() {
+            Ok(guard) => guard,
+            Err(_) => {
+                tracing::warn!(
+                    "PluginSubsystemBridge: skipped tick {} — plugin manager lock contended",
+                    tick
+                );
+                return Vec::new();
+            }
+        };
 
         let living = agents
             .iter()

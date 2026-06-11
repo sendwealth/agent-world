@@ -87,7 +87,7 @@ async fn test_escrow_create_happy_path() {
     });
     let (status, resp) = send(&app, json_post("/api/v1/escrow", body)).await;
     assert_eq!(status, StatusCode::CREATED, "create resp: {resp:?}");
-    assert!(resp["escrow_id"].as_str().unwrap().len() > 0);
+    assert!(!resp["escrow_id"].as_str().unwrap().is_empty());
 }
 
 #[tokio::test]

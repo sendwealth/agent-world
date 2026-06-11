@@ -76,7 +76,7 @@ async fn test_create_task_happy_path() {
     assert_eq!(resp["reward"], 50);
     assert_eq!(resp["status"], "published");
     assert_eq!(resp["publisher_id"], "agent-1");
-    assert!(resp["id"].as_str().unwrap().len() > 0);
+    assert!(!resp["id"].as_str().unwrap().is_empty());
 }
 
 #[tokio::test]
@@ -154,7 +154,7 @@ async fn test_task_full_lifecycle_approved() {
     assert_eq!(r["status"], "claimed");
 
     // start
-    let req = Request::builder().method("POST").uri(&format!("/api/v1/tasks/{tid}/start")).body(Body::empty()).unwrap();
+    let req = Request::builder().method("POST").uri(format!("/api/v1/tasks/{tid}/start")).body(Body::empty()).unwrap();
     let (s, r) = send(&app, req).await;
     assert_eq!(s, StatusCode::OK, "start: {r:?}");
     assert_eq!(r["status"], "in_progress");
@@ -178,7 +178,7 @@ async fn test_task_review_rejection() {
     let tid = cr["id"].as_str().unwrap();
 
     send(&app, json_post(&format!("/api/v1/tasks/{tid}/claim"), json!({"assignee_id": "cook-1"}))).await;
-    let req = Request::builder().method("POST").uri(&format!("/api/v1/tasks/{tid}/start")).body(Body::empty()).unwrap();
+    let req = Request::builder().method("POST").uri(format!("/api/v1/tasks/{tid}/start")).body(Body::empty()).unwrap();
     send(&app, req).await;
     send(&app, json_post(&format!("/api/v1/tasks/{tid}/submit"), json!({"result": "Burnt"}))).await;
 
@@ -211,7 +211,7 @@ async fn test_complete_open_task() {
     let body = json!({"title": "Too early", "publisher_id": "p1", "reward": 10});
     let (_, cr) = send(&app, json_post("/api/v1/tasks", body)).await;
     let tid = cr["id"].as_str().unwrap();
-    let req = Request::builder().method("POST").uri(&format!("/api/v1/tasks/{tid}/complete")).body(Body::empty()).unwrap();
+    let req = Request::builder().method("POST").uri(format!("/api/v1/tasks/{tid}/complete")).body(Body::empty()).unwrap();
     let (s, _) = send(&app, req).await;
     assert_eq!(s, StatusCode::CONFLICT);
 }
@@ -222,7 +222,7 @@ async fn test_expire_task() {
     let body = json!({"title": "Expire", "publisher_id": "p1", "reward": 5});
     let (_, cr) = send(&app, json_post("/api/v1/tasks", body)).await;
     let tid = cr["id"].as_str().unwrap();
-    let req = Request::builder().method("POST").uri(&format!("/api/v1/tasks/{tid}/expire")).body(Body::empty()).unwrap();
+    let req = Request::builder().method("POST").uri(format!("/api/v1/tasks/{tid}/expire")).body(Body::empty()).unwrap();
     let (s, r) = send(&app, req).await;
     assert_eq!(s, StatusCode::OK, "expire: {r:?}");
     assert_eq!(r["status"], "expired");

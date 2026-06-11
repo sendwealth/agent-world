@@ -84,7 +84,7 @@ async fn test_leg_start_cycle_happy_path() {
     });
     let (status, resp) = send(&app, json_post("/api/v1/legislation/cycles", body)).await;
     assert_eq!(status, StatusCode::OK, "start: {resp:?}");
-    assert!(resp["cycle_id"].as_str().unwrap().len() > 0);
+    assert!(!resp["cycle_id"].as_str().unwrap().is_empty());
 }
 
 #[tokio::test]
@@ -122,7 +122,7 @@ async fn test_leg_start_cycle_with_leader() {
     });
     let (status, resp) = send(&app, json_post("/api/v1/legislation/cycles/with-leader", body)).await;
     assert_eq!(status, StatusCode::OK, "with-leader: {resp:?}");
-    assert!(resp["cycle_id"].as_str().unwrap().len() > 0);
+    assert!(!resp["cycle_id"].as_str().unwrap().is_empty());
 }
 
 // ── Get Cycle ──────────────────────────────────────────────────

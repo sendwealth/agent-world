@@ -289,7 +289,7 @@ async fn test_inv_update_performance_invalid_score() {
     let pid = create_product(&app).await;
 
     let body = json!({"product_id": pid.clone(), "performance_score": 20.0}); // Assuming > 100 is invalid
-    let (status, _) = send(&app, json_post(&format!("/api/v1/investments/products/{pid}/performance"), body)).await;
+    let (_status, _) = send(&app, json_post(&format!("/api/v1/investments/products/{pid}/performance"), body)).await;
     // May or may not fail depending on validation; just ensure no panic
 }
 

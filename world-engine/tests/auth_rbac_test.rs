@@ -72,6 +72,7 @@ fn test_app_with_agents() -> Router {
             parent_ids: Vec::new(),
             generation: 1,
             skills: HashMap::new(),
+            created_at: String::new(),
         });
     }
 

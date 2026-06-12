@@ -7,6 +7,33 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed — 外部 Agent 运行时关键修复 (2026-06-12)
+
+修复了外部 Agent（Python runtime + Docker）模式下多个导致系统无法正常运行的核心问题。
+
+**Agent Runtime (Python)**
+- 初始 token 量从 500 → 100,000：`AgentSpawnConfig` 默认值和 `parse_runtime_config` fallback 均已修复（之前约 167 tick 后 token 耗尽进入 URGENT 模式）
+- URGENT 模式死循环：紧急操作（broadcast_message）在 REST 模式下不可用导致无限空转，现在连续失败 3 次后自动降级到正常 LLM 决策
+- Agent 创建时 phase 直接设为 `ADULT`，跳过不适用的 BIRTH/CHILDHOOD 阶段
+- `broadcast_message` 等不支持的操作降级为 warning 而非 NotImplementedError
+
+**World Engine (Rust)**
+- `WorldState.agents` 注册同步：外部 agent 注册时同时写入 `AppState.agents` 和 `WorldState.agents`，metrics `agents_alive` 不再为 0
+- `AgentDto` 新增 `created_at` 时间戳字段（RFC3339），注册/spawn 时自动记录
+- Action handler 更新 `ticks_survived`（每次 +1）和 `phase`，agent 数据不再永远是初始值
+- `AppState` 新增 `world_state` 引用，桥接 API 层与调度器的数据隔离问题
+
+**Dashboard (Next.js)**
+- API 信封自动解包：`fetchJSON`/`postJSON` 统一处理 `{data, error}` 响应格式，修复 marketplace 等页面崩溃
+- Agent 类型兼容 `created_at`（snake_case）和 `createdAt`（camelCase），修复 "Invalid Date" 显示
+- `formatDate()` 安全处理 null/undefined，显示"未知"而非 "Invalid Date"
+- 21 个页面全部返回 HTTP 200（agents, tasks, governance, trust, traces, economy 等）
+- `NEXT_PUBLIC_API_URL` 通过 Dockerfile ARG 在构建时嵌入，解决 standalone 模式 API 连接问题
+- CORS 设为 `*`，浏览器直接调用 world-engine API
+
+**Tests**
+- 新增 7 个 URGENT fallback 测试（连续失败触发、成功重置、手动重置、自定义阈值、think-loop 集成）
+
 ---
 
 ## [1.0.0] - 2026-05-20

@@ -205,6 +205,28 @@ class RESTWorldClient:
             "build", {"structure_type": structure_type, **kwargs},
         )
 
+    async def get_perception(self) -> dict[str, Any]:
+        """Fetch perception data from the World Engine.
+
+        Uses ``GET /api/v1/agents/{id}/perception`` which returns
+        nearby agents, resources, position, and the current world tick.
+        """
+        return await self._request(
+            "GET",
+            f"/api/v1/agents/{self._agent_id}/perception",
+        )
+
+    async def get_status(self) -> dict[str, Any]:
+        """Fetch the agent's status from the World Engine.
+
+        Uses ``GET /api/v1/agents/{id}/status`` which returns
+        alive, phase, tokens, money, position, etc.
+        """
+        return await self._request(
+            "GET",
+            f"/api/v1/agents/{self._agent_id}/status",
+        )
+
     async def broadcast_message(
         self, payload: dict[str, object]
     ) -> dict[str, object]:
@@ -218,6 +240,75 @@ class RESTWorldClient:
     async def join_org(self, org_id: str, member_data: dict[str, Any]) -> dict[str, Any]:
         return await self._request(
             "POST", f"/api/v1/orgs/{org_id}/join", json=member_data,
+        )
+
+
+# ---------------------------------------------------------------------------
+# REST perception provider
+# ---------------------------------------------------------------------------
+
+
+class RESTPerceptionProvider:
+    """Fetches perception data from the World Engine REST API.
+
+    Uses ``GET /api/v1/agents/{id}/perception`` to get nearby agents,
+    resources, position, and the current world tick, then builds a
+    ``Perception`` object that the ThinkLoop can consume.
+    """
+
+    def __init__(self, rest_client: RESTWorldClient) -> None:
+        self._client = rest_client
+
+    async def perceive(self, state: AgentState, tick: int) -> Any:
+        """Fetch world state from the World Engine and build a Perception."""
+        from agent_runtime.core.think_loop import Perception
+
+        try:
+            data = await self._client.get_perception()
+        except Exception:
+            logger.debug(
+                "Failed to fetch perception from World Engine, using local state",
+                exc_info=True,
+            )
+            # Fallback to local-only perception
+            max_tokens = getattr(state, "max_tokens", None)
+            ratio = (state.tokens / max_tokens) if max_tokens and max_tokens > 0 else 0.0
+            return Perception(
+                messages=[],
+                token_balance=state.tokens,
+                token_ratio=ratio,
+                market_state={},
+                active_task=None,
+                health=state.health,
+                tick=tick,
+            )
+
+        # Extract world state
+        nearby_agents = data.get("nearby_agents", [])
+        nearby_resources = data.get("nearby_resources", [])
+        position = data.get("position", {})
+        world_tick = data.get("world_tick", tick)
+
+        # Build market_state from perception data
+        market_state: dict[str, Any] = {
+            "nearby_agents": nearby_agents,
+            "nearby_resources": nearby_resources,
+            "position": position,
+            "world_tick": world_tick,
+        }
+
+        max_tokens = getattr(state, "max_tokens", None)
+        ratio = (state.tokens / max_tokens) if max_tokens and max_tokens > 0 else 0.0
+
+        return Perception(
+            messages=[],
+            token_balance=state.tokens,
+            token_ratio=ratio,
+            market_state=market_state,
+            active_task=None,
+            health=state.health,
+            tick=tick,
+            server_tick=world_tick,
         )
 
 
@@ -302,12 +393,16 @@ async def connect_world_engine(
 
     # REST fallback
     rest_client = RESTWorldClient(rest_url, agent_id=agent_id)
+    rest_perception = RESTPerceptionProvider(rest_client)
     logger.info(
         "Using REST fallback for World Engine at %s",
         rest_url,
         extra={"agent": agent_id, "event": "rest_fallback"},
     )
-    return WorldConnection(world_client=rest_client)
+    return WorldConnection(
+        world_client=rest_client,
+        perception_provider=rest_perception,
+    )
 
 
 async def register_agent(
@@ -316,12 +411,17 @@ async def register_agent(
     *,
     public_key_b64: str | None = None,
     timeout: float = 5.0,
+    max_retries: int = 3,
+    retry_delay: float = 2.0,
 ) -> str | None:
     """Register the agent with the World Engine as an *external* agent.
 
     Uses the ``POST /api/v1/agents/register`` endpoint which stores the
     agent in the World Engine's ``external_agents`` map — the same map
     that ``POST /api/v1/agents/:id/action`` looks up.
+
+    Retries up to ``max_retries`` times with ``retry_delay`` second delay
+    between attempts to handle transient startup ordering in Docker Compose.
 
     Returns the World Engine-assigned ``agent_id`` on success, or ``None``
     on failure (in which case the agent runs in standalone mode).
@@ -352,33 +452,57 @@ async def register_agent(
         state.name, state.id, url,
     )
 
-    try:
-        async with httpx.AsyncClient(timeout=timeout, trust_env=False) as client:
-            resp = await client.post(url, json=payload)
-            if resp.status_code in (200, 201):
-                body = resp.json()
-                world_agent_id = body.get("agent_id")
-                logger.info(
-                    "Agent registered successfully (world_id=%s)",
-                    world_agent_id,
-                    extra={"agent": state.name, "event": "registered"},
+    last_exc: Exception | None = None
+    for attempt in range(1, max_retries + 1):
+        try:
+            async with httpx.AsyncClient(timeout=timeout, trust_env=False) as client:
+                resp = await client.post(url, json=payload)
+                if resp.status_code in (200, 201):
+                    body = resp.json()
+                    world_agent_id = body.get("agent_id")
+                    logger.info(
+                        "Agent registered successfully (world_id=%s) on attempt %d",
+                        world_agent_id, attempt,
+                        extra={"agent": state.name, "event": "registered"},
+                    )
+                    return world_agent_id
+                logger.warning(
+                    "World Engine returned %d on attempt %d: %s",
+                    resp.status_code, attempt,
+                    resp.text[:200] if resp.text else "(empty)",
                 )
-                return world_agent_id
+                # Non-connection errors (4xx/5xx) — don't retry
+                if resp.status_code < 500:
+                    return None
+        except httpx.ConnectError as exc:
+            last_exc = exc
             logger.warning(
-                "World Engine returned %d: %s",
-                resp.status_code,
-                resp.text[:200] if resp.text else "(empty)",
+                "World Engine unreachable at %s (attempt %d/%d) — %s",
+                world_url, attempt, max_retries, exc,
             )
-            return None
-    except httpx.ConnectError:
-        logger.warning(
-            "World Engine unreachable at %s — running in standalone mode",
-            world_url,
-        )
-        return None
-    except Exception:
-        logger.exception("Failed to register with World Engine")
-        return None
+        except Exception as exc:
+            last_exc = exc
+            logger.warning(
+                "Registration attempt %d/%d failed: %s",
+                attempt, max_retries, exc,
+                exc_info=True,
+            )
+
+        # Wait before retrying (except on last attempt)
+        if attempt < max_retries:
+            logger.info(
+                "Retrying registration in %.1fs...",
+                retry_delay,
+                extra={"agent": state.name},
+            )
+            await asyncio.sleep(retry_delay)
+
+    logger.error(
+        "Failed to register with World Engine after %d attempts — "
+        "running in standalone mode (last error: %s)",
+        max_retries, last_exc,
+    )
+    return None
 
 
 async def deregister_agent(
@@ -768,6 +892,14 @@ async def run_agent(config: RuntimeConfig) -> RunStats:
                 world_client._agent_id = world_agent_id
             # Also update stats so deregister uses the right ID
             stats.agent_id = world_agent_id
+            logger.info(
+                "World Engine connection established (world_agent_id=%s, "
+                "perception=%s, world_client=%s)",
+                world_agent_id,
+                type(perception_provider).__name__ if perception_provider else "None",
+                type(world_client).__name__,
+                extra={"agent": state.name, "event": "world_connected"},
+            )
 
         # Build heartbeat provider if A2A client is available
         heartbeat_provider: Any | None = None
@@ -1669,8 +1801,12 @@ def build_config_from_args(args: argparse.Namespace) -> RuntimeConfig:
     if args.tick_interval is not None:
         config.think_loop.tick_interval = args.tick_interval
 
-    # CLI overrides for world -- support both --world-url and top-level --world
+    # CLI overrides for world -- support --world-url, top-level --world,
+    # and WORLD_ENGINE_URL env var.
+    # Priority: CLI flag > env var > config file > default
     world_url = args.world_url or getattr(args, "world", None)
+    if world_url is None:
+        world_url = os.environ.get("WORLD_ENGINE_URL")
     if world_url is not None:
         config.world.engine_url = world_url
 

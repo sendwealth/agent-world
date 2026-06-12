@@ -72,7 +72,18 @@ from agent_runtime.llm.queue import QueueConfig as LLMQueueConfig
 logger = logging.getLogger(__name__)
 
 # Default World Engine URL (single source of truth)
+# Can be overridden via WORLD_ENGINE_URL env var or --world-url CLI flag.
 _DEFAULT_ENGINE_URL = "http://localhost:3000"
+
+
+def _resolve_engine_url() -> str:
+    """Resolve the World Engine URL from environment or default.
+
+    Priority:
+      1. ``WORLD_ENGINE_URL`` env var
+      2. ``_DEFAULT_ENGINE_URL`` (``http://localhost:3000``)
+    """
+    return os.environ.get("WORLD_ENGINE_URL", _DEFAULT_ENGINE_URL)
 
 
 # ---------------------------------------------------------------------------
@@ -82,9 +93,13 @@ _DEFAULT_ENGINE_URL = "http://localhost:3000"
 
 @dataclass
 class WorldConfig:
-    """Connection settings for the World Engine."""
+    """Connection settings for the World Engine.
 
-    engine_url: str = _DEFAULT_ENGINE_URL
+    ``engine_url`` defaults to the ``WORLD_ENGINE_URL`` environment variable
+    when set, otherwise ``http://localhost:3000``.
+    """
+
+    engine_url: str = field(default_factory=_resolve_engine_url)
 
 
 @dataclass
@@ -299,9 +314,13 @@ def _parse_think_loop_config(data: dict[str, Any]) -> ThinkLoopConfig:
 
 
 def _parse_world_config(data: dict[str, Any]) -> WorldConfig:
-    """Parse the ``[world]`` section."""
+    """Parse the ``[world]`` section.
+
+    Uses ``WORLD_ENGINE_URL`` env var as fallback when ``engine_url``
+    is not specified in the config file.
+    """
     return WorldConfig(
-        engine_url=data.get("engine_url", _DEFAULT_ENGINE_URL),
+        engine_url=data.get("engine_url", _resolve_engine_url()),
     )
 
 

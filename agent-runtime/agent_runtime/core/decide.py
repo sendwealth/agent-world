@@ -21,10 +21,12 @@ Usage::
 
 from __future__ import annotations
 
+import hashlib
 import json
 import logging
 import random
 import re
+from collections import OrderedDict
 from dataclasses import dataclass, field
 from enum import Enum
 from typing import Any, Protocol
@@ -286,10 +288,16 @@ Do NOT choose an action you cannot afford.
 Your reputation is {reputation:.1f}. High-value tasks (reward >= 500) require reputation >= 10.0.
 {reputation_note}
 
-## Response Format
-Respond with ONLY a JSON object (no markdown, no explanation outside JSON):
-{{"action": "<action_name>", "parameters": {{"key": "value"}}, "reasoning": "<why>", \
-"confidence": <0-100>}}
+## RESPONSE FORMAT — CRITICAL
+Output ONLY a single JSON object. No other text before or after.
+The JSON must have these exact keys:
+
+{{"action": "action_name", "parameters": {{}}, "reasoning": "brief reason", "confidence": 75}}
+
+Valid action names: {action_names}
+
+## Example
+{{"action": "rest", "parameters": {{}}, "reasoning": "conserving tokens", "confidence": 80}}
 
 Choose the best action now:"""
 
@@ -398,6 +406,9 @@ def build_prompt(
         f"  - {a.value} (cost: {a.token_cost()} tokens)" for a in available_actions
     )
 
+    # Action names for the response format section
+    action_names = ", ".join(a.value for a in available_actions)
+
     # Pending Oracles
     if perception.pending_oracles:
         oracle_lines = []
@@ -496,6 +507,7 @@ def build_prompt(
         should_socialize=should_socialize,
         social_targets_section=social_targets_section,
         actions_section=actions_section,
+        action_names=action_names,
         oracles_section=oracles_section,
         bounties_section=bounties_section,
         reputation_note=reputation_note,
@@ -508,11 +520,23 @@ def build_prompt(
 
 
 def strip_code_fences(text: str) -> str:
-    """Strip markdown code fences and <think/> blocks from LLM output."""
+    """Strip markdown code fences and <think/> blocks from LLM output.
+
+    Handles:
+    - `````json ... `````` code fences
+    - Closed ``<think...>...</think...>`` blocks (minicpm5-1b thinking mode)
+    - Unclosed ``<think...>`` at end of output (model started thinking but
+      ran out of tokens before closing the tag)
+    """
     trimmed = text.strip()
 
     # Strip <think...>...</think*> blocks (e.g. minicpm5-1b thinking mode)
-    trimmed = re.sub(r"<think[^>]*>.*?</think[^>]*>\s*", "", trimmed, flags=re.DOTALL)
+    trimmed = re.sub(r"<think\b.*?</think[^>]*>\s*", "", trimmed, flags=re.DOTALL)
+
+    # Also strip unclosed <think at end (model did not close the tag)
+    trimmed = re.sub(r"<think\b.*$", "", trimmed, flags=re.DOTALL)
+
+    trimmed = trimmed.strip()
 
     if not trimmed.startswith("```"):
         return trimmed
@@ -525,6 +549,53 @@ def strip_code_fences(text: str) -> str:
 
     return without_end.strip()
 
+
+
+def _extract_json_from_text(text: str) -> str | None:
+    """Try to extract a JSON object from surrounding text.
+
+    Strategies (in order):
+    1. Look for the outermost ``{ ... }`` brace pair
+    2. Return the first substring that ``json.loads`` accepts
+
+    Returns ``None`` when no valid JSON is found.
+    """
+    start = text.find("{")
+    if start == -1:
+        return None
+    end = text.rfind("}")
+    if end <= start:
+        return None
+
+    candidate = text[start : end + 1]
+    try:
+        json.loads(candidate)
+        return candidate
+    except json.JSONDecodeError:
+        pass
+
+    # Try every (opening, closing) combination from outside in
+    openings = []
+    pos = start
+    while pos <= end:
+        idx = text.find("{", pos, end + 1)
+        if idx == -1:
+            break
+        openings.append(idx)
+        pos = idx + 1
+
+    for opening in openings:
+        for closing in range(end, opening, -1):
+            if text[closing] != "}":
+                continue
+            sub = text[opening : closing + 1]
+            try:
+                json.loads(sub)
+                return sub
+            except json.JSONDecodeError:
+                continue
+
+    return None
 
 def parse_llm_response(raw: str) -> dict[str, Any]:
     """Parse the raw LLM response string into a dict.
@@ -540,12 +611,24 @@ def parse_llm_response(raw: str) -> dict[str, Any]:
         JsonParseError: If the response cannot be parsed as valid JSON
             or the action field is missing/invalid.
     """
+    if not raw or not raw.strip():
+        raise JsonParseError("LLM returned an empty response")
+
     cleaned = strip_code_fences(raw)
 
+    # First try direct parse
     try:
         data = json.loads(cleaned)
-    except json.JSONDecodeError as e:
-        raise JsonParseError(f"Failed to parse LLM response as JSON: {e}") from e
+    except json.JSONDecodeError:
+        # Fall back to extracting JSON from surrounding text
+        extracted = _extract_json_from_text(cleaned)
+        if extracted is not None:
+            data = json.loads(extracted)
+        else:
+            raise JsonParseError(
+                f"Failed to parse LLM response as JSON: no valid object found "
+                f"in response (length={len(raw)})"
+            ) from None
 
     if not isinstance(data, dict) or "action" not in data:
         raise JsonParseError("LLM response must be a JSON object with an 'action' field")
@@ -578,6 +661,45 @@ def parse_llm_response(raw: str) -> dict[str, Any]:
 
     return data
 
+
+
+# ---------------------------------------------------------------------------
+# Keyword-match fallback for small models that can't produce JSON
+# ---------------------------------------------------------------------------
+
+# Map common keywords to actions -- used when JSON extraction completely fails
+_KEYWORD_ACTION_MAP: list[tuple[re.Pattern, DecisionAction]] = [
+    (re.compile(r"\brest\b", re.IGNORECASE), DecisionAction.REST),
+    (re.compile(r"\bgather\b", re.IGNORECASE), DecisionAction.GATHER),
+    (re.compile(r"\bexplore\b", re.IGNORECASE), DecisionAction.EXPLORE),
+    (re.compile(r"\bmove\b", re.IGNORECASE), DecisionAction.MOVE),
+    (re.compile(r"\bbuild\b", re.IGNORECASE), DecisionAction.BUILD),
+    (re.compile(r"\btrade\b", re.IGNORECASE), DecisionAction.TRADE),
+    (re.compile(r"\bpractice\b", re.IGNORECASE), DecisionAction.PRACTICE_SKILL),
+    (re.compile(r"\bsociali[sz]e\b", re.IGNORECASE), DecisionAction.SOCIALIZE),
+    (re.compile(r"\bclaim\b", re.IGNORECASE), DecisionAction.CLAIM_TASK),
+    (re.compile(r"\bwork\b", re.IGNORECASE), DecisionAction.PRACTICE_SKILL),
+]
+
+
+def keyword_match_decision(
+    raw: str,
+    available_actions: list[DecisionAction],
+) -> Decision | None:
+    """Try to infer a decision from keyword matching in the raw LLM text.
+
+    Scans the response for action-related keywords and returns the first
+    matching action that is both available and affordable.  Returns ``None``
+    if no keyword matches any available action.
+    """
+    for pattern, action in _KEYWORD_ACTION_MAP:
+        if pattern.search(raw) and action in available_actions:
+            return Decision(
+                action=action,
+                reasoning=f"Keyword match from LLM output: {action.value}",
+                confidence=30,
+            )
+    return None
 
 # ---------------------------------------------------------------------------
 # Decision validation
@@ -710,6 +832,75 @@ def get_available_actions(
     return [a for a in DecisionAction.all() if a.token_cost() <= state.tokens]
 
 
+
+# ---------------------------------------------------------------------------
+# Response cache -- avoid redundant LLM calls for identical perceptions
+# ---------------------------------------------------------------------------
+
+
+class LRUCache:
+    """Simple LRU cache keyed by perception hash.
+
+    Caches successful LLM decisions so that identical perception states
+    don't trigger redundant LLM calls.
+    """
+
+    def __init__(self, max_size: int = 256) -> None:
+        self._cache: OrderedDict[str, Decision] = OrderedDict()
+        self._max_size = max_size
+        self.hits = 0
+        self.misses = 0
+
+    def _make_key(
+        self,
+        state: AgentStateProtocol,
+        perception: DecisionPerception,
+        survival: SurvivalAssessment,
+    ) -> str:
+        """Build a stable cache key from the decision inputs."""
+        payload = json.dumps({
+            "id": str(state.id),
+            "tokens": state.tokens,
+            "health": state.health,
+            "tick": perception.tick,
+            "nearby": sorted(perception.nearby_agents),
+            "tasks": sorted(perception.available_tasks),
+            "resources": sorted(perception.visible_resources),
+            "events": sorted(perception.recent_events),
+            "in_danger": survival.in_danger,
+            "survival_score": survival.survival_score,
+        }, sort_keys=True)
+        return hashlib.sha256(payload.encode()).hexdigest()
+
+    def get(
+        self,
+        state: AgentStateProtocol,
+        perception: DecisionPerception,
+        survival: SurvivalAssessment,
+    ) -> Decision | None:
+        """Look up a cached decision. Returns None on miss."""
+        key = self._make_key(state, perception, survival)
+        if key in self._cache:
+            self._cache.move_to_end(key)
+            self.hits += 1
+            return self._cache[key]
+        self.misses += 1
+        return None
+
+    def put(
+        self,
+        state: AgentStateProtocol,
+        perception: DecisionPerception,
+        survival: SurvivalAssessment,
+        decision: Decision,
+    ) -> None:
+        """Store a decision in the cache."""
+        key = self._make_key(state, perception, survival)
+        self._cache[key] = decision
+        self._cache.move_to_end(key)
+        if len(self._cache) > self._max_size:
+            self._cache.popitem(last=False)
+
 # ---------------------------------------------------------------------------
 # Decision Engine
 # ---------------------------------------------------------------------------
@@ -759,12 +950,14 @@ class DecisionEngine:
         social_provider: SocialContextProvider | None = None,
         emotion_provider: EmotionContextProvider | None = None,
         fallback_providers: list[LLMProvider] | None = None,
+        cache_size: int = 256,
     ) -> None:
         self._provider = provider
         self._pipeline = pipeline
         self._social_provider = social_provider
         self._emotion_provider = emotion_provider
         self._fallback_providers = fallback_providers or []
+        self._cache = LRUCache(max_size=cache_size)
 
     async def decide(
         self,
@@ -791,6 +984,18 @@ class DecisionEngine:
                 reasoning="No available actions",
                 confidence=0,
             )
+
+        # Check cache first
+        cached = self._cache.get(state, perception, survival)
+        if cached is not None:
+            # Validate cached action is still affordable
+            if cached.action in available and cached.action.token_cost() <= state.tokens:
+                logger.debug(
+                    "Agent %s: cache hit for tick %d -> %s",
+                    state.id, perception.tick, cached.action.value,
+                )
+                return cached
+            # Cached decision is stale, proceed normally
 
         # Build social context if provider is available
         social: SocialContext | None = None
@@ -824,6 +1029,8 @@ class DecisionEngine:
                 state, perception, survival, available, social=social,
                 mood_description=mood_description,
             )
+            # Cache the successful decision
+            self._cache.put(state, perception, survival, decision)
             logger.info(
                 "Agent %s decided: %s (confidence: %d)",
                 state.id,
@@ -872,12 +1079,14 @@ class DecisionEngine:
         messages = [LLMMessage(role="user", content=prompt)]
 
         last_error: Exception | None = None
+        last_raw: str = ""
+
         for i, provider in enumerate(providers):
             label = "primary" if i == 0 else f"fallback[{i - 1}]"
             try:
                 response = await provider.chat(messages)
-                # Parse and validate the response
                 raw = response.content
+                last_raw = raw
                 parsed = parse_llm_response(raw)
                 decision = Decision(
                     action=DecisionAction(parsed["action"]),
@@ -925,6 +1134,16 @@ class DecisionEngine:
                             else "unknown",
                         },
                     )
+
+        # All providers' JSON parsing failed -- try keyword match on last raw
+        if last_raw:
+            kw_decision = keyword_match_decision(last_raw, available_actions)
+            if kw_decision is not None:
+                logger.info(
+                    "Agent %s: keyword match fallback -> %s",
+                    state.id, kw_decision.action.value,
+                )
+                return kw_decision
 
         # All providers failed
         if last_error is not None:

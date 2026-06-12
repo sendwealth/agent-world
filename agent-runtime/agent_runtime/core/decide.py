@@ -763,7 +763,10 @@ def _random_params(action: DecisionAction) -> dict[str, Any]:
     if action == DecisionAction.BUILD:
         return {"structure_type": random.choice(["shelter", "storage", "workshop"])}
     if action == DecisionAction.TRADE:
-        return {"resource_type": random.choice(["food", "wood", "stone"]), "amount": random.randint(1, 10)}
+        return {
+            "resource_type": random.choice(["food", "wood", "stone"]),
+            "amount": random.randint(1, 10),
+        }
     if action == DecisionAction.PRACTICE_SKILL:
         return {"skill": random.choice(["coding", "research", "trading"])}
     return {}

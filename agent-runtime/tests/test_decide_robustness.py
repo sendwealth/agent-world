@@ -16,22 +16,20 @@ import json
 import pytest
 
 from agent_runtime.core.decide import (
-    LRUCache,
     Decision,
     DecisionAction,
     DecisionEngine,
     DecisionPerception,
     JsonParseError,
+    LRUCache,
     SurvivalAssessment,
     _extract_json_from_text,
     build_prompt,
-    fallback_decision,
     keyword_match_decision,
     parse_llm_response,
     strip_code_fences,
 )
 from agent_runtime.llm.base import LLMMessage, LLMResponse, TokenUsage
-
 
 # ---------------------------------------------------------------------------
 # Mock state
@@ -100,7 +98,10 @@ class TestStripCodeFences:
 
 class TestExtractJsonFromText:
     def test_json_in_text(self):
-        text = 'The best action is {"action": "rest", "parameters": {}, "reasoning": "safe", "confidence": 80} and that is final.'
+        text = (
+            'The best action is {"action": "rest", "parameters": {},'
+            ' "reasoning": "safe", "confidence": 80} and that is final.'
+        )
         result = _extract_json_from_text(text)
         assert result is not None
         data = json.loads(result)
@@ -133,12 +134,18 @@ class TestParseLlmResponse:
         assert data["action"] == "rest"
 
     def test_json_in_surrounding_text(self):
-        raw = 'I think the best action is {"action": "explore", "parameters": {}, "reasoning": "need info", "confidence": 60}.'
+        raw = (
+            'I think the best action is {"action": "explore",'
+            ' "parameters": {}, "reasoning": "need info", "confidence": 60}.'
+        )
         data = parse_llm_response(raw)
         assert data["action"] == "explore"
 
     def test_think_block_then_json(self):
-        raw = '<think analyzing situation</think >{"action": "gather", "parameters": {}, "reasoning": "need food", "confidence": 50}'
+        raw = (
+            '<think analyzing situation</think >{"action": "gather",'
+            ' "parameters": {}, "reasoning": "need food", "confidence": 50}'
+        )
         data = parse_llm_response(raw)
         assert data["action"] == "gather"
 
@@ -163,7 +170,10 @@ class TestParseLlmResponse:
             parse_llm_response('{"action": "fly_away"}')
 
     def test_code_fence_json(self):
-        raw = '```json\n{"action": "rest", "parameters": {}, "reasoning": "resting", "confidence": 80}\n```'
+        raw = (
+            '```json\n{"action": "rest", "parameters": {},'
+            ' "reasoning": "resting", "confidence": 80}\n```'
+        )
         data = parse_llm_response(raw)
         assert data["action"] == "rest"
 
@@ -175,7 +185,9 @@ class TestParseLlmResponse:
 
 class TestKeywordMatchDecision:
     def test_rest_keyword(self):
-        d = keyword_match_decision("I should rest now", [DecisionAction.REST, DecisionAction.EXPLORE])
+        d = keyword_match_decision(
+            "I should rest now", [DecisionAction.REST, DecisionAction.EXPLORE]
+        )
         assert d is not None
         assert d.action == DecisionAction.REST
 
@@ -293,7 +305,10 @@ class TestDecisionEngineCache:
     @pytest.mark.asyncio
     async def test_cache_avoids_duplicate_llm_calls(self):
         """Same perception twice should only call LLM once."""
-        mock = MockLLMProvider('{"action": "rest", "parameters": {}, "reasoning": "cached", "confidence": 80}')
+        mock = MockLLMProvider(
+            '{"action": "rest", "parameters": {},'
+            ' "reasoning": "cached", "confidence": 80}'
+        )
         engine = DecisionEngine(provider=mock)
         state = MockState()
         perception = DecisionPerception(tick=1)
@@ -309,11 +324,18 @@ class TestDecisionEngineCache:
     @pytest.mark.asyncio
     async def test_cache_invalidation_on_state_change(self):
         """Different state should not hit cache."""
-        mock = MockLLMProvider('{"action": "rest", "parameters": {}, "reasoning": "test", "confidence": 80}')
+        mock = MockLLMProvider(
+            '{"action": "rest", "parameters": {},'
+            ' "reasoning": "test", "confidence": 80}'
+        )
         engine = DecisionEngine(provider=mock)
 
-        d1 = await engine.decide(MockState(tokens=500), DecisionPerception(tick=1), SurvivalAssessment())
-        d2 = await engine.decide(MockState(tokens=100), DecisionPerception(tick=2), SurvivalAssessment())
+        d1 = await engine.decide(
+            MockState(tokens=500), DecisionPerception(tick=1), SurvivalAssessment()
+        )
+        d2 = await engine.decide(
+            MockState(tokens=100), DecisionPerception(tick=2), SurvivalAssessment()
+        )
 
         assert d1.action == DecisionAction.REST
         assert d2.action == DecisionAction.REST

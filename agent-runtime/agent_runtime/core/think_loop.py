@@ -694,6 +694,7 @@ class ThinkLoop:
           - Dead agents: skip the cycle entirely and stop the loop.
           - Dying agents: run a reduced cycle (only will/communication actions).
           - Phase abilities gate which actions the agent can perform.
+          - Token-exhausted agents: stop the loop to prevent infinite panic loops.
         """
         self._tick += 1
         think_start = time.monotonic()
@@ -702,6 +703,16 @@ class ThinkLoop:
         if is_terminal(self.state.phase):
             logger.info(
                 "Tick %d: agent is Dead — stopping think loop", self._tick
+            )
+            self.stop()
+            return
+
+        # --- Token exhaustion gate: stop before entering infinite panic ---
+        if self.state.tokens <= 0:
+            logger.warning(
+                "Tick %d: agent has 0 tokens — stopping think loop to prevent "
+                "infinite panic cycle",
+                self._tick,
             )
             self.stop()
             return
@@ -782,8 +793,9 @@ class ThinkLoop:
 
         # 2. Survival assessment (synchronous, no LLM)
         survival_action = self.survival.assess(self.state)
+        in_emergency = survival_action.mode in (SurvivalMode.PANIC, SurvivalMode.URGENT)
 
-        if survival_action.mode in (SurvivalMode.PANIC, SurvivalMode.URGENT):
+        if in_emergency:
             logger.warning(
                 "Tick %d: survival mode=%s — executing emergency actions",
                 self._tick,
@@ -793,7 +805,21 @@ class ThinkLoop:
             # Pass the world_client as the A2A client for emergency broadcasts
             a2a = self._world_client if self._world_client is not None else None
             await self.survival.execute(survival_action, self.state, a2a_client=a2a)
-            return  # Skip normal decision
+            # Skip normal decision but still record metrics — do NOT run
+            # expensive hooks (diary, reflection, feed, language experiment)
+            # in emergency mode to avoid draining tokens.
+            elapsed = time.monotonic() - think_start
+            metrics.think_duration.observe(elapsed)
+            metrics.tokens_balance.set(self.state.tokens)
+            metrics.health.set(self.state.health)
+            log_tick(
+                self._tick,
+                str(self.state.id),
+                self.state.tokens,
+                self.state.health,
+                self.state.phase.value,
+            )
+            return
 
         # 3. Decide
         with trace_phase("decide", str(self.state.id)):
@@ -867,8 +893,12 @@ class ThinkLoop:
                     exc_info=True,
                 )
 
-        # 6. Reflect (periodic)
-        if self.config.reflect_interval > 0 and self._tick % self.config.reflect_interval == 0:
+        # 6. Reflect (periodic — skip when low on tokens)
+        if (
+            self.config.reflect_interval > 0
+            and self._tick % self.config.reflect_interval == 0
+            and survival_action.mode not in (SurvivalMode.PANIC, SurvivalMode.URGENT)
+        ):
             await self._reflection.reflect(self.state, self._tick)
 
         # 7. Cultural influence hook (every tick, no-op if not configured)
@@ -904,8 +934,8 @@ class ThinkLoop:
                     exc_info=True,
                 )
 
-        # 8. Diary entry (every tick, non-fatal)
-        if self._diary is not None:
+        # 8. Diary entry (every tick, non-fatal — skip when critically low on tokens)
+        if self._diary is not None and survival_action.mode != SurvivalMode.PANIC:
             try:
                 action_outcome = (
                     action_result.status.value

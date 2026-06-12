@@ -17,6 +17,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 import pytest
 
 from agent_runtime.__main__ import (
+    RESTPerceptionProvider,
     RESTWorldClient,
     WorldConnection,
     build_config_from_args,
@@ -378,7 +379,7 @@ class TestConnectWorldEngine:
         )
         assert isinstance(conn, WorldConnection)
         assert isinstance(conn.world_client, RESTWorldClient)
-        assert conn.perception_provider is None
+        assert isinstance(conn.perception_provider, RESTPerceptionProvider)
         assert conn.a2a_client is None
 
 

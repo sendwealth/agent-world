@@ -24,6 +24,7 @@ import pytest
 
 from agent_runtime.__main__ import (
     HealthCheckServer,
+    RESTPerceptionProvider,
     RESTWorldClient,
     WorldConnection,
     _get_health_port,
@@ -241,14 +242,28 @@ class TestKeyGeneration:
     async def test_register_with_public_key(self) -> None:
         """register_agent accepts public_key_b64 without error."""
         state = AgentState(name="KeyTest", tokens=500, max_tokens=1000)
-        # World Engine is unreachable, so it returns False but doesn't crash
+        # World Engine is unreachable, so it returns None but doesn't crash
         result = await register_agent(
             state,
             "http://localhost:1",
             public_key_b64="dGVzdHB1YmxpY2tleQ",
             timeout=0.1,
+            max_retries=1,
         )
-        assert result is False or result is None  # Unreachable but no crash
+        assert result is None  # Unreachable but no crash
+
+    @pytest.mark.asyncio
+    async def test_register_retries_on_connect_error(self) -> None:
+        """register_agent retries on connection errors before giving up."""
+        state = AgentState(name="RetryTest", tokens=500, max_tokens=1000)
+        result = await register_agent(
+            state,
+            "http://localhost:1",
+            timeout=0.1,
+            max_retries=2,
+            retry_delay=0.05,
+        )
+        assert result is None  # Exhausted retries, no crash
 
 
 # ---------------------------------------------------------------------------
@@ -314,7 +329,7 @@ class TestConnectWorldEngine:
         )
         assert isinstance(conn, WorldConnection)
         assert isinstance(conn.world_client, RESTWorldClient)
-        assert conn.perception_provider is None
+        assert isinstance(conn.perception_provider, RESTPerceptionProvider)
         assert conn.a2a_client is None
 
 
@@ -354,6 +369,26 @@ class TestBuildConfigFromArgs:
         args = parser.parse_args(["spawn", "--world-url", "http://engine:4000"])
         config = build_config_from_args(args)
         assert config.world.engine_url == "http://engine:4000"
+
+    def test_world_url_from_env_var(self) -> None:
+        """WORLD_ENGINE_URL env var is used when --world-url is not provided."""
+        import os
+
+        parser = build_parser()
+        args = parser.parse_args(["spawn"])
+        with patch.dict(os.environ, {"WORLD_ENGINE_URL": "http://world-engine:8080"}):
+            config = build_config_from_args(args)
+        assert config.world.engine_url == "http://world-engine:8080"
+
+    def test_world_url_cli_overrides_env_var(self) -> None:
+        """CLI --world-url takes precedence over WORLD_ENGINE_URL env var."""
+        import os
+
+        parser = build_parser()
+        args = parser.parse_args(["spawn", "--world-url", "http://cli-url:9090"])
+        with patch.dict(os.environ, {"WORLD_ENGINE_URL": "http://env-url:8080"}):
+            config = build_config_from_args(args)
+        assert config.world.engine_url == "http://cli-url:9090"
 
 
 # ---------------------------------------------------------------------------

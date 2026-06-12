@@ -57,8 +57,8 @@ function AgentCard({ agent }: { agent: Agent }) {
         <span>{phaseLabels[agent.phase] ?? agent.phase}</span>
         <span>{agent.tokens.toLocaleString()} Token</span>
         <span>{formatMoney(agent.money)}</span>
-        <span>信誉 {agent.reputation.toFixed(1)}</span>
-        <span>{agent.age} Tick</span>
+        <span>信誉 {(agent.reputation ?? 0).toFixed(1)}</span>
+        <span>{agent.age ?? agent.ticks_survived ?? 0} Tick</span>
       </div>
       <p className="mt-1.5 text-xs text-zinc-500 truncate">
         {formatSkills(agent.skills)}
@@ -274,13 +274,13 @@ export default function AgentsPage() {
                         {formatMoney(agent.money)}
                       </td>
                       <td className="px-4 py-3 text-right text-sm text-zinc-300 tabular-nums">
-                        {agent.reputation.toFixed(1)}
+                        {(agent.reputation ?? 0).toFixed(1)}
                       </td>
                       <td className="px-4 py-3 text-sm text-zinc-400 max-w-[200px] truncate">
                         {formatSkills(agent.skills)}
                       </td>
                       <td className="px-4 py-3 text-right text-sm text-zinc-500 tabular-nums">
-                        {agent.age} Tick
+                        {agent.age ?? agent.ticks_survived ?? 0} Tick
                       </td>
                     </tr>
                   ))}

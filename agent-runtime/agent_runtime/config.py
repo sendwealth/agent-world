@@ -187,8 +187,8 @@ class AgentSpawnConfig:
     name: str = "Agent"
     traits: dict[str, float] = field(default_factory=dict)
     skills: dict[str, int] = field(default_factory=dict)
-    tokens: int = 500
-    max_tokens: int = 1000
+    tokens: int = 100_000
+    max_tokens: int = 200_000
     money: float = 50.0
     health: float = 100.0
     identity: IdentityConfig = field(default_factory=IdentityConfig)
@@ -440,8 +440,8 @@ def parse_runtime_config(raw: dict[str, Any]) -> RuntimeConfig:
         name=agent_raw.get("name", "Agent"),
         traits=agent_raw.get("traits", {}),
         skills=skills,
-        tokens=agent_raw.get("tokens", 500),
-        max_tokens=agent_raw.get("max_tokens", 1000),
+        tokens=agent_raw.get("tokens", 100_000),
+        max_tokens=agent_raw.get("max_tokens", 200_000),
         money=agent_raw.get("money", 50.0),
         health=agent_raw.get("health", 100.0),
         identity=identity_cfg,

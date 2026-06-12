@@ -11,6 +11,8 @@ use serde::Deserialize;
 use uuid::Uuid;
 
 use crate::api::{AgentDto, AppState, ErrorResponse, ExternalAgent, Position, ALLOWED_ACTIONS};
+use crate::world::agent::AgentRecord;
+use crate::world::enums::AgentPhase;
 use crate::world::event::WorldEvent;
 
 // ── Request Types ──────────────────────────────────────
@@ -66,6 +68,7 @@ pub async fn register_external_agent(
         money: 0,
         position: Position { x: 0, y: 0 },
         registered_tick: tick,
+        created_at: chrono::Utc::now().to_rfc3339(),
     };
 
     {
@@ -75,6 +78,7 @@ pub async fn register_external_agent(
 
     // Also add to the shared agents list for world_stats compatibility
     {
+        let created_at = chrono::Utc::now().to_rfc3339();
         let mut agents = state.agents.lock().await;
         agents.push(AgentDto {
             id: agent_id.clone(),
@@ -88,7 +92,29 @@ pub async fn register_external_agent(
             parent_ids: Vec::new(),
             generation: 0,
             skills: HashMap::new(),
+            created_at,
         });
+    }
+
+    // Also insert into WorldState.agents so metrics (agents_alive) are correct.
+    // The scheduler and metrics sync task read from WorldState.agents, not AppState.agents.
+    if let Some(ref ws) = state.world_state {
+        let agent_uuid = Uuid::parse_str(&agent_id).unwrap_or_else(|_| Uuid::new_v4());
+        let mut ws_guard = ws.lock().await;
+        ws_guard.agents.push((
+            agent_uuid,
+            tick,
+            AgentRecord {
+                id: agent_uuid,
+                name: name.clone(),
+                phase: AgentPhase::Adult,
+                tokens: 100_000,
+                skills: std::collections::HashMap::new(),
+                personality: String::new(),
+                tasks_completed: 0,
+                tasks_attempted: 0,
+            },
+        ));
     }
 
     (
@@ -127,6 +153,12 @@ pub async fn deregister_external_agent(
     {
         let mut agents = state.agents.lock().await;
         agents.retain(|a| a.id != agent_id);
+    }
+
+    // Also remove from WorldState.agents so metrics stay in sync.
+    if let Some(ref ws) = state.world_state {
+        let mut ws_guard = ws.lock().await;
+        ws_guard.agents.retain(|(id, _, _)| id.to_string() != agent_id);
     }
 
     (
@@ -232,6 +264,9 @@ pub async fn execute_agent_action(
             record.money = agent.money;
             record.tokens = agent.tokens;
             record.alive = agent.alive;
+            record.phase = agent.phase.clone();
+            // Increment ticks_survived on every action (each action = one tick survived)
+            record.ticks_survived = record.ticks_survived.saturating_add(1);
         }
     }
 

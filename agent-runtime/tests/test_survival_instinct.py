@@ -801,3 +801,139 @@ class TestThinkLoopPattern:
         # NORMAL mode -> actions list is empty -> proceed to LLM
         assert action.mode == SurvivalMode.NORMAL
         assert action.actions == []
+
+
+# ---------------------------------------------------------------------------
+# Urgent fallback to LLM after repeated failures
+# ---------------------------------------------------------------------------
+
+
+class TestUrgentFallback:
+    """Test that repeated urgent-action failures trigger fallback to LLM."""
+
+    @pytest.mark.asyncio
+    async def test_fallback_after_consecutive_failures(self) -> None:
+        """After max_urgent_retries consecutive failures, should_fallback_to_llm is True."""
+        instinct = SurvivalInstinct(action_cooldown=0.0, max_urgent_retries=3)
+        agent = FakeAgentState(tokens=5_000, max_tokens=100_000)
+        a2a = FailingA2AClient()
+
+        action = instinct.assess(agent)
+        assert action.mode == SurvivalMode.PANIC
+
+        # Execute 3 times — each should fail because A2A is broken.
+        for i in range(3):
+            results = await instinct.execute(action, agent, a2a)
+            assert any(r["status"] == "failed" for r in results)
+            assert instinct.consecutive_urgent_failures == i + 1
+
+        assert instinct.should_fallback_to_llm is True
+
+    @pytest.mark.asyncio
+    async def test_no_fallback_when_actions_succeed(self) -> None:
+        """When A2A works, should_fallback_to_llm stays False."""
+        instinct = SurvivalInstinct(action_cooldown=0.0, max_urgent_retries=3)
+        agent = FakeAgentState(tokens=5_000, max_tokens=100_000)
+        a2a = FakeA2AClient()  # succeeds
+
+        action = instinct.assess(agent)
+        await instinct.execute(action, agent, a2a)
+
+        assert instinct.consecutive_urgent_failures == 0
+        assert instinct.should_fallback_to_llm is False
+
+    @pytest.mark.asyncio
+    async def test_fallback_counter_resets_on_success(self) -> None:
+        """After failures, a successful execute resets the counter."""
+        instinct = SurvivalInstinct(action_cooldown=0.0, max_urgent_retries=3)
+        agent = FakeAgentState(tokens=5_000, max_tokens=100_000)
+        failing = FailingA2AClient()
+        succeeding = FakeA2AClient()
+
+        action = instinct.assess(agent)
+
+        # Fail twice.
+        await instinct.execute(action, agent, failing)
+        await instinct.execute(action, agent, failing)
+        assert instinct.consecutive_urgent_failures == 2
+
+        # Succeed once — counter should reset.
+        instinct.reset_cooldowns()
+        await instinct.execute(action, agent, succeeding)
+        assert instinct.consecutive_urgent_failures == 0
+        assert instinct.should_fallback_to_llm is False
+
+    @pytest.mark.asyncio
+    async def test_fallback_counter_resets_on_mode_improvement(self) -> None:
+        """When token ratio improves out of PANIC/URGENT, the counter resets."""
+        instinct = SurvivalInstinct(action_cooldown=0.0, max_urgent_retries=3)
+        agent_low = FakeAgentState(tokens=5_000, max_tokens=100_000)
+        agent_ok = FakeAgentState(tokens=50_000, max_tokens=100_000)
+        failing = FailingA2AClient()
+
+        # Fail twice in PANIC mode.
+        action = instinct.assess(agent_low)
+        await instinct.execute(action, agent_low, failing)
+        await instinct.execute(action, agent_low, failing)
+        assert instinct.consecutive_urgent_failures == 2
+
+        # Agent recovers — assess with normal tokens.
+        action2 = instinct.assess(agent_ok)
+        assert action2.mode == SurvivalMode.NORMAL
+        assert instinct.consecutive_urgent_failures == 0
+        assert instinct.should_fallback_to_llm is False
+
+    @pytest.mark.asyncio
+    async def test_manual_reset_fallback_counter(self) -> None:
+        """reset_fallback_counter() clears the counter."""
+        instinct = SurvivalInstinct(action_cooldown=0.0, max_urgent_retries=3)
+        agent = FakeAgentState(tokens=5_000, max_tokens=100_000)
+        failing = FailingA2AClient()
+
+        action = instinct.assess(agent)
+        for _ in range(3):
+            await instinct.execute(action, agent, failing)
+
+        assert instinct.should_fallback_to_llm is True
+        instinct.reset_fallback_counter()
+        assert instinct.should_fallback_to_llm is False
+        assert instinct.consecutive_urgent_failures == 0
+
+    @pytest.mark.asyncio
+    async def test_custom_max_urgent_retries(self) -> None:
+        """max_urgent_retries is configurable."""
+        instinct = SurvivalInstinct(action_cooldown=0.0, max_urgent_retries=1)
+        agent = FakeAgentState(tokens=5_000, max_tokens=100_000)
+        failing = FailingA2AClient()
+
+        action = instinct.assess(agent)
+        await instinct.execute(action, agent, failing)
+
+        # Should fallback after just 1 failure.
+        assert instinct.should_fallback_to_llm is True
+
+    @pytest.mark.asyncio
+    async def test_think_loop_pattern_fallback(self) -> None:
+        """Simulate the think-loop pattern: after max failures, LLM is called."""
+        instinct = SurvivalInstinct(action_cooldown=0.0, max_urgent_retries=2)
+        agent = FakeAgentState(tokens=5_000, max_tokens=100_000)
+        failing = FailingA2AClient()
+
+        llm_calls = 0
+
+        for tick in range(5):
+            action = instinct.assess(agent)
+            if action.mode in (SurvivalMode.PANIC, SurvivalMode.URGENT):
+                await instinct.execute(action, agent, failing)
+                if instinct.should_fallback_to_llm:
+                    # Fall through to LLM
+                    llm_calls += 1
+                # else: skip LLM (return early)
+            else:
+                llm_calls += 1
+
+        # Tick 0: counter=1, no fallback → no LLM
+        # Tick 1: counter=2 (= max), fallback → LLM
+        # Ticks 2-4: counter keeps growing, fallback stays True → LLM
+        # Total LLM calls = 4 (ticks 1,2,3,4)
+        assert llm_calls == 4

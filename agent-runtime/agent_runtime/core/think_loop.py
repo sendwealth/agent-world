@@ -805,21 +805,34 @@ class ThinkLoop:
             # Pass the world_client as the A2A client for emergency broadcasts
             a2a = self._world_client if self._world_client is not None else None
             await self.survival.execute(survival_action, self.state, a2a_client=a2a)
-            # Skip normal decision but still record metrics — do NOT run
-            # expensive hooks (diary, reflection, feed, language experiment)
-            # in emergency mode to avoid draining tokens.
-            elapsed = time.monotonic() - think_start
-            metrics.think_duration.observe(elapsed)
-            metrics.tokens_balance.set(self.state.tokens)
-            metrics.health.set(self.state.health)
-            log_tick(
-                self._tick,
-                str(self.state.id),
-                self.state.tokens,
-                self.state.health,
-                self.state.phase.value,
-            )
-            return
+
+            # Check if urgent actions have failed too many times; if so,
+            # fall through to normal LLM decision-making instead of
+            # returning and looping forever on failing emergency actions.
+            if self.survival.should_fallback_to_llm:
+                logger.warning(
+                    "Tick %d: URGENT/PANIC actions failed %d consecutive times — "
+                    "falling back to normal LLM decision-making.",
+                    self._tick,
+                    self.survival.consecutive_urgent_failures,
+                )
+                # Do NOT return — fall through to the normal decide step.
+            else:
+                # Skip normal decision but still record metrics — do NOT run
+                # expensive hooks (diary, reflection, feed, language experiment)
+                # in emergency mode to avoid draining tokens.
+                elapsed = time.monotonic() - think_start
+                metrics.think_duration.observe(elapsed)
+                metrics.tokens_balance.set(self.state.tokens)
+                metrics.health.set(self.state.health)
+                log_tick(
+                    self._tick,
+                    str(self.state.id),
+                    self.state.tokens,
+                    self.state.health,
+                    self.state.phase.value,
+                )
+                return
 
         # 3. Decide
         with trace_phase("decide", str(self.state.id)):

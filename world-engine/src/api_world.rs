@@ -335,6 +335,7 @@ pub async fn spawn_agent(
         parent_ids: Vec::new(),
         generation: 0,
         skills: HashMap::new(),
+        created_at: chrono::Utc::now().to_rfc3339(),
     };
 
     state.event_bus.emit(WorldEvent::AgentSpawned {

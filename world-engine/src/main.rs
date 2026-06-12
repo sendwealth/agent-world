@@ -667,6 +667,7 @@ async fn main() {
         mentorship_system: Some(mentorship_system),
         inheritance_system: Some(inheritance_system),
         legislation_cycle_engine: Some(legislation_cycle_engine),
+        world_state: Some(world_state.clone()),
     });
     // Wire the WorldMessageRouter into the AppState for Oracle/Bounty delivery
     app_state.world_msg_router = Some(world_msg_router);

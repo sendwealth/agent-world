@@ -187,7 +187,7 @@ export default function TracesPage() {
             <option value="">-- 选择一个 Agent --</option>
             {agents.map((agent) => (
               <option key={agent.id} value={agent.id}>
-                {agent.name} {!agent.alive ? "(已死亡)" : ""} · {agent.age} Tick
+                {agent.name} {!agent.alive ? "(已死亡)" : ""} · {(agent.age ?? agent.ticks_survived ?? 0)} Tick
               </option>
             ))}
           </select>
@@ -219,7 +219,7 @@ export default function TracesPage() {
               {selectedAgent.alive ? "存活" : "死亡"}
             </span>
             <span>{selectedAgent.tokens.toLocaleString()} Token</span>
-            <span>信誉 {selectedAgent.reputation.toFixed(1)}</span>
+            <span>信誉 {(selectedAgent.reputation ?? 0).toFixed(1)}</span>
           </div>
         )}
       </div>

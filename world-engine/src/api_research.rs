@@ -538,6 +538,7 @@ mod tests {
             parent_ids: Vec::new(),
             generation: 0,
             skills: HashMap::new(),
+            created_at: String::new(),
         }
     }
 

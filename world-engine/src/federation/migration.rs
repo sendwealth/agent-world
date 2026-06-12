@@ -511,6 +511,7 @@ impl MigrationManager {
                     parent_ids: vec![],
                     generation: 0,
                     skills: std::collections::HashMap::new(),
+                    created_at: String::new(),
                 };
                 agents_list.push(new_agent);
             }

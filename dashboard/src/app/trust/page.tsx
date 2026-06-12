@@ -77,7 +77,7 @@ export default function TrustPage() {
         <h1 className="text-xl md:text-2xl font-bold text-zinc-100">信任网络</h1>
         <p className="text-sm text-zinc-500">
           {stats
-            ? `${stats.total_relationships} 条关系 · 平均信任分 ${stats.avg_trust_score.toFixed(2)} · ${stats.allies_count} 个盟友 · ${stats.enemies_count} 个敌人`
+            ? `${stats.total_relationships ?? 0} 条关系 · 平均信任分 ${stats.avg_trust_score?.toFixed(2) ?? "—"} · ${stats.allies_count ?? 0} 个盟友 · ${stats.enemies_count ?? 0} 个敌人`
             : "Agent 间的信任关系图谱"}
         </p>
       </div>
@@ -96,7 +96,7 @@ export default function TrustPage() {
         </div>
         <div className="rounded-xl border border-purple-500/20 bg-purple-500/5 p-4 space-y-1">
           <p className="text-sm text-zinc-400">平均信任分</p>
-          <p className="text-2xl font-bold text-purple-400">{stats?.avg_trust_score.toFixed(2) ?? "—"}</p>
+          <p className="text-2xl font-bold text-purple-400">{stats?.avg_trust_score?.toFixed(2) ?? "—"}</p>
         </div>
         <div className="rounded-xl border border-green-500/20 bg-green-500/5 p-4 space-y-1">
           <p className="text-sm text-zinc-400">盟友对数</p>

@@ -127,7 +127,7 @@ function AgentCard({
       <div className="grid grid-cols-3 gap-2 mt-3 text-center">
         <div>
           <div className="text-xs text-zinc-500">Rep</div>
-          <div className="text-sm font-medium tabular-nums">{agent.reputation.toFixed(0)}</div>
+          <div className="text-sm font-medium tabular-nums">{(agent.reputation ?? 0).toFixed(0)}</div>
         </div>
         <div>
           <div className="text-xs text-zinc-500">Wealth</div>
@@ -253,7 +253,7 @@ function AgentDetail({
           </div>
           <div className="text-center p-3 rounded-lg bg-zinc-900/30">
             <div className="text-xs text-zinc-500">Reputation</div>
-            <div className="text-sm font-semibold tabular-nums">{agent.reputation.toFixed(0)}</div>
+            <div className="text-sm font-semibold tabular-nums">{(agent.reputation ?? 0).toFixed(0)}</div>
           </div>
         </div>
       </div>

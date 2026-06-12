@@ -614,6 +614,8 @@ def spawn_agent(config: AgentSpawnConfig) -> AgentState:
     if config.questions:
         personality["questions"] = config.questions
 
+    from agent_runtime.models.enums import AgentPhase
+
     state = AgentState(
         name=config.name,
         tokens=config.tokens,
@@ -621,6 +623,7 @@ def spawn_agent(config: AgentSpawnConfig) -> AgentState:
         money=config.money,
         health=config.health,
         personality=personality,
+        phase=AgentPhase.ADULT,  # External agents skip BIRTH/CHILDHOOD
     )
 
     for skill_name, level in config.skills.items():

@@ -1,5 +1,7 @@
-export function formatDate(iso: string): string {
+export function formatDate(iso: string | null | undefined): string {
+  if (!iso) return "未知";
   const d = new Date(iso);
+  if (isNaN(d.getTime())) return "未知";
   const now = new Date();
   const diff = now.getTime() - d.getTime();
   const minutes = Math.floor(diff / 60_000);

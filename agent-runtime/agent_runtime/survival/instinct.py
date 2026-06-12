@@ -167,9 +167,17 @@ class SurvivalInstinct:
         instinct = SurvivalInstinct()
         action = instinct.assess(agent_state)
         if action.mode in (SurvivalMode.PANIC, SurvivalMode.URGENT):
-            await instinct.execute(action, agent, a2a_client)
-            return  # skip normal LLM decision
+            results = await instinct.execute(action, agent, a2a_client)
+            if instinct.should_fallback_to_llm:
+                # Proceed to normal LLM decision instead of looping
+                pass
+            else:
+                return  # skip normal LLM decision
     """
+
+    # Maximum number of consecutive emergency-action rounds that may fail
+    # before we give up and fall back to normal LLM decision-making.
+    _DEFAULT_MAX_URGENT_RETRIES: int = 3
 
     def __init__(
         self,
@@ -177,12 +185,15 @@ class SurvivalInstinct:
         *,
         action_cooldown: float = _ACTION_COOLDOWN,
         loan_terms: LoanTerms | None = None,
+        max_urgent_retries: int = _DEFAULT_MAX_URGENT_RETRIES,
     ) -> None:
         self.thresholds = thresholds or SurvivalThresholds()
         self._last_action_time: dict[EmergencyActionType, float | None] = {}
         self._action_cooldown = action_cooldown
         self.loan_terms = loan_terms or LoanTerms()
         self._lock: asyncio.Lock | None = None
+        self._max_urgent_retries = max_urgent_retries
+        self._consecutive_urgent_failures: int = 0
 
     def _get_lock(self) -> asyncio.Lock:
         """Lazily create the asyncio.Lock on first use.
@@ -195,6 +206,34 @@ class SurvivalInstinct:
         if self._lock is None:
             self._lock = asyncio.Lock()
         return self._lock
+
+    # ------------------------------------------------------------------
+    # Fallback state
+    # ------------------------------------------------------------------
+
+    @property
+    def should_fallback_to_llm(self) -> bool:
+        """Return True if urgent actions have failed too many times.
+
+        The think-loop should check this after ``execute()`` and, if
+        True, proceed with normal LLM decision-making instead of
+        returning early (which would cause an infinite loop).
+        """
+        return self._consecutive_urgent_failures >= self._max_urgent_retries
+
+    @property
+    def consecutive_urgent_failures(self) -> int:
+        """Number of consecutive emergency rounds where A2A actions failed."""
+        return self._consecutive_urgent_failures
+
+    def reset_fallback_counter(self) -> None:
+        """Reset the consecutive-failure counter.
+
+        Called automatically when a non-emergency mode is assessed, or
+        when an emergency round succeeds.  Can also be called manually
+        (e.g. after tokens are replenished).
+        """
+        self._consecutive_urgent_failures = 0
 
     # ------------------------------------------------------------------
     # Core assessment (synchronous — no LLM, no I/O)
@@ -237,6 +276,17 @@ class SurvivalInstinct:
         mode = self._classify_mode(ratio)
         actions = self._generate_actions(mode, ratio, agent)
 
+        # If the mode has improved out of PANIC/URGENT, reset the failure
+        # counter so we don't carry stale failure state forward.
+        if mode not in (SurvivalMode.PANIC, SurvivalMode.URGENT):
+            if self._consecutive_urgent_failures > 0:
+                logger.info(
+                    "Survival mode improved to %s — resetting urgent failure counter (was %d).",
+                    mode.value,
+                    self._consecutive_urgent_failures,
+                )
+            self._consecutive_urgent_failures = 0
+
         logger.debug(
             "Survival assessment: mode=%s ratio=%.2f actions=%d",
             mode.value,
@@ -263,6 +313,11 @@ class SurvivalInstinct:
 
         This method is serialised with an ``asyncio.Lock`` so that
         concurrent calls do not bypass the cooldown check.
+
+        After calling this method, callers should check
+        ``self.should_fallback_to_llm`` — if True, the think-loop
+        should proceed to normal LLM decision-making instead of
+        returning early.
         """
         async with self._get_lock():
             results: list[dict[str, object]] = []
@@ -278,6 +333,37 @@ class SurvivalInstinct:
                 result = await self._execute_single(ema, agent, a2a_client)
                 self._last_action_time[ema.action_type] = now
                 results.append(result)
+
+            # Track consecutive failures for PANIC/URGENT modes.
+            if action.mode in (SurvivalMode.PANIC, SurvivalMode.URGENT):
+                any_a2a_attempted = any(
+                    ema.action_type in _A2A_ACTIONS
+                    for ema in action.actions
+                )
+                any_failed = any(
+                    r.get("status") == "failed"
+                    for r in results
+                )
+                if any_failed or (any_a2a_attempted and len(results) == 0):
+                    # All A2A actions were skipped by cooldown and nothing
+                    # succeeded either — count as a failed round.
+                    self._consecutive_urgent_failures += 1
+                    logger.warning(
+                        "Urgent action round failed (%d/%d consecutive failures). "
+                        "A2A actions that failed: %s",
+                        self._consecutive_urgent_failures,
+                        self._max_urgent_retries,
+                        [r["action"] for r in results if r.get("status") == "failed"],
+                    )
+                    if self.should_fallback_to_llm:
+                        logger.warning(
+                            "URGENT mode reached max retries (%d). "
+                            "Falling back to normal LLM decision-making.",
+                            self._max_urgent_retries,
+                        )
+                else:
+                    # At least one action succeeded — reset counter.
+                    self._consecutive_urgent_failures = 0
 
             return results
 

@@ -168,7 +168,7 @@ export default function DiaryPage() {
             </h1>
             {agent && (
               <p className="text-sm text-zinc-500">
-                {agent.alive ? "存活" : "已死亡"} · {agent.age} Tick · {entries.length} 篇日记
+                {agent.alive ? "存活" : "已死亡"} · {(agent.age ?? agent.ticks_survived ?? 0)} Tick · {entries.length} 篇日记
               </p>
             )}
           </div>

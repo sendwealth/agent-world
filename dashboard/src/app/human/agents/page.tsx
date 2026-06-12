@@ -186,7 +186,7 @@ export default function HumanAgentsPage() {
           <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
             {claimed.map((agent) => {
               const tokenRatio =
-                agent.tokens / Math.max(agent.age || 1, 1);
+                agent.tokens / Math.max(agent.age ?? 1, 1);
               const tokenStatus =
                 tokenRatio < 0.5
                   ? "critical"
@@ -270,13 +270,13 @@ export default function HumanAgentsPage() {
                     <div>
                       <span className="text-zinc-500">信誉</span>
                       <p className="font-medium text-zinc-200">
-                        {agent.reputation.toFixed(1)}
+                        {(agent.reputation ?? 0).toFixed(1)}
                       </p>
                     </div>
                     <div>
                       <span className="text-zinc-500">年龄</span>
                       <p className="font-medium text-zinc-200">
-                        {agent.age} ticks
+                        {(agent.age ?? 0)} ticks
                       </p>
                     </div>
                   </div>
@@ -428,7 +428,7 @@ export default function HumanAgentsPage() {
                         {agent.money}
                       </td>
                       <td className="px-4 py-3 text-right text-sm text-zinc-400">
-                        {agent.age}
+                        {(agent.age ?? 0)}
                       </td>
                       <td className="px-4 py-3 text-right">
                         {claimedIds.has(agent.id) ? (

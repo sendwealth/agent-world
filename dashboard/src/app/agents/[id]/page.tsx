@@ -20,8 +20,10 @@ function formatMoney(v: number): string {
   return `$${v.toFixed(0)}`;
 }
 
-function formatDate(iso: string): string {
+function formatDate(iso: string | null | undefined): string {
+  if (!iso) return "未知";
   const d = new Date(iso);
+  if (isNaN(d.getTime())) return "未知";
   const now = new Date();
   const diff = now.getTime() - d.getTime();
   const minutes = Math.floor(diff / 60_000);
@@ -262,7 +264,7 @@ export default function AgentDetailPage() {
               </span>
             </div>
             <p className="text-sm text-zinc-500">
-              创建于 {formatDate(agent.createdAt)} · {agent.age} Tick · 信誉 {agent.reputation.toFixed(1)}
+              创建于 {formatDate(agent.createdAt || agent.created_at)} · {(agent.age ?? agent.ticks_survived ?? 0)} Tick · 信誉 {(agent.reputation ?? 0).toFixed(1)}
             </p>
           </div>
         </div>
@@ -297,8 +299,8 @@ export default function AgentDetailPage() {
             <span className="text-sm font-medium text-zinc-400">信誉值</span>
             <span className="text-xs text-amber-400">&#9733;</span>
           </div>
-          <p className="text-2xl font-bold tabular-nums text-zinc-100">{agent.reputation.toFixed(1)}</p>
-          <BalanceBar value={agent.reputation} max={100} color="bg-amber-400" />
+          <p className="text-2xl font-bold tabular-nums text-zinc-100">{(agent.reputation ?? 0).toFixed(1)}</p>
+          <BalanceBar value={(agent.reputation ?? 0)} max={100} color="bg-amber-400" />
         </div>
 
         <div className="rounded-xl border border-purple-500/20 bg-purple-500/5 p-4 space-y-2">

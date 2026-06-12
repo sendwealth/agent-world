@@ -16,11 +16,16 @@ export interface Agent {
   phase: string;
   money: number;
   tokens: number;
-  reputation: number;
+  reputation?: number;
   skills: Record<string, number>;
   alive: boolean;
-  age: number; // in ticks
-  createdAt: string;
+  age?: number; // in ticks
+  ticks_survived?: number;
+  personality?: string;
+  parent_ids?: string[];
+  generation?: number;
+  createdAt?: string;
+  created_at?: string; // API returns snake_case
 }
 
 export interface WorldEvent {
@@ -512,9 +517,9 @@ export interface ClaimedAgent {
   alive: boolean;
   tokens: number;
   money: number;
-  reputation: number;
+  reputation?: number;
   skills: Record<string, number>;
-  age: number;
+  age?: number;
 }
 
 // Provider types

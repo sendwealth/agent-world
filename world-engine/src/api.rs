@@ -49,6 +49,7 @@ use crate::time_capsule::SnapshotStore;
 use crate::wal::WAL;
 use crate::world::map::building::BuildingManager;
 use crate::world::state::EventBus;
+use crate::world::WorldState;
 
 // ── Shared Type Aliases ──────────────────────────────────
 
@@ -92,8 +93,11 @@ pub struct AgentDto {
     pub parent_ids: Vec<String>,
     #[serde(default)]
     pub generation: u32,
-#[serde(default)]
+    #[serde(default)]
     pub skills: HashMap<String, u32>,
+    /// ISO 8601 timestamp when this agent was created / registered.
+    #[serde(default)]
+    pub created_at: String,
 }
 
 impl From<crate::world::agent::AgentRecord> for AgentDto {
@@ -103,13 +107,14 @@ impl From<crate::world::agent::AgentRecord> for AgentDto {
             name: rec.name,
             phase: format!("{:?}", rec.phase).to_lowercase(),
             tokens: rec.tokens,
-            money: 0,
+            money: 0, // Money is tracked in ExternalAgent / BankingSystem, not AgentRecord
             alive: !matches!(rec.phase, crate::world::enums::AgentPhase::Dead),
-            ticks_survived: 0,
+            ticks_survived: rec.tasks_attempted as u64, // Best proxy until tick-based tracking is added
             personality: rec.personality,
             parent_ids: Vec::new(),
             generation: 0,
             skills: rec.skills.values().map(|s| (s.name.clone(), s.level)).collect(),
+            created_at: String::new(), // AgentRecord doesn't carry a timestamp
         }
     }
 }
@@ -165,6 +170,9 @@ pub struct ExternalAgent {
     pub money: u64,
     pub position: Position,
     pub registered_tick: u64,
+    /// ISO 8601 timestamp when this agent was created / registered.
+    #[serde(default)]
+    pub created_at: String,
 }
 
 pub type SharedExternalAgents = Arc<Mutex<HashMap<String, ExternalAgent>>>;
@@ -245,6 +253,10 @@ pub struct AppState {
     pub mentorship_system: Option<SharedMentorshipSystem>,
     pub inheritance_system: Option<SharedInheritanceSystem>,
     pub legislation_cycle_engine: Option<SharedLegislationCycleEngine>,
+    /// Shared reference to the WorldState used by the scheduler and metrics.
+    /// External agent registration must also insert here so that
+    /// `agents_alive` metrics reflect all registered agents.
+    pub world_state: Option<Arc<Mutex<WorldState>>>,
 }
 
 /// Optional subsystem overrides for test AppState construction.
@@ -283,6 +295,7 @@ pub struct TestOverrides {
     pub mentorship_system: Option<SharedMentorshipSystem>,
     pub inheritance_system: Option<SharedInheritanceSystem>,
     pub legislation_cycle_engine: Option<SharedLegislationCycleEngine>,
+    pub world_state: Option<Arc<Mutex<WorldState>>>,
 }
 
 impl AppState {
@@ -357,6 +370,7 @@ impl AppState {
             mentorship_system: overrides.mentorship_system,
             inheritance_system: overrides.inheritance_system,
             legislation_cycle_engine: overrides.legislation_cycle_engine,
+            world_state: overrides.world_state,
         }
     }
 
@@ -457,6 +471,7 @@ fn make_test_state(
         mentorship_system: None,
         inheritance_system: None,
         legislation_cycle_engine: None,
+        world_state: None,
     }
 }
 

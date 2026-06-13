@@ -233,6 +233,104 @@ class TestSocialEngineBuildContext:
         desc = ctx.personality_description.lower()
         assert "sociable" in desc or "personality" in desc
 
+    def test_rest_api_dict_shape_with_id_key(self):
+        """build_context handles REST perception dicts that use 'id' not 'agent_id'.
+
+        The World Engine REST API (GET /api/v1/agents/{id}/perception) returns
+        nearby_agents dicts with key 'id', while the gRPC path uses 'agent_id'.
+        This test reproduces the production KeyError and verifies the fix.
+        """
+        engine = SocialEngine()
+        nearby = [
+            {"id": "agent-from-rest", "name": "Alice"},
+        ]
+        ctx = engine.build_context(
+            agent_id="a1",
+            personality=_extraverted_personality(),
+            values=ValueWeights(cooperation_weight=0.8),
+            nearby_agents=nearby,
+            tick=1,
+        )
+        assert len(ctx.targets) == 1
+        assert ctx.targets[0].agent_id == "agent-from-rest"
+        assert ctx.should_socialize is True
+        assert "agent-from-rest" in ctx.trust_snapshot
+
+    def test_mixed_dict_shapes_agent_id_and_id(self):
+        """build_context handles a mix of 'agent_id' and 'id' keyed dicts."""
+        engine = SocialEngine()
+        nearby = [
+            {"agent_id": "grpc-agent", "name": "Bob"},
+            {"id": "rest-agent", "name": "Carol"},
+        ]
+        ctx = engine.build_context(
+            agent_id="a1",
+            personality=_extraverted_personality(),
+            values=ValueWeights(cooperation_weight=0.8),
+            nearby_agents=nearby,
+            tick=1,
+        )
+        assert len(ctx.targets) == 2
+        target_ids = {t.agent_id for t in ctx.targets}
+        assert target_ids == {"grpc-agent", "rest-agent"}
+
+    def test_skips_entries_without_agent_id_or_id(self):
+        """Entries missing both 'agent_id' and 'id' are skipped, not crashed on."""
+        engine = SocialEngine()
+        nearby = [
+            {"name": "NoID"},  # missing both keys
+            {"agent_id": "valid-agent", "name": "Valid"},
+            {"id": "also-valid", "name": "AlsoValid"},
+        ]
+        ctx = engine.build_context(
+            agent_id="a1",
+            personality=_extraverted_personality(),
+            values=ValueWeights(cooperation_weight=0.8),
+            nearby_agents=nearby,
+            tick=1,
+        )
+        assert len(ctx.targets) == 2
+        target_ids = {t.agent_id for t in ctx.targets}
+        assert "valid-agent" in target_ids
+        assert "also-valid" in target_ids
+
+    def test_all_entries_missing_id_returns_empty_context(self):
+        """When all entries lack agent_id/id, context is valid but has no targets."""
+        engine = SocialEngine()
+        nearby = [
+            {"name": "Ghost1"},
+            {"name": "Ghost2"},
+        ]
+        ctx = engine.build_context(
+            agent_id="a1",
+            personality=_extraverted_personality(),
+            values=ValueWeights(cooperation_weight=0.8),
+            nearby_agents=nearby,
+            tick=1,
+        )
+        assert ctx.targets == []
+        assert ctx.trust_snapshot == {}
+        assert ctx.should_socialize is False
+        assert ctx.recommended_target is None
+
+    def test_empty_agent_id_string_is_skipped(self):
+        """Entries with agent_id='' or id='' are skipped."""
+        engine = SocialEngine()
+        nearby = [
+            {"agent_id": "", "name": "EmptyID"},
+            {"id": "", "name": "AlsoEmpty"},
+            {"agent_id": "real-agent", "name": "Real"},
+        ]
+        ctx = engine.build_context(
+            agent_id="a1",
+            personality=_extraverted_personality(),
+            values=ValueWeights(cooperation_weight=0.8),
+            nearby_agents=nearby,
+            tick=1,
+        )
+        assert len(ctx.targets) == 1
+        assert ctx.targets[0].agent_id == "real-agent"
+
 
 # ---------------------------------------------------------------------------
 # SocialEngine.execute_socialize

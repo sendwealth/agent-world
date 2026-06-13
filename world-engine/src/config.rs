@@ -112,6 +112,12 @@ pub struct EconomyConfig {
     pub token_price: u64,
     #[serde(default = "default_interest_rate")]
     pub interest_rate: f64,
+    /// Initial tokens granted to externally-registered agents (REST + gRPC).
+    #[serde(default = "default_external_agent_initial_tokens")]
+    pub external_agent_initial_tokens: u64,
+    /// Initial money granted to externally-registered agents (REST + gRPC).
+    #[serde(default = "default_external_agent_initial_money")]
+    pub external_agent_initial_money: u64,
 }
 
 impl Default for EconomyConfig {
@@ -124,6 +130,8 @@ impl Default for EconomyConfig {
             initial_money: 0,
             token_price: default_token_price(),
             interest_rate: default_interest_rate(),
+            external_agent_initial_tokens: default_external_agent_initial_tokens(),
+            external_agent_initial_money: default_external_agent_initial_money(),
         }
     }
 }
@@ -145,6 +153,14 @@ fn default_token_price() -> u64 {
 }
 fn default_interest_rate() -> f64 {
     0.001
+}
+
+fn default_external_agent_initial_tokens() -> u64 {
+    100_000
+}
+
+fn default_external_agent_initial_money() -> u64 {
+    5_000
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
@@ -1079,6 +1095,25 @@ safety:
         assert_eq!(config.economy.initial_tokens, 100_000);
         assert_eq!(config.lifecycle.birth_tokens, 100_000);
         assert_eq!(config.evolution.skill_max_level, 10);
+    }
+
+    #[test]
+    fn external_agent_resources_have_defaults() {
+        let config = GenesisConfig::default();
+        assert_eq!(config.economy.external_agent_initial_tokens, 100_000);
+        assert_eq!(config.economy.external_agent_initial_money, 5_000);
+    }
+
+    #[test]
+    fn external_agent_resources_parsed_from_yaml() {
+        let yaml = r#"
+economy:
+  external_agent_initial_tokens: 50000
+  external_agent_initial_money: 2500
+"#;
+        let config: GenesisConfig = serde_yaml::from_str(yaml).unwrap();
+        assert_eq!(config.economy.external_agent_initial_tokens, 50_000);
+        assert_eq!(config.economy.external_agent_initial_money, 2_500);
     }
 
     #[test]

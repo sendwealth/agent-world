@@ -291,6 +291,30 @@ impl GovernanceMetricsCollector {
             None => Vec::new(),
         }
     }
+
+    /// Query the governance event timeline across ALL organizations.
+    ///
+    /// Events are merged and sorted by tick (ascending). Optionally filter
+    /// by event type and/or tick range `(start, end)`.
+    pub fn get_world_timeline(
+        &self,
+        event_type: Option<EventType>,
+        range: (u64, u64),
+    ) -> Vec<GovernanceEvent> {
+        let data = self.org_data.lock().unwrap_or_else(|e| { tracing::error!("governance_metrics lock poisoned: {}", e); e.into_inner() });
+        let mut events: Vec<GovernanceEvent> = data
+            .values()
+            .flat_map(|acc| acc.timeline.iter())
+            .filter(|e| {
+                let type_match = event_type.is_none_or(|t| e.event_type == t);
+                let range_match = e.tick >= range.0 && e.tick <= range.1;
+                type_match && range_match
+            })
+            .cloned()
+            .collect();
+        events.sort_by_key(|e| e.tick);
+        events
+    }
 }
 
 // ── Background collection loop ─────────────────────────────────────────────

@@ -568,7 +568,8 @@ pub fn build_full_router(state: AppState) -> Router {
         .merge(crate::api_plugins::plugin_routes())
         .merge(crate::api_providers::provider_routes())
         .merge(crate::api_diary::diary_routes())
-        .merge(crate::api_feed::feed_routes());
+        .merge(crate::api_feed::feed_routes())
+        .merge(crate::api_dashboard::dashboard_routes());
 
     Router::new()
         // All v1 routes nested under /api/v1

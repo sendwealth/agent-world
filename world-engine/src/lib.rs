@@ -18,6 +18,7 @@ pub mod api_buildings;
 pub mod api_diplomacy;
 pub mod api_diary;
 pub mod api_feed;
+pub mod api_dashboard;
 pub mod api_dsl;
 pub mod api_experiment;
 pub mod api_escrow;

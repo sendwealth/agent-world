@@ -330,6 +330,11 @@ impl MentorshipSystem {
         Ok(completed)
     }
 
+    /// Get all sessions in the system.
+    pub fn all_sessions(&self) -> Vec<&MentorshipSession> {
+        self.sessions.values().collect()
+    }
+
     /// Get active sessions for a mentor.
     pub fn mentor_active_sessions(&self, mentor_id: &str) -> Vec<&MentorshipSession> {
         self.sessions

@@ -431,7 +431,7 @@ class TestThinkLoopErrorRecovery:
 class TestThinkLoopSurvivalBypass:
     @pytest.mark.asyncio
     async def test_panic_mode_skips_decision(self):
-        """When tokens are critically low, survival takes over and skips LLM."""
+        """PANIC initially bypasses the LLM, then falls back after repeated failures."""
         decision_calls = 0
 
         class CountingDecision:
@@ -452,12 +452,14 @@ class TestThinkLoopSurvivalBypass:
         )
         await loop.run(max_ticks=5)
         assert loop.tick == 5
-        # Decision should never have been called because PANIC mode
-        assert decision_calls == 0
+        # PANIC initially bypasses the LLM, but after max_urgent_retries (3)
+        # consecutive emergency-action failures the loop falls back to normal
+        # LLM decision-making to avoid an infinite emergency loop.
+        assert 0 < decision_calls < 5
 
     @pytest.mark.asyncio
     async def test_urgent_mode_skips_decision(self):
-        """URGENT mode (tokens < 20%) also skips normal decision."""
+        """URGENT initially bypasses the LLM, then falls back after repeated failures."""
         decision_calls = 0
 
         class CountingDecision:
@@ -478,7 +480,10 @@ class TestThinkLoopSurvivalBypass:
         )
         await loop.run(max_ticks=5)
         assert loop.tick == 5
-        assert decision_calls == 0
+        # URGENT initially bypasses the LLM, but after max_urgent_retries (3)
+        # consecutive emergency-action failures the loop falls back to normal
+        # LLM decision-making to avoid an infinite emergency loop.
+        assert 0 < decision_calls < 5
 
     @pytest.mark.asyncio
     async def test_normal_mode_calls_decision(self):

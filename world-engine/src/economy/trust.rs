@@ -253,6 +253,11 @@ impl TrustNetwork {
             .collect()
     }
 
+    /// Get all trust edges in the network.
+    pub fn all_edges(&self) -> Vec<&TrustEdge> {
+        self.edges.values().collect()
+    }
+
     /// Count total trust edges.
     pub fn edge_count(&self) -> usize {
         self.edges.len()

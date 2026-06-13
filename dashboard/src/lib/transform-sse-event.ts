@@ -23,9 +23,20 @@ export function transformSSEEvent(raw: RawSSEEvent): WorldEvent {
   const { type, payload } = raw;
 
   // Extract common fields from payload
+  // Many event types (e.g. balance_changed) carry agent_name; older events
+  // use `name`. Prefer agent_name, then fall back to name.
   const agentId = payload.agent_id as string | undefined;
-  const agentName = payload.name as string | undefined;
-  const tick = (payload.tick as number) ?? 0;
+  const agentName =
+    (payload.agent_name as string | undefined) ??
+    (payload.name as string | undefined);
+  // Tick may be at the top level or nested inside data; coerce to a number.
+  const tickRaw = payload.tick;
+  const tick =
+    (typeof tickRaw === "number"
+      ? tickRaw
+      : typeof tickRaw === "string"
+        ? Number(tickRaw)
+        : 0) || 0;
   const amount = payload.amount as number | undefined;
 
   // Extract target info where applicable
@@ -62,7 +73,10 @@ function buildDescription(
   type: string,
   payload: Record<string, unknown>,
 ): string {
+  // Prefer agent_name (used by balance_changed and similar), then fall back
+  // to `name`, then to agent_id, then to "unknown".
   const name =
+    (payload.agent_name as string | undefined) ??
     (payload.name as string | undefined) ??
     (payload.agent_id as string | undefined) ??
     "unknown";

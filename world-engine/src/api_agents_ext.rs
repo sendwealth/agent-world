@@ -63,9 +63,9 @@ pub async fn register_external_agent(
         capabilities: body.capabilities,
         config: body.config,
         alive: true,
-        phase: "exploration".to_string(),
+        phase: "adult".to_string(),
         tokens: 100_000,
-        money: 0,
+        money: 5_000,
         position: Position { x: 0, y: 0 },
         registered_tick: tick,
         created_at: chrono::Utc::now().to_rfc3339(),
@@ -83,9 +83,9 @@ pub async fn register_external_agent(
         agents.push(AgentDto {
             id: agent_id.clone(),
             name: name.clone(),
-            phase: "exploration".to_string(),
+            phase: "adult".to_string(),
             tokens: 100_000,
-            money: 0,
+            money: 5_000,
             alive: true,
             ticks_survived: 0,
             personality: String::new(),
@@ -213,6 +213,42 @@ pub async fn execute_agent_action(
 
     // Execute action — update position for "move", etc.
     let tick = *state.tick_rx.borrow();
+    let agent_name = agent.name.clone();
+
+    // Token cost per action (server-authoritative)
+    // Aligned with agent-runtime/agent_runtime/core/decide.py:_TOKEN_COSTS
+    // and act.py:_DEFAULT_TOKEN_COSTS
+    let action_cost: u64 = match body.action.as_str() {
+        "explore" => 3,
+        "move" => 12,
+        "build" => 20,
+        "trade" => 10,
+        "communicate" => 10, // maps to SEND_MESSAGE / RESPOND_MESSAGE
+        "claim_task" => 5,
+        "submit_task" => 8,
+        "socialize" => 5,
+        "practice_skill" => 8,
+        "teach_skill" => 15,
+        _ => 0, // rest, gather = free
+    };
+    // Token income per action
+    let token_income: u64 = match body.action.as_str() {
+        "rest" => 5,
+        "explore" => 2,
+        "build" => 5,
+        "submit_task" => 15,
+        _ => 0,
+    };
+
+    // Deduct token cost
+    let old_tokens = agent.tokens;
+    if action_cost > 0 {
+        agent.tokens = agent.tokens.saturating_sub(action_cost);
+    }
+    if token_income > 0 {
+        agent.tokens = agent.tokens.saturating_add(token_income);
+    }
+
     let success = match body.action.as_str() {
         "move" => {
             if let Some(dir) = body.params.get("direction").and_then(|d| d.as_str()) {
@@ -242,19 +278,22 @@ pub async fn execute_agent_action(
         "build" => true,
         "claim_task" => true,
         "submit_task" => true,
+        "socialize" => true,
+        "practice_skill" => true,
+        "teach_skill" => true,
         _ => false,
     };
 
-    // Auto-advance the World Engine tick on every agent action.
-    // This ensures that `GET /api/v1/world/stats` reflects agent activity
-    // even when no external tick scheduler is driving the game loop.
-    {
-        let current = *state.tick_rx.borrow();
-        let new_tick = current + 1;
-        state
-            .event_bus
-            .emit(WorldEvent::TickAdvanced { tick: new_tick });
-        let _ = state.tick_tx.send(new_tick);
+    // Emit BalanceChanged event for dashboard visibility (token changes)
+    if success && (action_cost > 0 || token_income > 0) {
+        state.event_bus.emit(WorldEvent::BalanceChanged {
+            agent_id: id.clone(),
+            agent_name: agent_name.clone(),
+            currency: crate::world::enums::Currency::Token,
+            old_balance: old_tokens,
+            new_balance: agent.tokens,
+            tick,
+        });
     }
 
     // Sync changes back to the shared agents list so GET /api/v1/agents reflects updates

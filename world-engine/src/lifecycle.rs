@@ -394,6 +394,7 @@ pub fn perform_death_cleanup(agent: &mut AgentRecord, tick: u64) -> DeathCleanup
     if tokens_destroyed > 0 {
         events.push(WorldEvent::BalanceChanged {
             agent_id: agent.id.to_string(),
+            agent_name: agent.name.clone(),
             currency: crate::world::enums::Currency::Token,
             old_balance: tokens_destroyed,
             new_balance: 0,

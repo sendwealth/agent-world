@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import type { Leaderboard, LeaderboardEntry, ReputationRankingEntry } from "@/types/world";
+import type { Agent, Leaderboard, LeaderboardEntry, ReputationRankingEntry } from "@/types/world";
 import { fetchJSON } from "@/lib/api";
 
 interface LeaderboardProps {
@@ -121,22 +121,103 @@ function ReputationRankingTable({
   );
 }
 
+// ─── Client-side leaderboard derivation ─────────────────────
+// Builds a Leaderboard object from the /api/v1/agents response so the
+// homepage rankings sections stay populated even when the dedicated
+// /api/v1/world/leaderboard endpoint is unavailable or empty.
+
+function topN<T>(items: T[], n: number): T[] {
+  return items.slice(0, n);
+}
+
+function rankEntries(
+  values: { agent: Agent; value: number }[],
+): LeaderboardEntry[] {
+  return topN(
+    values
+      .filter((v) => typeof v.value === "number" && !Number.isNaN(v.value))
+      .sort((a, b) => b.value - a.value),
+    10,
+  ).map((v, i) => ({
+    agentId: v.agent.id,
+    agentName: v.agent.name ?? v.agent.id,
+    value: v.value,
+    rank: i + 1,
+  }));
+}
+
+function deriveLeaderboardFromAgents(agents: Agent[]): Leaderboard {
+  const richest = rankEntries(
+    agents.map((agent) => ({ agent, value: agent.money ?? 0 })),
+  );
+  const longestLived = rankEntries(
+    agents.map((agent) => ({
+      agent,
+      value: agent.ticks_survived ?? agent.age ?? 0,
+    })),
+  );
+  const highestSkill = rankEntries(
+    agents.map((agent) => ({
+      agent,
+      value: Object.values(agent.skills ?? {}).reduce(
+        (sum, lvl) => sum + (typeof lvl === "number" ? lvl : 0),
+        0,
+      ),
+    })),
+  );
+  const highestReputation = rankEntries(
+    agents.map((agent) => ({ agent, value: agent.reputation ?? 0 })),
+  );
+  return { richest, longestLived, highestSkill, highestReputation };
+}
+
 export function LeaderboardSection({ statsTick }: LeaderboardProps) {
   const [leaderboard, setLeaderboard] = useState<Leaderboard | null>(null);
   const [reputationRankings, setReputationRankings] = useState<ReputationRankingEntry[]>([]);
 
   useEffect(() => {
+    let cancelled = false;
+
     async function load() {
+      // Try the dedicated leaderboard endpoint first. If it returns nothing
+      // (or the endpoint is not implemented), fall back to deriving rankings
+      // from the /api/v1/agents list.
+      let data: Leaderboard | null = null;
       try {
-        const data = await fetchJSON<Leaderboard>("/api/v1/world/leaderboard");
-        setLeaderboard(data);
+        data = await fetchJSON<Leaderboard>("/api/v1/world/leaderboard");
       } catch {
         // Backend may not be available
       }
+
+      const hasAny =
+        !!data &&
+        (data.richest?.length ||
+          data.longestLived?.length ||
+          data.highestSkill?.length ||
+          data.highestReputation?.length);
+
+      if (!hasAny) {
+        // Derive from agents list. Each agent has {name, money, tokens,
+        // ticks_survived, reputation, skills}. Map to LeaderboardEntry shape.
+        try {
+          const agents = await fetchJSON<Agent[]>("/api/v1/agents");
+          if (cancelled) return;
+          const list = Array.isArray(agents) ? agents : [];
+          data = deriveLeaderboardFromAgents(list);
+        } catch {
+          // Both endpoints unavailable — leave leaderboard empty
+        }
+      }
+
+      if (!cancelled) setLeaderboard(data);
     }
+
     load();
     const interval = setInterval(load, 10000);
-    return () => clearInterval(interval);
+    return () => {
+      cancelled = true;
+      clearInterval(interval);
+    };
   }, [statsTick]);
 
   useEffect(() => {

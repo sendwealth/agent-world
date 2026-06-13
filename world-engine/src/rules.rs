@@ -337,6 +337,7 @@ impl Rule for TokenConsumptionRule {
         if actual_burn > 0 {
             events.push(WorldEvent::BalanceChanged {
                 agent_id: agent.id.to_string(),
+                agent_name: agent.name.clone(),
                 currency: crate::world::enums::Currency::Token,
                 old_balance: tokens_before,
                 new_balance: agent.tokens,

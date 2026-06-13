@@ -147,6 +147,9 @@ pub const ALLOWED_ACTIONS: &[&str] = &[
     "build",
     "claim_task",
     "submit_task",
+    "socialize",
+    "practice_skill",
+    "teach_skill",
 ];
 
 /// Position in the world grid.

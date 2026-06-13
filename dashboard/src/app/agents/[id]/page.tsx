@@ -4,7 +4,7 @@ import { useEffect, useState, useMemo, useRef, useCallback } from "react";
 import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";
 import type { Agent, WorldEvent } from "@/types/world";
-import { fetchJSON } from "@/lib/api";
+import { fetchJSON, postJSON } from "@/lib/api";
 import { useSSEContext } from "@/components/SSEProvider";
 
 const phaseLabels: Record<string, string> = {
@@ -98,6 +98,15 @@ export default function AgentDetailPage() {
   const [allAgents, setAllAgents] = useState<Agent[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  // Feedback banner for action buttons (投资 / 发布任务 / 发消息)
+  const [actionMsg, setActionMsg] = useState<string | null>(null);
+  const [actionOk, setActionOk] = useState<boolean>(true);
+
+  const showActionMsg = (msg: string, ok = true) => {
+    setActionMsg(msg);
+    setActionOk(ok);
+    window.setTimeout(() => setActionMsg(null), 4000);
+  };
 
   const sse = useSSEContext();
 
@@ -204,6 +213,92 @@ export default function AgentDetailPage() {
     if (!agent) return [];
     return Object.entries(agent.skills).sort(([, a], [, b]) => b - a);
   }, [agent]);
+
+  // ─── Action handlers ─────────────────────────────────────
+  // Each handler attempts a POST to the appropriate API endpoint. If the
+  // feature is not implemented on the backend (404/405/etc.), the user sees
+  // a "功能开发中" message instead of the button silently doing nothing.
+
+  const handleInvest = async () => {
+    if (!agent) return;
+    const amountStr = window.prompt(`投资 ${agent.name} 的金额 (Money):`);
+    if (!amountStr) return;
+    const amount = Number(amountStr);
+    if (isNaN(amount) || amount <= 0) {
+      showActionMsg("金额无效", false);
+      return;
+    }
+    try {
+      await postJSON(`/api/v1/investments/agents/${agentId}/invest`, {
+        agent_id: agentId,
+        amount,
+        currency: "money",
+      });
+      showActionMsg(`已投资 ${agent.name} $${amount.toLocaleString()}`);
+      loadAgent();
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : String(e);
+      // 404 / 405 → endpoint not implemented yet
+      if (/404|405|not found|method not allowed/i.test(msg)) {
+        showActionMsg("功能开发中：Agent 投资接口尚未实现", false);
+      } else {
+        showActionMsg(`投资失败: ${msg}`, false);
+      }
+    }
+  };
+
+  const handlePublishTask = async () => {
+    if (!agent) return;
+    const title = window.prompt(`以 ${agent.name} 的名义发布任务 — 任务标题:`);
+    if (!title?.trim()) return;
+    const rewardStr = window.prompt("任务奖励 (Money):", "10");
+    if (!rewardStr) return;
+    const reward = Number(rewardStr);
+    if (isNaN(reward) || reward < 0) {
+      showActionMsg("奖励金额无效", false);
+      return;
+    }
+    try {
+      await postJSON("/api/v1/tasks", {
+        title: title.trim(),
+        description: `由 ${agent.name} 发布`,
+        reward,
+        publisher_id: agentId,
+      });
+      showActionMsg(`任务「${title}」已发布`);
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : String(e);
+      if (/404|405|not found|method not allowed/i.test(msg)) {
+        showActionMsg("功能开发中：任务发布接口尚未实现", false);
+      } else {
+        showActionMsg(`发布失败: ${msg}`, false);
+      }
+    }
+  };
+
+  const handleSendMessage = async () => {
+    if (!agent) return;
+    const content = window.prompt(`发送给 ${agent.name} 的消息:`);
+    if (!content?.trim()) return;
+    try {
+      // Try the feed-post endpoint (author = this agent's human observer)
+      await postJSON("/api/v1/feed/posts", {
+        author_id: "human",
+        author_name: "人类观察者",
+        content: `@${agent.name} ${content.trim()}`,
+        mood: "neutral",
+        tick: 0,
+      });
+      showActionMsg(`消息已发送给 ${agent.name}`);
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : String(e);
+      if (/404|405|not found|method not allowed/i.test(msg)) {
+        showActionMsg("功能开发中：Agent 私信接口尚未实现", false);
+      } else {
+        showActionMsg(`发送失败: ${msg}`, false);
+      }
+    }
+  };
 
   if (loading) {
     return (
@@ -389,14 +484,35 @@ export default function AgentDetailPage() {
           {/* Action Buttons */}
           <div className="rounded-xl border border-zinc-800 bg-zinc-900/50 p-4 space-y-4">
             <h2 className="text-sm font-semibold text-zinc-200">操作</h2>
+            {actionMsg && (
+              <div
+                className={`rounded-lg px-3 py-2 text-xs ${
+                  actionOk
+                    ? "bg-emerald-500/10 border border-emerald-500/20 text-emerald-400"
+                    : "bg-amber-500/10 border border-amber-500/20 text-amber-400"
+                }`}
+                role="status"
+              >
+                {actionMsg}
+              </div>
+            )}
             <div className="grid grid-cols-1 gap-2 sm:grid-cols-3">
-              <button className="rounded-lg bg-blue-500/10 border border-blue-500/20 px-4 py-2.5 text-sm font-medium text-blue-400 transition-colors hover:bg-blue-500/20">
+              <button
+                onClick={handleInvest}
+                className="rounded-lg bg-blue-500/10 border border-blue-500/20 px-4 py-2.5 text-sm font-medium text-blue-400 transition-colors hover:bg-blue-500/20"
+              >
                 投资
               </button>
-              <button className="rounded-lg bg-purple-500/10 border border-purple-500/20 px-4 py-2.5 text-sm font-medium text-purple-400 transition-colors hover:bg-purple-500/20">
+              <button
+                onClick={handlePublishTask}
+                className="rounded-lg bg-purple-500/10 border border-purple-500/20 px-4 py-2.5 text-sm font-medium text-purple-400 transition-colors hover:bg-purple-500/20"
+              >
                 发布任务
               </button>
-              <button className="rounded-lg bg-emerald-500/10 border border-emerald-500/20 px-4 py-2.5 text-sm font-medium text-emerald-400 transition-colors hover:bg-emerald-500/20">
+              <button
+                onClick={handleSendMessage}
+                className="rounded-lg bg-emerald-500/10 border border-emerald-500/20 px-4 py-2.5 text-sm font-medium text-emerald-400 transition-colors hover:bg-emerald-500/20"
+              >
                 发消息
               </button>
             </div>

@@ -202,9 +202,12 @@ pub enum WorldEvent {
     },
     BalanceChanged {
         agent_id: String,
+        #[serde(default)]
+        agent_name: String,
         currency: Currency,
         old_balance: u64,
         new_balance: u64,
+        #[serde(default)]
         tick: u64,
     },
     PhaseChanged {
@@ -1395,6 +1398,7 @@ mod tests {
     fn to_json_and_from_json_roundtrip() {
         let event = WorldEvent::BalanceChanged {
             agent_id: "a1".into(),
+            agent_name: "TestAgent".into(),
             currency: Currency::Token,
             old_balance: 100,
             new_balance: 50,

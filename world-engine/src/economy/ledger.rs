@@ -892,6 +892,7 @@ impl MoneyLedger {
                 };
                 WorldEvent::BalanceChanged {
                     agent_id: entry.account_id.clone(),
+                    agent_name: String::new(),
                     currency: entry.currency,
                     old_balance,
                     new_balance,

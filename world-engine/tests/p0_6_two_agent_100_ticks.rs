@@ -100,15 +100,16 @@ impl TestWorld {
         // Emit BalanceChanged events for each agent that burned tokens
         for burn in &burn_result.burns {
             if burn.burn_amount > 0 {
-                // Find the agent ID string from the UUID
-                let agent_id_str = self
+                // Find the agent ID string and name from the UUID
+                let (agent_id_str, agent_name) = self
                     .agents
                     .iter()
                     .find(|(_, r)| r.id == burn.agent_id)
-                    .map(|(id, _)| id.clone())
+                    .map(|(id, r)| (id.clone(), r.name.clone()))
                     .unwrap();
                 self.event_bus.emit(WorldEvent::BalanceChanged {
                     agent_id: agent_id_str,
+                    agent_name,
                     currency: Currency::Token,
                     old_balance: burn.tokens_before,
                     new_balance: burn.tokens_after,

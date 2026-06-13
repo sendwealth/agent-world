@@ -112,6 +112,7 @@ impl TestWorld {
                     currency: Currency::Token,
                     old_balance: burn.tokens_before,
                     new_balance: burn.tokens_after,
+                    tick: self.tick,
                 });
             }
         }

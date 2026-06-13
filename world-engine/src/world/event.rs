@@ -205,6 +205,7 @@ pub enum WorldEvent {
         currency: Currency,
         old_balance: u64,
         new_balance: u64,
+        tick: u64,
     },
     PhaseChanged {
         agent_id: String,
@@ -1397,6 +1398,7 @@ mod tests {
             currency: Currency::Token,
             old_balance: 100,
             new_balance: 50,
+            tick: 7,
         };
         let json = event.to_json();
         let back = WorldEvent::from_json(&json).unwrap();

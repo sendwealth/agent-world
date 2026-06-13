@@ -1168,6 +1168,7 @@ async fn test_cross_agent_event_filtering() {
         currency: Currency::Token,
         old_balance: 1000,
         new_balance: 900,
+        tick: 0,
     });
 
     bus.emit(WorldEvent::BalanceChanged {
@@ -1175,6 +1176,7 @@ async fn test_cross_agent_event_filtering() {
         currency: Currency::Money,
         old_balance: 500,
         new_balance: 600,
+        tick: 0,
     });
 
     bus.emit(WorldEvent::TransactionCompleted {

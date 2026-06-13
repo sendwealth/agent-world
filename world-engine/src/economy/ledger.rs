@@ -895,6 +895,7 @@ impl MoneyLedger {
                     currency: entry.currency,
                     old_balance,
                     new_balance,
+                    tick: entry.tick,
                 }
             })
             .collect();

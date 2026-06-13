@@ -317,7 +317,7 @@ impl Rule for TokenConsumptionRule {
         RuleCategory::Survival
     }
 
-    fn evaluate(&self, _ctx: &RuleContext, agent: &mut AgentRecord) -> RuleResult {
+    fn evaluate(&self, ctx: &RuleContext, agent: &mut AgentRecord) -> RuleResult {
         // Skip dead or birth-phase agents
         if agent.phase == AgentPhase::Dead || agent.phase == AgentPhase::Birth {
             return RuleResult::empty(self.id());
@@ -340,6 +340,7 @@ impl Rule for TokenConsumptionRule {
                 currency: crate::world::enums::Currency::Token,
                 old_balance: tokens_before,
                 new_balance: agent.tokens,
+                tick: ctx.tick,
             });
         }
 
@@ -1404,6 +1405,7 @@ mod tests {
                 currency,
                 old_balance,
                 new_balance,
+                ..
             } => {
                 assert_eq!(*agent_id, agent.id.to_string());
                 assert_eq!(*currency, crate::world::enums::Currency::Token);

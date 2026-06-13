@@ -66,11 +66,11 @@ impl Subsystem for TokenBurnSubsystem {
                     currency: crate::world::enums::Currency::Token,
                     old_balance: tokens_before,
                     new_balance: agent.tokens,
+                    tick,
                 });
             }
         }
 
-        let _ = tick; // used for logging in future
         events
     }
 }
@@ -235,7 +235,7 @@ impl Subsystem for LifecycleAgingSubsystem {
 
             // If agent died from old age, perform cleanup
             if let crate::lifecycle::TransitionResult::Died { .. } = &result {
-                let cleanup = crate::lifecycle::perform_death_cleanup(agent);
+                let cleanup = crate::lifecycle::perform_death_cleanup(agent, tick);
                 events.extend(cleanup.events);
             }
 

@@ -81,7 +81,7 @@ function buildDescription(
     case "transaction_completed":
       return `${payload.from} → ${payload.to}: $${payload.amount}`;
     case "balance_changed":
-      return `${name} 余额变更: ${payload.old_balance} → ${payload.new_balance}`;
+      return `${name} 余额变更: ${payload.old_balance} → ${payload.new_balance} (Tick #${payload.tick ?? 0})`;
     case "phase_changed":
       return `${name} 阶段变更: ${payload.old_phase} → ${payload.new_phase}`;
     case "rule_violated":

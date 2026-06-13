@@ -380,7 +380,7 @@ pub struct DeathCleanupResult {
 /// - Remaining tokens are destroyed (removed from circulation).
 /// - Skills are archived for potential tombstone creation.
 /// - Appropriate events are generated.
-pub fn perform_death_cleanup(agent: &mut AgentRecord) -> DeathCleanupResult {
+pub fn perform_death_cleanup(agent: &mut AgentRecord, tick: u64) -> DeathCleanupResult {
     let tokens_destroyed = agent.tokens;
     let skills_archived: Vec<(String, u32)> = agent
         .skills
@@ -397,6 +397,7 @@ pub fn perform_death_cleanup(agent: &mut AgentRecord) -> DeathCleanupResult {
             currency: crate::world::enums::Currency::Token,
             old_balance: tokens_destroyed,
             new_balance: 0,
+            tick,
         });
         agent.tokens = 0;
     }
@@ -981,7 +982,7 @@ some_other_section:
     #[test]
     fn test_death_cleanup_destroys_tokens() {
         let mut agent = make_agent(AgentPhase::Dead, 500);
-        let result = perform_death_cleanup(&mut agent);
+        let result = perform_death_cleanup(&mut agent, 0);
 
         assert_eq!(result.tokens_destroyed, 500);
         assert_eq!(agent.tokens, 0);
@@ -992,7 +993,7 @@ some_other_section:
     fn test_death_cleanup_archives_skills() {
         let mut agent =
             make_agent_with_skills(AgentPhase::Dead, 100, vec![("mining", 5), ("trading", 3)]);
-        let result = perform_death_cleanup(&mut agent);
+        let result = perform_death_cleanup(&mut agent, 0);
 
         assert_eq!(result.skills_archived.len(), 2);
         assert!(result.skills_archived.contains(&("mining".to_string(), 5)));
@@ -1003,7 +1004,7 @@ some_other_section:
     #[test]
     fn test_death_cleanup_with_zero_tokens() {
         let mut agent = make_agent(AgentPhase::Adult, 0);
-        let result = perform_death_cleanup(&mut agent);
+        let result = perform_death_cleanup(&mut agent, 0);
 
         assert_eq!(result.tokens_destroyed, 0);
         assert_eq!(result.events.len(), 0); // No BalanceChanged event for 0 tokens
@@ -1013,7 +1014,7 @@ some_other_section:
     #[test]
     fn test_death_cleanup_emits_balance_event() {
         let mut agent = make_agent(AgentPhase::Adult, 250);
-        let result = perform_death_cleanup(&mut agent);
+        let result = perform_death_cleanup(&mut agent, 0);
 
         assert_eq!(result.events.len(), 1);
         match &result.events[0] {

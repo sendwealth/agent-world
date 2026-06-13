@@ -16,7 +16,7 @@
 //! for audit and monitoring. Actual action blocking happens at the
 //! A2A service layer via the `MessageInterventionGuard`.
 
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 
 use uuid::Uuid;
 
@@ -68,6 +68,9 @@ pub struct InterventionCheckerSubsystem {
     broadcast_counts: std::sync::Mutex<HashMap<String, u32>>,
     /// Last tick we processed (for resetting broadcast counts).
     last_tick: std::sync::Mutex<u64>,
+    /// IC-05: Agents already flagged for death lock — each agent emits
+    /// IC-05 only once (on transition to Dead/Dying) to avoid SSE flooding.
+    ic05_flagged: std::sync::Mutex<HashSet<Uuid>>,
 }
 
 impl InterventionCheckerSubsystem {
@@ -76,6 +79,7 @@ impl InterventionCheckerSubsystem {
             config,
             broadcast_counts: std::sync::Mutex::new(HashMap::new()),
             last_tick: std::sync::Mutex::new(0),
+            ic05_flagged: std::sync::Mutex::new(HashSet::new()),
         }
     }
 
@@ -121,25 +125,31 @@ impl Subsystem for InterventionCheckerSubsystem {
         for (_id, spawn_tick, agent) in agents.iter() {
             let agent_id_str = agent.id.to_string();
 
-            // IC-05: Death lock — dead/dying agents cannot act
-            if agent.phase == AgentPhase::Dead {
-                // Emit audit event (the agent is already dead, but this is
-                // for logging/monitoring purposes)
-                events.push(WorldEvent::RuleViolated {
-                    agent_id: agent_id_str.clone(),
-                    rule: "IC-05".to_string(),
-                    details: format!("Agent is Dead — no actions allowed (tick {})", tick),
+            // IC-05: Death lock — dead/dying agents cannot act.
+            // Emit RuleViolated only once per agent (on first detection) to
+            // avoid flooding the SSE event stream with repeated IC-05 events
+            // every tick.
+            if agent.phase == AgentPhase::Dead || agent.phase == AgentPhase::Dying {
+                let mut flagged = self.ic05_flagged.lock().unwrap_or_else(|e| {
+                    tracing::error!("intervention ic05_flagged lock poisoned: {}", e);
+                    e.into_inner()
                 });
-                continue; // No further checks needed for dead agents
-            }
-
-            if agent.phase == AgentPhase::Dying {
-                events.push(WorldEvent::RuleViolated {
-                    agent_id: agent_id_str.clone(),
-                    rule: "IC-05".to_string(),
-                    details: format!("Agent is Dying — no actions allowed (tick {})", tick),
-                });
-                continue;
+                if flagged.insert(agent.id) {
+                    let phase_str = if agent.phase == AgentPhase::Dead {
+                        "Dead"
+                    } else {
+                        "Dying"
+                    };
+                    events.push(WorldEvent::RuleViolated {
+                        agent_id: agent_id_str.clone(),
+                        rule: "IC-05".to_string(),
+                        details: format!(
+                            "Agent is {} — no actions allowed (tick {})",
+                            phase_str, tick
+                        ),
+                    });
+                }
+                continue; // No further checks needed for dead/dying agents
             }
 
             // IC-03: Newbie protection check
@@ -303,6 +313,26 @@ mod tests {
             &events[0],
             WorldEvent::RuleViolated { rule, .. } if rule == "IC-05"
         ));
+    }
+
+    #[test]
+    fn intervention_checker_ic05_emits_once_per_agent() {
+        // IC-05 should fire only once per agent, even across multiple ticks,
+        // to avoid flooding the SSE event stream.
+        let sub = InterventionCheckerSubsystem::new(InterventionConfig::default());
+        let mut agents = vec![make_agent(AgentPhase::Dead, 100)];
+
+        // Tick 1: first detection → emits IC-05
+        let events_tick1 = sub.on_tick(1, &mut agents);
+        assert_eq!(events_tick1.len(), 1);
+
+        // Tick 2: same agent still dead → should NOT emit again
+        let events_tick2 = sub.on_tick(2, &mut agents);
+        assert!(events_tick2.is_empty(), "IC-05 should not repeat for the same agent");
+
+        // Tick 3: still no repeat
+        let events_tick3 = sub.on_tick(3, &mut agents);
+        assert!(events_tick3.is_empty());
     }
 
     #[test]

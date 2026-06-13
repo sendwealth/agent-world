@@ -86,7 +86,7 @@ class TestActionFeedbackLoop:
 
     @pytest.fixture()
     def registered_agent(
-        self, engine_port: int
+        self, world_engine_process, engine_port: int
     ) -> dict[str, Any]:
         """Register an agent and yield its details; deregister on cleanup."""
         data = _register_agent(engine_port)
@@ -188,7 +188,7 @@ class TestActionFeedbackLoop:
 
     @pytest.mark.asyncio
     async def test_action_on_unknown_agent_raises(
-        self, engine_port: int
+        self, world_engine_process, engine_port: int
     ) -> None:
         """Action on a non-existent agent should raise (404), not silently succeed."""
         client = RESTWorldClient(
@@ -223,7 +223,7 @@ class TestActionFeedbackLoop:
 
     @pytest.mark.asyncio
     async def test_deregistered_agent_action_fails(
-        self, engine_port: int
+        self, world_engine_process, engine_port: int
     ) -> None:
         """After deregistering, actions on the agent should fail."""
         # Register

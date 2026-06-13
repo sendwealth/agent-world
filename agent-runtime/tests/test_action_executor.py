@@ -119,6 +119,7 @@ class TestActionType:
             "submit_task",
             "propose_deal",
             "teach_skill",
+            "practice_skill",
             "rest",
             "explore",
             "move",
@@ -315,17 +316,21 @@ class TestExecuteClaimTask:
         assert result.data["task_id"] == "task-001"
 
     @pytest.mark.asyncio
-    async def test_missing_task_id_raises(self) -> None:
-        executor = ActionExecutor()
+    async def test_missing_task_id_degrades_gracefully(self) -> None:
+        """No task_id → graceful no_tasks_available result, not retry-exhausted."""
+        executor = ActionExecutor(max_retries=3, retry_delay=0.0)
         agent = FakeAgentState(tokens=100)
         world = FakeWorldClient()
         ctx = ActionContext(agent=agent, world=world, parameters={})
 
         result = await executor.execute(ActionType.CLAIM_TASK, ctx)
 
-        # ValueError from handler → caught → retry exhausted
-        assert result.status == ActionStatus.RETRY_EXHAUSTED
-        assert "task_id" in (result.error or "")
+        assert result.status == ActionStatus.SUCCESS
+        assert result.attempts == 1  # no retries on graceful degradation
+        assert result.data["action"] == "claim_task"
+        assert result.data["status"] == "no_tasks_available"
+        # World client must NOT have been called
+        assert len(world.calls) == 0
 
 
 class TestExecuteSubmitTask:
@@ -430,6 +435,67 @@ class TestExecuteTeachSkill:
         result = await executor.execute(ActionType.TEACH_SKILL, ctx)
         assert result.status == ActionStatus.RETRY_EXHAUSTED
         assert "skill_name" in (result.error or "")
+
+
+class TestExecutePracticeSkill:
+    @pytest.mark.asyncio
+    async def test_success_with_skill_name(self) -> None:
+        executor = ActionExecutor()
+        agent = FakeAgentState(tokens=100)
+        world = FakeWorldClient()
+        ctx = ActionContext(
+            agent=agent,
+            world=world,
+            parameters={"skill_name": "foraging"},
+        )
+
+        result = await executor.execute(ActionType.PRACTICE_SKILL, ctx)
+
+        assert result.status == ActionStatus.SUCCESS
+        assert result.token_cost == 8
+        assert agent.tokens == 92
+        assert result.data["action"] == "practice_skill"
+        assert result.data["status"] == "practiced"
+        assert result.data["skill"] == "foraging"
+        # Self-practice needs no world interaction
+        assert len(world.calls) == 0
+
+    @pytest.mark.asyncio
+    async def test_success_without_skill_name(self) -> None:
+        """No skill_name is fine — practice_skill needs no required params."""
+        executor = ActionExecutor()
+        agent = FakeAgentState(tokens=100)
+        world = FakeWorldClient()
+        ctx = ActionContext(agent=agent, world=world, parameters={})
+
+        result = await executor.execute(ActionType.PRACTICE_SKILL, ctx)
+
+        assert result.status == ActionStatus.SUCCESS
+        assert result.token_cost == 8
+        assert result.data["status"] == "practiced"
+        assert len(world.calls) == 0
+
+    @pytest.mark.asyncio
+    async def test_no_target_required(self) -> None:
+        """practice_skill must NOT behave like teach_skill (which needs a target).
+
+        Regression guard for the original bug where PRACTICE_SKILL was mapped
+        to TEACH_SKILL, causing a 'teach_skill requires target_agent_id' error.
+        """
+        executor = ActionExecutor()
+        agent = FakeAgentState(tokens=100)
+        world = FakeWorldClient()
+        ctx = ActionContext(
+            agent=agent,
+            world=world,
+            parameters={},  # deliberately empty — no target, no skill
+        )
+
+        result = await executor.execute(ActionType.PRACTICE_SKILL, ctx)
+
+        assert result.status == ActionStatus.SUCCESS
+        assert result.attempts == 1
+        assert result.error is None
 
 
 class TestExecuteRest:

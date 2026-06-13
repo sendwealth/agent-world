@@ -671,6 +671,48 @@ async fn main() {
     });
     // Wire the WorldMessageRouter into the AppState for Oracle/Bounty delivery
     app_state.world_msg_router = Some(world_msg_router);
+
+    // Clone external_agents before app_state is moved into build_full_router.
+    // Used by the metrics sync task below to compute token_supply / money_supply.
+    let metrics_external_agents = app_state.external_agents.clone();
+
+    // ── Spawn EventBus → tick_tx bridge task ───────────────
+    // Without this task, tick_tx stays at its initial value 0 forever, so
+    // GET /api/v1/tick always returns {"tick": 0}. The bridge listens for
+    // TickAdvanced events from the EventBus and forwards the tick value.
+    let bridge_tick_tx = app_state.tick_tx.clone();
+    let mut bridge_rx = event_bus.subscribe();
+    let bridge_cancel = cancel_token.clone();
+    let bridge_handle = tokio::spawn(async move {
+        loop {
+            tokio::select! {
+                result = bridge_rx.recv() => {
+                    match result {
+                        Ok(event) => {
+                            if let WorldEvent::TickAdvanced { tick } = event {
+                                // send() is infallible as long as at least one Receiver exists.
+                                // The watch channel always has the AppState's tick_rx, so this is safe.
+                                let _ = bridge_tick_tx.send(tick);
+                            }
+                        }
+                        Err(tokio::sync::broadcast::error::RecvError::Lagged(n)) => {
+                            eprintln!("[TickBridge] Lagged {} events", n);
+                        }
+                        Err(tokio::sync::broadcast::error::RecvError::Closed) => {
+                            break;
+                        }
+                    }
+                }
+                _ = bridge_cancel.cancelled() => {
+                    break;
+                }
+            }
+        }
+    });
+    // Keep the handle alive for graceful shutdown
+    tokio::spawn(async move { let _ = bridge_handle.await; });
+    println!("   TickBridge: EventBus → tick_tx bridge spawned");
+
     let app = api::build_full_router(app_state);
 
     let host = std::env::var("HOST").unwrap_or_else(|_| "0.0.0.0".to_string());
@@ -704,8 +746,15 @@ async fn main() {
                                     let state = metrics_state.lock().await;
                                     let alive = state.agents.len() as i64;
                                     agent_world_engine::observability::AGENTS_ALIVE.set(alive);
+                                    // Compute token_supply and money_supply from external agents
+                                    let (token_supply, money_supply) = {
+                                        let ea = metrics_external_agents.lock().await;
+                                        let ts: i64 = ea.values().map(|a| a.tokens as i64).sum();
+                                        let ms: i64 = ea.values().map(|a| a.money as i64).sum();
+                                        (ts, ms)
+                                    };
                                     agent_world_engine::observability::log_tick(
-                                        *tick, alive as usize, 0, 0,
+                                        *tick, alive as usize, token_supply, money_supply,
                                     );
                                 }
                                 WorldEvent::AgentDied { agent_id, .. } => {

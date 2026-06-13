@@ -19,6 +19,7 @@ use tower_http::cors::CorsLayer;
 use uuid::Uuid;
 
 use crate::api_auth::SharedApiKeyStore;
+use crate::config::GenesisConfig;
 
 /// Hardcoded JWT secret for test/dev helpers only. Production reads `JWT_SECRET` from env.
 #[cfg(test)]
@@ -107,7 +108,7 @@ impl From<crate::world::agent::AgentRecord> for AgentDto {
             name: rec.name,
             phase: format!("{:?}", rec.phase).to_lowercase(),
             tokens: rec.tokens,
-            money: 0, // Money is tracked in ExternalAgent / BankingSystem, not AgentRecord
+            money: 0, // Built-in agent money is tracked in BankingSystem; ExternalAgent carries its own money field
             alive: !matches!(rec.phase, crate::world::enums::AgentPhase::Dead),
             ticks_survived: rec.tasks_attempted as u64, // Best proxy until tick-based tracking is added
             personality: rec.personality,
@@ -260,6 +261,9 @@ pub struct AppState {
     /// External agent registration must also insert here so that
     /// `agents_alive` metrics reflect all registered agents.
     pub world_state: Option<Arc<Mutex<WorldState>>>,
+    /// Snapshot of the genesis config used at startup.
+    /// Read by external agent registration to determine initial resources.
+    pub genesis_config: Option<Arc<GenesisConfig>>,
 }
 
 /// Optional subsystem overrides for test AppState construction.
@@ -299,6 +303,7 @@ pub struct TestOverrides {
     pub inheritance_system: Option<SharedInheritanceSystem>,
     pub legislation_cycle_engine: Option<SharedLegislationCycleEngine>,
     pub world_state: Option<Arc<Mutex<WorldState>>>,
+    pub genesis_config: Option<Arc<GenesisConfig>>,
 }
 
 impl AppState {
@@ -374,6 +379,7 @@ impl AppState {
             inheritance_system: overrides.inheritance_system,
             legislation_cycle_engine: overrides.legislation_cycle_engine,
             world_state: overrides.world_state,
+            genesis_config: overrides.genesis_config,
         }
     }
 
@@ -475,6 +481,7 @@ fn make_test_state(
         inheritance_system: None,
         legislation_cycle_engine: None,
         world_state: None,
+        genesis_config: None,
     }
 }
 

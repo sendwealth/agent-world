@@ -24,6 +24,9 @@ pub struct A2aServiceImpl {
     registry: Arc<AgentRegistry>,
     router: Arc<MessageRouter>,
     world_msg_router: Arc<WorldMessageRouter>,
+    /// Initial resources for externally-registered agents.
+    external_agent_initial_tokens: u64,
+    external_agent_initial_money: u64,
 }
 
 impl A2aServiceImpl {
@@ -36,7 +39,20 @@ impl A2aServiceImpl {
             registry,
             router,
             world_msg_router,
+            external_agent_initial_tokens: 0,
+            external_agent_initial_money: 0,
         }
+    }
+
+    /// Set initial resources granted to newly registered external agents.
+    pub fn with_external_agent_resources(
+        mut self,
+        initial_tokens: u64,
+        initial_money: u64,
+    ) -> Self {
+        self.external_agent_initial_tokens = initial_tokens;
+        self.external_agent_initial_money = initial_money;
+        self
     }
 
     /// Provide access to the shared WorldMessageRouter.
@@ -70,7 +86,14 @@ impl A2aService for A2aServiceImpl {
 
         let now = chrono::Utc::now().timestamp();
         self.registry
-            .register(req.agent_id, req.name, req.capabilities, req.public_key)
+            .register_with_resources(
+                req.agent_id,
+                req.name,
+                req.capabilities,
+                req.public_key,
+                self.external_agent_initial_tokens as i64,
+                self.external_agent_initial_money as i64,
+            )
             .await;
 
         Ok(Response::new(RegisterAgentResponse {

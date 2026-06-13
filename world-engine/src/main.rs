@@ -559,7 +559,11 @@ async fn main() {
     let grpc_registry = Arc::new(AgentRegistry::new(event_bus.clone()));
     let grpc_router = Arc::new(MessageRouter::new(grpc_registry.clone()));
     let world_msg_router = Arc::new(WorldMessageRouter::new());
-    let grpc_service = A2aServiceImpl::new(grpc_registry, grpc_router, world_msg_router.clone());
+    let grpc_service = A2aServiceImpl::new(grpc_registry, grpc_router, world_msg_router.clone())
+        .with_external_agent_resources(
+            genesis_config.economy.external_agent_initial_tokens,
+            genesis_config.economy.external_agent_initial_money,
+        );
     let grpc_addr_str =
         std::env::var("GRPC_ADDR").unwrap_or_else(|_| "0.0.0.0:50051".to_string());
     let grpc_addr: std::net::SocketAddr = grpc_addr_str
@@ -668,6 +672,7 @@ async fn main() {
         inheritance_system: Some(inheritance_system),
         legislation_cycle_engine: Some(legislation_cycle_engine),
         world_state: Some(world_state.clone()),
+        genesis_config: Some(Arc::new(genesis_config.clone())),
     });
     // Wire the WorldMessageRouter into the AppState for Oracle/Bounty delivery
     app_state.world_msg_router = Some(world_msg_router);

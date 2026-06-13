@@ -11,6 +11,8 @@ use serde::Deserialize;
 use uuid::Uuid;
 
 use crate::api::{AgentDto, AppState, ErrorResponse, ExternalAgent, Position, ALLOWED_ACTIONS};
+use crate::config::GenesisConfig;
+use crate::economy::banking::{BankAccountType, BankingError};
 use crate::world::agent::AgentRecord;
 use crate::world::enums::AgentPhase;
 use crate::world::event::WorldEvent;
@@ -37,6 +39,11 @@ pub struct AgentActionRequest {
 // ── Third-Party Agent API Handlers ────────────────────────
 
 /// Register a new third-party agent.
+///
+/// Initial tokens and money are read from the genesis config
+/// (`economy.external_agent_initial_tokens` / `external_agent_initial_money`).
+/// A checking account is opened in the BankingSystem with the initial money
+/// deposited so the agent can participate in economic activities immediately.
 pub async fn register_external_agent(
     State(state): State<AppState>,
     Json(body): Json<RegisterAgentRequest>,
@@ -51,6 +58,18 @@ pub async fn register_external_agent(
             .into_response();
     }
 
+    // Read initial resources from genesis config, falling back to defaults.
+    let (initial_tokens, initial_money) = match &state.genesis_config {
+        Some(cfg) => (
+            cfg.economy.external_agent_initial_tokens,
+            cfg.economy.external_agent_initial_money,
+        ),
+        None => (
+            GenesisConfig::default().economy.external_agent_initial_tokens,
+            GenesisConfig::default().economy.external_agent_initial_money,
+        ),
+    };
+
     let agent_id = Uuid::new_v4().to_string();
     let api_key = Uuid::new_v4().to_string();
     let tick = *state.tick_rx.borrow();
@@ -64,8 +83,8 @@ pub async fn register_external_agent(
         config: body.config,
         alive: true,
         phase: "adult".to_string(),
-        tokens: 100_000,
-        money: 5_000,
+        tokens: initial_tokens,
+        money: initial_money,
         position: Position { x: 0, y: 0 },
         registered_tick: tick,
         created_at: chrono::Utc::now().to_rfc3339(),
@@ -84,8 +103,8 @@ pub async fn register_external_agent(
             id: agent_id.clone(),
             name: name.clone(),
             phase: "adult".to_string(),
-            tokens: 100_000,
-            money: 5_000,
+            tokens: initial_tokens,
+            money: initial_money,
             alive: true,
             ticks_survived: 0,
             personality: String::new(),
@@ -108,7 +127,7 @@ pub async fn register_external_agent(
                 id: agent_uuid,
                 name: name.clone(),
                 phase: AgentPhase::Adult,
-                tokens: 100_000,
+                tokens: initial_tokens,
                 skills: std::collections::HashMap::new(),
                 personality: String::new(),
                 tasks_completed: 0,
@@ -117,12 +136,53 @@ pub async fn register_external_agent(
         ));
     }
 
+    // Create a checking account in the BankingSystem and deposit the initial money
+    // so the external agent can participate in transactions, investments, and bounties.
+    if let Some(ref banking) = state.banking_system {
+        let mut bank = banking.lock().await;
+        // Fund the agent's wallet with initial money (creates ledger account).
+        bank.fund_agent_wallet(&agent_id, &name, initial_money);
+
+        let label = format!("{} Checking", name);
+        match bank.open_account(&agent_id, BankAccountType::Checking, &label, tick) {
+            Ok(account) => {
+                // Deposit initial money from wallet into the bank checking account.
+                if initial_money > 0 {
+                    if let Err(e) = bank.deposit(account.id, &agent_id, initial_money, tick) {
+                        tracing::error!(
+                            agent_id = %agent_id,
+                            error = %e,
+                            "Failed to deposit initial money for external agent"
+                        );
+                    }
+                }
+            }
+            Err(BankingError::DuplicateAccountType { .. }) => {
+                // Agent already has a checking account — this is safe to ignore
+                // for re-registration scenarios.
+                tracing::warn!(
+                    agent_id = %agent_id,
+                    "External agent already has a checking account, skipping bank account creation"
+                );
+            }
+            Err(e) => {
+                tracing::error!(
+                    agent_id = %agent_id,
+                    error = %e,
+                    "Failed to open bank account for external agent"
+                );
+            }
+        }
+    }
+
     (
         StatusCode::CREATED,
         Json(serde_json::json!({
             "agent_id": agent_id,
             "api_key": api_key,
             "name": name,
+            "tokens": initial_tokens,
+            "money": initial_money,
         })),
     )
         .into_response()

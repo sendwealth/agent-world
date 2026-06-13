@@ -957,6 +957,30 @@ impl BankingSystem {
         })
     }
 
+    // ── Agent Funding ───────────────────────────────────
+
+    /// Create a wallet account for an agent and fund it with initial money.
+    ///
+    /// This is the canonical way to grant initial money to a newly registered
+    /// external agent. It creates a ledger account (id = `agent_id`) and sets
+    /// the Money balance via genesis-style injection (same mechanism used for
+    /// built-in agents at world boot).
+    pub fn fund_agent_wallet(&mut self, agent_id: &str, name: &str, initial_money: u64) {
+        if !self.ledger.account_exists(agent_id) {
+            self.ledger
+                .create_account(Account::new_agent(agent_id, name));
+        }
+        if initial_money > 0 {
+            let current = self.ledger.get_balance(agent_id, Currency::Money);
+            self.ledger
+                .set_balance_genesis(agent_id, Currency::Money, current + initial_money);
+            // Mint matching money into the central bank so the books balance.
+            let cb_current = self.ledger.get_balance("central_bank", Currency::Money);
+            self.ledger
+                .set_balance_genesis("central_bank", Currency::Money, cb_current + initial_money);
+        }
+    }
+
     // ── Queries ──────────────────────────────────────────
 
     /// Get a loan by id.
@@ -1466,5 +1490,47 @@ mod tests {
         let result = sys.repay_loan(app.loan_id, 0, 10).unwrap();
         assert_eq!(result.amount_paid, 0);
         assert!(!result.fully_repaid);
+    }
+
+    // ── Agent Funding ────────────────────────────────────
+
+    #[test]
+    fn test_fund_agent_wallet_creates_account_and_balance() {
+        let mut sys = make_system();
+        sys.fund_agent_wallet("alice", "Alice", 5000);
+        assert_eq!(sys.ledger.get_balance("alice", Currency::Money), 5000);
+    }
+
+    #[test]
+    fn test_fund_agent_wallet_zero_is_noop() {
+        let mut sys = make_system();
+        sys.fund_agent_wallet("alice", "Alice", 0);
+        // Account is created but balance stays 0.
+        assert!(sys.ledger.account_exists("alice"));
+        assert_eq!(sys.ledger.get_balance("alice", Currency::Money), 0);
+    }
+
+    #[test]
+    fn test_fund_agent_wallet_accumulates() {
+        let mut sys = make_system();
+        sys.fund_agent_wallet("alice", "Alice", 3000);
+        sys.fund_agent_wallet("alice", "Alice", 2000);
+        assert_eq!(sys.ledger.get_balance("alice", Currency::Money), 5000);
+    }
+
+    #[test]
+    fn test_fund_agent_wallet_then_deposit_to_bank() {
+        let mut sys = make_system();
+        // Fund the wallet with initial money.
+        sys.fund_agent_wallet("alice", "Alice", 5000);
+
+        // Open a checking account and deposit from the wallet.
+        let account = sys
+            .open_account("alice", BankAccountType::Checking, "Alice Checking", 0)
+            .unwrap();
+        let result = sys.deposit(account.id, "alice", 5000, 1).unwrap();
+        assert_eq!(result.new_balance, 5000);
+        // Wallet should now be empty.
+        assert_eq!(sys.ledger.get_balance("alice", Currency::Money), 0);
     }
 }

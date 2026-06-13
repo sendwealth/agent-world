@@ -49,12 +49,33 @@ impl AgentRegistry {
     }
 
     /// Register a new agent or update an existing one.
+    ///
+    /// New agents are created with `tokens = 0` and `money = 0`.
+    /// Use [`register_with_resources`] to grant initial resources.
     pub async fn register(
         &self,
         agent_id: String,
         name: String,
         capabilities: Vec<String>,
         public_key: String,
+    ) -> bool {
+        self.register_with_resources(agent_id, name, capabilities, public_key, 0, 0)
+            .await
+    }
+
+    /// Register a new agent with initial tokens and money, or update an existing one.
+    ///
+    /// For new agents, the `initial_tokens` and `initial_money` values are set
+    /// on the `RegisteredAgent`. For existing agents, the resource fields are
+    /// **not** overwritten (only identity/capabilities are refreshed).
+    pub async fn register_with_resources(
+        &self,
+        agent_id: String,
+        name: String,
+        capabilities: Vec<String>,
+        public_key: String,
+        initial_tokens: i64,
+        initial_money: i64,
     ) -> bool {
         let now = chrono::Utc::now().timestamp();
         let mut agents = self.agents.write().await;
@@ -66,8 +87,8 @@ impl AgentRegistry {
             name,
             capabilities,
             public_key,
-            tokens: 0,
-            money: 0,
+            tokens: initial_tokens,
+            money: initial_money,
             skills: Vec::new(),
             reputation: 0.0,
             phase: 0, // BIRTH
@@ -461,5 +482,68 @@ mod tests {
         .await;
         let found = reg.discover(&["teaching".into()]).await;
         assert!(found.is_empty());
+    }
+
+    #[tokio::test]
+    async fn register_with_resources_grants_initial_values() {
+        let reg = make_registry();
+        let is_new = reg
+            .register_with_resources(
+                "agent-1".into(),
+                "Alice".into(),
+                vec!["coding".into()],
+                "pubkey1".into(),
+                100_000,
+                5_000,
+            )
+            .await;
+        assert!(is_new);
+
+        let agent = reg.get("agent-1").await.unwrap();
+        assert_eq!(agent.tokens, 100_000);
+        assert_eq!(agent.money, 5_000);
+    }
+
+    #[tokio::test]
+    async fn register_without_resources_defaults_to_zero() {
+        let reg = make_registry();
+        reg.register("agent-1".into(), "Alice".into(), vec![], "pk".into())
+            .await;
+
+        let agent = reg.get("agent-1").await.unwrap();
+        assert_eq!(agent.tokens, 0);
+        assert_eq!(agent.money, 0);
+    }
+
+    #[tokio::test]
+    async fn register_with_resources_then_update_preserves_resources() {
+        // When an agent is re-registered, resources from the second call
+        // overwrite the first. This matches the "update" semantics of register().
+        let reg = make_registry();
+        reg.register_with_resources(
+            "agent-1".into(),
+            "Alice".into(),
+            vec![],
+            "pk".into(),
+            100_000,
+            5_000,
+        )
+        .await;
+
+        // Re-register with different resources
+        reg.register_with_resources(
+            "agent-1".into(),
+            "Alice Updated".into(),
+            vec!["coding".into()],
+            "pk".into(),
+            50_000,
+            2_000,
+        )
+        .await;
+
+        let agent = reg.get("agent-1").await.unwrap();
+        assert_eq!(agent.name, "Alice Updated");
+        assert_eq!(agent.tokens, 50_000);
+        assert_eq!(agent.money, 2_000);
     }
 }

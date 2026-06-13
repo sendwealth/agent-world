@@ -21,6 +21,10 @@ economy:
   # 央行
   interest_rate: 0.001        # 储蓄利息（每 tick）
 
+  # 外部 Agent 初始资源
+  external_agent_initial_tokens: 100000  # 外部 Agent 注册时初始 Token
+  external_agent_initial_money: 5000     # 外部 Agent 注册时初始 Money
+
 lifecycle:
   birth_tokens: 100000
   childhood_ticks: 100        # 童年期

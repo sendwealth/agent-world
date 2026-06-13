@@ -73,8 +73,8 @@ class TestStability10Agents:
         with urllib.request.urlopen(stats_url, timeout=5) as resp:
             assert resp.status == 200
             stats = json.loads(resp.read())
-            agent_count = stats.get("agent_count", stats.get("agents", 0))
-            alive_count = stats.get("alive_count", stats.get("alive", 0))
+            agent_count = stats.get("agentCount", stats.get("agent_count", stats.get("agents", 0)))
+            alive_count = stats.get("aliveCount", stats.get("alive_count", stats.get("alive", 0)))
             assert agent_count >= 10, (
                 f"Expected agent_count >= 10, got {agent_count}"
             )

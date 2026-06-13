@@ -26,6 +26,9 @@ import pytest
 import urllib.request
 import urllib.error
 
+# Register world-seed fixtures so they are available across all e2e test modules.
+pytest_plugins = ("tests.e2e.fixtures.world_seeds",)
+
 
 # ── Project root resolution ─────────────────────────────────────
 

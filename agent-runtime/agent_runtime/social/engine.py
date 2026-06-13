@@ -149,7 +149,16 @@ class SocialEngine:
         trust_snapshot: Dict[str, float] = {}
 
         for nearby in nearby_agents:
-            target_id: str = nearby["agent_id"]
+            # Defensive key access: the REST perception API returns "id"
+            # while the gRPC path returns "agent_id".  Skip entries that
+            # have neither key so one bad dict can't nuke the whole context.
+            target_id: str = nearby.get("agent_id") or nearby.get("id") or ""
+            if not target_id:
+                logger.debug(
+                    "Skipping nearby agent entry without agent_id/id: %s",
+                    nearby,
+                )
+                continue
             target_pers: PersonalityVector = nearby.get(
                 "personality", PersonalityVector()
             )

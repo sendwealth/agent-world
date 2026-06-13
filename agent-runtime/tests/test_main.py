@@ -126,8 +126,8 @@ class TestSpawnAgent:
         cfg = AgentSpawnConfig(name="TestBot")
         state = spawn_agent(cfg)
         assert state.name == "TestBot"
-        assert state.tokens == 500
-        assert state.max_tokens == 1000
+        assert state.tokens == 100_000
+        assert state.max_tokens == 200_000
 
     def test_spawn_with_traits(self) -> None:
         cfg = AgentSpawnConfig(

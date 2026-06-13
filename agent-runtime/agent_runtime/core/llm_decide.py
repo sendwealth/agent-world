@@ -164,7 +164,12 @@ def _perception_to_decision(perception: Perception) -> DecisionPerception:
     nearby_agents: list[str] = []
     for agent_info in nearby_agents_raw:
         if isinstance(agent_info, dict):
-            name = agent_info.get("name") or agent_info.get("agent_id") or agent_info.get("id") or "unknown"
+            name = (
+                agent_info.get("name")
+                or agent_info.get("agent_id")
+                or agent_info.get("id")
+                or "unknown"
+            )
             nearby_agents.append(str(name))
         elif isinstance(agent_info, str):
             nearby_agents.append(agent_info)

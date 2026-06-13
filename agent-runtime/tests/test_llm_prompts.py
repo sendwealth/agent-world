@@ -74,7 +74,7 @@ class TestPromptTemplate:
         assert "Alice traded with Bob" in result
         assert "100" in result  # ticks_until_depletion
         assert "rest (cost: 0 tokens)" in result
-        assert "explore (cost: 15 tokens)" in result
+        assert "explore (cost: 3 tokens)" in result
         assert "JSON object" in result
 
     def test_render_survival_template(self):

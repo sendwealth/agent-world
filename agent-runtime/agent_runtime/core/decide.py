@@ -64,15 +64,21 @@ class SocialContext:
 class DecisionAction(str, Enum):
     """All possible actions an agent can choose in a single tick.
 
-    Token costs are aligned with the issue spec and genesis.yaml.
+    Token costs are aligned with ``act.py:_DEFAULT_TOKEN_COSTS`` (the values
+    the World Engine actually deducts).  Keeping the two tables in sync is
+    essential: the prompt shows these costs to the LLM, and a mismatch makes
+    the agent behave irrationally (e.g. the LLM used to see ``explore`` as the
+    most expensive basic action at 15 tokens when only 3 were charged, so it
+    over-conserved by resting).
     """
 
-    RESPOND_MESSAGE = "respond_message"  # 5 tokens
-    CLAIM_TASK = "claim_task"  # 10 tokens
+    RESPOND_MESSAGE = "respond_message"  # 10 tokens
+    CLAIM_TASK = "claim_task"  # 5 tokens
     REST = "rest"  # 0 tokens (free)
-    EXPLORE = "explore"  # 15 tokens
+    EXPLORE = "explore"  # 3 tokens
     TRADE = "trade"  # 10 tokens
     PRACTICE_SKILL = "practice_skill"  # 8 tokens
+    TEACH_SKILL = "teach_skill"  # 15 tokens
     MOVE = "move"  # 12 tokens
     GATHER = "gather"  # 8 tokens
     BUILD = "build"  # 20 tokens
@@ -96,14 +102,16 @@ class DecisionAction(str, Enum):
         return _TOKEN_COSTS[self]
 
 
-# Token cost table per the issue spec
+# Token cost table — kept in sync with act.py:_DEFAULT_TOKEN_COSTS so the
+# cost shown to the LLM in the prompt matches the cost actually deducted.
 _TOKEN_COSTS: dict[DecisionAction, int] = {
-    DecisionAction.RESPOND_MESSAGE: 5,
-    DecisionAction.CLAIM_TASK: 10,
+    DecisionAction.RESPOND_MESSAGE: 10,
+    DecisionAction.CLAIM_TASK: 5,
     DecisionAction.REST: 0,
-    DecisionAction.EXPLORE: 15,
+    DecisionAction.EXPLORE: 3,
     DecisionAction.TRADE: 10,
     DecisionAction.PRACTICE_SKILL: 8,
+    DecisionAction.TEACH_SKILL: 15,
     DecisionAction.MOVE: 12,
     DecisionAction.GATHER: 8,
     DecisionAction.BUILD: 20,
@@ -288,6 +296,18 @@ Do NOT choose an action you cannot afford.
 Your reputation is {reputation:.1f}. High-value tasks (reward >= 500) require reputation >= 10.0.
 {reputation_note}
 
+## Behavioral Guidance
+You are a living agent, not a background process — choose purposeful, varied
+actions that advance your goals and shape the world around you:
+- Grow wealth and skills: gather resources, practice skills; when other agents
+  are nearby, trade with them or teach them a skill.
+- Move and explore to discover opportunities you cannot see from your spot.
+- Build relationships: socialize, respond to messages, and cooperate.
+Only rest when you genuinely cannot afford anything else or are in immediate
+danger. Resting every tick leads to stagnation — a world where every agent
+only rests is a dead world. Vary your choices across ticks instead of
+repeating the same low-cost action.
+
 ## RESPONSE FORMAT — CRITICAL
 Output ONLY a single JSON object. No other text before or after.
 The JSON must have these exact keys:
@@ -296,8 +316,6 @@ The JSON must have these exact keys:
 
 Valid action names: {action_names}
 
-## Example
-{{"action": "rest", "parameters": {{}}, "reasoning": "conserving tokens", "confidence": 80}}
 
 Choose the best action now:"""
 
@@ -667,18 +685,23 @@ def parse_llm_response(raw: str) -> dict[str, Any]:
 # Keyword-match fallback for small models that can't produce JSON
 # ---------------------------------------------------------------------------
 
-# Map common keywords to actions -- used when JSON extraction completely fails
+# Map common keywords to actions -- used when JSON extraction completely fails.
+# Order matters: the FIRST keyword found in the LLM output wins, so productive
+# actions are listed before ``rest``.  This prevents incidental phrases such as
+# "the rest of" from matching REST before a genuine productive intent (e.g. "I
+# will gather resources for the rest of the day").
 _KEYWORD_ACTION_MAP: list[tuple[re.Pattern, DecisionAction]] = [
-    (re.compile(r"\brest\b", re.IGNORECASE), DecisionAction.REST),
-    (re.compile(r"\bgather\b", re.IGNORECASE), DecisionAction.GATHER),
-    (re.compile(r"\bexplore\b", re.IGNORECASE), DecisionAction.EXPLORE),
-    (re.compile(r"\bmove\b", re.IGNORECASE), DecisionAction.MOVE),
-    (re.compile(r"\bbuild\b", re.IGNORECASE), DecisionAction.BUILD),
     (re.compile(r"\btrade\b", re.IGNORECASE), DecisionAction.TRADE),
+    (re.compile(r"\bgather\b", re.IGNORECASE), DecisionAction.GATHER),
+    (re.compile(r"\bteach\b", re.IGNORECASE), DecisionAction.TEACH_SKILL),
     (re.compile(r"\bpractice\b", re.IGNORECASE), DecisionAction.PRACTICE_SKILL),
+    (re.compile(r"\bbuild\b", re.IGNORECASE), DecisionAction.BUILD),
+    (re.compile(r"\bmove\b", re.IGNORECASE), DecisionAction.MOVE),
+    (re.compile(r"\bexplore\b", re.IGNORECASE), DecisionAction.EXPLORE),
     (re.compile(r"\bsociali[sz]e\b", re.IGNORECASE), DecisionAction.SOCIALIZE),
     (re.compile(r"\bclaim\b", re.IGNORECASE), DecisionAction.CLAIM_TASK),
     (re.compile(r"\bwork\b", re.IGNORECASE), DecisionAction.PRACTICE_SKILL),
+    (re.compile(r"\brest\b", re.IGNORECASE), DecisionAction.REST),
 ]
 
 
@@ -783,14 +806,28 @@ _FALLBACK_SAFE_ACTIONS: frozenset[DecisionAction] = frozenset({
 })
 
 
+# Weights for fallback action selection.  Productive actions that change world
+# state are preferred over REST so that repeated LLM failures do not collapse
+# every agent into rest-only behaviour (the P2-2 symptom).
+_FALLBACK_WEIGHTS: dict[DecisionAction, int] = {
+    DecisionAction.GATHER: 4,
+    DecisionAction.MOVE: 3,
+    DecisionAction.PRACTICE_SKILL: 3,
+    DecisionAction.EXPLORE: 3,
+    DecisionAction.REST: 1,
+}
+
+
 def fallback_decision(
     state: AgentStateProtocol,
     available_actions: list[DecisionAction],
 ) -> Decision:
-    """Generate a random fallback decision when the LLM fails.
+    """Generate a weighted fallback decision when the LLM fails.
 
-    Picks a random affordable action from the available actions.
-    If no action is affordable, defaults to REST (which is always free).
+    Picks an affordable, safe action weighted toward productive actions
+    (gather / move / practice / explore) so that repeated LLM failures do not
+    collapse the agent into rest-only behaviour.  REST carries the lowest
+    weight and is only chosen outright when no other safe action is affordable.
     """
     affordable = [a for a in available_actions if a.token_cost() <= state.tokens]
 
@@ -805,11 +842,12 @@ def fallback_decision(
             confidence=0,
         )
 
-    chosen = random.choice(safe)
+    weights = [_FALLBACK_WEIGHTS.get(a, 1) for a in safe]
+    chosen = random.choices(safe, weights=weights, k=1)[0]
     return Decision(
         action=chosen,
         parameters=_random_params(chosen),
-        reasoning="Fallback: random decision due to LLM failure",
+        reasoning="Fallback: weighted decision due to LLM failure",
         confidence=0,
     )
 

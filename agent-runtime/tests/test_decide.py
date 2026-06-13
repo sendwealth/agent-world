@@ -101,8 +101,8 @@ def _make_survival(**kwargs: Any) -> SurvivalAssessment:
 class TestDecisionAction:
     """Tests for DecisionAction enum."""
 
-    def test_all_returns_18_actions(self):
-        assert len(DecisionAction.all()) == 18
+    def test_all_returns_19_actions(self):
+        assert len(DecisionAction.all()) == 19
 
     def test_action_values_are_snake_case(self):
         for action in DecisionAction.all():
@@ -121,11 +121,12 @@ class TestDecisionAction:
         assert DecisionAction.REST.token_cost() == 0
 
     def test_specific_token_costs(self):
-        assert DecisionAction.RESPOND_MESSAGE.token_cost() == 5
-        assert DecisionAction.CLAIM_TASK.token_cost() == 10
-        assert DecisionAction.EXPLORE.token_cost() == 15
+        assert DecisionAction.RESPOND_MESSAGE.token_cost() == 10
+        assert DecisionAction.CLAIM_TASK.token_cost() == 5
+        assert DecisionAction.EXPLORE.token_cost() == 3
         assert DecisionAction.TRADE.token_cost() == 10
         assert DecisionAction.PRACTICE_SKILL.token_cost() == 8
+        assert DecisionAction.TEACH_SKILL.token_cost() == 15
         assert DecisionAction.MOVE.token_cost() == 12
         assert DecisionAction.GATHER.token_cost() == 8
         assert DecisionAction.BUILD.token_cost() == 20
@@ -223,7 +224,7 @@ class TestBuildPrompt:
         prompt = build_prompt(state, perception, survival, actions)
 
         assert "rest (cost: 0 tokens)" in prompt
-        assert "explore (cost: 15 tokens)" in prompt
+        assert "explore (cost: 3 tokens)" in prompt
 
     def test_prompt_contains_json_format(self):
         state = _make_state()
@@ -408,7 +409,7 @@ class TestValidateDecision:
             validate_decision(decision, state, actions)
 
     def test_insufficient_tokens(self):
-        state = _make_state(tokens=2)  # Not enough for EXPLORE (15)
+        state = _make_state(tokens=2)  # Not enough for EXPLORE (3)
         decision = Decision(action=DecisionAction.EXPLORE, confidence=50)
         actions = DecisionAction.all()
 
@@ -494,17 +495,17 @@ class TestFallbackDecision:
 class TestGetAvailableActions:
     """Tests for get_available_actions()."""
 
-    def test_rich_agent_has_all_18_actions(self):
+    def test_rich_agent_has_all_19_actions(self):
         state = _make_state(tokens=10000)
         actions = get_available_actions(state)
-        assert len(actions) == 18
+        assert len(actions) == 19
 
     def test_low_token_agent_filters_expensive(self):
-        state = _make_state(tokens=5)
+        state = _make_state(tokens=2)
         actions = get_available_actions(state)
-        # REST=0, RESPOND_MESSAGE=5, SOCIALIZE=5
+        # Only REST(0) and CHECK_BOUNTIES(2) are affordable at 2 tokens
         assert DecisionAction.REST in actions
-        assert DecisionAction.EXPLORE not in actions  # costs 15
+        assert DecisionAction.EXPLORE not in actions  # costs 3
         assert DecisionAction.BUILD not in actions  # costs 20
 
     def test_dead_agent_has_no_actions(self):
@@ -725,9 +726,9 @@ class TestAcceptance:
         assert parsed_back["confidence"] == 85
 
     @pytest.mark.asyncio
-    async def test_acceptance_all_18_actions_available_to_rich_agent(self):
-        """A rich agent should have all 18 actions available."""
+    async def test_acceptance_all_19_actions_available_to_rich_agent(self):
+        """A rich agent should have all 19 actions available."""
         state = _make_state(tokens=10000)
         actions = get_available_actions(state)
-        assert len(actions) == 18
+        assert len(actions) == 19
         assert set(actions) == set(DecisionAction.all())

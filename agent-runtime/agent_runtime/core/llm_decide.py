@@ -55,6 +55,7 @@ _DECISION_TO_ACTION: dict[DecisionAction, ActionType] = {
     DecisionAction.EXPLORE: ActionType.EXPLORE,
     DecisionAction.TRADE: ActionType.PROPOSE_DEAL,
     DecisionAction.PRACTICE_SKILL: ActionType.PRACTICE_SKILL,
+    DecisionAction.TEACH_SKILL: ActionType.TEACH_SKILL,
     DecisionAction.SOCIALIZE: ActionType.SOCIALIZE,
     DecisionAction.MOVE: ActionType.MOVE,
     DecisionAction.GATHER: ActionType.GATHER,
@@ -93,7 +94,16 @@ class LLMDecisionProvider:
             provider=llm_provider,
             social_provider=social_provider,
         )
-        self._fallback_actions = fallback_actions or [ActionType.REST, ActionType.EXPLORE]
+        # Default fallback covers productive actions, not just REST/EXPLORE, so
+        # that repeated LLM failures do not collapse every agent into rest.
+        self._fallback_actions = fallback_actions or [
+            ActionType.GATHER,
+            ActionType.MOVE,
+            ActionType.PRACTICE_SKILL,
+            ActionType.EXPLORE,
+            ActionType.PROPOSE_DEAL,
+            ActionType.REST,
+        ]
 
     async def decide(
         self,
@@ -264,21 +274,48 @@ def _inject_action_args(
     if action_type == ActionType.CLAIM_TASK and not parameters.get("task_id"):
         if perception.available_tasks:
             parameters = {**parameters, "task_id": perception.available_tasks[0]}
+
+    # teach_skill needs a target agent; auto-pick the nearest one when the LLM
+    # omitted it (mirrors the claim_task auto-selection above).
+    if action_type == ActionType.TEACH_SKILL and not parameters.get("target_agent_id"):
+        if perception.nearby_agents:
+            parameters = {
+                **parameters,
+                "target_agent_id": perception.nearby_agents[0],
+                "skill_name": parameters.get("skill_name", "trading"),
+            }
     return parameters
+
+
+# Weights so LLM-failure fallbacks produce varied, world-changing behaviour
+# instead of collapsing every agent into REST/EXPLORE only (P2-2 symptom).
+_FALLBACK_WEIGHTS: dict[ActionType, int] = {
+    ActionType.GATHER: 4,
+    ActionType.MOVE: 3,
+    ActionType.PRACTICE_SKILL: 3,
+    ActionType.EXPLORE: 3,
+    ActionType.PROPOSE_DEAL: 2,
+    ActionType.REST: 1,
+}
 
 
 def _random_fallback(
     state: AgentState,
     actions: list[ActionType],
 ) -> Decision:
-    """Return a random affordable action as a fallback."""
+    """Return a weighted affordable action as a fallback.
+
+    Productive actions (gather/move/practice/explore) outweigh REST so that
+    repeated LLM failures yield varied behaviour rather than rest-only.
+    """
     # REST costs 0 so it's always affordable
     affordable = [a for a in actions if a == ActionType.REST or state.tokens > 0]
     if not affordable:
         affordable = [ActionType.REST]
 
-    chosen = random.choice(affordable)
+    weights = [_FALLBACK_WEIGHTS.get(a, 1) for a in affordable]
+    chosen = random.choices(affordable, weights=weights, k=1)[0]
     return Decision(
         action_type=chosen,
-        reasoning="Fallback: random decision due to LLM failure",
+        reasoning="Fallback: weighted random decision due to LLM failure",
     )

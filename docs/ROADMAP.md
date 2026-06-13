@@ -178,7 +178,7 @@
 178|178|- [x] Auto report generation — `GET /api/v2/export/report` (HTML/JSON/Markdown with trend analysis, emergent pattern detection, SVG sparklines) + Python `ExperimentReporter` (Markdown/JSON/HTML/PDF with embedded matplotlib charts)
 179|179|
 180|180|### 4.6 Demo & Open-Source Promotion 🔄
-181|181|- [ ] Dashboard demo video / screenshots
+181|181|- [x] Dashboard demo video / screenshots — Playwright automation in `scripts/screenshots/`, `make screenshots` captures all pages; initial captures in `docs/screenshots/`
 182|182|- [x] README update with Phase 4 features
 183|183|- [x] Third-party Agent API documentation — `docs-site/how-to/third-party-agent-api.md` + Python SDK
 184|184|- [x] Cross-world interaction (multiple instances) — Federation + Migration wired into AppState, 27 API routes
@@ -228,7 +228,7 @@
 228|228|Current: `1.1.0` (VERSION file)
 229|229|
 230|230|- `v1.0.0` — Phase 1 (Island) complete
-231|231|- `v1.1.0` — Phases 2-4 substantially complete; Phase 4 remaining: demo video/screenshots only
+231|231|- `v1.1.0` — Phases 2-4 substantially complete; Phase 4 screenshots delivered, demo video pending
 232|232|
 233|233|Tags `v4.0.0-alpha` and `v5.0.0` were removed — they overstated completion (Phase 5 has not started).
 234|234|

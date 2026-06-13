@@ -1,6 +1,6 @@
 .PHONY: help setup dev dev-llm dev-detach dev-down dev-logs dev-ps dev-restart \
        dev-ci dev-ci-down test lint fmt proto clean build run demo demo-json demo-death \
-       bench stress test-e2e-integration
+       bench stress test-e2e-integration screenshots screenshots-install
 
 help: ## Show this help
 	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) | sort | awk 'BEGIN {FS = ":.*?## "}; {printf "\033[36m%-20s\033[0m %s\n", $$1, $$2}'
@@ -117,6 +117,14 @@ demo-json: ## Run E2E demo with JSON metrics output
 
 demo-death: ## Run death scenario (agent with 30 tokens)
 	python3 scripts/e2e_demo.py --death-scenario
+
+# ── Screenshots ──────────────────────────────────────────
+
+screenshots-install: ## Install Playwright + Chromium for screenshot automation
+	cd scripts/screenshots && npm install && npx playwright install chromium
+
+screenshots: ## Capture dashboard screenshots (requires running dashboard)
+	@cd scripts/screenshots && DASHBOARD_URL=$${DASHBOARD_URL:-http://localhost:3000} node capture.mjs --out $$(pwd)/../../docs/screenshots $${SCREENSHOTS_ARGS:-}
 
 # ── Code Quality ─────────────────────────────────────────
 

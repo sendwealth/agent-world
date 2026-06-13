@@ -48,6 +48,9 @@ demo-video/
 dashboard/node_modules/
 dashboard/.next/
 
+# Screenshot automation tool
+scripts/screenshots/node_modules/
+
 # World engine
 world-engine/target/
 

@@ -475,21 +475,20 @@ A third-party **extension API** lets external code extend the World Engine throu
 
 ## 🤝 Contributing Screenshots
 454|442|
-455|443|The screenshots in this README are real captures from a running instance. To update them with newer screenshots:
-456|444|
-457|445|1. Start the platform: `docker compose up`
-458|446|2. Navigate to `http://localhost:3001`
-459|447|3. Take screenshots of:
-460|448|   - World Overview page (stat cards, event stream)
-461|449|   - Agent detail page (decision log, skill tree)
-462|450|   - Organizations page (companies, guilds, alliances)
-463|451|   - Stocks page (market data, order book)
-464|452|   - Evolution page (skill distribution, mutations)
-465|453|   - Governance page (DSL rules, elections, treaties)
-466|454|   - Economy page (GDP, banking)
-467|455|   - Federation page (migration, diplomacy)
-468|456|4. Save as `docs/screenshots/world-overview.png`, `agent-decisions.png`, `emergent-societies.png`, `organizations.png`, `stocks.png`, `evolution.png`, `governance.png`, `economy.png`, `federation.png`
-469|457|5. Open a PR — we'll merge them in!
+The screenshots in this README are real captures from a running instance. The fastest way to regenerate them is with the built-in automation tool:
+
+```sh
+make screenshots-install   # first time only — installs Playwright + Chromium
+make screenshots           # captures all dashboard pages at 1920×1080
+```
+
+If the dashboard runs on a non-default port, set `DASHBOARD_URL`:
+
+```sh
+DASHBOARD_URL=http://localhost:3001 make screenshots
+```
+
+See [`docs/screenshots/README.md`](docs/screenshots/README.md) for the full route list and manual capture instructions. Open a PR with your captures — we'll merge them in!
 470|458|
 471|459|---
 472|460|

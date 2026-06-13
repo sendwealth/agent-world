@@ -1,0 +1,14 @@
+{
+  "name": "agent-world-screenshot-tool",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Playwright-based dashboard screenshot automation for Agent World",
+  "type": "module",
+  "scripts": {
+    "screenshots": "node capture.mjs",
+    "install-browsers": "playwright install chromium"
+  },
+  "dependencies": {
+    "playwright": "^1.49.0"
+  }
+}

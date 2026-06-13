@@ -10,6 +10,7 @@ Supported action types:
     - ``submit_task``      — Submit completed work for a claimed task
     - ``propose_deal``     — Propose a deal/contract to another agent
     - ``teach_skill``      — Teach a skill to another agent (costs tokens)
+    - ``practice_skill``   — Practice a skill by yourself (no target needed)
     - ``rest``             — Skip the tick to conserve tokens (no cost)
     - ``explore``          — Explore the world for opportunities
 
@@ -50,6 +51,7 @@ class ActionType(str, Enum):
     SUBMIT_TASK = "submit_task"
     PROPOSE_DEAL = "propose_deal"
     TEACH_SKILL = "teach_skill"
+    PRACTICE_SKILL = "practice_skill"
     REST = "rest"
     EXPLORE = "explore"
     MOVE = "move"
@@ -114,6 +116,7 @@ _DEFAULT_TOKEN_COSTS: dict[ActionType, int] = {
     ActionType.SUBMIT_TASK: 8,
     ActionType.PROPOSE_DEAL: 10,
     ActionType.TEACH_SKILL: 15,
+    ActionType.PRACTICE_SKILL: 8,
     ActionType.REST: 0,
     ActionType.EXPLORE: 3,
     ActionType.MOVE: 12,
@@ -372,6 +375,7 @@ class ActionExecutor:
         ActionType.SUBMIT_TASK: "_handle_submit_task",
         ActionType.PROPOSE_DEAL: "_handle_propose_deal",
         ActionType.TEACH_SKILL: "_handle_teach_skill",
+        ActionType.PRACTICE_SKILL: "_handle_practice_skill",
         ActionType.REST: "_handle_rest",
         ActionType.EXPLORE: "_handle_explore",
         ActionType.MOVE: "_handle_move",
@@ -406,10 +410,20 @@ class ActionExecutor:
         return await context.world.send_message(payload)
 
     async def _handle_claim_task(self, context: ActionContext) -> dict[str, Any]:
-        """Claim an available task from the market."""
+        """Claim an available task from the market.
+
+        Degrades gracefully when no ``task_id`` is present (e.g. the LLM chose
+        ``claim_task`` but the perception carried no available tasks, or every
+        candidate was claimed between perceive and act). Instead of raising —
+        which burns all retries — it returns a ``no_tasks_available`` result so
+        the caller can move on to the next tick.
+        """
         task_id = context.parameters.get("task_id", "")
         if not task_id:
-            raise ValueError("claim_task requires 'task_id' parameter")
+            logger.warning(
+                "claim_task executed without a task_id — no task selected"
+            )
+            return {"action": "claim_task", "status": "no_tasks_available"}
         return await context.world.claim_task(task_id)
 
     async def _handle_submit_task(self, context: ActionContext) -> dict[str, Any]:
@@ -433,6 +447,27 @@ class ActionExecutor:
         if not target_id or not skill_name:
             raise ValueError("teach_skill requires 'target_agent_id' and 'skill_name'")
         return await context.world.teach_skill(target_id, skill_name, level)
+
+    async def _handle_practice_skill(self, context: ActionContext) -> dict[str, Any]:
+        """Practice a skill by yourself — improves proficiency, no target needed.
+
+        Unlike ``teach_skill``, self-practice does not require a target agent.
+        The optional ``skill_name`` (if provided by the LLM) is echoed back so
+        downstream skill-progression modules can record which skill was honed.
+        """
+        skill_name = context.parameters.get("skill_name", "")
+        if skill_name:
+            return {
+                "action": "practice_skill",
+                "status": "practiced",
+                "skill": skill_name,
+                "message": f"Practiced {skill_name} to improve proficiency.",
+            }
+        return {
+            "action": "practice_skill",
+            "status": "practiced",
+            "message": "Practiced skills to improve proficiency.",
+        }
 
     async def _handle_rest(self, context: ActionContext) -> dict[str, Any]:
         """Rest — skip the tick to conserve tokens. No world interaction."""

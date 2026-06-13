@@ -7,9 +7,10 @@ import json
 import pytest
 
 from agent_runtime.core.act import ActionType
-from agent_runtime.core.decide import DecisionAction
+from agent_runtime.core.decide import DecisionAction, DecisionPerception
 from agent_runtime.core.llm_decide import (
     LLMDecisionProvider,
+    _inject_action_args,
     _map_decision_action,
     _perception_to_decision,
     _random_fallback,
@@ -149,6 +150,14 @@ class TestActionMapping:
         assert _map_decision_action(DecisionAction.GATHER) == ActionType.GATHER
         assert _map_decision_action(DecisionAction.BUILD) == ActionType.BUILD
 
+    def test_practice_skill_mapped_directly(self):
+        # Regression: PRACTICE_SKILL must NOT map to TEACH_SKILL (which requires
+        # a target_agent_id the self-practice scenario never provides).
+        assert (
+            _map_decision_action(DecisionAction.PRACTICE_SKILL)
+            == ActionType.PRACTICE_SKILL
+        )
+
 
 class TestRandomFallback:
     def test_returns_decision(self, agent_state):
@@ -238,3 +247,68 @@ class TestLLMDecisionProvider:
         # The prompt should contain survival-related information
         prompt = mock_llm.last_messages[0].content
         assert "panic" in prompt.lower() or "danger" in prompt.lower() or "10" in prompt
+
+    @pytest.mark.asyncio
+    async def test_claim_task_injects_task_id_from_available_tasks(
+        self, agent_state, survival_normal
+    ):
+        """claim_task decision auto-selects a task_id from available_tasks.
+
+        Regression for P2-1: the LLM picks claim_task without naming a task,
+        so the bridge injects the first available task into the parameters.
+        """
+        mock_llm = MockLLMProvider(response_action="claim_task")
+        provider = LLMDecisionProvider(llm_provider=mock_llm)
+        p = Perception(
+            tick=5,
+            market_state={"available_tasks": ["task-A", "task-B"]},
+        )
+
+        decision = await provider.decide(agent_state, p, survival_normal)
+
+        assert decision.action_type == ActionType.CLAIM_TASK
+        assert decision.parameters["task_id"] == "task-A"
+
+    @pytest.mark.asyncio
+    async def test_claim_task_without_tasks_leaves_no_task_id(
+        self, agent_state, perception, survival_normal
+    ):
+        """When no tasks are available, no task_id is injected — the action
+        handler degrades gracefully to no_tasks_available instead."""
+        mock_llm = MockLLMProvider(response_action="claim_task")
+        provider = LLMDecisionProvider(llm_provider=mock_llm)
+
+        decision = await provider.decide(agent_state, perception, survival_normal)
+
+        assert decision.action_type == ActionType.CLAIM_TASK
+        assert "task_id" not in decision.parameters
+
+
+class TestInjectActionArgs:
+    """Unit tests for the _inject_action_args helper."""
+
+    def test_claim_task_injects_first_task(self):
+        params = {}
+        perc = DecisionPerception(available_tasks=["t1", "t2"])
+        out = _inject_action_args(ActionType.CLAIM_TASK, params, perc)
+        assert out["task_id"] == "t1"
+        # original dict untouched
+        assert params == {}
+
+    def test_claim_task_keeps_existing_task_id(self):
+        params = {"task_id": "chosen"}
+        perc = DecisionPerception(available_tasks=["t1"])
+        out = _inject_action_args(ActionType.CLAIM_TASK, params, perc)
+        assert out["task_id"] == "chosen"
+
+    def test_claim_task_no_tasks_no_injection(self):
+        params = {}
+        perc = DecisionPerception(available_tasks=[])
+        out = _inject_action_args(ActionType.CLAIM_TASK, params, perc)
+        assert "task_id" not in out
+
+    def test_other_actions_untouched(self):
+        params = {"direction": "north"}
+        perc = DecisionPerception(available_tasks=["t1"])
+        out = _inject_action_args(ActionType.MOVE, params, perc)
+        assert out == {"direction": "north"}

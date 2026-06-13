@@ -54,7 +54,7 @@ _DECISION_TO_ACTION: dict[DecisionAction, ActionType] = {
     DecisionAction.REST: ActionType.REST,
     DecisionAction.EXPLORE: ActionType.EXPLORE,
     DecisionAction.TRADE: ActionType.PROPOSE_DEAL,
-    DecisionAction.PRACTICE_SKILL: ActionType.TEACH_SKILL,
+    DecisionAction.PRACTICE_SKILL: ActionType.PRACTICE_SKILL,
     DecisionAction.SOCIALIZE: ActionType.SOCIALIZE,
     DecisionAction.MOVE: ActionType.MOVE,
     DecisionAction.GATHER: ActionType.GATHER,
@@ -119,9 +119,13 @@ class LLMDecisionProvider:
                     f" — action not yet executable]"
                 )
 
+            parameters = _inject_action_args(
+                action_type, result.parameters, dec_perception
+            )
+
             return Decision(
                 action_type=action_type,
-                parameters=result.parameters,
+                parameters=parameters,
                 reasoning=reasoning,
             )
         except Exception:
@@ -241,6 +245,26 @@ def _map_decision_action(action: DecisionAction) -> ActionType:
     if mapped is not None:
         return mapped
     return ActionType.REST
+
+
+def _inject_action_args(
+    action_type: ActionType,
+    parameters: dict[str, Any],
+    perception: DecisionPerception,
+) -> dict[str, Any]:
+    """Inject action arguments the LLM may have omitted.
+
+    The LLM frequently chooses ``claim_task`` without naming *which* task.
+    When that happens we auto-select the first available task from the
+    perception so the action can proceed.  If no tasks are available the
+    ``_handle_claim_task`` handler degrades gracefully.
+
+    Returns a new parameters dict (the caller's dict is left untouched).
+    """
+    if action_type == ActionType.CLAIM_TASK and not parameters.get("task_id"):
+        if perception.available_tasks:
+            parameters = {**parameters, "task_id": perception.available_tasks[0]}
+    return parameters
 
 
 def _random_fallback(

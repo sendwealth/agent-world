@@ -1165,6 +1165,7 @@ async fn test_cross_agent_event_filtering() {
     // Emit events from various agents
     bus.emit(WorldEvent::BalanceChanged {
         agent_id: "agent-a".to_string(),
+        agent_name: "agent-a".to_string(),
         currency: Currency::Token,
         old_balance: 1000,
         new_balance: 900,
@@ -1173,6 +1174,7 @@ async fn test_cross_agent_event_filtering() {
 
     bus.emit(WorldEvent::BalanceChanged {
         agent_id: "agent-b".to_string(),
+        agent_name: "agent-b".to_string(),
         currency: Currency::Money,
         old_balance: 500,
         new_balance: 600,

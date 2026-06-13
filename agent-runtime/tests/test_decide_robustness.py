@@ -398,16 +398,21 @@ class TestImprovedPrompt:
         assert "gather" in prompt
         assert "Valid action names:" in prompt
 
-    def test_prompt_contains_example(self):
-        """The prompt should contain a few-shot example."""
+    def test_prompt_contains_behavioral_guidance(self):
+        """The prompt should encourage diverse actions and NOT anchor to rest.
+
+        The old few-shot example (``{"action": "rest", ...}``) was removed
+        because small models copy it verbatim and collapse into rest-only
+        behaviour (SEN-684 / P2-2).  A behavioral-guidance section replaces it.
+        """
         prompt = build_prompt(
             MockState(),
             DecisionPerception(tick=1),
             SurvivalAssessment(),
             [DecisionAction.REST],
         )
-        assert "## Example" in prompt
-        assert '"action": "rest"' in prompt
+        assert "Behavioral Guidance" in prompt
+        assert '"action": "rest", "parameters": {}' not in prompt
 
     def test_prompt_contains_critical_format_header(self):
         """The response format section should be prominently marked."""

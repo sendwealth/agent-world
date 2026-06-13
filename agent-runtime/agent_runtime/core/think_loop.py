@@ -838,6 +838,10 @@ class ThinkLoop:
         with trace_phase("decide", str(self.state.id)):
             decision = await self._decision.decide(self.state, perception, survival_action)
 
+        # 3b. Record the chosen action for distribution metrics (P2-2) so
+        # action diversity can be monitored over time.
+        metrics.record_action(decision.action_type.value)
+
         # 4. Phase ability gate: check if the agent can perform this action
         abilities = get_phase_abilities(self.state.phase)
         if not self.state.can_perform(decision.action_type.value):

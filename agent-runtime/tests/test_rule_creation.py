@@ -38,8 +38,8 @@ class TestDecisionActionRegistration:
         assert _TOKEN_COSTS[DecisionAction.VOTE_RULE] == 5
 
     def test_action_count_is_14(self) -> None:
-        """There should now be 18 actions (12 original + 6 new)."""
-        assert len(DecisionAction) == 18
+        """There should now be 19 actions (12 original + 6 new + teach_skill)."""
+        assert len(DecisionAction) == 19
 
 
 class TestActionTypeRegistration:

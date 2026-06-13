@@ -108,6 +108,9 @@ class Metrics:
         self.errors_total = _Counter("agent_errors_total")
         self.survival_actions = _Counter("agent_survival_actions_total")
 
+        # Per-action-type chosen-action counters (action distribution).
+        self._action_counters: dict[str, _Counter] = {}
+
         # Gauges
         self.tokens_balance = _Gauge("agent_tokens_balance")
         self.money_balance = _Gauge("agent_money_balance")
@@ -123,7 +126,7 @@ class Metrics:
 
     def snapshot(self) -> dict[str, Any]:
         """Return a dict of all metric values for Prometheus exposition."""
-        return {
+        snap = {
             self.think_ticks.name: self.think_ticks.value,
             self.llm_calls.name: self.llm_calls.value,
             self.llm_tokens_used.name: self.llm_tokens_used.value,
@@ -148,18 +151,35 @@ class Metrics:
             f"{self.llm_latency.name}_count": self.llm_latency.count,
             f"{self.llm_latency.name}_sum": self.llm_latency.sum,
         }
+        # Per-action distribution: one labeled entry per action type chosen.
+        for action, counter in self._action_counters.items():
+            snap[f'agent_action_chosen_total{{action="{action}"}}'] = counter.value
+        return snap
+
+    def record_action(self, action_type: str) -> None:
+        """Increment the per-action-type chosen-action counter."""
+        counter = self._action_counters.get(action_type)
+        if counter is None:
+            counter = _Counter("agent_action_chosen_total")
+            self._action_counters[action_type] = counter
+        counter.inc()
+
+    @property
+    def action_distribution(self) -> dict[str, int]:
+        """Mapping of action_type -> how often it was chosen."""
+        return {a: c.value for a, c in self._action_counters.items()}
 
     def render_prometheus(self) -> str:
         """Render metrics in Prometheus text exposition format."""
         lines: list[str] = []
         snap = self.snapshot()
+        emitted_types: set[str] = set()
         for name, value in snap.items():
-            if isinstance(value, int):
-                lines.append(f"# TYPE {name} counter")
-                lines.append(f"{name} {value}")
-            else:
-                lines.append(f"# TYPE {name} gauge")
-                lines.append(f"{name} {value}")
+            base = name.split("{", 1)[0]
+            if base not in emitted_types:
+                lines.append(f"# TYPE {base} {'counter' if isinstance(value, int) else 'gauge'}")
+                emitted_types.add(base)
+            lines.append(f"{name} {value}")
         return "\n".join(lines) + "\n"
 
 

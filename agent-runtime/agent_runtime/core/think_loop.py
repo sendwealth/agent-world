@@ -1302,6 +1302,48 @@ class ThinkLoop:
                     exc_info=True,
                 )
 
+        # Fallback 5: direct REST API query via httpx.  This bypasses all
+        # world client wrappers and hits the World Engine directly — it works
+        # even when the world_client is a GRPCWorldClient or lacks _request().
+        try:
+            import os
+
+            import httpx
+
+            base_url = os.environ.get(
+                "WORLD_ENGINE_URL", "http://world-engine:8080",
+            )
+            async with httpx.AsyncClient(timeout=5) as client:
+                resp = await client.get(f"{base_url}/api/v1/agents")
+                all_agents = resp.json()
+                if isinstance(all_agents, dict):
+                    all_agents = all_agents.get("agents", [])
+                candidates = [
+                    a.get("id", "") for a in all_agents
+                    if a.get("id") and str(a.get("id")) != my_id
+                    and a.get("alive", True)
+                ]
+                if candidates:
+                    target = random.choice(candidates)
+                    logger.info(
+                        "Tick %d: injected target_agent_id=%s (rest_api)",
+                        self._tick,
+                        target,
+                    )
+                    return replace(
+                        decision,
+                        parameters={
+                            **decision.parameters,
+                            "target_agent_id": target,
+                        },
+                    )
+        except Exception:
+            logger.debug(
+                "Tick %d: httpx REST API fallback for socialize target failed",
+                self._tick,
+                exc_info=True,
+            )
+
         # All fallbacks exhausted — downgrade to REST to avoid retry_exhausted
         logger.warning(
             "Tick %d: SOCIALIZE has no target_agent_id and all fallbacks "

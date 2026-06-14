@@ -405,8 +405,15 @@ class ActionExecutor:
     # ------------------------------------------------------------------
 
     async def _handle_send_message(self, context: ActionContext) -> dict[str, Any]:
-        """Send a message to another agent via A2A."""
-        payload = context.parameters.get("payload", {})
+        """Send a message to another agent via A2A.
+
+        Injects ``from_agent`` and ``to_agent`` if the LLM omitted them,
+        since the World Engine requires both fields.
+        """
+        payload = dict(context.parameters.get("payload", context.parameters))
+        payload.setdefault("from_agent", str(context.agent.id))
+        payload.setdefault("to_agent", context.parameters.get("target_agent_id", ""))
+        payload.setdefault("message_type", payload.pop("type", "INFORM"))
         return await context.world.send_message(payload)
 
     async def _handle_claim_task(self, context: ActionContext) -> dict[str, Any]:
@@ -435,8 +442,21 @@ class ActionExecutor:
         return await context.world.submit_task(task_id, task_result)
 
     async def _handle_propose_deal(self, context: ActionContext) -> dict[str, Any]:
-        """Propose a deal/contract to another agent."""
+        """Propose a deal/contract to another agent.
+
+        Builds a minimal proposal if the LLM omitted details.
+        """
         proposal = context.parameters.get("proposal", {})
+        if not proposal:
+            proposal = {
+                "from_agent": str(context.agent.id),
+                "deal_type": "trade",
+                "offering": context.parameters.get("offering", "tokens"),
+                "offering_amount": context.parameters.get("offering_amount", 10),
+                "requesting": context.parameters.get("requesting", "food"),
+                "requesting_amount": context.parameters.get("requesting_amount", 5),
+            }
+        proposal.setdefault("from_agent", str(context.agent.id))
         return await context.world.propose_deal(proposal)
 
     async def _handle_teach_skill(self, context: ActionContext) -> dict[str, Any]:
@@ -479,17 +499,25 @@ class ActionExecutor:
         return await context.world.explore(params)
 
     async def _handle_move(self, context: ActionContext) -> dict[str, Any]:
-        """Move the agent in a direction via the world client."""
+        """Move the agent in a direction via the world client.
+
+        Defaults to a random direction if the LLM omitted it (common when
+        the anti-repetition system forces a MOVE action).
+        """
+        import random
+
         direction = context.parameters.get("direction", "")
         if not direction:
-            raise ValueError("move requires 'direction' parameter")
+            direction = random.choice(["north", "south", "east", "west"])
         return await context.world.move(direction)
 
     async def _handle_gather(self, context: ActionContext) -> dict[str, Any]:
-        """Gather a resource from the agent's location."""
-        resource_type = context.parameters.get("resource_type", "")
-        if not resource_type:
-            raise ValueError("gather requires 'resource_type' parameter")
+        """Gather a resource from the agent's location.
+
+        Defaults to ``food`` if the LLM omitted ``resource_type`` (common
+        when the anti-repetition system forces a GATHER action).
+        """
+        resource_type = context.parameters.get("resource_type", "food")
         return await context.world.gather(resource_type)
 
     async def _handle_build(self, context: ActionContext) -> dict[str, Any]:

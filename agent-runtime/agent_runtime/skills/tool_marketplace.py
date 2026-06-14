@@ -4,6 +4,12 @@ The tool_marketplace skill enables an agent to interact with the world-engine's
 Tool Marketplace API — list tools, browse/search, purchase, rent, rate, and
 manage their own tool listings. Higher levels unlock advanced marketplace
 operations (renting, bulk operations, analytics).
+
+Backend support status (``world-engine/src/api_tool_marketplace.rs``):
+    All 16 routes are implemented under ``/api/v1/tool-marketplace/*``.
+    If a route is temporarily unavailable (deployment lag, feature flag),
+    the client methods degrade gracefully — logging a warning and returning
+    a safe empty result instead of raising an unhandled exception.
 """
 
 from __future__ import annotations
@@ -44,6 +50,11 @@ class ListingMode(str, Enum):
 class ToolMarketplaceClient:
     """Async client for the world-engine Tool Marketplace REST API.
 
+    All methods degrade gracefully on HTTP errors (404/500/etc.):
+    they log a warning and return a safe empty result instead of raising.
+    Callers that need to distinguish success from failure can check
+    the ``error`` key in the returned dict.
+
     Usage::
 
         client = ToolMarketplaceClient("http://localhost:3000")
@@ -59,22 +70,55 @@ class ToolMarketplaceClient:
         return f"{self._base_url}{path}"
 
     async def _get(self, path: str, params: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
-        async with httpx.AsyncClient(timeout=self._timeout) as client:
-            resp = await client.get(self._url(path), params=params)
-            resp.raise_for_status()
-            return resp.json()
+        try:
+            async with httpx.AsyncClient(timeout=self._timeout) as client:
+                resp = await client.get(self._url(path), params=params)
+                resp.raise_for_status()
+                return resp.json()
+        except httpx.HTTPStatusError as exc:
+            logger.warning(
+                "Tool Marketplace GET %s failed: %s — returning empty result",
+                path,
+                exc.response.status_code,
+            )
+            return {"data": [], "error": str(exc)}
+        except httpx.HTTPError as exc:
+            logger.warning("Tool Marketplace GET %s failed: %s", path, exc)
+            return {"data": [], "error": str(exc)}
 
     async def _post(self, path: str, json: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
-        async with httpx.AsyncClient(timeout=self._timeout) as client:
-            resp = await client.post(self._url(path), json=json)
-            resp.raise_for_status()
-            return resp.json()
+        try:
+            async with httpx.AsyncClient(timeout=self._timeout) as client:
+                resp = await client.post(self._url(path), json=json)
+                resp.raise_for_status()
+                return resp.json()
+        except httpx.HTTPStatusError as exc:
+            logger.warning(
+                "Tool Marketplace POST %s failed: %s — returning error result",
+                path,
+                exc.response.status_code,
+            )
+            return {"error": str(exc)}
+        except httpx.HTTPError as exc:
+            logger.warning("Tool Marketplace POST %s failed: %s", path, exc)
+            return {"error": str(exc)}
 
     async def _put(self, path: str, json: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
-        async with httpx.AsyncClient(timeout=self._timeout) as client:
-            resp = await client.put(self._url(path), json=json)
-            resp.raise_for_status()
-            return resp.json()
+        try:
+            async with httpx.AsyncClient(timeout=self._timeout) as client:
+                resp = await client.put(self._url(path), json=json)
+                resp.raise_for_status()
+                return resp.json()
+        except httpx.HTTPStatusError as exc:
+            logger.warning(
+                "Tool Marketplace PUT %s failed: %s — returning error result",
+                path,
+                exc.response.status_code,
+            )
+            return {"error": str(exc)}
+        except httpx.HTTPError as exc:
+            logger.warning("Tool Marketplace PUT %s failed: %s", path, exc)
+            return {"error": str(exc)}
 
     # -- Tool CRUD --
 
@@ -203,6 +247,8 @@ class ToolMarketplaceClient:
 
     async def get_balance(self, agent_id: str) -> int:
         result = await self._get(f"/api/v1/tool-marketplace/balance/{agent_id}")
+        if isinstance(result, dict) and "error" in result:
+            return 0
         data = result.get("data", result)
         return data.get("balance", 0)
 

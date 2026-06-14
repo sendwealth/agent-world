@@ -219,6 +219,8 @@ def _perception_to_decision(perception: Perception) -> DecisionPerception:
         elif isinstance(msg, str):
             recent_events.append(msg)
 
+    recent_actions = perception.market_state.get("recent_actions", [])
+
     return DecisionPerception(
         tick=perception.tick,
         nearby_agents=nearby_agents,
@@ -227,6 +229,7 @@ def _perception_to_decision(perception: Perception) -> DecisionPerception:
         recent_events=recent_events,
         pending_oracles=pending_oracles,
         pending_bounties=pending_bounties,
+        recent_actions=recent_actions,
     )
 
 

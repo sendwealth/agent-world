@@ -106,6 +106,43 @@ class FakeWorldClient:
             raise RuntimeError("Exploration blocked")
         return {"status": "explored", "discoveries": ["a mine", "a market"]}
 
+    async def practice_skill(self, skill_name: str) -> dict[str, Any]:
+        self._call_count += 1
+        self.calls.append(("practice_skill", {"skill_name": skill_name}))
+        if self._should_fail or self._call_count <= self._fail_times:
+            raise RuntimeError("Practice session interrupted")
+        return {
+            "action": "practice_skill",
+            "status": "practiced",
+            "skill": skill_name,
+            "received": True,
+        }
+
+    async def check_bounties(self) -> dict[str, Any]:
+        self._call_count += 1
+        self.calls.append(("check_bounties", {}))
+        if self._should_fail or self._call_count <= self._fail_times:
+            raise RuntimeError("Bounty board unavailable")
+        return {
+            "status": "ok",
+            "bounties": [
+                {
+                    "id": "bounty-001",
+                    "title": "Gather 50 wood",
+                    "description": "Collect and deliver 50 units of wood",
+                    "reward": 100,
+                    "status": "open",
+                },
+                {
+                    "id": "bounty-002",
+                    "title": "Build watchtower",
+                    "description": "Construct a stone watchtower near the river",
+                    "reward": 250,
+                    "status": "open",
+                },
+            ],
+        }
+
 
 # ---------------------------------------------------------------------------
 # Enum tests
@@ -441,6 +478,7 @@ class TestExecuteTeachSkill:
 class TestExecutePracticeSkill:
     @pytest.mark.asyncio
     async def test_success_with_skill_name(self) -> None:
+        """practice_skill calls world client and returns practiced status."""
         executor = ActionExecutor()
         agent = FakeAgentState(tokens=100)
         world = FakeWorldClient()
@@ -458,12 +496,14 @@ class TestExecutePracticeSkill:
         assert result.data["action"] == "practice_skill"
         assert result.data["status"] == "practiced"
         assert result.data["skill"] == "foraging"
-        # Self-practice needs no world interaction
-        assert len(world.calls) == 0
+        # Must call world client (not a local stub)
+        assert len(world.calls) == 1
+        assert world.calls[0][0] == "practice_skill"
+        assert world.calls[0][1]["skill_name"] == "foraging"
 
     @pytest.mark.asyncio
     async def test_success_without_skill_name(self) -> None:
-        """No skill_name is fine — practice_skill needs no required params."""
+        """No skill_name still works — passes empty string to world client."""
         executor = ActionExecutor()
         agent = FakeAgentState(tokens=100)
         world = FakeWorldClient()
@@ -474,7 +514,9 @@ class TestExecutePracticeSkill:
         assert result.status == ActionStatus.SUCCESS
         assert result.token_cost == 8
         assert result.data["status"] == "practiced"
-        assert len(world.calls) == 0
+        # World client is still called even with empty skill_name
+        assert len(world.calls) == 1
+        assert world.calls[0][0] == "practice_skill"
 
     @pytest.mark.asyncio
     async def test_no_target_required(self) -> None:
@@ -497,6 +539,113 @@ class TestExecutePracticeSkill:
         assert result.status == ActionStatus.SUCCESS
         assert result.attempts == 1
         assert result.error is None
+
+    @pytest.mark.asyncio
+    async def test_world_client_call_recorded(self) -> None:
+        """The practice_skill call must be visible in world.calls for audit."""
+        executor = ActionExecutor()
+        agent = FakeAgentState(tokens=100)
+        world = FakeWorldClient()
+        ctx = ActionContext(
+            agent=agent,
+            world=world,
+            parameters={"skill_name": "crafting"},
+        )
+
+        await executor.execute(ActionType.PRACTICE_SKILL, ctx)
+
+        # Verify the call is recorded with correct method name and params
+        assert len(world.calls) == 1
+        method, params = world.calls[0]
+        assert method == "practice_skill"
+        assert params == {"skill_name": "crafting"}
+
+    @pytest.mark.asyncio
+    async def test_skill_data_in_result(self) -> None:
+        """Result data must contain skill field so downstream modules can
+        track which skill was practiced."""
+        executor = ActionExecutor()
+        agent = FakeAgentState(tokens=100)
+        world = FakeWorldClient()
+        ctx = ActionContext(
+            agent=agent,
+            world=world,
+            parameters={"skill_name": "mining"},
+        )
+
+        result = await executor.execute(ActionType.PRACTICE_SKILL, ctx)
+
+        assert result.status == ActionStatus.SUCCESS
+        assert result.data["skill"] == "mining"
+        assert result.data["received"] is True
+
+
+class TestExecuteCheckBounties:
+    @pytest.mark.asyncio
+    async def test_success(self) -> None:
+        """check_bounties returns bounties matching the Bounty schema."""
+        executor = ActionExecutor()
+        agent = FakeAgentState(tokens=100)
+        world = FakeWorldClient()
+        ctx = ActionContext(agent=agent, world=world, parameters={})
+
+        result = await executor.execute(ActionType.CHECK_BOUNTIES, ctx)
+
+        assert result.status == ActionStatus.SUCCESS
+        assert result.token_cost == 2
+        assert agent.tokens == 98
+        assert len(world.calls) == 1
+        assert world.calls[0][0] == "check_bounties"
+
+    @pytest.mark.asyncio
+    async def test_bounty_fields_match_schema(self) -> None:
+        """Every bounty in the response must have id, title, description,
+        reward, and status fields — matching the Bounty schema."""
+        executor = ActionExecutor()
+        agent = FakeAgentState(tokens=100)
+        world = FakeWorldClient()
+        ctx = ActionContext(agent=agent, world=world, parameters={})
+
+        result = await executor.execute(ActionType.CHECK_BOUNTIES, ctx)
+
+        assert result.status == ActionStatus.SUCCESS
+        bounties = result.data["bounties"]
+        assert len(bounties) >= 1
+        for bounty in bounties:
+            assert "id" in bounty
+            assert "title" in bounty
+            assert "description" in bounty
+            assert "reward" in bounty
+            assert "status" in bounty
+
+    @pytest.mark.asyncio
+    async def test_insufficient_tokens(self) -> None:
+        executor = ActionExecutor()
+        agent = FakeAgentState(tokens=1)
+        world = FakeWorldClient()
+        ctx = ActionContext(agent=agent, world=world, parameters={})
+
+        result = await executor.execute(ActionType.CHECK_BOUNTIES, ctx)
+
+        assert result.status == ActionStatus.INSUFFICIENT_TOKENS
+        assert result.token_cost == 0
+        assert len(world.calls) == 0
+
+    @pytest.mark.asyncio
+    async def test_no_agent_fields_in_bounty(self) -> None:
+        """Bounties must NOT contain agent fields like 'name' or 'agent_id'
+        — regression guard for the old discover-based mapping bug."""
+        executor = ActionExecutor()
+        agent = FakeAgentState(tokens=100)
+        world = FakeWorldClient()
+        ctx = ActionContext(agent=agent, world=world, parameters={})
+
+        result = await executor.execute(ActionType.CHECK_BOUNTIES, ctx)
+
+        assert result.status == ActionStatus.SUCCESS
+        for bounty in result.data["bounties"]:
+            assert "agent_id" not in bounty
+            assert "name" not in bounty
 
 
 class TestExecuteRest:

@@ -2,14 +2,14 @@
 
 Provides endpoints for creating, running, and analyzing A/B experiments.
 
-Endpoints:
-    POST   /api/v1/experiments                  — Create a new A/B experiment
-    GET    /api/v1/experiments                   — List all experiments
-    GET    /api/v1/experiments/{id}              — Get experiment details
-    POST   /api/v1/experiments/{id}/run          — Run an experiment
-    GET    /api/v1/experiments/{id}/results      — Get results with statistical tests
-    GET    /api/v1/experiments/{id}/report       — Get report (markdown/html/pdf)
-    POST   /api/v1/experiments/{id}/compare      — Compare two experiment runs
+Endpoints (aligned with Rust backend ``world-engine/src/api_experiment.rs``):
+    POST   /api/v2/experiments                  — Create a new A/B experiment
+    GET    /api/v2/experiments                   — List all experiments
+    GET    /api/v2/experiments/{id}              — Get experiment details
+    POST   /api/v2/experiments/{id}/run          — Run an experiment
+    GET    /api/v2/experiments/{id}/results      — Get results with statistical tests
+    GET    /api/v2/experiments/{id}/report       — Get report (markdown/html/pdf)
+    POST   /api/v2/experiments/{id}/compare      — Compare two experiment runs
 
 Usage::
 
@@ -127,12 +127,12 @@ def create_app(
     """
     app = FastAPI(
         title=title,
-        version="1.0.0",
+        version="2.0.0",
         description="A/B Experiment Framework API for Agent World",
     )
 
     @app.post(
-        "/api/v1/experiments",
+        "/api/v2/experiments",
         status_code=201,
         summary="Create a new A/B experiment",
     )
@@ -206,7 +206,7 @@ def create_app(
         }
 
     @app.get(
-        "/api/v1/experiments",
+        "/api/v2/experiments",
         summary="List all experiments",
     )
     async def list_experiments() -> list[dict[str, Any]]:
@@ -222,7 +222,7 @@ def create_app(
         ]
 
     @app.get(
-        "/api/v1/experiments/{experiment_id}",
+        "/api/v2/experiments/{experiment_id}",
         summary="Get experiment details",
     )
     async def get_experiment(experiment_id: str) -> dict[str, Any]:
@@ -243,7 +243,7 @@ def create_app(
         }
 
     @app.post(
-        "/api/v1/experiments/{experiment_id}/run",
+        "/api/v2/experiments/{experiment_id}/run",
         summary="Run an experiment",
     )
     async def run_experiment(
@@ -294,7 +294,7 @@ def create_app(
         }
 
     @app.get(
-        "/api/v1/experiments/{experiment_id}/results",
+        "/api/v2/experiments/{experiment_id}/results",
         summary="Get experiment results with statistical tests",
     )
     async def get_results(
@@ -332,7 +332,7 @@ def create_app(
         }
 
     @app.get(
-        "/api/v1/experiments/{experiment_id}/report",
+        "/api/v2/experiments/{experiment_id}/report",
         summary="Get experiment report",
     )
     async def get_report(
@@ -390,7 +390,7 @@ def create_app(
         return {"report": report, "format": format}
 
     @app.post(
-        "/api/v1/experiments/{experiment_id}/compare",
+        "/api/v2/experiments/{experiment_id}/compare",
         summary="Compare two experiment runs",
     )
     async def compare_runs(

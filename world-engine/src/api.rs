@@ -456,7 +456,9 @@ fn make_test_state(
             }
         },
         investment_system: None,
-        rule_engine: None,
+        rule_engine: Some(Arc::new(Mutex::new(RuleEngine::with_event_bus(
+            event_bus.clone(),
+        )))),
         tool_marketplace: None,
         federation: Some(Arc::new(Mutex::new(
             crate::a2a::federation::FederationEngine::with_shared_event_bus(event_bus.clone()),
@@ -1135,6 +1137,35 @@ mod tests {
             .unwrap();
 
         assert_eq!(response.status(), StatusCode::SERVICE_UNAVAILABLE);
+    }
+
+    /// Regression for the `rule_engine: None` tech debt in `make_test_state`.
+    ///
+    /// The default test-state constructor now wires up a `RuleEngine` consistent
+    /// with `main.rs`, so requests to DSL routes (`/api/v1/rules/dsl/*`) are
+    /// reachable from the default test state instead of returning 503 or panicking.
+    #[tokio::test]
+    async fn test_default_test_state_supports_dsl_routes() {
+        let bus = Arc::new(EventBus::new(256));
+        let board = Arc::new(Mutex::new(TaskBoard::new()));
+        let tmp = tempfile::tempdir().expect("tempdir");
+        let wal = Arc::new(Mutex::new(WAL::new(tmp.path())));
+        let (tick_tx, tick_rx) = watch::channel(0u64);
+        let state = make_test_state(board, wal, bus, tick_tx, tick_rx, None);
+        let app = build_full_router(state);
+
+        // GET /api/v1/rules/dsl/rules — should return 200 OK (empty list),
+        // NOT 503 "rule engine not configured" and NOT a panic.
+        let response = app
+            .oneshot(
+                axum::http::Request::builder()
+                    .uri("/api/v1/rules/dsl/rules")
+                    .body(Body::empty())
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        assert_eq!(response.status(), StatusCode::OK);
     }
 
     #[tokio::test]

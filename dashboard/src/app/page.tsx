@@ -1,11 +1,14 @@
 "use client";
 
+import { useRouter } from "next/navigation";
 import { StatCards } from "@/components/StatCards";
 import { EventStream } from "@/components/EventStream";
 import { LeaderboardSection } from "@/components/Leaderboard";
+import { postJSON } from "@/lib/api";
 import { useWorldState } from "@/hooks/useWorldState";
 
 export default function DashboardPage() {
+  const router = useRouter();
   const { stats, events, connected, error } = useWorldState();
 
   return (
@@ -39,13 +42,37 @@ export default function DashboardPage() {
           <div className="rounded-xl border border-zinc-800 bg-zinc-900/50 p-3 md:p-4">
             <h2 className="mb-3 text-sm font-semibold text-zinc-200">快速操作</h2>
             <div className="space-y-2">
-              <button className="w-full min-h-[44px] rounded-lg bg-blue-500/10 border border-blue-500/20 px-4 py-2.5 text-sm font-medium text-blue-400 transition-colors hover:bg-blue-500/20">
+              <button
+                onClick={async () => {
+                  const name = window.prompt("新 Agent 名称:");
+                  if (!name?.trim()) return;
+                  try {
+                    await postJSON("/api/v1/agents", { name: name.trim() });
+                    window.alert(`Agent "${name}" 已创建`);
+                  } catch (e) {
+                    window.alert(`创建失败: ${e instanceof Error ? e.message : "未知错误"}`);
+                  }
+                }}
+                className="w-full min-h-[44px] rounded-lg bg-blue-500/10 border border-blue-500/20 px-4 py-2.5 text-sm font-medium text-blue-400 transition-colors hover:bg-blue-500/20"
+              >
                 🤖 创建 Agent
               </button>
-              <button className="w-full min-h-[44px] rounded-lg bg-purple-500/10 border border-purple-500/20 px-4 py-2.5 text-sm font-medium text-purple-400 transition-colors hover:bg-purple-500/20">
+              <button
+                onClick={() => router.push("/marketplace")}
+                className="w-full min-h-[44px] rounded-lg bg-purple-500/10 border border-purple-500/20 px-4 py-2.5 text-sm font-medium text-purple-400 transition-colors hover:bg-purple-500/20"
+              >
                 📋 发布任务
               </button>
-              <button className="w-full min-h-[44px] rounded-lg bg-emerald-500/10 border border-emerald-500/20 px-4 py-2.5 text-sm font-medium text-emerald-400 transition-colors hover:bg-emerald-500/20">
+              <button
+                onClick={async () => {
+                  try {
+                    await postJSON("/api/v1/tick", { count: 100 });
+                  } catch (e) {
+                    window.alert(`快进失败: ${e instanceof Error ? e.message : "未知错误"}`);
+                  }
+                }}
+                className="w-full min-h-[44px] rounded-lg bg-emerald-500/10 border border-emerald-500/20 px-4 py-2.5 text-sm font-medium text-emerald-400 transition-colors hover:bg-emerald-500/20"
+              >
                 ⏩ 快进 100 Tick
               </button>
             </div>

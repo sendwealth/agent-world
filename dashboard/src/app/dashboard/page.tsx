@@ -505,7 +505,6 @@ function RightSidebar({ stats }: { stats: { tick: number; totalTokens: number; t
           <ActionBtn icon="+" label="Spawn 新 Agent" onClick={handleSpawn} />
           <ActionBtn icon="$" label="发布任务悬赏" onClick={() => router.push("/marketplace")} />
           <ActionBtn icon="I" label="投资 Agent" onClick={() => router.push("/agents")} />
-          <ActionBtn icon="P" label="调整世界参数" disabled />
         </div>
         <div className="mt-2">
           <ActionBtn icon="?" label="查看墓碑" onClick={() => router.push("/agents")} />

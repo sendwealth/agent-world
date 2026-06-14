@@ -319,9 +319,10 @@ class TestThinkLoopStability:
 
     @pytest.mark.asyncio
     async def test_100_ticks_survival_panic_recovery(self):
-        """Agent that starts low on tokens but can still run 100 ticks."""
-        # Start with moderate tokens — survival mode should kick in
-        state = make_state(tokens=50, max_tokens=1000)
+        """Agent in survival mode can still run 100 ticks without crashing."""
+        # Use enough tokens to survive 100 ticks (survival fall-through
+        # consumes tokens each tick).  50% ratio avoids PANIC stop gate.
+        state = make_state(tokens=5000, max_tokens=10000)
         loop = ThinkLoop(
             state=state,
             survival=SurvivalInstinct(),

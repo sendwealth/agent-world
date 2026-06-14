@@ -139,9 +139,10 @@ migration:
 
 # 联邦配置（多世界互联，Phase 1 禁用）/ Federation (multi-world interconnect, disabled in Phase 1)
 federation:
+  enabled: false               # Phase 1 禁用；Phase 2 设为 true 启用 peer 发现 / Disabled in Phase 1; set true in Phase 2 to enable peer discovery
   heartbeat_timeout_secs: 90   # 心跳超时 / Heartbeat timeout
   world_id: "agent-world-v1"   # 本世界唯一标识 / Unique world identifier
-  bootstrap_peers: []          # 种子节点列表 / Bootstrap peer nodes
+  bootstrap_peers: []          # 种子节点列表（Phase 2 填入 peer 世界 URL）/ Bootstrap peer nodes (add peer world URLs in Phase 2)
 
 # 插件系统配置 / Plugin system
 # plugins:

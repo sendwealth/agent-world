@@ -284,6 +284,19 @@ class DiaryProvider(Protocol):
     ) -> None: ...
 
 
+class FederationHook(Protocol):
+    """Optional hook for periodic federation peer discovery.
+
+    Called once per tick; the implementation decides its own cadence.
+    When federation is enabled (genesis.yaml ``federation.enabled: true``),
+    the hook discovers peer worlds via the World Engine federation API so the
+    agent is aware of the wider multi-world network.  Must never raise —
+    implementations swallow failures internally.
+    """
+
+    async def sync(self, tick: int) -> None: ...
+
+
 # ---------------------------------------------------------------------------
 # Default (mock) providers
 # ---------------------------------------------------------------------------
@@ -435,6 +448,7 @@ class ThinkLoop:
         diary_provider: DiaryProvider | None = None,
         feed_integration: FeedIntegration | None = None,
         language_experiment_hook: LanguageExperimentHook | None = None,
+        federation_hook: FederationHook | None = None,
     ) -> None:
         self.state = state
         self.survival = survival
@@ -488,6 +502,8 @@ class ThinkLoop:
         self._feed = feed_integration
         # Language experiment hook — optional, vocabulary constraints and efficiency
         self._language_experiment_hook = language_experiment_hook
+        # Federation hook — optional, periodic peer discovery (Phase 2)
+        self._federation_hook = federation_hook
 
         # Runtime state
         self._tick: int = 0
@@ -743,6 +759,17 @@ class ThinkLoop:
             except Exception:
                 logger.debug(
                     "Tick %d: model swap check failed (non-fatal)",
+                    self._tick,
+                    exc_info=True,
+                )
+
+        # 0c. Federation peer discovery (optional — Phase 2)
+        if self._federation_hook is not None:
+            try:
+                await self._federation_hook.sync(self._tick)
+            except Exception:
+                logger.debug(
+                    "Tick %d: federation sync failed (non-fatal)",
                     self._tick,
                     exc_info=True,
                 )

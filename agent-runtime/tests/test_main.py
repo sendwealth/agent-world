@@ -339,7 +339,8 @@ class TestRESTWorldClientEndpoints:
                 "payload": {"content": "SOS"},
             })
             _args, kwargs = mock_req.call_args
-            assert kwargs["json"]["payload"] == _json.dumps({"content": "SOS"}, separators=(",", ":"))
+            expected = _json.dumps({"content": "SOS"}, separators=(",", ":"))
+            assert kwargs["json"]["payload"] == expected
 
     @pytest.mark.asyncio
     async def test_send_message_keeps_string_payload(self) -> None:

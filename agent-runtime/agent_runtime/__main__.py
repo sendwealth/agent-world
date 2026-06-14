@@ -989,6 +989,23 @@ async def run_agent(config: RuntimeConfig) -> RunStats:
         except Exception:
             logger.debug("EmotionEngine setup failed (non-fatal)", exc_info=True)
 
+        # Build federation sync hook (optional — Phase 2; disabled by default).
+        # When federation is enabled in genesis.yaml the hook periodically
+        # discovers peer worlds; otherwise it is None and the loop is unchanged.
+        federation_hook: Any | None = None
+        try:
+            from agent_runtime.federation import build_federation_sync
+
+            federation_hook = build_federation_sync(config.world.engine_url)
+            if federation_hook is not None:
+                logger.info(
+                    "Federation sync enabled (world_id=%s, bootstrap_peers=%d)",
+                    federation_hook.config.world_id,
+                    len(federation_hook.config.bootstrap_peers),
+                )
+        except Exception:
+            logger.debug("Federation sync setup failed (non-fatal)", exc_info=True)
+
         think_loop = ThinkLoop(
             state=state,
             survival=survival,
@@ -1001,6 +1018,7 @@ async def run_agent(config: RuntimeConfig) -> RunStats:
             social_context_provider=social_context_provider,
             social_nearby_cache=_social_nearby_cache,
             emotion_hook=emotion_hook,
+            federation_hook=federation_hook,
         )
 
         # Graceful shutdown on SIGINT

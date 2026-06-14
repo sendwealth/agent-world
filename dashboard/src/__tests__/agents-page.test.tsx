@@ -29,7 +29,7 @@ function mockFetchResponse(data: unknown) {
 
 const mockAgents: Agent[] = [
   { id: "agent-1", name: "Alpha", phase: "adult", money: 1500, tokens: 200, reputation: 0.8, skills: { mining: 5, trading: 3 }, alive: true, age: 100, createdAt: "2024-01-01" },
-  { id: "agent-2", name: "Beta", phase: "child", money: 50, tokens: 10, reputation: 0.2, skills: {}, alive: false, age: 5, createdAt: "2024-01-02" },
+  { id: "agent-2", name: "Beta", phase: "childhood", money: 50, tokens: 10, reputation: 0.2, skills: {}, alive: false, age: 5, createdAt: "2024-01-02" },
   { id: "agent-3", name: "Gamma", phase: "elder", money: 500000, tokens: 5000, reputation: 0.95, skills: { crafting: 10, leadership: 8, trading: 7 }, alive: true, age: 800, createdAt: "2024-01-03" },
 ];
 

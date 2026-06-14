@@ -407,13 +407,24 @@ class ActionExecutor:
     async def _handle_send_message(self, context: ActionContext) -> dict[str, Any]:
         """Send a message to another agent via A2A.
 
-        Injects ``from_agent`` and ``to_agent`` if the LLM omitted them,
-        since the World Engine requires both fields.
+        Injects ``from_agent``, ``to_agent``, ``message_type``, and ``payload``
+        if the LLM omitted them, since the World Engine requires all four fields.
+        ``payload`` must be a JSON string, not a dict.
         """
+        import json
+
         payload = dict(context.parameters.get("payload", context.parameters))
+        # Ensure required fields
         payload.setdefault("from_agent", str(context.agent.id))
         payload.setdefault("to_agent", context.parameters.get("target_agent_id", ""))
         payload.setdefault("message_type", payload.pop("type", "INFORM"))
+        # World Engine expects payload as a JSON string
+        if "payload" not in payload:
+            payload["payload"] = json.dumps(
+                {"text": context.parameters.get("message", "")}
+            )
+        elif isinstance(payload["payload"], (dict, list)):
+            payload["payload"] = json.dumps(payload["payload"])
         return await context.world.send_message(payload)
 
     async def _handle_claim_task(self, context: ActionContext) -> dict[str, Any]:

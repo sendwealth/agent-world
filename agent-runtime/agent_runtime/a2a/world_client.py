@@ -157,6 +157,30 @@ class GRPCWorldClient:
             logger.exception("explore failed")
             raise
 
+    async def practice_skill(self, skill_name: str) -> dict[str, Any]:
+        """Practice a skill — sent as a WILL message to the World Engine.
+
+        The engine records the practice attempt and may update the agent's
+        skill proficiency server-side.
+        """
+        try:
+            ack = await self._client.send_message(
+                message_type=a2a_pb2.WILL,
+                payload={
+                    "action": "practice_skill",
+                    "skill_name": skill_name,
+                },
+            )
+            return {
+                "action": "practice_skill",
+                "status": "practiced",
+                "skill": skill_name,
+                "received": ack.received,
+            }
+        except Exception:
+            logger.exception("practice_skill failed")
+            raise
+
     async def move(self, direction: str) -> dict[str, Any]:
         """Move the agent in a direction — sent as a WILL message."""
         try:
@@ -238,16 +262,30 @@ class GRPCWorldClient:
             raise
 
     async def check_bounties(self) -> dict[str, Any]:
-        """Check available bounties — sent as a DISCOVER message."""
+        """Check available bounties — sent as an INFORM message to request the
+        current bounty board from the World Engine.
+
+        Returns bounties with fields matching the Bounty schema:
+        ``id``, ``title``, ``description``, ``reward``, ``status``.
+        """
         try:
-            response = await self._client.discover(capabilities=["bounties"])
-            return {
-                "status": "ok",
-                "bounties": [
-                    {"id": a.agent_id, "name": a.name}
-                    for a in response.agents
-                ],
-            }
+            ack = await self._client.send_message(
+                message_type=a2a_pb2.INFORM,
+                payload={"action": "check_bounties"},
+            )
+            bounties: list[dict[str, Any]] = []
+            if ack.received and ack.bounties:
+                for bp in ack.bounties:
+                    bounties.append(
+                        {
+                            "id": bp.bounty_id,
+                            "title": bp.title,
+                            "description": bp.description,
+                            "reward": bp.reward,
+                            "status": bp.status if bp.status else "open",
+                        }
+                    )
+            return {"status": "ok", "bounties": bounties}
         except Exception:
             logger.exception("check_bounties failed")
             raise

@@ -808,63 +808,6 @@ class ThinkLoop:
         with trace_phase("decide", str(self.state.id)):
             decision = await self._decision.decide(self.state, perception, survival_action)
 
-        # 3a. Inject target_agent_id for socialize if the LLM omitted it.
-        # glm-4-flash often decides socialize but doesn't include the target
-        # ID in parameters, causing the action to fail.  Fall back to the
-        # recommended target from social context, or a random nearby agent.
-        if (
-            decision.action_type == ActionType.SOCIALIZE
-            and "target_agent_id" not in decision.parameters
-        ):
-            target = ""
-            # Try social context provider's recommended target first
-            if self._social_context_provider is not None:
-                try:
-                    ctx = self._social_context_provider.build_social_context(
-                        agent_id=str(self.state.id), tick=self._tick,
-                    )
-                    if ctx is not None:
-                        target = getattr(ctx, "recommended_target_id", "") or ""
-                except Exception:
-                    pass
-            # Fall back to a random nearby agent
-            if not target and self._social_nearby_cache:
-                target = random.choice(self._social_nearby_cache)
-            # Final fallback: query world engine REST API for any alive agent.
-            # Use httpx directly since the world_client may be GRPCWorldClient
-            # (which lacks a _request method).
-            if not target:
-                try:
-                    import os
-                    import httpx
-                    base_url = os.environ.get(
-                        "WORLD_ENGINE_URL", "http://world-engine:8080",
-                    )
-                    async with httpx.AsyncClient(timeout=5) as client:
-                        resp = await client.get(f"{base_url}/api/v1/agents")
-                        all_agents = resp.json()
-                        if isinstance(all_agents, dict):
-                            all_agents = all_agents.get("agents", [])
-                        candidates = [
-                            a.get("id", "") for a in all_agents
-                            if a.get("id") and a.get("id") != str(self.state.id)
-                            and a.get("alive", True)
-                        ]
-                        if candidates:
-                            target = random.choice(candidates)
-                except Exception:
-                    pass
-            if target:
-                from dataclasses import replace as dc_replace
-                decision = dc_replace(
-                    decision,
-                    parameters={**decision.parameters, "target_agent_id": target},
-                )
-                logger.debug(
-                    "Tick %d: injected target_agent_id=%s for socialize",
-                    self._tick, target,
-                )
-
         # 3b. Record the chosen action for distribution metrics (P2-2) so
         # action diversity can be monitored over time.
         metrics.record_action(decision.action_type.value)

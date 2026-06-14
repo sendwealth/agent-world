@@ -452,10 +452,10 @@ class TestThinkLoopSurvivalBypass:
         )
         await loop.run(max_ticks=5)
         assert loop.tick == 5
-        # PANIC initially bypasses the LLM, but after max_urgent_retries (3)
-        # consecutive emergency-action failures the loop falls back to normal
-        # LLM decision-making to avoid an infinite emergency loop.
-        assert 0 < decision_calls < 5
+        # PANIC mode now always falls through to normal LLM decision-making
+        # after emergency actions fire (fire-and-forget).  So every tick
+        # should invoke the decision provider.
+        assert decision_calls == 5
 
     @pytest.mark.asyncio
     async def test_urgent_mode_skips_decision(self):
@@ -480,10 +480,10 @@ class TestThinkLoopSurvivalBypass:
         )
         await loop.run(max_ticks=5)
         assert loop.tick == 5
-        # URGENT initially bypasses the LLM, but after max_urgent_retries (3)
-        # consecutive emergency-action failures the loop falls back to normal
-        # LLM decision-making to avoid an infinite emergency loop.
-        assert 0 < decision_calls < 5
+        # URGENT mode now always falls through to normal LLM decision-making
+        # after emergency actions fire (fire-and-forget).  So every tick
+        # should invoke the decision provider.
+        assert decision_calls == 5
 
     @pytest.mark.asyncio
     async def test_normal_mode_calls_decision(self):

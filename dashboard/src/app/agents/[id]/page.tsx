@@ -217,35 +217,53 @@ export default function AgentDetailPage() {
   }, [agent]);
 
   // ─── Action handlers ─────────────────────────────────────
-  // Each handler attempts a POST to the appropriate API endpoint. If the
-  // feature is not implemented on the backend (404/405/etc.), the user sees
-  // a "功能开发中" message instead of the button silently doing nothing.
 
+  // Investment uses the product/share-based system: POST /api/v1/investments/buy.
+  // The flow is: find an existing investment product for this agent (by target_id),
+  // or create one if none exists, then buy shares.
   const handleInvest = async () => {
     if (!agent) return;
-    const amountStr = window.prompt(`投资 ${agent.name} 的金额 (Money):`);
-    if (!amountStr) return;
-    const amount = Number(amountStr);
-    if (isNaN(amount) || amount <= 0) {
-      showActionMsg("金额无效", false);
+    const sharesStr = window.prompt(`投资 ${agent.name} — 购买份额数:`, "10");
+    if (!sharesStr) return;
+    const shares = Number(sharesStr);
+    if (isNaN(shares) || shares <= 0) {
+      showActionMsg("份额数无效", false);
       return;
     }
+
     try {
-      await postJSON(`/api/v1/investments/agents/${agentId}/invest`, {
-        agent_id: agentId,
-        amount,
-        currency: "money",
+      // 1. Find or create an investment product for this agent
+      const products = await fetchJSON<Array<{ id: string; target_id: string }>>(
+        "/api/v1/investments/products",
+      );
+      let product = products.find((p) => p.target_id === agentId);
+
+      if (!product) {
+        // Create a new investment product for this agent
+        product = await postJSON<{ id: string; target_id: string }>(
+          "/api/v1/investments/products",
+          {
+            target_id: agentId,
+            target_name: agent.name,
+            entity_type: "agent",
+            total_shares: 1000,
+            price_per_share: 10,
+            owner_id: agentId,
+          },
+        );
+      }
+
+      // 2. Buy shares via the investment system
+      await postJSON("/api/v1/investments/buy", {
+        product_id: product.id,
+        investor_id: "human",
+        shares,
       });
-      showActionMsg(`已投资 ${agent.name} $${amount.toLocaleString()}`);
+      showActionMsg(`已购买 ${agent.name} ${shares} 份额`);
       loadAgent();
     } catch (e) {
       const msg = e instanceof Error ? e.message : String(e);
-      // 404 / 405 → endpoint not implemented yet
-      if (/404|405|not found|method not allowed/i.test(msg)) {
-        showActionMsg("功能开发中：Agent 投资接口尚未实现", false);
-      } else {
-        showActionMsg(`投资失败: ${msg}`, false);
-      }
+      showActionMsg(`投资失败: ${msg}`, false);
     }
   };
 
@@ -270,35 +288,27 @@ export default function AgentDetailPage() {
       showActionMsg(`任务「${title}」已发布`);
     } catch (e) {
       const msg = e instanceof Error ? e.message : String(e);
-      if (/404|405|not found|method not allowed/i.test(msg)) {
-        showActionMsg("功能开发中：任务发布接口尚未实现", false);
-      } else {
-        showActionMsg(`发布失败: ${msg}`, false);
-      }
+      showActionMsg(`发布失败: ${msg}`, false);
     }
   };
 
+  // Send a message to this agent via the A2A message system (POST /api/v1/messages).
+  // The backend messages endpoint accepts { from_agent, to_agent, message_type, payload }.
   const handleSendMessage = async () => {
     if (!agent) return;
     const content = window.prompt(`发送给 ${agent.name} 的消息:`);
     if (!content?.trim()) return;
     try {
-      // Try the feed-post endpoint (author = this agent's human observer)
-      await postJSON("/api/v1/feed/posts", {
-        author_id: "human",
-        author_name: "人类观察者",
-        content: `@${agent.name} ${content.trim()}`,
-        mood: "neutral",
-        tick: 0,
+      await postJSON("/api/v1/messages", {
+        from_agent: "human",
+        to_agent: agentId,
+        message_type: "dm",
+        payload: content.trim(),
       });
       showActionMsg(`消息已发送给 ${agent.name}`);
     } catch (e) {
       const msg = e instanceof Error ? e.message : String(e);
-      if (/404|405|not found|method not allowed/i.test(msg)) {
-        showActionMsg("功能开发中：Agent 私信接口尚未实现", false);
-      } else {
-        showActionMsg(`发送失败: ${msg}`, false);
-      }
+      showActionMsg(`发送失败: ${msg}`, false);
     }
   };
 

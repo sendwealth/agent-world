@@ -206,7 +206,7 @@
 206|206|
 207|207|| File | Issue | Severity |
 208|208||------|-------|----------|
-209|209|| `world-engine/src/api.rs` (test constructors) | `rule_engine: None` in test AppState constructors — only `main.rs` sets it to `Some`; tests that hit DSL routes will fail | Low |
+209|209|| _Resolved_ — `world-engine/src/api.rs` test constructors now default `rule_engine` to `Some(RuleEngine::with_event_bus(..))`, consistent with `main.rs`; DSL routes are reachable from the default test state. No open known issues remain. | ✓ |
 210|210|
 211|211|> **Note**: Previously tracked placeholder for `agent-runtime/agent_runtime/social/` (12 files) has been **resolved** — social/cultural modules are now wired into the think loop via `DefaultSocialContextProvider` → `SocialEngine` → `DecisionEngine`. Previously tracked placeholders in `selection.rs` and `competition.rs` have also been verified as resolved.
 212|212|

@@ -283,7 +283,6 @@ class DiaryProvider(Protocol):
     ) -> None: ...
 
 
-
 # ---------------------------------------------------------------------------
 # Default (mock) providers
 # ---------------------------------------------------------------------------
@@ -325,8 +324,8 @@ class MockDecisionProvider:
     # Weighted action pool: GATHER and MOVE are more frequent so they
     # produce visible state changes in the World Engine.
     _ACTION_WEIGHTS: list[tuple[ActionType, int]] = [
-        (ActionType.GATHER, 3),   # adds money in World Engine
-        (ActionType.MOVE, 3),     # changes position in World Engine
+        (ActionType.GATHER, 3),  # adds money in World Engine
+        (ActionType.MOVE, 3),  # changes position in World Engine
         (ActionType.EXPLORE, 2),
         (ActionType.REST, 1),
     ]
@@ -339,9 +338,7 @@ class MockDecisionProvider:
 
     def _weighted_choice(self, affordable: list[ActionType]) -> ActionType:
         """Pick a random action weighted by _ACTION_WEIGHTS."""
-        weights = {
-            at: w for at, w in self._ACTION_WEIGHTS if at in affordable
-        }
+        weights = {at: w for at, w in self._ACTION_WEIGHTS if at in affordable}
         if not weights:
             return affordable[0]
         actions = list(weights.keys())
@@ -365,9 +362,7 @@ class MockDecisionProvider:
         survival: SurvivalAction,
     ) -> Decision:
         all_actions = [at for at, _ in self._ACTION_WEIGHTS]
-        affordable = [
-            at for at in all_actions if self._executor.can_afford(at, state)
-        ]
+        affordable = [at for at in all_actions if self._executor.can_afford(at, state)]
 
         if not affordable:
             # Even REST should be free, but guard anyway.
@@ -579,9 +574,7 @@ class ThinkLoop:
         engine = self._unwrap_to_engine(self._decision)
         if engine is not None and hasattr(engine, "_social_provider"):
             object.__setattr__(engine, "_social_provider", provider)
-            logger.info(
-                "Injected SocialContextProvider into DecisionEngine"
-            )
+            logger.info("Injected SocialContextProvider into DecisionEngine")
             return
 
         logger.warning(
@@ -598,9 +591,7 @@ class ThinkLoop:
         engine = self._unwrap_to_engine(self._decision)
         if engine is not None and hasattr(engine, "_emotion_provider"):
             object.__setattr__(engine, "_emotion_provider", hook)
-            logger.info(
-                "Injected EmotionContextProvider into DecisionEngine"
-            )
+            logger.info("Injected EmotionContextProvider into DecisionEngine")
             return
 
         logger.warning(
@@ -701,17 +692,14 @@ class ThinkLoop:
 
         # --- Lifecycle gate: Dead agents do nothing ---
         if is_terminal(self.state.phase):
-            logger.info(
-                "Tick %d: agent is Dead — stopping think loop", self._tick
-            )
+            logger.info("Tick %d: agent is Dead — stopping think loop", self._tick)
             self.stop()
             return
 
         # --- Token exhaustion gate: stop before entering infinite panic ---
         if self.state.tokens <= 0:
             logger.warning(
-                "Tick %d: agent has 0 tokens — stopping think loop to prevent "
-                "infinite panic cycle",
+                "Tick %d: agent has 0 tokens — stopping think loop to prevent infinite panic cycle",
                 self._tick,
             )
             self.stop()
@@ -894,9 +882,7 @@ class ThinkLoop:
             # Fall back to rest if the chosen action is not allowed
             decision = Decision(
                 action_type=ActionType.REST,
-                reasoning=(
-                    f"Action blocked by phase {self.state.phase.value}, resting instead."
-                ),
+                reasoning=(f"Action blocked by phase {self.state.phase.value}, resting instead."),
             )
 
         logger.debug(
@@ -905,6 +891,17 @@ class ThinkLoop:
             decision.action_type.value,
             decision.reasoning,
         )
+
+        # 4b. Socialize target injection — deep fallback (SEN-693).
+        # The LLM frequently omits target_agent_id for socialize, and the
+        # perception's nearby_agents list may be empty (Discover RPC returned
+        # no agents or the gRPC perception provider silently failed).  Try
+        # multiple fallbacks before giving up; if all fail, downgrade to REST
+        # so we don't burn retries on a guaranteed ValueError.
+        if decision.action_type == ActionType.SOCIALIZE and not decision.parameters.get(
+            "target_agent_id"
+        ):
+            decision = await self._inject_socialize_target(decision, perception)
 
         # 5. Act
         with trace_phase("act", str(self.state.id)):
@@ -994,9 +991,7 @@ class ThinkLoop:
         if self._diary is not None and survival_action.mode != SurvivalMode.PANIC:
             try:
                 action_outcome = (
-                    action_result.status.value
-                    if action_result is not None
-                    else "unknown"
+                    action_result.status.value if action_result is not None else "unknown"
                 )
                 await self._diary.write_entry(
                     self.state,
@@ -1020,9 +1015,7 @@ class ThinkLoop:
                 personality = getattr(self.state, "personality", None)
                 if personality and hasattr(personality, "extraversion"):
                     extraversion = float(personality.extraversion)
-                await self._feed.on_tick(
-                    self._tick, mood=mood, extraversion=extraversion
-                )
+                await self._feed.on_tick(self._tick, mood=mood, extraversion=extraversion)
             except Exception:
                 logger.debug(
                     "Tick %d: feed integration error (non-fatal)",
@@ -1162,7 +1155,7 @@ class ThinkLoop:
             # Return cached perception but update tick and messages
             cached = self._perception_cache
             # Re-drain messages (always fresh)
-            if hasattr(self._perception, '_drain_messages'):
+            if hasattr(self._perception, "_drain_messages"):
                 fresh_messages = await self._perception._drain_messages()  # type: ignore[union-attr]
             else:
                 fresh_messages = cached.messages
@@ -1190,6 +1183,144 @@ class ThinkLoop:
     # ------------------------------------------------------------------
     # Action execution
     # ------------------------------------------------------------------
+
+    async def _inject_socialize_target(
+        self,
+        decision: Decision,
+        perception: Perception,
+    ) -> Decision:
+        """Inject ``target_agent_id`` for a SOCIALIZE action via deep fallback.
+
+        Three layers are tried in order (SEN-693):
+          1. ``social_context_provider.recommended_target_id``
+          2. ``perception.market_state['nearby_agents']`` (may differ from
+             the DecisionPerception's nearby_agents because the LLM
+             injection runs against a potentially stale / empty list)
+          3. ``world_client.explore()`` / ``discover()`` — direct query via
+             whatever world client is wired in (GRPCWorldClient or REST)
+
+        If all three fail the decision is downgraded to REST so the action
+        executor does not burn all retries on a guaranteed ValueError.
+        """
+        my_id = str(self.state.id)
+
+        # Fallback 1: social context provider recommended target
+        if self._social_context_provider is not None:
+            try:
+                social_ctx = self._social_context_provider.build_social_context(
+                    agent_id=my_id, tick=self._tick
+                )
+                if social_ctx is not None and social_ctx.recommended_target_id:
+                    logger.info(
+                        "Tick %d: injected target_agent_id=%s (social_context_provider)",
+                        self._tick,
+                        social_ctx.recommended_target_id,
+                    )
+                    return replace(
+                        decision,
+                        parameters={
+                            **decision.parameters,
+                            "target_agent_id": social_ctx.recommended_target_id,
+                        },
+                    )
+            except Exception:
+                logger.debug(
+                    "Tick %d: social_context_provider target lookup failed",
+                    self._tick,
+                    exc_info=True,
+                )
+
+        # Fallback 2: perception market_state nearby_agents
+        nearby = perception.market_state.get("nearby_agents", [])
+        for agent_info in nearby:
+            candidate = (
+                agent_info.get("agent_id") or agent_info.get("id") or agent_info.get("name")
+                if isinstance(agent_info, dict)
+                else agent_info
+            )
+            if candidate and str(candidate) != my_id:
+                candidate = str(candidate)
+                logger.info(
+                    "Tick %d: injected target_agent_id=%s (nearby_agents)",
+                    self._tick,
+                    candidate,
+                )
+                return replace(
+                    decision,
+                    parameters={
+                        **decision.parameters,
+                        "target_agent_id": candidate,
+                    },
+                )
+
+        # Fallback 3: social_nearby_cache (populated by step 1c)
+        if self._social_nearby_cache is not None:
+            for agent_info in self._social_nearby_cache:
+                candidate = (
+                    agent_info.get("agent_id") or agent_info.get("id") or agent_info.get("name")
+                    if isinstance(agent_info, dict)
+                    else agent_info
+                )
+                if candidate and str(candidate) != my_id:
+                    candidate = str(candidate)
+                    logger.info(
+                        "Tick %d: injected target_agent_id=%s (nearby_cache)",
+                        self._tick,
+                        candidate,
+                    )
+                    return replace(
+                        decision,
+                        parameters={
+                            **decision.parameters,
+                            "target_agent_id": candidate,
+                        },
+                    )
+
+        # Fallback 4: query the world client directly.
+        # GRPCWorldClient has ``explore()`` which calls Discover and returns
+        # ``{"agents": [...]}``.  Any REST client with ``explore()`` works too.
+        if self._world_client is not None:
+            try:
+                result = await self._world_client.explore({})
+                for agent_info in result.get("agents", []):
+                    candidate = (
+                        agent_info.get("agent_id") or agent_info.get("name")
+                        if isinstance(agent_info, dict)
+                        else None
+                    )
+                    if candidate and str(candidate) != my_id:
+                        candidate = str(candidate)
+                        logger.info(
+                            "Tick %d: injected target_agent_id=%s (world.explore)",
+                            self._tick,
+                            candidate,
+                        )
+                        return replace(
+                            decision,
+                            parameters={
+                                **decision.parameters,
+                                "target_agent_id": candidate,
+                            },
+                        )
+            except Exception:
+                logger.debug(
+                    "Tick %d: world_client.explore fallback failed",
+                    self._tick,
+                    exc_info=True,
+                )
+
+        # All fallbacks exhausted — downgrade to REST to avoid retry_exhausted
+        logger.warning(
+            "Tick %d: SOCIALIZE has no target_agent_id and all fallbacks "
+            "failed — downgrading to REST",
+            self._tick,
+        )
+        return Decision(
+            action_type=ActionType.REST,
+            reasoning=(
+                "Socialize target unavailable (no nearby agents discovered) — resting instead"
+            ),
+        )
 
     async def _act(self, decision: Decision) -> Any:
         """Execute a decision via the ActionExecutor.
@@ -1261,9 +1392,7 @@ class _NoOpWorldClient:
     async def claim_task(self, task_id: str) -> dict[str, Any]:
         return {"status": "ok", "action": "claim_task", "task_id": task_id}
 
-    async def submit_task(
-        self, task_id: str, result: dict[str, Any]
-    ) -> dict[str, Any]:
+    async def submit_task(self, task_id: str, result: dict[str, Any]) -> dict[str, Any]:
         return {"status": "ok", "action": "submit_task", "task_id": task_id}
 
     async def propose_deal(self, proposal: dict[str, Any]) -> dict[str, Any]:

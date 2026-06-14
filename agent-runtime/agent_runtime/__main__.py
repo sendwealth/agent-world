@@ -168,8 +168,25 @@ class RESTWorldClient:
             json={"action": action, "params": params},
         )
 
+    @staticmethod
+    def _stringify_payload(body: dict[str, Any]) -> dict[str, Any]:
+        """Ensure the ``payload`` field is a JSON string, as the World Engine expects.
+
+        World Engine's ``SendMessageRequest.payload`` is typed as ``String``
+        (``api_world.rs``), so sending a JSON object/map here results in a 422
+        deserialization error.  ``act.py:_handle_send_message`` already does
+        this conversion; this helper applies the same rule at the REST boundary
+        so every caller (including survival ``broadcast_message``) is safe.
+        """
+        inner = body.get("payload")
+        if isinstance(inner, (dict, list)):
+            body = {**body, "payload": json.dumps(inner, separators=(",", ":"))}
+        return body
+
     async def send_message(self, payload: dict[str, Any]) -> dict[str, Any]:
-        return await self._request("POST", "/api/v1/messages", json=payload)
+        return await self._request(
+            "POST", "/api/v1/messages", json=self._stringify_payload(payload)
+        )
 
     async def claim_task(self, task_id: str) -> dict[str, Any]:
         return await self.submit_action("claim_task", {"task_id": task_id})
@@ -245,6 +262,9 @@ class RESTWorldClient:
         is unavailable, so emergency actions don't crash the think loop.
         """
         try:
+            inner_payload = payload.get("payload", {})
+            if isinstance(inner_payload, (dict, list)):
+                inner_payload = json.dumps(inner_payload, separators=(",", ":"))
             return await self._request(
                 "POST",
                 "/api/v1/messages",
@@ -252,7 +272,7 @@ class RESTWorldClient:
                     "from_agent": self._agent_id,
                     "to_agent": "",  # empty = broadcast
                     "message_type": payload.get("type", "INFORM"),
-                    "payload": payload.get("payload", {}),
+                    "payload": inner_payload,
                 },
             )
         except Exception:

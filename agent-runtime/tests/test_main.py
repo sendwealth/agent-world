@@ -326,6 +326,56 @@ class TestRESTWorldClientEndpoints:
         # World Engine is unreachable in tests — should return no_endpoint fallback
         assert result["status"] == "no_endpoint"
 
+    @pytest.mark.asyncio
+    async def test_send_message_stringifies_dict_payload(self) -> None:
+        """World Engine expects payload as a JSON string, not a map (SEN-718)."""
+        import json as _json
+        client = _make_client()
+        with patch.object(client, "_request", new_callable=AsyncMock) as mock_req:
+            mock_req.return_value = {"status": "ok"}
+            await client.send_message({
+                "from_agent": "a", "to_agent": "",
+                "message_type": "INFORM",
+                "payload": {"content": "SOS"},
+            })
+            _args, kwargs = mock_req.call_args
+            assert kwargs["json"]["payload"] == _json.dumps({"content": "SOS"}, separators=(",", ":"))
+
+    @pytest.mark.asyncio
+    async def test_send_message_keeps_string_payload(self) -> None:
+        """A pre-stringified payload should pass through unchanged."""
+        client = _make_client()
+        with patch.object(client, "_request", new_callable=AsyncMock) as mock_req:
+            mock_req.return_value = {"status": "ok"}
+            await client.send_message({
+                "from_agent": "a", "to_agent": "b",
+                "message_type": "INFORM", "payload": "raw-string",
+            })
+            _args, kwargs = mock_req.call_args
+            assert kwargs["json"]["payload"] == "raw-string"
+
+    @pytest.mark.asyncio
+    async def test_broadcast_message_stringifies_dict_payload(self) -> None:
+        """broadcast_message must JSON-encode the inner payload dict (SEN-718)."""
+        import json as _json
+        client = _make_client()
+        with patch.object(client, "_request", new_callable=AsyncMock) as mock_req:
+            mock_req.return_value = {"status": "ok"}
+            await client.broadcast_message({
+                "type": "INFORM",
+                "payload": {"category": "personal", "content": "[SOS] help"},
+            })
+            _args, kwargs = mock_req.call_args
+            sent_body = kwargs["json"]
+            assert sent_body["to_agent"] == ""
+            assert sent_body["from_agent"] == "agent-42"
+            assert sent_body["message_type"] == "INFORM"
+            # payload must be a JSON string, not a dict
+            assert isinstance(sent_body["payload"], str)
+            assert _json.loads(sent_body["payload"]) == {
+                "category": "personal", "content": "[SOS] help",
+            }
+
 
 class TestRESTWorldClientFallback:
     """Verify error handling when World Engine is unreachable."""

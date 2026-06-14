@@ -1,9 +1,9 @@
 "use client";
 
-import { useEffect, useState, useMemo, useRef } from "react";
+import { useEffect, useState, useMemo } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import type { Agent, WorldEvent } from "@/types/world";
+import type { Agent, NetworkGraph, NetworkEdge, WorldEvent } from "@/types/world";
 import { fetchJSON, postJSON } from "@/lib/api";
 import { useWorldState } from "@/hooks/useWorldState";
 import { useSSEContext } from "@/components/SSEProvider";
@@ -172,10 +172,55 @@ function StatCards({
   );
 }
 
-// ─── Main: World Graph (SVG Ring) ───────────────────────────
+// ─── Main: World Graph (SVG Ring with real interaction edges) ───
+
+const WORLD_GRAPH_EDGE_CAP = 60;
+
+/** Deduplicate edges so that an undirected {A,B} pair renders once,
+ *  accumulating weight across both directions and edge types. */
+function dedupeEdges(edges: NetworkEdge[]): { source: string; target: string; weight: number }[] {
+  const map = new Map<string, { source: string; target: string; weight: number }>();
+  for (const edge of edges) {
+    const [lo, hi] = edge.source < edge.target
+      ? [edge.source, edge.target]
+      : [edge.target, edge.source];
+    const key = `${lo}|${hi}`;
+    const existing = map.get(key);
+    if (existing) {
+      existing.weight += edge.weight;
+    } else {
+      map.set(key, { source: lo, target: hi, weight: edge.weight });
+    }
+  }
+  return Array.from(map.values());
+}
 
 function WorldGraph({ agents }: { agents: Agent[] }) {
   const alive = useMemo(() => agents.filter((a) => a.alive), [agents]);
+  const [graph, setGraph] = useState<NetworkGraph | null>(null);
+
+  // Poll /api/v2/export/network for real interaction edges (trust, trade, message).
+  useEffect(() => {
+    let cancelled = false;
+
+    async function load() {
+      try {
+        const data = await fetchJSON<NetworkGraph>(
+          "/api/v2/export/network?format=json&edge_types=trust,trade,message",
+        );
+        if (!cancelled) setGraph(data);
+      } catch {
+        // Backend may not be running; silently retry on next interval.
+      }
+    }
+
+    load();
+    const interval = setInterval(load, 10000);
+    return () => {
+      cancelled = true;
+      clearInterval(interval);
+    };
+  }, []);
 
   // Ring layout parameters
   const size = 340;
@@ -198,12 +243,30 @@ function WorldGraph({ agents }: { agents: Agent[] }) {
     });
   }, [alive, cx, cy, radius]);
 
+  // Build real edges from the network graph response.
+  // Keep only edges between alive agents that are present in the ring layout,
+  // deduplicate pairs, then cap to the heaviest WORLD_GRAPH_EDGE_CAP for perf.
+  const renderEdges = useMemo(() => {
+    if (!graph || nodes.length === 0) return [];
+    const nodeIds = new Set(nodes.map((n) => n.id));
+    const relevant = dedupeEdges(graph.edges).filter(
+      (e) => nodeIds.has(e.source) && nodeIds.has(e.target),
+    );
+    relevant.sort((a, b) => b.weight - a.weight);
+    return relevant.slice(0, WORLD_GRAPH_EDGE_CAP);
+  }, [graph, nodes]);
+
+  const nodeMap = useMemo(
+    () => new Map(nodes.map((n) => [n.id, n])),
+    [nodes],
+  );
+
   return (
     <section className="rounded-[var(--radius)] border border-border bg-card p-4">
       <div className="flex items-center justify-between mb-3">
         <h3 className="text-sm font-semibold text-fg">世界图谱</h3>
         <span className="text-[10px] text-muted font-mono">
-          节点 = Agent · 连线 = 活跃交易
+          节点 = Agent · 连线 = 真实交互
         </span>
       </div>
       <div className="flex items-center justify-center">
@@ -230,23 +293,24 @@ function WorldGraph({ agents }: { agents: Agent[] }) {
               opacity={0.5}
             />
 
-            {/* Connection lines (some random connections for visual) */}
-            {nodes.length > 2 &&
-              nodes.slice(0, Math.min(nodes.length - 1, 8)).map((node, i) => {
-                const target = nodes[(i + 2) % nodes.length];
-                return (
-                  <line
-                    key={`line-${node.id}`}
-                    x1={node.x}
-                    y1={node.y}
-                    x2={target.x}
-                    y2={target.y}
-                    stroke="var(--accent)"
-                    strokeWidth="0.5"
-                    opacity={0.15}
-                  />
-                );
-              })}
+            {/* Real interaction edges from /api/v2/export/network */}
+            {renderEdges.map((edge) => {
+              const src = nodeMap.get(edge.source);
+              const tgt = nodeMap.get(edge.target);
+              if (!src || !tgt) return null;
+              return (
+                <line
+                  key={`edge-${edge.source}-${edge.target}`}
+                  x1={src.x}
+                  y1={src.y}
+                  x2={tgt.x}
+                  y2={tgt.y}
+                  stroke="var(--accent)"
+                  strokeWidth="0.5"
+                  opacity={0.2}
+                />
+              );
+            })}
 
             {/* Agent nodes */}
             {nodes.map((node) => (

@@ -984,3 +984,31 @@ export interface ExportTypeInfo {
   description: string;
 }
 
+// ── Network Graph types (mirrors GET /api/v2/export/network) ──
+
+export interface NetworkNode {
+  id: string;
+  label: string;
+  phase: string;
+  alive: boolean;
+  tokens: number;
+  generation?: number;
+  skills?: Record<string, number>;
+  organization?: string;
+}
+
+export interface NetworkEdge {
+  source: string;
+  target: string;
+  weight: number;
+  edge_type: string;
+  interaction_count?: number;
+}
+
+export interface NetworkGraph {
+  node_count: number;
+  edge_count: number;
+  nodes: NetworkNode[];
+  edges: NetworkEdge[];
+}
+

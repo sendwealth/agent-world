@@ -194,6 +194,14 @@ class RESTWorldClient:
     async def explore(self, parameters: dict[str, Any]) -> dict[str, Any]:
         return await self.submit_action("explore", parameters)
 
+    async def socialize(
+        self, target_agent_id: str, message: str = ""
+    ) -> dict[str, Any]:
+        return await self.submit_action("socialize", {
+            "target_agent_id": target_agent_id,
+            "message": message,
+        })
+
     async def move(self, direction: str) -> dict[str, Any]:
         return await self.submit_action("move", {"direction": direction})
 

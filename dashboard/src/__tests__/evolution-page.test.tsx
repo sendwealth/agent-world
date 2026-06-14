@@ -23,7 +23,7 @@ function mockFetchResponse(data: unknown) {
 
 const mockAgents: Agent[] = [
   { id: "agent-1", name: "Alpha", phase: "adult", money: 1000, tokens: 200, reputation: 0.8, skills: { mining: 5 }, alive: true, age: 100, createdAt: "2024-01-01" },
-  { id: "agent-2", name: "Beta", phase: "child", money: 50, tokens: 10, reputation: 0.2, skills: {}, alive: true, age: 5, createdAt: "2024-01-02" },
+  { id: "agent-2", name: "Beta", phase: "childhood", money: 50, tokens: 10, reputation: 0.2, skills: {}, alive: true, age: 5, createdAt: "2024-01-02" },
 ];
 
 afterEach(() => { cleanup(); });

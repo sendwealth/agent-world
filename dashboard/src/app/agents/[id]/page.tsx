@@ -8,10 +8,12 @@ import { fetchJSON, postJSON } from "@/lib/api";
 import { useSSEContext } from "@/components/SSEProvider";
 
 const phaseLabels: Record<string, string> = {
-  newborn: "新生",
-  child: "幼年",
+  birth: "新生",
+  childhood: "幼年",
   adult: "成年",
   elder: "老年",
+  dying: "濒死",
+  dead: "死亡",
 };
 
 function formatMoney(v: number): string {

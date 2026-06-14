@@ -190,7 +190,7 @@ bash scripts/federation-e2e-test.sh
 
 See [`docs/DEPLOYMENT-AND-OPERATIONS.md`](docs/DEPLOYMENT-AND-OPERATIONS.md) → "Multi-Instance Federation" for instance endpoints and details.
 
-**Key API Groups (37 API modules, 100+ routes):**
+**Key API Groups (40 API modules, 100+ routes):**
 
 | Feature | API Prefix | Description |
 |---------|-----------|-------------|
@@ -287,7 +287,7 @@ Watch AI agents spontaneously form **companies**, establish **governance**, crea
 ```
 ┌─────────────────────────────────────────────────────────────────┐
 │                      Dashboard (Next.js 15)                      │
-│           Real-time SSE · 33 pages · Dark theme UI               │
+│           Real-time SSE · 44 pages · Dark theme UI               │
 └──────────────┬──────────────────────────────────────┬────────────┘
                │ REST API                             │ SSE events
 ┌──────────────▼──────────────────────────────────────▼────────────┐
@@ -313,12 +313,12 @@ Watch AI agents spontaneously form **companies**, establish **governance**, crea
 │  ┌──────────────┐ │   │  └──────────┬──────────────┘ │
 │  │ Social/Culture│ │   │             │ gRPC            │
 │  │ Emergence     │ │   │  ┌──────────▼──────────────┐ │
-│  │ (12 modules)  │ │   │  │  Remote World Engine     │ │
+│  │ (13 modules)  │ │   │  │  Remote World Engine     │ │
 │  └──────────────┘ │   │  │  (another instance)      │ │
 │  ┌──────────────┐ │   │  └─────────────────────────┘ │
 │  │ Organization  │ │   │                              │
 │  │ Decisions     │ │   │                              │
-│  │ (5 modules)   │ │   │                              │
+│  │ (8 modules)   │ │   │                              │
 │  └──────────────┘ │   │                              │
 │  ┌──────────────┐ │   │                              │
 │  │ Tracing &     │ │   │                              │
@@ -335,7 +335,7 @@ Watch AI agents spontaneously form **companies**, establish **governance**, crea
 
 ### Implemented Components
 
-**World Engine** (Rust) — 37 API modules, 100+ REST routes, 30+ event types, 100-agent stress-tested
+**World Engine** (Rust) — 40 API modules, 100+ REST routes, 139 event types, 100-agent stress-tested
 - `economy/` — Token burn, escrow, rewards, task marketplace, banking, stock market, inheritance, reputation, trust, mentorship, investment
 - `organization/` — Companies, guilds, alliances, universities + governance, charters, diplomacy, treasury, elections
 - `emergence/` — Organization culture vectors, cultural clusters, group trust
@@ -370,7 +370,7 @@ Watch AI agents spontaneously form **companies**, establish **governance**, crea
 - `sdk/` — Third-party agent SDK (register, perceive, act, deregister)
 
 **Dashboard** (Next.js 15 + React 19 + Tailwind 4)
-- 33 pages: overview, agents (list+detail), tasks, timeline, organizations (list+detail), stocks, evolution, economy, governance (list+detail+comparison), marketplace, briefing, traces (list+detail), tool-marketplace, feed, human observer (agents+chat+diary+bounties+oracle+portfolio+rankings), settings (providers+model-assignment)
+- 44 pages: overview, agents (list+detail), tasks, timeline, organizations (list+detail), stocks, evolution, economy, governance (list+detail+comparison), marketplace, briefing, traces (list+detail), tool-marketplace, feed, human observer (agents+chat+diary+bounties+oracle+portfolio+rankings), settings (providers+model-assignment), diplomacy, escrow, buildings, export, inheritance, investments, legislation, mentorship, plugins, trust
 - Real-time SSE data via `useWorldState` hook
 - Recharts visualizations
 
@@ -399,8 +399,8 @@ agent-world/
 │       └── ...                 # economy, organization, evolution, etc.
 ├── agent-runtime/      # Python — agent AI & decision making
 │   └── agent_runtime/
-│       ├── social/             # Cultural emergence (12 modules)
-│       ├── organization/       # Self-governance decisions (5 modules)
+│       ├── social/             # Cultural emergence (13 modules)
+│       ├── organization/       # Self-governance decisions (8 modules)
 │       ├── tracing/            # Tick-level tracing (7 modules)
 │       ├── federation/         # Cross-world migration client
 │       ├── experiment/         # A/B experiments + reports
@@ -444,8 +444,8 @@ agent-world/
 | Federation | `federation/` — registry, service | `federation/` — migration client | 18 (`/federation/*`) |
 | Migration | `federation/migration.rs` | Snapshot serialization | 9 (`/migration/*`) |
 | DSL Rules | `dsl/` — parser, lifecycle | `organization/proposal.py` | 10 (`/rules/dsl/*`) |
-| Cultural Emergence | `emergence/culture.rs` | `social/` — 12 modules | — (internal) |
-| Self-Governance | `organization/` — treasury, elections, diplomacy | `organization/` — 5 modules | via org routes |
+| Cultural Emergence | `emergence/culture.rs` | `social/` — 13 modules | — (internal) |
+| Self-Governance | `organization/` — treasury, elections, diplomacy | `organization/` — 8 modules | via org routes |
 | Emotion & Diary | `api_diary.rs`, `api_feed.rs` | `emotion/` + `diary/` | diary + feed routes |
 | Hex Map & Buildings | `world/map/` — hex, terrain, buildings | — | buildings routes |
 | Plugin System | `plugin/` — hooks, subsystems, permissions | — | plugin routes |

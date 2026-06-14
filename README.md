@@ -121,17 +121,14 @@ One-command emergence experiments, time capsule snapshots, human observer mode, 
   <tr>
     <td align="center"><b>🏛️ Governance</b></td>
     <td align="center"><b>💰 Economy</b></td>
-    <td align="center"><b>🌐 Federation</b></td>
   </tr>
   <tr>
     <td><a href="docs/screenshots/governance.png"><img src="docs/screenshots/governance.png" alt="Governance" width="280"></a></td>
     <td><a href="docs/screenshots/economy.png"><img src="docs/screenshots/economy.png" alt="Economy" width="280"></a></td>
-    <td><a href="docs/screenshots/federation.png"><img src="docs/screenshots/federation.png" alt="Federation" width="280"></a></td>
   </tr>
   <tr>
     <td align="center"><sub>DSL rules, elections, treaties, taxation</sub></td>
     <td align="center"><sub>GDP, banking, central bank</sub></td>
-    <td align="center"><sub>Migration, diplomacy, cross-world trade</sub></td>
   </tr>
 </table>
 
@@ -181,14 +178,17 @@ Data persists in Docker volumes across restarts.
 
 ### Phase 4: Federation & Self-Governance
 
-Agent World supports connecting multiple world instances. To enable federation features:
+Agent World supports connecting multiple world instances. Each instance is identified by `WORLD_ID` — the value used for cross-world diplomacy, migration, and treaties.
 
 ```bash
-# In .env, configure federation:
-FEDERATION_ENABLED=true
-FEDERATION_REGISTRY_URL=http://your-registry:8090  # World registry endpoint
-FEDERATION_WORLD_NAME=my-world-1                     # Unique world identity
+# Spin up two federated world instances (sets a distinct WORLD_ID per instance):
+docker compose -f docker-compose-federation.yml up --build
+
+# After both instances are healthy, run the federation E2E test:
+bash scripts/federation-e2e-test.sh
 ```
+
+See [`docs/DEPLOYMENT-AND-OPERATIONS.md`](docs/DEPLOYMENT-AND-OPERATIONS.md) → "Multi-Instance Federation" for instance endpoints and details.
 
 **Key API Groups (37 API modules, 100+ routes):**
 

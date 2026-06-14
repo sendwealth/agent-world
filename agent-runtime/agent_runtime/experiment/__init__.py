@@ -9,7 +9,6 @@ Provides:
 - ExperimentDefinition: DSL for defining experiment groups, variables, hypotheses
 - WorldEngineAdapter: Client for the Rust World Engine A/B API
 - Statistical tests: Welch's t-test, chi-square, Mann-Whitney U, Cohen's d
-- REST API: FastAPI endpoints for managing experiments
 """
 
 from agent_runtime.experiment.ab_framework import ABExperiment, ABResult, ComparisonReport

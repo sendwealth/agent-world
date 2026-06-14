@@ -64,6 +64,10 @@ _DECISION_TO_ACTION: dict[DecisionAction, ActionType] = {
     DecisionAction.CHECK_BOUNTIES: ActionType.CHECK_BOUNTIES,
     DecisionAction.ACCEPT_BOUNTY: ActionType.ACCEPT_BOUNTY,
     DecisionAction.COMPLETE_BOUNTY: ActionType.COMPLETE_BOUNTY,
+    DecisionAction.FORM_ORG: ActionType.FORM_ORG,
+    DecisionAction.JOIN_ORG: ActionType.JOIN_ORG,
+    DecisionAction.PROPOSE_RULE: ActionType.PROPOSE_RULE,
+    DecisionAction.VOTE_RULE: ActionType.VOTE_RULE,
 }
 
 # DecisionActions without a direct ActionType counterpart — mapped to REST

@@ -158,6 +158,21 @@ class TestActionMapping:
             == ActionType.PRACTICE_SKILL
         )
 
+    def test_form_org_mapped(self):
+        assert _map_decision_action(DecisionAction.FORM_ORG) == ActionType.FORM_ORG
+
+    def test_join_org_mapped(self):
+        assert _map_decision_action(DecisionAction.JOIN_ORG) == ActionType.JOIN_ORG
+
+    def test_propose_rule_mapped(self):
+        assert (
+            _map_decision_action(DecisionAction.PROPOSE_RULE)
+            == ActionType.PROPOSE_RULE
+        )
+
+    def test_vote_rule_mapped(self):
+        assert _map_decision_action(DecisionAction.VOTE_RULE) == ActionType.VOTE_RULE
+
 
 class TestRandomFallback:
     def test_returns_decision(self, agent_state):
@@ -282,6 +297,46 @@ class TestLLMDecisionProvider:
 
         assert decision.action_type == ActionType.CLAIM_TASK
         assert "task_id" not in decision.parameters
+
+    @pytest.mark.asyncio
+    async def test_form_org_not_silently_remapped_to_rest(
+        self, agent_state, perception, survival_normal
+    ):
+        mock_llm = MockLLMProvider(response_action="form_org")
+        provider = LLMDecisionProvider(llm_provider=mock_llm)
+
+        decision = await provider.decide(agent_state, perception, survival_normal)
+        assert decision.action_type == ActionType.FORM_ORG
+
+    @pytest.mark.asyncio
+    async def test_join_org_not_silently_remapped_to_rest(
+        self, agent_state, perception, survival_normal
+    ):
+        mock_llm = MockLLMProvider(response_action="join_org")
+        provider = LLMDecisionProvider(llm_provider=mock_llm)
+
+        decision = await provider.decide(agent_state, perception, survival_normal)
+        assert decision.action_type == ActionType.JOIN_ORG
+
+    @pytest.mark.asyncio
+    async def test_propose_rule_not_silently_remapped_to_rest(
+        self, agent_state, perception, survival_normal
+    ):
+        mock_llm = MockLLMProvider(response_action="propose_rule")
+        provider = LLMDecisionProvider(llm_provider=mock_llm)
+
+        decision = await provider.decide(agent_state, perception, survival_normal)
+        assert decision.action_type == ActionType.PROPOSE_RULE
+
+    @pytest.mark.asyncio
+    async def test_vote_rule_not_silently_remapped_to_rest(
+        self, agent_state, perception, survival_normal
+    ):
+        mock_llm = MockLLMProvider(response_action="vote_rule")
+        provider = LLMDecisionProvider(llm_provider=mock_llm)
+
+        decision = await provider.decide(agent_state, perception, survival_normal)
+        assert decision.action_type == ActionType.VOTE_RULE
 
 
 class TestInjectActionArgs:

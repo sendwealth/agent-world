@@ -159,15 +159,17 @@ class TestNewActionHandlers:
         assert mock_world.calls[-1] == ("move", "north")
 
     @pytest.mark.asyncio
-    async def test_move_requires_direction(
+    async def test_move_defaults_direction(
         self, executor: ActionExecutor, mock_world: MockWorldClient
     ) -> None:
+        """MOVE with empty params now succeeds — defaults to a random cardinal direction."""
         state = AgentState(name="Mover", tokens=500, max_tokens=1000)
         context = ActionContext(
             agent=state, world=mock_world, parameters={}
         )
         result = await executor.execute(ActionType.MOVE, context)
-        assert result.status.value == "retry_exhausted"
+        assert result.status.value == "success"
+        assert mock_world.calls[-1][0] == "move"
 
     @pytest.mark.asyncio
     async def test_gather_handler(
@@ -185,15 +187,17 @@ class TestNewActionHandlers:
         assert mock_world.calls[-1] == ("gather", "wood")
 
     @pytest.mark.asyncio
-    async def test_gather_requires_resource_type(
+    async def test_gather_defaults_resource_type(
         self, executor: ActionExecutor, mock_world: MockWorldClient
     ) -> None:
+        """GATHER with empty params now succeeds — defaults to 'food'."""
         state = AgentState(name="Gatherer", tokens=500, max_tokens=1000)
         context = ActionContext(
             agent=state, world=mock_world, parameters={}
         )
         result = await executor.execute(ActionType.GATHER, context)
-        assert result.status.value == "retry_exhausted"
+        assert result.status.value == "success"
+        assert mock_world.calls[-1] == ("gather", "food")
 
     @pytest.mark.asyncio
     async def test_build_handler(

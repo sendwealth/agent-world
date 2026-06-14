@@ -40,6 +40,7 @@ class FakeAgentState:
     """Minimal agent state for testing."""
 
     tokens: int = 1000
+    id: str = "test-agent-id"
 
     def adjust_tokens(self, delta: int) -> None:
         new_balance = self.tokens + delta

@@ -189,17 +189,117 @@
 
 ---
 
-## Phase 5: Ecosystem (Month 19+) — **NOT STARTED** 🔴
+## Phase 5: Ecosystem (Month 19+) — **PLANNED** 🟡
 
-**Goal**: A living ecosystem of interconnected agent worlds.
+**Goal**: Turn Agent World from a feature-complete single-instance simulator into a *used, cited, and interconnected* ecosystem — closing the gap between engineering scope and real-world adoption.
 
-### Planned
-- [ ] Inter-world trade and diplomacy
-- [ ] Human participants as equals (not just observers)
-- [ ] Agents creating sub-worlds
-- [ ] Published research papers
-- [ ] Sustainable open-source community
+> **The strategic problem Phase 5 must solve.** As of v1.1.0 the platform already exceeds every comparable open project in *breadth* of simulation mechanics (economy, governance, culture, evolution, federation, emotion, plugins — ~141K LOC). Yet it has essentially **zero adoption** (~1 star, 0 forks) and **zero published research**. Adding more simulation depth will not change that. Phase 5 is therefore an *ecosystem & validation* phase, not a feature phase: its north-star metric is "number of external people who run, extend, or cite Agent World," not LOC shipped.
 
+---
+
+### 5.0 Current Capability Boundary
+
+Before defining new work, here is the honest line between "done" and "ecosystem requires":
+
+| Capability | Phase 1–4 state | What a true *ecosystem* still needs |
+|---|---|---|
+| Federation | Migration + diplomacy status (Peace/Trade/Alliance/War) + heartbeat — **27 routes** | No real cross-world **trade flow**; no public **world discovery registry**; federation is local-only (no hosted hub) |
+| Plugin system | Local registry, hooks/subsystems/permissions — fully wired | No **distribution/marketplace**; plugins are code-copy, not install-from-registry |
+| Human role | Observer mode — bounties, oracles, portfolio, interventions | Humans are **outside** the world; cannot *be* an agent peer in the economy |
+| Research tools | A/B experiments, auto-reports, data export, SDK | No **shared benchmark suite**; no replication of prior work (Park et al.); no dataset/Zenodo publishing flow |
+| Sub-worlds | — | Agents cannot spawn or govern child worlds |
+| Adoption | Open-source, Docker one-command, docs | No published paper, no contributor base, no citation, no "show HN / demo video" delivered |
+
+**One sentence:** the engine is a finished *simulator*; Phase 5 makes it a *platform* and a *research object*.
+
+---
+
+### 5.1 Comparable Projects & Landscape
+
+Phase 5 directions are chosen against this landscape, not in a vacuum:
+
+| Project | Scale | Has Agent World beat it? | What Agent World lacks vs. them |
+|---|---|---|---|
+| **Generative Agents / Smallville** (Park et al., 2023) | 25 agents, no economy | ✅ vastly more mechanics | ❌ **citation & academic legitimacy** — it *defined* the field |
+| **Project Sid** (Altera, 2024) | 1000+ agents, Minecraft | ✅ decoupled from a game; open | ❌ a **flagship "look what emerged" result** + publicity |
+| **AI Town** (a16z/Convex, 2023) | simple, JS | ✅ far deeper systems | ❌ **onboarding friction** — AI Town runs in one click in a browser |
+| **AgentScope / AutoGen / CAMEL** | frameworks, not sims | different category | — these are *agent frameworks*; AW is a *world*. No direct overlap, but they define the audience. |
+
+**Takeaway:** the moat is *depth + observability*; the gap is *legitimacy, reach, and a killer demo result*. Every Phase 5 direction is scored on how it closes that gap.
+
+---
+
+### 5.2 Candidate Directions (Comparative Analysis)
+
+Five directions were considered. The matrix scores each on five dimensions (1–5, higher = better) against the Phase 5 north star (*adoption & validation leverage per unit effort*).
+
+| # | Direction | Builds on existing infra | Adoption leverage | Research leverage | Effort (5=low) | Risk (5=low) | **Total** |
+|---|---|:-:|:-:|:-:|:-:|:-:|:-:|
+| **A** | **Research Platform & Emergence Benchmark** — replication suite (Park et al.), standardized emergence metrics, dataset publishing | 5 | 4 | 5 | 4 | 4 | **22** |
+| **B** | **Human-as-Agent / Participatory Mode** — humans play as economic peers, mixed human-AI societies, game-like UX | 3 | 5 | 3 | 2 | 3 | **16** |
+| **C** | **Inter-World Economy & Federation Hub** — real cross-world trade routes, hosted world-discovery registry, agent-spawned sub-worlds | 4 | 3 | 3 | 2 | 3 | **15** |
+| **D** | **Plugin Marketplace & Community Worlds** — distributable plugin/skill/scenario registry (Minecraft-modding model) | 4 | 4 | 2 | 2 | 2 | **14** |
+| **E** | **Emergence Deep-Dive & Auto-Documentary** — causal-emergence metrics, phase-transition detection, auto-generated "world history" films | 3 | 4 | 4 | 3 | 4 | **18** |
+
+#### Direction A — Research Platform & Emergence Benchmark *(recommended first)*
+Make Agent World the canonical reproducible platform for multi-agent society research. Ship a **Park et al. replication** showing AW reproduces known emergence (information diffusion, relationship formation), define a shared **"Emergence Benchmark"** (the MMLU for agent societies), and a one-command path from experiment → published dataset (Zenodo/Dataverse).
+
+#### Direction B — Human-as-Agent / Participatory Mode
+Promote humans from observer to **peer**: a human can incarnate as an agent, hold tokens, trade, vote, and survive alongside AI agents. Turns a spectacle into a *participatory simulation* and opens the "game" audience. Highest engagement ceiling, highest scope risk (real-time interaction model vs. tick loop).
+
+#### Direction C — Inter-World Economy & Federation Hub
+Extend federation from migration+diplomacy to **real trade** (cross-world markets, shared bounties, currency exchange), add a **hosted world-discovery registry** so strangers can find and federate worlds, and let high-rank agents **spawn sub-worlds**. Natural technical continuation — but premature without a community to federate.
+
+#### Direction D — Plugin Marketplace & Community Worlds
+Turn the local plugin registry into a **distributable marketplace** (skills, world rules, LLM adapters, scenario packs). The Roblox/Minecraft-modding play. Strong long-term network effects, but a cold-start problem with today's 0 contributors.
+
+#### Direction E — Emergence Deep-Dive & Auto-Documentary
+Invest in the *analysis* layer: causal-emergence detection, society "phase transitions," and an auto-generated **"world history" documentary** (timeline → narrated video). The best "shareable artifact" per dollar; differentiates AW as science, not just a sim.
+
+---
+
+### 5.3 Recommended Sequence & Milestones
+
+Sequencing follows the rule: **maximize legitimacy and shareable artifacts early; build network-effect features only once a community exists to use them.**
+
+```
+A (Research/Benchmark)  →  E (Documentary)  →  B (Human-as-Agent)  →  C (Inter-world)  →  D (Marketplace)
+  credibility first          shareable demo        audience growth        network effects       flywheel
+```
+
+| Milestone | Direction | Deliverable | Target metric (definition of done) |
+|---|:-:|---|---|
+| **5.1 Replication & Benchmark** | A | Park et al. replication experiment; `emergence-benchmark` suite (≥6 metrics); benchmark README + leaderboard | Reproduction report reproduces ≥3 published findings; benchmark runnable via `make benchmark` |
+| **5.2 First Paper / Preprint** | A | arXiv preprint: "Agent World: an open platform for multi-agent society emergence" | Submitted to arXiv; ≥1 external researcher runs an experiment |
+| **5.3 Dataset Publishing Flow** | A | `aw publish` → Zenodo/Dataverse DOI; experiment→dataset provenance | One-click DOI from any A/B experiment |
+| **5.4 Auto-Documentary** | E | Timeline → narrated "world history" video generator; sample film in README | A 3-min auto film linked from the README |
+| **5.5 Human-as-Agent MVP** | B | Humans incarnate as agents; mixed human-AI economy in a public demo world | ≥1 public "play a world" session with external participants |
+| **5.6 Federation Hub (hosted)** | C | Public world-discovery registry; real cross-world trade routes; ≥2 hosted demo worlds | ≥3 external self-hosted worlds federated |
+| **5.7 Agent-Spawned Sub-Worlds** | C | High-rank agents create and govern child worlds | E2E: an agent founds a world others can migrate to |
+| **5.8 Plugin Marketplace** | D | Distributable plugin registry; ≥5 community-contributed plugins | ≥1 third-party plugin not authored by core team |
+
+**Gating rule:** Milestones 5.5–5.8 are *deferred* and only start once 5.1–5.2 land a preprint and a first external user. Building network-effect features (C, D) before a community exists would repeat the Phase 1–4 pattern of shipping depth nobody uses.
+
+---
+
+### 5.4 Decision Criteria & Risks
+
+**Kill / pivot signals** (re-evaluate at each milestone):
+- If **5.1 replication fails to reproduce any prior finding** → pause; the engine needs a correctness audit before more research claims.
+- If after **5.2 (preprint)** there are still **0 external users** → pivot from C/D (network) to B (participatory/game), because the adoption problem is UX, not capability.
+- If LLM cost makes 1000-agent runs prohibitive → scope milestones to ≤200 agents and lead with E (documentary) which is cheap to demo.
+
+| Risk | Likelihood | Impact | Mitigation |
+|---|:-:|:-:|---|
+| Replication reveals engine bugs | Med | High | 5.1 *is* the audit; budget a fix cycle |
+| No academic adoption despite preprint | High | High | Partner with ≥1 lab before writing; co-author |
+| Inter-world features built, no worlds to federate | High | Med | Hard-gate C/D behind community milestones |
+| Scope creep re-bloats the codebase | Med | Med | Phase 5 north star = users/citations, NOT LOC |
+| Demo video never ships (carried over from 4.6) | Med | Med | 5.4 auto-documentary subsumes & forces it |
+
+---
+
+> **Status note:** Phase 5 is now **planned with milestones** (was: NOT STARTED). No Phase 5 code has been written; milestones 5.1–5.8 are the backlog to promote to `todo` in priority order once Phase 4.6 (demo video) closes. The first executable step is **5.1 — Replication & Benchmark**, scoped to begin after the v1.1.0 demo deliverables land.
 ---
 
 ## Placeholder & Known Issue Tracker

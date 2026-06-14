@@ -230,9 +230,26 @@ class RESTWorldClient:
     async def broadcast_message(
         self, payload: dict[str, object]
     ) -> dict[str, object]:
-        """No World Engine broadcast endpoint — raises to indicate unsupported."""
-        logger.warning("broadcast_message: no World Engine endpoint for broadcast")
-        raise NotImplementedError("broadcast_message is not supported via REST World Engine")  # type: ignore[return-value]
+        """Broadcast a message to all agents via the World Engine REST API.
+
+        Posts to ``POST /api/v1/messages`` with an empty ``to_agent`` field
+        to indicate a broadcast.  Falls back to a no-op log if the endpoint
+        is unavailable, so emergency actions don't crash the think loop.
+        """
+        try:
+            return await self._request(
+                "POST",
+                "/api/v1/messages",
+                json={
+                    "from_agent": self._agent_id,
+                    "to_agent": "",  # empty = broadcast
+                    "message_type": payload.get("type", "INFORM"),
+                    "payload": payload.get("payload", {}),
+                },
+            )
+        except Exception:
+            logger.debug("broadcast_message: POST /api/v1/messages failed (non-fatal)")
+            return {"status": "no_endpoint", "broadcast": False}
 
     async def form_org(self, org_data: dict[str, Any]) -> dict[str, Any]:
         return await self._request("POST", "/api/v1/orgs", json=org_data)
@@ -917,6 +934,33 @@ async def run_agent(config: RuntimeConfig) -> RunStats:
         if social_context_result is not None:
             social_context_provider, _social_nearby_cache = social_context_result
 
+        # Build emotion hook to give agents emotional state in decisions
+        emotion_hook: Any | None = None
+        try:
+            from agent_runtime.emotion.engine import EmotionEngine, ThinkLoopEmotionHook
+            from agent_runtime.models.personality import PersonalityVector
+
+            # Build personality from agent state if available, else use defaults
+            personality_data = getattr(state, "personality", None) or {}
+            personality = PersonalityVector(
+                openness=float(personality_data.get("openness", 0.5)),
+                conscientiousness=float(personality_data.get("conscientiousness", 0.5)),
+                extraversion=float(personality_data.get("extraversion", 0.5)),
+                agreeableness=float(personality_data.get("agreeableness", 0.5)),
+                neuroticism=float(personality_data.get("neuroticism", 0.5)),
+                risk_tolerance=float(personality_data.get("risk_tolerance", 0.5)),
+                social_orientation=float(personality_data.get("social_orientation", 0.5)),
+                greed=float(personality_data.get("greed", 0.5)),
+            )
+            emotion_engine = EmotionEngine(personality=personality)
+            emotion_hook = ThinkLoopEmotionHook(emotion_engine)
+            logger.info(
+                "EmotionEngine wired (personality: O=%.1f E=%.1f N=%.1f)",
+                personality.openness, personality.extraversion, personality.neuroticism,
+            )
+        except Exception:
+            logger.debug("EmotionEngine setup failed (non-fatal)", exc_info=True)
+
         think_loop = ThinkLoop(
             state=state,
             survival=survival,
@@ -928,6 +972,7 @@ async def run_agent(config: RuntimeConfig) -> RunStats:
             heartbeat_provider=heartbeat_provider,
             social_context_provider=social_context_provider,
             social_nearby_cache=_social_nearby_cache,
+            emotion_hook=emotion_hook,
         )
 
         # Graceful shutdown on SIGINT

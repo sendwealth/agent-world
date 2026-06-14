@@ -179,7 +179,7 @@ services:
       - PORT=3000
     restart: unless-stopped
     healthcheck:
-      test: ["CMD", "node", "-e", "const req=require('http').get('http://localhost:3000/',(r)=>{process.exit(r.statusCode<500?0:1)});req.on('error',()=>process.exit(1));req.setTimeout(3000,()=>{req.destroy();process.exit(1)})"]
+      test: ["CMD-SHELL", "node -e \"const http=require('http');const opts={hostname:'127.0.0.1',port:3000,path:'/',timeout:3000};const req=http.get(opts,(r)=>{process.exit(r.statusCode<500?0:1)});req.on('error',()=>process.exit(1));req.on('timeout',()=>{req.destroy();process.exit(1)})\""]
       interval: 15s
       timeout: 10s
       retries: 5

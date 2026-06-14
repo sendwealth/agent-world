@@ -170,8 +170,8 @@ class OracleResponder:
 
         try:
             messages = [LLMMessage(role="user", content=prompt)]
-            response = await self._llm.generate(messages)
-            text = response.strip()
+            llm_response = await self._llm.chat(messages)
+            text = llm_response.content.strip()
             if text:
                 logger.debug("LLM oracle response generated (%d chars)", len(text))
                 return text

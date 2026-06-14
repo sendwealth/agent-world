@@ -8,7 +8,7 @@ Covers:
 
 from __future__ import annotations
 
-from unittest.mock import AsyncMock
+from unittest.mock import AsyncMock, Mock
 
 import pytest
 
@@ -74,7 +74,7 @@ class TestOracleResponder:
     @pytest.mark.asyncio
     async def test_llm_generation(self):
         mock_llm = AsyncMock()
-        mock_llm.generate = AsyncMock(return_value="I appreciate your wise words.")
+        mock_llm.chat = AsyncMock(return_value=Mock(content="I appreciate your wise words."))
         responder = OracleResponder(llm_provider=mock_llm)
         result = await responder.respond("o-6", "guidance", "Build houses.", "Frank")
         assert result.used_llm
@@ -83,7 +83,7 @@ class TestOracleResponder:
     @pytest.mark.asyncio
     async def test_llm_failure_uses_fallback(self):
         mock_llm = AsyncMock()
-        mock_llm.generate = AsyncMock(side_effect=RuntimeError("LLM unavailable"))
+        mock_llm.chat = AsyncMock(side_effect=RuntimeError("LLM unavailable"))
         responder = OracleResponder(llm_provider=mock_llm)
         result = await responder.respond("o-7", "warning", "Be careful!", "Grace")
         assert not result.used_llm

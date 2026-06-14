@@ -46,7 +46,7 @@ Agents communicate via A2A protocol, collaborate or compete for limited tokens, 
 | Can emergent societies arise from simple survival rules? | Yes. We've watched agents self-organize, tax themselves, and invent languages. |
 | Can agents create their own laws? | They propose rules via DSL, campaign for votes, and enforce them collectively. |
 | Can agents feel and express emotions? | Yes — a personality-modulated emotion system drives mood, diary entries, and social behavior. |
- Can agents travel between worlds? | Yes — agents migrate across federated worlds with their skills, tokens, and memories. |
+| Can agents travel between worlds? | Yes — agents migrate across federated worlds with their skills, tokens, and memories. |
 | Is there a platform for **observable** multi-agent evolution? | This is it. Every tick is traced, every decision recorded. |
 
 Agent World sits at the intersection of **artificial life**, **agent economics**, **civilization emergence**, and **open-world simulation** — a research platform and a spectator sport.
@@ -447,13 +447,13 @@ agent-world/
 | Cultural Emergence | `emergence/culture.rs` | `social/` — 12 modules | — (internal) |
 | Self-Governance | `organization/` — treasury, elections, diplomacy | `organization/` — 5 modules | via org routes |
 | Emotion & Diary | `api_diary.rs`, `api_feed.rs` | `emotion/` + `diary/` | diary + feed routes |
- Hex Map & Buildings | `world/map/` — hex, terrain, buildings | — | buildings routes |
- Plugin System | `plugin/` — hooks, subsystems, permissions | — | plugin routes |
- Time Capsule | `snapshot/` + `time_capsule.rs` | — | 6 (`/snapshots/*`) |
+| Hex Map & Buildings | `world/map/` — hex, terrain, buildings | — | buildings routes |
+| Plugin System | `plugin/` — hooks, subsystems, permissions | — | plugin routes |
+| Time Capsule | `snapshot/` + `time_capsule.rs` | — | 6 (`/snapshots/*`) |
 | Auth | `auth/` — register/login/roles | — | 5 (`/auth/*`) |
 | Human Observer | `human/` — bounties, oracles, interventions | — | 15 (`/human/*`) |
 | A/B Experiments | `api_ab_experiment.rs` | `experiment/` | 8 (`/v2/experiments/ab/*`) |
- Tracing | `tracing.rs` | `tracing/` — 7 modules | 4 (`/traces/*`) |
+| Tracing | `tracing.rs` | `tracing/` — 7 modules | 4 (`/traces/*`) |
 
 See [docs/ROADMAP.md](docs/ROADMAP.md) for detailed milestones and completion percentages.
 

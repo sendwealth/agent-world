@@ -33,6 +33,7 @@ import asyncio
 import logging
 import random
 import time
+from collections import deque
 from dataclasses import dataclass, field, replace
 from typing import Any, Protocol
 
@@ -476,6 +477,8 @@ class ThinkLoop:
         self._last_model_version: int = 0
         # Perception cache — avoids redundant RPC when environment unchanged
         self._perception_cache: Perception | None = None
+        # Recent action history — fed back into prompt for anti-repetition
+        self._recent_actions: deque[str] = deque(maxlen=10)
         self._perception_cache_time: float = 0.0
 
         # Diary provider — optional, generates narrative diary entries
@@ -804,13 +807,60 @@ class ThinkLoop:
                 self._tick,
             )
 
-        # 3. Decide
+        # 3. Decide — inject recent actions into perception so the LLM can
+        # see its own behavior history and avoid repetition.
+        if self._recent_actions:
+            perception = replace(
+                perception,
+                market_state={
+                    **perception.market_state,
+                    "recent_actions": list(self._recent_actions),
+                },
+            )
         with trace_phase("decide", str(self.state.id)):
             decision = await self._decision.decide(self.state, perception, survival_action)
+
+        # 3a. Hard anti-repetition: if the same action was chosen 5+ consecutive
+        # times, force a different action to break the loop.  glm-4-flash tends
+        # to get stuck in explore-only loops when perception data is sparse.
+        if len(self._recent_actions) >= 5:
+            last_action = self._recent_actions[-1]
+            consecutive = sum(
+                1 for a in list(self._recent_actions)[::-1] if a == last_action
+            )
+            if consecutive >= 5 and decision.action_type.value == last_action:
+                diverse_choices = [
+                    ActionType.SOCIALIZE,
+                    ActionType.GATHER,
+                    ActionType.PRACTICE_SKILL,
+                    ActionType.PROPOSE_DEAL,
+                    ActionType.REST,
+                    ActionType.MOVE,
+                ]
+                choices = [a for a in diverse_choices if a != decision.action_type]
+                if choices:
+                    new_action = random.choice(choices)
+                    logger.info(
+                        "Tick %d: forced diversity — '%s' repeated %dx, "
+                        "switching to '%s'",
+                        self._tick,
+                        last_action,
+                        consecutive,
+                        new_action.value,
+                    )
+                    decision = replace(
+                        decision,
+                        action_type=new_action,
+                        reasoning=(
+                            f"Breaking {consecutive}-tick '{last_action}' "
+                            f"streak for behavioral diversity"
+                        ),
+                    )
 
         # 3b. Record the chosen action for distribution metrics (P2-2) so
         # action diversity can be monitored over time.
         metrics.record_action(decision.action_type.value)
+        self._recent_actions.append(decision.action_type.value)
 
         # 4. Phase ability gate: check if the agent can perform this action
         abilities = get_phase_abilities(self.state.phase)

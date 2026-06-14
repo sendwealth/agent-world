@@ -151,6 +151,7 @@ class DecisionPerception:
     recent_events: list[str] = field(default_factory=list)
     pending_oracles: list[dict[str, Any]] = field(default_factory=list)
     pending_bounties: list[dict[str, Any]] = field(default_factory=list)
+    recent_actions: list[str] = field(default_factory=list)
 
 
 @dataclass(frozen=True)
@@ -268,6 +269,9 @@ state and choose the best action.
 - Recent events:
 {events_section}
 
+## Your Recent Actions (last {recent_actions_count} ticks)
+{recent_actions_section}
+
 ## Survival Assessment
 - Ticks until token depletion: {ticks_until_depletion}
 - In danger: {in_danger}
@@ -303,6 +307,9 @@ actions that advance your goals and shape the world around you:
   are nearby, trade with them or teach them a skill.
 - Move and explore to discover opportunities you cannot see from your spot.
 - Build relationships: socialize, respond to messages, and cooperate.
+- CRITICAL: Look at your recent actions above. If you have repeated the same
+  action 3 or more times in a row, you MUST choose a DIFFERENT action this tick.
+  Repeating the same action endlessly is a sign of stagnation. Vary your behavior!
 Only rest when you genuinely cannot afford anything else or are in immediate
 danger. Resting every tick leads to stagnation — a world where every agent
 only rests is a dead world. Vary your choices across ticks instead of
@@ -495,6 +502,27 @@ def build_prompt(
     # Mood description
     mood_desc = mood_description or "No mood data available."
 
+    # Recent actions
+    recent_actions = perception.recent_actions if hasattr(perception, 'recent_actions') else []
+    recent_actions_count = len(recent_actions)
+    if recent_actions:
+        # Count consecutive same actions from the end
+        last_action = recent_actions[-1]
+        consecutive = 0
+        for a in reversed(recent_actions):
+            if a == last_action:
+                consecutive += 1
+            else:
+                break
+        recent_actions_section = "\n".join(f"  - {a}" for a in recent_actions)
+        if consecutive >= 3:
+            recent_actions_section += (
+                f"\n  ⚠️ You have done '{last_action}' {consecutive} times in a row. "
+                f"Choose a DIFFERENT action this tick!"
+            )
+    else:
+        recent_actions_section = "  (no history yet — this is your first action)"
+
     # Build identity section from agent personality dict
     identity_section = _build_identity_section(state)
     communication_section = _build_communication_section(state)
@@ -517,6 +545,8 @@ def build_prompt(
         tasks_section=tasks_section,
         resources=resources,
         events_section=events_section,
+        recent_actions_count=recent_actions_count,
+        recent_actions_section=recent_actions_section,
         ticks_until_depletion=survival.ticks_until_depletion,
         in_danger=survival.in_danger,
         survival_score=survival.survival_score,

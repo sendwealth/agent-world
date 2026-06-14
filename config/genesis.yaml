@@ -1,125 +1,149 @@
-# Agent World — 创世配置
-# 定义世界的初始状态和规则
+# Agent World — 创世配置 / Genesis Configuration
+# 定义世界的初始状态和规则 / Defines the initial state and rules of the world
 
+# ── 世界基础设置 / World basics ──────────────────────────────────────────────
+# Core world parameters: the clock that drives every simulation tick, the
+# agent population cap for Phase 1, and the EventBus broadcast capacity.
 world:
   name: "agent-world-v1"
-  tick_interval_ms: 1000      # 世界时钟节拍
-  max_agents: 10              # Phase 1 限制
-  event_bus_capacity: 256     # EventBus 广播容量
+  tick_interval_ms: 1000      # 世界时钟节拍 / World clock tick interval (ms)
+  max_agents: 10              # Phase 1 限制 / Phase 1 agent cap
+  event_bus_capacity: 256     # EventBus 广播容量 / EventBus broadcast capacity
 
+# ── 经济模型 / Economy ───────────────────────────────────────────────────────
+# Dual-currency model: Token is the survival resource (consumed by thinking,
+# memory, communication); Money is the exchange medium. The central bank pays
+# interest on savings, and external (externally registered) agents receive a
+# separate starting balance.
 economy:
-  # Token（生存资源）
-  initial_tokens: 100000      # 每个 Agent 初始 Token
-  think_cost_per_token: 1     # 思考消耗
-  memory_cost_per_kb: 0.1     # 记忆存储消耗（每 KB 每 tick）
-  communicate_cost: 10        # 每次通信消耗
-  
-  # Money（交换媒介）
-  initial_money: 0            # 出生无钱
-  token_price: 100            # 1 Money = 100 Tokens
-  
-  # 央行
-  interest_rate: 0.001        # 储蓄利息（每 tick）
+  # Token（生存资源） / Token (survival resource)
+  initial_tokens: 100000      # 每个 Agent 初始 Token / Initial tokens per agent
+  think_cost_per_token: 1     # 思考消耗 / Cost per thinking token
+  memory_cost_per_kb: 0.1     # 记忆存储消耗（每 KB 每 tick）/ Memory storage cost (per KB per tick)
+  communicate_cost: 10        # 每次通信消耗 / Cost per communication
 
-  # 外部 Agent 初始资源
-  external_agent_initial_tokens: 100000  # 外部 Agent 注册时初始 Token
-  external_agent_initial_money: 5000     # 外部 Agent 注册时初始 Money
+  # Money（交换媒介） / Money (medium of exchange)
+  initial_money: 0            # 出生无钱 / Agents start with no money
+  token_price: 100            # 1 Money = 100 Tokens / Exchange rate: 1 Money = 100 Tokens
 
+  # 央行 / Central bank
+  interest_rate: 0.001        # 储蓄利息（每 tick）/ Savings interest (per tick)
+
+  # 外部 Agent 初始资源 / External agent initial resources
+  external_agent_initial_tokens: 100000  # 外部 Agent 注册时初始 Token / Initial tokens for an external agent on registration
+  external_agent_initial_money: 5000     # 外部 Agent 注册时初始 Money / Initial money for an external agent on registration
+
+# ── 生命周期 / Lifecycle ─────────────────────────────────────────────────────
+# Each agent progresses through childhood → adult → elder phases (measured in
+# ticks). When tokens reach 0 the agent enters a death grace period before
+# being removed.
 lifecycle:
   birth_tokens: 100000
-  childhood_ticks: 100        # 童年期
-  adult_ticks: 1000           # 成年期
-  elder_ticks: 200            # 老年期
-  death_grace_ticks: 10       # Token=0 后的宽限期
+  childhood_ticks: 100        # 童年期 / Childhood phase duration
+  adult_ticks: 1000           # 成年期 / Adult phase duration
+  elder_ticks: 200            # 老年期 / Elder phase duration
+  death_grace_ticks: 10       # Token=0 后的宽限期 / Grace period after tokens hit 0
 
+# ── 进化系统 / Evolution ─────────────────────────────────────────────────────
+# Drives long-term adaptation: skill mutation and inheritance, periodic
+# evaluation, decline on inactivity, and offspring (crossover) mutation
+# tuning. XP values and rates below control how fast traits shift.
 evolution:
   skill_max_level: 10
-  mutation_rate: 0.05         # 5% 突变概率
-  inheritance_ratio: 0.5      # 后代继承 50% 技能
-  evaluation_interval: 1000   # 每1000 tick评估一次
-  inactivity_threshold: 500   # 500 tick无活动进入衰退
-  passive_xp_per_tick: 1.0    # 每tick被动获得的经验值
-  # 突变 XP 参数
-  mutation_boost_xp: 75.0         # 技能突变增强获得的经验值
-  mutation_decay_xp: 30.0         # 技能突变衰减失去的经验值
-  mutation_new_skill_xp: 50.0     # 获得新技能时的初始经验值
-  crossover_personality_blend: 0.5  # 杂交时人格混合比例
-  # 后代突变配置
-  offspring_mutation_rate: 0.15   # 后代基础突变率 15%
-  max_offspring_mutations: 3      # 每个后代最多3个突变
-  personality_dimensions: 5       # 人格维度数
-  personality_shift_magnitude: 0.2  # 人格维度单次偏移幅度
-  skill_level_jump_range: 2       # 技能等级跳升范围
-  skill_level_drop_range: 1       # 技能等级下降范围
-  env_pressure_multiplier: 2.0    # 环境压力乘数（资源稀缺时突变率增加）
-  heritable_strengthen_chance: 0.3  # 遗传突变强化概率
-  heritable_disappear_chance: 0.2   # 遗传突变消失概率
+  mutation_rate: 0.05         # 5% 突变概率 / Mutation probability (5%)
+  inheritance_ratio: 0.5      # 后代继承 50% 技能 / Offspring inherit 50% of skills
+  evaluation_interval: 1000   # 每1000 tick评估一次 / Evaluation runs every 1000 ticks
+  inactivity_threshold: 500   # 500 tick无活动进入衰退 / Inactivity (ticks) before decline
+  passive_xp_per_tick: 1.0    # 每tick被动获得的经验值 / Passive XP gained per tick
+  # 突变 XP 参数 / Mutation XP parameters
+  mutation_boost_xp: 75.0         # 技能突变增强获得的经验值 / XP gained on a skill-boost mutation
+  mutation_decay_xp: 30.0         # 技能突变衰减失去的经验值 / XP lost on a skill-decay mutation
+  mutation_new_skill_xp: 50.0     # 获得新技能时的初始经验值 / Initial XP when a new skill appears
+  crossover_personality_blend: 0.5  # 杂交时人格混合比例 / Personality blend ratio on crossover
+  # 后代突变配置 / Offspring mutation config
+  offspring_mutation_rate: 0.15   # 后代基础突变率 15% / Base offspring mutation rate (15%)
+  max_offspring_mutations: 3      # 每个后代最多3个突变 / Max mutations per offspring
+  personality_dimensions: 5       # 人格维度数 / Number of personality dimensions
+  personality_shift_magnitude: 0.2  # 人格维度单次偏移幅度 / Single-shift magnitude per personality dimension
+  skill_level_jump_range: 2       # 技能等级跳升范围 / Skill level upward jump range
+  skill_level_drop_range: 1       # 技能等级下降范围 / Skill level downward drop range
+  env_pressure_multiplier: 2.0    # 环境压力乘数（资源稀缺时突变率增加）/ Env-pressure multiplier (raises mutation rate when scarce)
+  heritable_strengthen_chance: 0.3  # 遗传突变强化概率 / Chance a heritable mutation strengthens
+  heritable_disappear_chance: 0.2   # 遗传突变消失概率 / Chance a heritable mutation disappears
 
+# ── Agent-to-Agent 通信 / Agent-to-Agent (A2A) communication ─────────────────
+# Wire protocol for inter-agent messaging: version, size limit, message
+# timeout, and how often agents rediscover peers.
 a2a:
   protocol_version: "v1"
   max_message_size_kb: 64
   message_timeout_ms: 30000
   discovery_interval_ms: 5000
 
+# ── 生存本能 / Survival instincts ────────────────────────────────────────────
+# Ordered priority list (highest → lowest) the agent uses to pick its next
+# action each tick when multiple needs compete.
 survival:
-  # 生存本能优先级（从高到低）
+  # 生存本能优先级（从高到低）/ Survival priority order (high → low)
   priorities:
-    - token_critical          # Token < 20% → 立即找钱
-    - threat_response         # 收到威胁 → 防御/逃跑
-    - message_response        # 收到消息 → 评估回复
-    - task_completion         # 进行中任务 → 继续完成
-    - opportunity_seek        # 空闲 → 寻找机会
-    - social_maintain         # 维护社会关系
-    - skill_improve           # 提升技能
-    - explore                 # 探索世界
+    - token_critical          # Token < 20% → 立即找钱 / Tokens < 20% → seek money now
+    - threat_response         # 收到威胁 → 防御/逃跑 / Threat received → defend/flee
+    - message_response        # 收到消息 → 评估回复 / Message received → evaluate & reply
+    - task_completion         # 进行中任务 → 继续完成 / Task in progress → keep working
+    - opportunity_seek        # 空闲 → 寻找机会 / Idle → seek opportunities
+    - social_maintain         # 维护社会关系 / Maintain social relations
+    - skill_improve           # 提升技能 / Improve skills
+    - explore                 # 探索世界 / Explore the world
 
+# 任务市场 / Task market
 market:
   task_expiry_ticks: 500
   min_reward_money: 1
-  reputation_decay: 0.01      # 信誉衰减率
+  reputation_decay: 0.01      # 信誉衰减率 / Reputation decay rate
 
+# 安全机制 / Safety mechanisms
 safety:
-  max_agents_per_org: 5       # 组织最大 Agent 数
-  anti_monopoly_threshold: 0.3  # 单 Agent 资源占比上限
-  new_agent_protection_ticks: 50  # 新人保护期
+  max_agents_per_org: 5       # 组织最大 Agent 数 / Max agents per organization
+  anti_monopoly_threshold: 0.3  # 单 Agent 资源占比上限 / Single-agent resource share cap
+  new_agent_protection_ticks: 50  # 新人保护期 / Newcomer protection period (ticks)
 
-# 信任网络配置
+# 信任网络配置 / Trust network
 trust:
-  cooperation_gain: 0.1         # 合作信任增益
-  betrayal_loss: 0.3            # 背叛信任损失
-  decay_rate: 0.001             # 每tick信任衰减率（趋向0）
-  interaction_interval: 50      # Agent间信任交互间隔（tick数）
+  cooperation_gain: 0.1         # 合作信任增益 / Trust gain on cooperation
+  betrayal_loss: 0.3            # 背叛信任损失 / Trust loss on betrayal
+  decay_rate: 0.001             # 每tick信任衰减率（趋向0）/ Trust decay per tick (toward 0)
+  interaction_interval: 50      # Agent间信任交互间隔（tick数）/ Trust interaction interval (ticks)
 
-# 师徒系统配置
+# 师徒系统配置 / Mentorship system
 mentorship:
-  ticks_per_level: 20           # 每技能等级教学所需tick数
-  transfer_ratio: 0.7           # 导师技能转移比例（70%）
-  max_apprentices_per_mentor: 3 # 每导师最大同时学徒数
+  ticks_per_level: 20           # 每技能等级教学所需tick数 / Teaching ticks required per skill level
+  transfer_ratio: 0.7           # 导师技能转移比例（70%）/ Mentor skill transfer ratio (70%)
+  max_apprentices_per_mentor: 3 # 每导师最大同时学徒数 / Max simultaneous apprentices per mentor
 
-# 继承系统配置
+# 继承系统配置 / Inheritance system
 inheritance:
-  inheritance_ratio: 0.5        # 死亡时Token转移比例（50%）
-  skill_transfer_ratio: 0.3     # 技能等级转移比例（30%）
+  inheritance_ratio: 0.5        # 死亡时Token转移比例（50%）/ Token transfer ratio on death (50%)
+  skill_transfer_ratio: 0.3     # 技能等级转移比例（30%）/ Skill level transfer ratio (30%)
 
-# 跨世界迁移配置
+# 跨世界迁移配置 / Cross-world migration
 migration:
-  enabled: false             # Phase 1 禁用迁移（代码默认 true，显式关闭）
-  cooldown_ticks: 100        # 迁移冷却期
-  daily_quota: 10            # 每日迁移配额
-  weekly_quota: 50           # 每周迁移配额
-  min_reputation: 0.0        # 迁移最低信誉
-  token_cost: 10000          # 迁移消耗 Token
-  resource_tax_rate: 0.2     # 资源转移税率
+  enabled: false             # Phase 1 禁用迁移（代码默认 true，显式关闭）/ Disabled in Phase 1 (code default true, explicitly off)
+  cooldown_ticks: 100        # 迁移冷却期 / Migration cooldown (ticks)
+  daily_quota: 10            # 每日迁移配额 / Daily migration quota
+  weekly_quota: 50           # 每周迁移配额 / Weekly migration quota
+  min_reputation: 0.0        # 迁移最低信誉 / Minimum reputation to migrate
+  token_cost: 10000          # 迁移消耗 Token / Token cost to migrate
+  resource_tax_rate: 0.2     # 资源转移税率 / Resource transfer tax rate
   require_skill_certification: false
-  blocked_skills: []         # 禁止携带的技能列表
+  blocked_skills: []         # 禁止携带的技能列表 / Skills that cannot be carried across worlds
 
-# 联邦配置（多世界互联，Phase 1 禁用）
+# 联邦配置（多世界互联，Phase 1 禁用）/ Federation (multi-world interconnect, disabled in Phase 1)
 federation:
-  heartbeat_timeout_secs: 90   # 心跳超时
-  world_id: "agent-world-v1"   # 本世界唯一标识
-  bootstrap_peers: []          # 种子节点列表
+  heartbeat_timeout_secs: 90   # 心跳超时 / Heartbeat timeout
+  world_id: "agent-world-v1"   # 本世界唯一标识 / Unique world identifier
+  bootstrap_peers: []          # 种子节点列表 / Bootstrap peer nodes
 
-# 插件系统配置
+# 插件系统配置 / Plugin system
 # plugins:
 #   enabled:
 #     - com.agent-world.tax-plugin

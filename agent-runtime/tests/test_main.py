@@ -319,11 +319,12 @@ class TestRESTWorldClientEndpoints:
             )
 
     @pytest.mark.asyncio
-    async def test_broadcast_message_raises(self) -> None:
-        """broadcast_message has no World Engine endpoint — raises NotImplementedError."""
+    async def test_broadcast_message_fallback(self) -> None:
+        """broadcast_message POSTs to /api/v1/messages; returns fallback dict on error."""
         client = _make_client()
-        with pytest.raises(NotImplementedError):
-            await client.broadcast_message({"text": "hello all"})
+        result = await client.broadcast_message({"text": "hello all"})
+        # World Engine is unreachable in tests — should return no_endpoint fallback
+        assert result["status"] == "no_endpoint"
 
 
 class TestRESTWorldClientFallback:

@@ -129,9 +129,7 @@ class LLMDecisionProvider:
                     f" — action not yet executable]"
                 )
 
-            parameters = _inject_action_args(
-                action_type, result.parameters, dec_perception
-            )
+            parameters = _inject_action_args(action_type, result.parameters, dec_perception)
 
             return Decision(
                 action_type=action_type,
@@ -291,6 +289,15 @@ def _inject_action_args(
                 **parameters,
                 "target_agent_id": perception.nearby_agents[0],
                 "skill_name": parameters.get("skill_name", "trading"),
+            }
+
+    # socialize also needs a target agent; auto-pick from nearby_agents when
+    # the LLM omitted it or returned an empty string/null (SEN-693).
+    if action_type == ActionType.SOCIALIZE and not parameters.get("target_agent_id"):
+        if perception.nearby_agents:
+            parameters = {
+                **parameters,
+                "target_agent_id": perception.nearby_agents[0],
             }
     return parameters
 

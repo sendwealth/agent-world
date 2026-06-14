@@ -319,9 +319,10 @@ class TestThinkLoopStability:
 
     @pytest.mark.asyncio
     async def test_100_ticks_survival_panic_recovery(self):
-        """Agent that starts low on tokens but can still run 100 ticks."""
-        # Start with moderate tokens — survival mode should kick in
-        state = make_state(tokens=50, max_tokens=1000)
+        """Agent in survival mode can still run 100 ticks without crashing."""
+        # Use enough tokens to survive 100 ticks (survival fall-through
+        # consumes tokens each tick).  50% ratio avoids PANIC stop gate.
+        state = make_state(tokens=5000, max_tokens=10000)
         loop = ThinkLoop(
             state=state,
             survival=SurvivalInstinct(),
@@ -452,10 +453,10 @@ class TestThinkLoopSurvivalBypass:
         )
         await loop.run(max_ticks=5)
         assert loop.tick == 5
-        # PANIC initially bypasses the LLM, but after max_urgent_retries (3)
-        # consecutive emergency-action failures the loop falls back to normal
-        # LLM decision-making to avoid an infinite emergency loop.
-        assert 0 < decision_calls < 5
+        # PANIC mode now always falls through to normal LLM decision-making
+        # after emergency actions fire (fire-and-forget).  So every tick
+        # should invoke the decision provider.
+        assert decision_calls == 5
 
     @pytest.mark.asyncio
     async def test_urgent_mode_skips_decision(self):
@@ -480,10 +481,10 @@ class TestThinkLoopSurvivalBypass:
         )
         await loop.run(max_ticks=5)
         assert loop.tick == 5
-        # URGENT initially bypasses the LLM, but after max_urgent_retries (3)
-        # consecutive emergency-action failures the loop falls back to normal
-        # LLM decision-making to avoid an infinite emergency loop.
-        assert 0 < decision_calls < 5
+        # URGENT mode now always falls through to normal LLM decision-making
+        # after emergency actions fire (fire-and-forget).  So every tick
+        # should invoke the decision provider.
+        assert decision_calls == 5
 
     @pytest.mark.asyncio
     async def test_normal_mode_calls_decision(self):

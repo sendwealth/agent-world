@@ -231,10 +231,10 @@ export default function AgentDetailPage() {
       return;
     }
     try {
-      await postJSON(`/api/v1/investments/agents/${agentId}/invest`, {
-        agent_id: agentId,
-        amount,
-        currency: "money",
+      await postJSON("/api/v1/investments/buy", {
+        product_id: agentId,
+        investor_id: agentId,
+        shares: amount,
       });
       showActionMsg(`已投资 ${agent.name} $${amount.toLocaleString()}`);
       loadAgent();

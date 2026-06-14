@@ -165,6 +165,8 @@ class WorldClientProtocol(Protocol):
 
     async def explore(self, parameters: dict[str, Any]) -> dict[str, Any]: ...
 
+    async def practice_skill(self, skill_name: str) -> dict[str, Any]: ...
+
     async def move(self, direction: str) -> dict[str, Any]: ...
 
     async def gather(self, resource_type: str) -> dict[str, Any]: ...
@@ -483,22 +485,12 @@ class ActionExecutor:
         """Practice a skill by yourself — improves proficiency, no target needed.
 
         Unlike ``teach_skill``, self-practice does not require a target agent.
-        The optional ``skill_name`` (if provided by the LLM) is echoed back so
-        downstream skill-progression modules can record which skill was honed.
+        Sends a ``practice_skill`` intent to the World Engine via the world
+        client so the engine can record the attempt and update the agent's
+        skill proficiency server-side.
         """
         skill_name = context.parameters.get("skill_name", "")
-        if skill_name:
-            return {
-                "action": "practice_skill",
-                "status": "practiced",
-                "skill": skill_name,
-                "message": f"Practiced {skill_name} to improve proficiency.",
-            }
-        return {
-            "action": "practice_skill",
-            "status": "practiced",
-            "message": "Practiced skills to improve proficiency.",
-        }
+        return await context.world.practice_skill(skill_name)
 
     async def _handle_rest(self, context: ActionContext) -> dict[str, Any]:
         """Rest — skip the tick to conserve tokens. No world interaction."""

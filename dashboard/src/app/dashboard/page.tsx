@@ -456,7 +456,7 @@ function RightSidebar({ stats }: { stats: { tick: number; totalTokens: number; t
     const name = window.prompt("新 Agent 名称:");
     if (!name?.trim()) return;
     try {
-      await postJSON("/api/v1/agents/spawn", { name: name.trim() });
+      await postJSON("/api/v1/agents", { name: name.trim() });
       setActionMsg(`Agent ${name} 已创建`);
     } catch (e) {
       setActionMsg(`创建失败: ${e instanceof Error ? e.message : "未知错误"}`);

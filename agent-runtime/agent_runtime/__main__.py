@@ -1662,7 +1662,7 @@ def _add_spawn_args(parser: argparse.ArgumentParser) -> None:
     )
     parser.add_argument(
         "--llm-model", default=None,
-        help="LLM model name (default: minicpm5:1b)",
+        help="LLM model name (default: glm-4-flash)",
     )
     parser.add_argument(
         "--llm-base-url", default=None,
@@ -1906,7 +1906,7 @@ def _apply_llm_config(config: RuntimeConfig, args: argparse.Namespace) -> None:
       2. CLI flags (--llm-provider, --llm-model, --llm-base-url)
       3. Environment variables (LLM_PROVIDER, LLM_MODEL, LLM_BASE_URL, OLLAMA_BASE_URL)
       4. Existing config file value
-      5. Default: Ollama with minicpm5:1b (zero-cost mode)
+      5. Default: Ollama with glm-4-flash (zero-cost mode)
     """
     import os
 
@@ -1939,12 +1939,12 @@ def _apply_llm_config(config: RuntimeConfig, args: argparse.Namespace) -> None:
     if provider_str in _new_protocol_map:
         provider_str = _new_protocol_map[provider_str]
 
-    # Determine model: CLI > env > existing > default(minicpm5:1b)
+    # Determine model: CLI > env > existing > default(glm-4-flash)
     model = (
         args.llm_model
         or os.environ.get("LLM_MODEL")
         or (config.llm.model if config.llm else None)
-        or ("glm-5" if zhipu_mode else "minicpm5:1b")
+        or ("glm-5" if zhipu_mode else "glm-4-flash")
     )
 
     # Determine base_url: CLI > env > existing > provider-specific defaults

@@ -49,6 +49,7 @@ use agent_world_engine::evolution::mutation::OffspringMutationConfig;
 use agent_world_engine::persistence::{SerializableWorldState, SqlitePersistence, StatePersistence};
 use agent_world_engine::world::{Scheduler, WorldState};
 use agent_world_engine::federation::{MigrationManager, MigrationPolicy, WorldRegistry};
+use agent_world_engine::human_agent::{HumanActionQueue, HumanAgentRegistry, HumanAgentSubsystem};
 
 #[tokio::main]
 async fn main() {
@@ -166,6 +167,12 @@ async fn main() {
         death_grace_ticks: genesis_config.lifecycle.death_grace_ticks,
     };
 
+    // ── Phase 5.5: Human-as-Agent shared state ──────────────
+    // Created before the SubsystemRegistry so the HumanAgentSubsystem can
+    // share these handles with AppState.
+    let human_action_queue = HumanActionQueue::shared();
+    let human_agent_registry = HumanAgentRegistry::shared();
+
     let mut subsystem_registry = SubsystemRegistry::new();
     // CRITICAL: InterventionChecker runs FIRST — before any other subsystem.
     // This ensures all safety checks happen before token burn, death judgment, etc.
@@ -173,6 +180,12 @@ async fn main() {
     subsystem_registry.register(Box::new(
         agent_world_engine::world::InterventionCheckerSubsystem::new(intervention_config),
     ));
+    // Phase 5.5: HumanAgentSubsystem runs immediately after the InterventionChecker
+    // so queued human actions land before token burn and death judgment evaluate.
+    subsystem_registry.register(Box::new(HumanAgentSubsystem::new(
+        human_action_queue.clone(),
+        human_agent_registry.clone(),
+    )));
     subsystem_registry.register(Box::new(TokenBurnSubsystem::new(
         TokenBurnEngine::with_defaults(),
     )));
@@ -673,6 +686,8 @@ async fn main() {
         legislation_cycle_engine: Some(legislation_cycle_engine),
         world_state: Some(world_state.clone()),
         genesis_config: Some(Arc::new(genesis_config.clone())),
+        human_action_queue: Some(human_action_queue),
+        human_agent_registry: Some(human_agent_registry),
     });
     // Wire the WorldMessageRouter into the AppState for Oracle/Bounty delivery
     app_state.world_msg_router = Some(world_msg_router);

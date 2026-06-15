@@ -733,6 +733,123 @@ async fn main() {
     tokio::spawn(async move { let _ = bridge_handle.await; });
     println!("   TickBridge: EventBus → tick_tx bridge spawned");
 
+    // ── Spawn HumanActionDrain task ─────────────────────────
+    // Drains the human action queue on each TickAdvanced event and applies
+    // the queued actions (token cost, income, state updates) before AI
+    // decisions run. Also checks for timed-out human agents and applies
+    // AI fallback (Rest).
+    let human_queue = app_state.human_action_queue.clone();
+    let human_agents_list = app_state.agents.clone();
+    let human_event_bus = event_bus.clone();
+    let human_genesis = app_state.genesis_config.clone();
+    let mut human_rx = event_bus.subscribe();
+    let human_cancel = cancel_token.clone();
+    let human_handle = tokio::spawn(async move {
+        loop {
+            tokio::select! {
+                result = human_rx.recv() => {
+                    match result {
+                        Ok(event) => {
+                            if let WorldEvent::TickAdvanced { tick } = event {
+                                // 1. Drain queued human actions
+                                let actions = human_queue.drain(tick).await;
+                                for action in &actions {
+                                    let cost = action.action_type.token_cost();
+                                    let income = action.action_type.token_income();
+                                    // Apply token changes to AppState.agents
+                                    let mut agents = human_agents_list.lock().await;
+                                    if let Some(agent) = agents.iter_mut().find(|a| a.id == action.agent_id) {
+                                        agent.tokens = agent.tokens.saturating_sub(cost);
+                                        agent.tokens = agent.tokens.saturating_add(income);
+                                    }
+                                }
+                                if !actions.is_empty() {
+                                    tracing::debug!(
+                                        tick,
+                                        count = actions.len(),
+                                        "Drained human actions"
+                                    );
+                                }
+
+                                // 2. Check timeouts and apply AI fallback (Rest)
+                                let timeout_ticks = human_genesis
+                                    .as_ref()
+                                    .map(|c| c.human_agent.timeout_ticks)
+                                    .unwrap_or(3);
+                                let timed_out = human_queue.check_timeouts(tick, timeout_ticks).await;
+                                for agent_id in &timed_out {
+                                    // AI fallback: Rest action (free, +5 tokens)
+                                    let mut agents = human_agents_list.lock().await;
+                                    if let Some(agent) = agents.iter_mut().find(|a| &a.id == agent_id) {
+                                        if agent.alive {
+                                            agent.tokens = agent.tokens.saturating_add(5); // Rest income
+                                        }
+                                    }
+                                    human_queue.touch_agent(agent_id, tick).await;
+                                    tracing::info!(
+                                        agent_id = %agent_id,
+                                        tick,
+                                        "Human agent timed out — applied AI fallback (Rest)"
+                                    );
+                                }
+
+                                // 3. Apply token burn per tick for human agents
+                                let burn_per_tick = human_genesis
+                                    .as_ref()
+                                    .map(|c| c.human_agent.token_burn_per_tick)
+                                    .unwrap_or(50);
+                                if burn_per_tick > 0 {
+                                    let human_agents = human_queue.list_agents().await;
+                                    let mut agents = human_agents_list.lock().await;
+                                    for ha in &human_agents {
+                                        let agent_id_str = &ha.agent_id;
+                                        if let Some(agent) = agents.iter_mut().find(|a| &a.id == agent_id_str) {
+                                            if agent.alive {
+                                                // Skip newbie protection
+                                                if !ha.newbie_protection {
+                                                    agent.tokens = agent.tokens.saturating_sub(burn_per_tick);
+                                                    // Death check
+                                                    let death_threshold = human_genesis
+                                                        .as_ref()
+                                                        .map(|c| c.human_agent.death_token_threshold)
+                                                        .unwrap_or(0);
+                                                    if agent.tokens <= death_threshold {
+                                                        agent.alive = false;
+                                                        agent.phase = "dead".to_string();
+                                                        human_event_bus.emit(WorldEvent::AgentDied {
+                                                            agent_id: agent.id.clone(),
+                                                            reason: agent_world_engine::world::enums::DeathReason::TokenDepleted,
+                                                        });
+                                                        tracing::info!(
+                                                            agent_id = %agent.id,
+                                                            tick,
+                                                            "Human agent died (token depleted)"
+                                                        );
+                                                    }
+                                                }
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                        Err(tokio::sync::broadcast::error::RecvError::Lagged(n)) => {
+                            eprintln!("[HumanActionDrain] Lagged {} events", n);
+                        }
+                        Err(tokio::sync::broadcast::error::RecvError::Closed) => {
+                            break;
+                        }
+                    }
+                }
+                _ = human_cancel.cancelled() => {
+                    break;
+                }
+            }
+        }
+    });
+    tokio::spawn(async move { let _ = human_handle.await; });
+    println!("   HumanActionDrain: action queue drain + timeout fallback spawned");
+
     let app = api::build_full_router(app_state);
 
     let host = std::env::var("HOST").unwrap_or_else(|_| "0.0.0.0".to_string());

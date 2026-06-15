@@ -7,6 +7,8 @@ use axum::{
     routing::*,
     Json,
 };
+use serde::{Deserialize, Serialize};
+use uuid::Uuid;
 
 use crate::agentworld::a2a::v1::{
     world_message::Payload, BountyPayload, OraclePayload, OracleType as ProtoOracleType,
@@ -14,6 +16,7 @@ use crate::agentworld::a2a::v1::{
 };
 use crate::api::{AppState, ErrorResponse};
 use crate::auth::{extractors::require_capability, Capability, RequireAuth};
+use crate::human::action_queue::{HumanAction, HumanActionType};
 use crate::human::store::{
     ClaimAgentRequest, ClaimBountyRequest, CompleteBountyRequest, CreateBountyRequest,
     InfluenceRankingsQuery, InvestRequest, ListBountiesQuery, ListOraclesQuery, OracleType,
@@ -621,4 +624,318 @@ pub fn human_routes() -> axum::Router<AppState> {
         .route("/human/agents/:id/recharge", post(human_recharge_agent))
         .route("/human/agents/:id/energy", get(human_agent_energy))
         .route("/human/agents/:id/recharge-history", get(human_recharge_history))
+        // ── Human-as-Agent (Phase 5.5) endpoints ──
+        .route("/human/incarnate", post(human_incarnate))
+        .route("/human/agents/:id/action", post(human_submit_action))
+        .route("/human/agents/:id/state", get(human_agent_state))
+        .route("/human/agents/list-human", get(human_list_all))
+}
+
+// ── Human-as-Agent (Phase 5.5) ───────────────────────────
+
+/// Request body for POST /api/v1/human/incarnate.
+#[derive(Debug, Deserialize)]
+pub struct IncarnateRequest {
+    /// Display name for the human-controlled agent.
+    pub name: String,
+}
+
+/// Response body for incarnate.
+#[derive(Debug, Serialize)]
+pub struct IncarnateResponse {
+    pub agent_id: String,
+    pub name: String,
+    pub tokens: u64,
+    pub newbie_protection_ticks: u64,
+    pub incarnated_tick: u64,
+}
+
+/// Request body for POST /api/v1/human/agents/:id/action.
+#[derive(Debug, Deserialize)]
+pub struct SubmitActionRequest {
+    /// The action type (communicate, trade, rest, explore, gather, build, etc.)
+    pub action: String,
+    /// Free-form parameters for the action.
+    #[serde(default)]
+    pub params: serde_json::Value,
+}
+
+/// Response body for action submission.
+#[derive(Debug, Serialize)]
+pub struct SubmitActionResponse {
+    pub agent_id: String,
+    pub action: String,
+    pub queued: bool,
+    pub token_cost: u64,
+    pub submitted_tick: u64,
+}
+
+/// POST /api/v1/human/incarnate
+///
+/// Registers a human as an agent in the world. Allocates initial token balance
+/// and newbie protection. The agent is added to both AppState.agents and
+/// WorldState.agents so it participates in the same survival rules as AI agents.
+pub async fn human_incarnate(
+    State(state): State<AppState>,
+    RequireAuth(auth): RequireAuth,
+    Json(body): Json<IncarnateRequest>,
+) -> impl IntoResponse {
+    if body.name.trim().is_empty() {
+        return (
+            StatusCode::BAD_REQUEST,
+            Json(ErrorResponse {
+                error: "name is required".into(),
+            }),
+        )
+            .into_response();
+    }
+
+    // Read human-agent config from genesis, falling back to defaults.
+    let (initial_tokens, newbie_protection_ticks) = match &state.genesis_config {
+        Some(cfg) => (
+            cfg.human_agent.initial_tokens,
+            cfg.human_agent.newbie_protection_ticks,
+        ),
+        None => (
+            crate::config::HumanAgentConfig::default().initial_tokens,
+            crate::config::HumanAgentConfig::default().newbie_protection_ticks,
+        ),
+    };
+
+    let agent_id = Uuid::new_v4().to_string();
+    let tick = *state.tick_rx.borrow();
+    let name = body.name.clone();
+    let created_at = chrono::Utc::now().to_rfc3339();
+
+    // Register in the human action queue
+    let agent_state = state
+        .human_action_queue
+        .register_agent(
+            &agent_id,
+            &auth.user_id,
+            &name,
+            tick,
+            initial_tokens,
+            newbie_protection_ticks,
+        )
+        .await;
+
+    // Add to AppState.agents (shared agents list)
+    {
+        let mut agents = state.agents.lock().await;
+        agents.push(crate::api::AgentDto {
+            id: agent_id.clone(),
+            name: name.clone(),
+            phase: "adult".to_string(),
+            tokens: initial_tokens,
+            money: 0,
+            alive: true,
+            ticks_survived: 0,
+            personality: String::new(),
+            parent_ids: Vec::new(),
+            generation: 0,
+            skills: HashMap::new(),
+            created_at,
+        });
+    }
+
+    // Insert into WorldState.agents so survival subsystems process this agent
+    if let Some(ref ws) = state.world_state {
+        let agent_uuid = Uuid::parse_str(&agent_id).unwrap_or_else(|_| Uuid::new_v4());
+        let mut ws_guard = ws.lock().await;
+        ws_guard.agents.push((
+            agent_uuid,
+            tick,
+            crate::world::agent::AgentRecord {
+                id: agent_uuid,
+                name: name.clone(),
+                phase: crate::world::enums::AgentPhase::Adult,
+                tokens: initial_tokens,
+                skills: std::collections::HashMap::new(),
+                personality: String::new(),
+                tasks_completed: 0,
+                tasks_attempted: 0,
+            },
+        ));
+    }
+
+    // Emit spawn event
+    state.event_bus.emit(WorldEvent::AgentSpawned {
+        agent_id: agent_id.clone(),
+        name: name.clone(),
+    });
+
+    tracing::info!(
+        agent_id = %agent_id,
+        human_user_id = %auth.user_id,
+        name = %name,
+        "Human agent incarnated"
+    );
+
+    let _ = agent_state; // suppress unused warning
+
+    (
+        StatusCode::CREATED,
+        Json(IncarnateResponse {
+            agent_id,
+            name,
+            tokens: initial_tokens,
+            newbie_protection_ticks,
+            incarnated_tick: tick,
+        }),
+    )
+        .into_response()
+}
+
+/// POST /api/v1/human/agents/:id/action
+///
+/// Submit an action for a human-controlled agent. The action is queued and
+/// will be executed at the start of the next tick (before AI decisions).
+pub async fn human_submit_action(
+    State(state): State<AppState>,
+    RequireAuth(auth): RequireAuth,
+    Path(agent_id): Path<String>,
+    Json(body): Json<SubmitActionRequest>,
+) -> impl IntoResponse {
+    // Validate action type
+    let action_type = match HumanActionType::from_str_lossy(&body.action) {
+        Some(at) => at,
+        None => {
+            return (
+                StatusCode::BAD_REQUEST,
+                Json(ErrorResponse {
+                    error: format!("unknown action type '{}'", body.action),
+                }),
+            )
+                .into_response();
+        }
+    };
+
+    // Verify agent is a registered human agent
+    let agent_state = match state.human_action_queue.get_agent_state(&agent_id).await {
+        Some(s) => s,
+        None => {
+            return (
+                StatusCode::NOT_FOUND,
+                Json(ErrorResponse {
+                    error: "agent not found or not a human-controlled agent".into(),
+                }),
+            )
+                .into_response();
+        }
+    };
+
+    // Security: verify the authenticated user owns this agent
+    if agent_state.human_user_id != auth.user_id {
+        return (
+            StatusCode::FORBIDDEN,
+            Json(ErrorResponse {
+                error: "you do not control this agent".into(),
+            }),
+        )
+            .into_response();
+    }
+
+    // Check agent is alive
+    {
+        let agents = state.agents.lock().await;
+        match agents.iter().find(|a| a.id == agent_id) {
+            Some(a) if a.alive => {}
+            Some(_) => {
+                return (
+                    StatusCode::GONE,
+                    Json(ErrorResponse {
+                        error: "agent is dead".into(),
+                    }),
+                )
+                    .into_response();
+            }
+            None => {
+                return (
+                    StatusCode::NOT_FOUND,
+                    Json(ErrorResponse {
+                        error: "agent not found".into(),
+                    }),
+                )
+                    .into_response();
+            }
+        }
+    }
+
+    let tick = *state.tick_rx.borrow();
+    let token_cost = action_type.token_cost();
+
+    // Enqueue the action
+    state
+        .human_action_queue
+        .enqueue(HumanAction {
+            agent_id: agent_id.clone(),
+            action_type: action_type.clone(),
+            params: body.params,
+            submitted_tick: tick,
+        })
+        .await;
+
+    (
+        StatusCode::ACCEPTED,
+        Json(SubmitActionResponse {
+            agent_id,
+            action: action_type.as_str().to_string(),
+            queued: true,
+            token_cost,
+            submitted_tick: tick,
+        }),
+    )
+        .into_response()
+}
+
+/// GET /api/v1/human/agents/:id/state
+///
+/// Get the current state of a human-controlled agent, including timeout info.
+pub async fn human_agent_state(
+    State(state): State<AppState>,
+    Path(agent_id): Path<String>,
+) -> impl IntoResponse {
+    match state.human_action_queue.get_agent_state(&agent_id).await {
+        Some(agent_state) => {
+            let current_tick = *state.tick_rx.borrow();
+            let timeout_ticks = match &state.genesis_config {
+                Some(cfg) => cfg.human_agent.timeout_ticks,
+                None => crate::config::HumanAgentConfig::default().timeout_ticks,
+            };
+            let ticks_since_last_action =
+                current_tick.saturating_sub(agent_state.last_action_tick);
+            let will_timeout = ticks_since_last_action >= timeout_ticks;
+
+            let pending = state.human_action_queue.pending_count().await;
+
+            (
+                StatusCode::OK,
+                Json(serde_json::json!({
+                    "agent_state": agent_state,
+                    "current_tick": current_tick,
+                    "ticks_since_last_action": ticks_since_last_action,
+                    "timeout_ticks": timeout_ticks,
+                    "will_timeout": will_timeout,
+                    "pending_actions": pending,
+                })),
+            )
+                .into_response()
+        }
+        None => (
+            StatusCode::NOT_FOUND,
+            Json(ErrorResponse {
+                error: "human agent not found".into(),
+            }),
+        )
+            .into_response(),
+    }
+}
+
+/// GET /api/v1/human/agents/list-human
+///
+/// List all human-controlled agents.
+pub async fn human_list_all(State(state): State<AppState>) -> impl IntoResponse {
+    let agents = state.human_action_queue.list_agents().await;
+    Json(agents).into_response()
 }

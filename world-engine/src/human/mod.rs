@@ -6,6 +6,10 @@
 //! Key types: HumanParticipationStore, SharedHumanStore
 //! Depends on: auth (HumanUser), persistence (SQLite)
 //!
+pub mod action_queue;
 pub mod store;
 
-pub use store::{HumanParticipationStore, SharedHumanStore, RechargeRequest, RechargeEntry};
+pub use action_queue::{
+    HumanAction, HumanActionQueue, HumanActionType, HumanAgentState, SharedHumanActionQueue,
+};
+pub use store::{HumanParticipationStore, SharedHumanStore, RechargeEntry, RechargeRequest};

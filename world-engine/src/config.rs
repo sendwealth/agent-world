@@ -39,6 +39,8 @@ pub struct GenesisConfig {
     #[serde(default)]
     pub survival: SurvivalConfig,
     #[serde(default)]
+    pub human_agent: HumanAgentConfig,
+    #[serde(default)]
     pub market: MarketConfig,
     #[serde(default)]
     pub safety: SafetyConfig,
@@ -381,6 +383,55 @@ impl Default for SurvivalConfig {
             priorities: default_priorities(),
         }
     }
+}
+
+/// Configuration for the Human-as-Agent feature (Phase 5.5).
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub struct HumanAgentConfig {
+    /// Initial token balance granted to a human-controlled agent on incarnate.
+    #[serde(default = "default_human_initial_tokens")]
+    pub initial_tokens: u64,
+    /// Number of ticks of newbie protection (no token burn, no death).
+    #[serde(default = "default_human_newbie_protection_ticks")]
+    pub newbie_protection_ticks: u64,
+    /// Number of ticks a human can go without submitting an action before
+    /// automatic AI fallback (Rest / Survival Instinct).
+    #[serde(default = "default_human_timeout_ticks")]
+    pub timeout_ticks: u64,
+    /// Token burn per tick for human agents (same as AI agents by default).
+    #[serde(default = "default_human_token_burn_per_tick")]
+    pub token_burn_per_tick: u64,
+    /// Token threshold below which an agent dies (same as AI agents).
+    #[serde(default = "default_human_death_token_threshold")]
+    pub death_token_threshold: u64,
+}
+
+impl Default for HumanAgentConfig {
+    fn default() -> Self {
+        Self {
+            initial_tokens: default_human_initial_tokens(),
+            newbie_protection_ticks: default_human_newbie_protection_ticks(),
+            timeout_ticks: default_human_timeout_ticks(),
+            token_burn_per_tick: default_human_token_burn_per_tick(),
+            death_token_threshold: default_human_death_token_threshold(),
+        }
+    }
+}
+
+fn default_human_initial_tokens() -> u64 {
+    100_000
+}
+fn default_human_newbie_protection_ticks() -> u64 {
+    5
+}
+fn default_human_timeout_ticks() -> u64 {
+    3
+}
+fn default_human_token_burn_per_tick() -> u64 {
+    50
+}
+fn default_human_death_token_threshold() -> u64 {
+    0
 }
 
 fn default_priorities() -> Vec<String> {

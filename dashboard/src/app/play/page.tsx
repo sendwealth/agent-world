@@ -75,6 +75,7 @@ export default function PlayPage() {
   // Restore agent_id from localStorage on mount
   useEffect(() => {
     const stored = loadStoredAgentId();
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- sync from localStorage after hydration
     if (stored) setAgentId(stored);
     setLoading(false);
   }, []);
@@ -102,6 +103,7 @@ export default function PlayPage() {
 
   useEffect(() => {
     if (!agentId) return;
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- initial poll kick-off
     refreshStatus();
     const interval = setInterval(refreshStatus, 2000);
     return () => clearInterval(interval);

@@ -574,7 +574,7 @@ mod tests {
         let queue = HumanActionQueue::shared();
         let registry = HumanAgentRegistry::shared();
 
-        let (uid, _spawn, mut record) = make_record("Alice", 50);
+        let (uid, _spawn, record) = make_record("Alice", 50);
         let agent_id = uid.to_string();
         let initial_tokens = record.tokens;
 

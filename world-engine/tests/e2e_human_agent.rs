@@ -156,7 +156,7 @@ async fn test_play_http_round_trip() {
         .unwrap();
     assert_eq!(resp.status(), 200);
     let lb: serde_json::Value = resp.json().await.unwrap();
-    assert!(lb.as_array().unwrap().len() >= 1);
+    assert!(!lb.as_array().unwrap().is_empty());
 
     let resp = client
         .get(format!("{}/api/v1/play/stats", base_url))

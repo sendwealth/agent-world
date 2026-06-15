@@ -485,7 +485,7 @@ mod tests {
 
     async fn body_to_json(body: Body) -> serde_json::Value {
         let bytes = body.collect().await.unwrap().to_bytes();
-        serde_json::from_slice(&bytes).unwrap_or_else(|_| serde_json::Value::Null)
+        serde_json::from_slice(&bytes).unwrap_or(serde_json::Value::Null)
     }
 
     #[tokio::test]

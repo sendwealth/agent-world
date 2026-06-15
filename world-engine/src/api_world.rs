@@ -702,6 +702,7 @@ pub fn world_routes() -> axum::Router<AppState> {
     use axum::routing::*;
     axum::Router::new()
         .route("/world/events", get(world_events_sse))
+        .route("/world/:id/events", get(world_events_sse))
         .route("/world/stats", get(world_stats))
         .route("/world/leaderboard", get(world_leaderboard))
         .route("/agents", get(list_agents))

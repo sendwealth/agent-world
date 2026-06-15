@@ -1,7 +1,8 @@
 .PHONY: help setup dev dev-llm dev-detach dev-down dev-logs dev-ps dev-restart \
        dev-ci dev-ci-down test lint fmt proto clean build run demo demo-json demo-death \
        bench stress test-e2e-integration screenshots screenshots-install \
-       benchmark benchmark-synth benchmark-live
+       benchmark benchmark-synth benchmark-live \
+       documentary documentary-synth documentary-sample documentary-live documentary-no-tts
 
 help: ## Show this help
 	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) | sort | awk 'BEGIN {FS = ":.*?## "}; {printf "\033[36m%-20s\033[0m %s\n", $$1, $$2}'
@@ -120,6 +121,29 @@ benchmark-synth: ## Run benchmark in synthetic mode with explicit flags
 
 benchmark-live: ## Run benchmark against a live world-engine (set ENGINE_URL)
 	python3 scripts/park_replication.py --mode live --engine-url $${ENGINE_URL:-http://localhost:8080}
+
+# ── Auto-Documentary (Phase 5.4) ─────────────────────────
+
+documentary: ## Generate a narrated world-history documentary video (synthetic, CI-safe)
+	@command -v ffmpeg >/dev/null 2>&1 || { \
+		echo "Error: ffmpeg is required for video generation."; \
+		echo "  macOS:  brew install ffmpeg"; \
+		echo "  Ubuntu: sudo apt-get install ffmpeg"; \
+		exit 1; \
+	}
+	python3 scripts/generate_documentary.py --mode synthetic
+
+documentary-synth: ## Generate documentary with explicit synthetic flags
+	python3 scripts/generate_documentary.py --mode synthetic --agents 50 --ticks 5000
+
+documentary-sample: ## Generate documentary from dashboard sample data
+	python3 scripts/generate_documentary.py --mode sample
+
+documentary-live: ## Generate documentary from a live world-engine (set ENGINE_URL)
+	python3 scripts/generate_documentary.py --mode live --engine-url $${ENGINE_URL:-http://localhost:8080}
+
+documentary-no-tts: ## Generate documentary without TTS narration (subtitles only)
+	python3 scripts/generate_documentary.py --mode synthetic --no-tts
 
 demo: ## Run E2E demo: 2 agents survive 1000 ticks with trading, tasks, death
 	python3 scripts/e2e_demo.py

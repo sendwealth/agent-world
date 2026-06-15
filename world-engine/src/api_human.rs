@@ -16,7 +16,8 @@ use crate::agentworld::a2a::v1::{
 };
 use crate::api::{AppState, ErrorResponse};
 use crate::auth::{extractors::require_capability, Capability, RequireAuth};
-use crate::human::action_queue::{HumanAction, HumanActionType};
+use crate::human::action_queue::HumanActionType;
+use crate::human_agent::{HumanAgent, QueuedAction};
 use crate::human::store::{
     ClaimAgentRequest, ClaimBountyRequest, CompleteBountyRequest, CreateBountyRequest,
     InfluenceRankingsQuery, InvestRequest, ListBountiesQuery, ListOraclesQuery, OracleType,
@@ -707,18 +708,27 @@ pub async fn human_incarnate(
     let name = body.name.clone();
     let created_at = chrono::Utc::now().to_rfc3339();
 
-    // Register in the human action queue
-    let agent_state = state
-        .human_action_queue
-        .register_agent(
-            &agent_id,
-            &auth.user_id,
-            &name,
-            tick,
+    // Register in the human agent registry
+    {
+        let mut reg = state.human_agent_registry.lock().await;
+        if let Err(e) = reg.register(HumanAgent {
+            agent_id: agent_id.clone(),
+            human_id: auth.user_id.clone(),
+            name: name.clone(),
             initial_tokens,
-            newbie_protection_ticks,
-        )
-        .await;
+            initial_money: 0,
+            spawned_tick: tick,
+            last_action_tick: tick,
+            alive: true,
+            metadata: serde_json::json!({}),
+        }) {
+            return (
+                StatusCode::CONFLICT,
+                Json(ErrorResponse { error: e }),
+            )
+                .into_response();
+        }
+    }
 
     // Add to AppState.agents (shared agents list)
     {
@@ -772,7 +782,6 @@ pub async fn human_incarnate(
         "Human agent incarnated"
     );
 
-    let _ = agent_state; // suppress unused warning
 
     (
         StatusCode::CREATED,
@@ -812,21 +821,24 @@ pub async fn human_submit_action(
     };
 
     // Verify agent is a registered human agent
-    let agent_state = match state.human_action_queue.get_agent_state(&agent_id).await {
-        Some(s) => s,
-        None => {
-            return (
-                StatusCode::NOT_FOUND,
-                Json(ErrorResponse {
-                    error: "agent not found or not a human-controlled agent".into(),
-                }),
-            )
-                .into_response();
+    let agent = {
+        let reg = state.human_agent_registry.lock().await;
+        match reg.get_by_agent(&agent_id) {
+            Some(a) => a.clone(),
+            None => {
+                return (
+                    StatusCode::NOT_FOUND,
+                    Json(ErrorResponse {
+                        error: "agent not found or not a human-controlled agent".into(),
+                    }),
+                )
+                    .into_response();
+            }
         }
     };
 
     // Security: verify the authenticated user owns this agent
-    if agent_state.human_user_id != auth.user_id {
+    if agent.human_id != auth.user_id {
         return (
             StatusCode::FORBIDDEN,
             Json(ErrorResponse {
@@ -866,15 +878,23 @@ pub async fn human_submit_action(
     let token_cost = action_type.token_cost();
 
     // Enqueue the action
-    state
-        .human_action_queue
-        .enqueue(HumanAction {
+    {
+        let mut q = state.human_action_queue.lock().await;
+        if let Err(e) = q.enqueue(QueuedAction {
+            id: String::new(),
             agent_id: agent_id.clone(),
-            action_type: action_type.clone(),
+            action: action_type.as_str().to_string(),
             params: body.params,
-            submitted_tick: tick,
-        })
-        .await;
+            enqueued_tick: tick,
+            applied: false,
+        }) {
+            return (
+                StatusCode::TOO_MANY_REQUESTS,
+                Json(ErrorResponse { error: e }),
+            )
+                .into_response();
+        }
+    }
 
     (
         StatusCode::ACCEPTED,
@@ -896,46 +916,55 @@ pub async fn human_agent_state(
     State(state): State<AppState>,
     Path(agent_id): Path<String>,
 ) -> impl IntoResponse {
-    match state.human_action_queue.get_agent_state(&agent_id).await {
-        Some(agent_state) => {
-            let current_tick = *state.tick_rx.borrow();
-            let timeout_ticks = match &state.genesis_config {
-                Some(cfg) => cfg.human_agent.timeout_ticks,
-                None => crate::config::HumanAgentConfig::default().timeout_ticks,
-            };
-            let ticks_since_last_action =
-                current_tick.saturating_sub(agent_state.last_action_tick);
-            let will_timeout = ticks_since_last_action >= timeout_ticks;
-
-            let pending = state.human_action_queue.pending_count().await;
-
-            (
-                StatusCode::OK,
-                Json(serde_json::json!({
-                    "agent_state": agent_state,
-                    "current_tick": current_tick,
-                    "ticks_since_last_action": ticks_since_last_action,
-                    "timeout_ticks": timeout_ticks,
-                    "will_timeout": will_timeout,
-                    "pending_actions": pending,
-                })),
-            )
-                .into_response()
+    let agent = {
+        let reg = state.human_agent_registry.lock().await;
+        match reg.get_by_agent(&agent_id) {
+            Some(a) => a.clone(),
+            None => {
+                return (
+                    StatusCode::NOT_FOUND,
+                    Json(ErrorResponse {
+                        error: "human agent not found".into(),
+                    }),
+                )
+                    .into_response();
+            }
         }
-        None => (
-            StatusCode::NOT_FOUND,
-            Json(ErrorResponse {
-                error: "human agent not found".into(),
-            }),
-        )
-            .into_response(),
-    }
+    };
+    let current_tick = *state.tick_rx.borrow();
+    let timeout_ticks = match &state.genesis_config {
+        Some(cfg) => cfg.human_agent.timeout_ticks,
+        None => crate::config::HumanAgentConfig::default().timeout_ticks,
+    };
+    let ticks_since_last_action = current_tick.saturating_sub(agent.last_action_tick);
+    let will_timeout = ticks_since_last_action >= timeout_ticks;
+
+    let pending = state.human_action_queue.lock().await.pending_count();
+
+    (
+        StatusCode::OK,
+        Json(serde_json::json!({
+            "agent_state": agent,
+            "current_tick": current_tick,
+            "ticks_since_last_action": ticks_since_last_action,
+            "timeout_ticks": timeout_ticks,
+            "will_timeout": will_timeout,
+            "pending_actions": pending,
+        })),
+    )
+        .into_response()
 }
 
 /// GET /api/v1/human/agents/list-human
 ///
 /// List all human-controlled agents.
 pub async fn human_list_all(State(state): State<AppState>) -> impl IntoResponse {
-    let agents = state.human_action_queue.list_agents().await;
+    let agents: Vec<HumanAgent> = state
+        .human_agent_registry
+        .lock()
+        .await
+        .iter_alive()
+        .cloned()
+        .collect();
     Json(agents).into_response()
 }

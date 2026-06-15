@@ -237,8 +237,6 @@ pub struct AppState {
     pub governance_metrics: Option<SharedGovernanceMetricsCollector>,
     pub building_manager: Arc<Mutex<BuildingManager>>,
     pub human_store: Arc<Mutex<HumanParticipationStore>>,
-    /// Human-as-Agent action queue (Phase 5.5).
-    pub human_action_queue: crate::human::SharedHumanActionQueue,
     pub auth_store: SharedAuthStore,
     pub investment_system: Option<SharedInvestmentSystem>,
     pub rule_engine: Option<SharedRuleEngine>,
@@ -351,7 +349,6 @@ impl AppState {
             governance_metrics: overrides.governance_metrics,
             building_manager: Arc::new(Mutex::new(BuildingManager::new())),
             human_store: Arc::new(Mutex::new(HumanParticipationStore::new())),
-            human_action_queue: Arc::new(crate::human::HumanActionQueue::new()),
             auth_store: overrides
                 .auth_store
                 .unwrap_or_else(|| {
@@ -459,7 +456,6 @@ fn make_test_state(
         governance_metrics: None,
         building_manager: Arc::new(Mutex::new(BuildingManager::new())),
         human_store: Arc::new(Mutex::new(HumanParticipationStore::new())),
-        human_action_queue: Arc::new(crate::human::HumanActionQueue::new()),
         auth_store: {
             #[cfg(test)]
             { Arc::new(Mutex::new(AuthStore::new(_TEST_JWT_SECRET))) }

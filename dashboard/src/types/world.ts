@@ -1012,3 +1012,60 @@ export interface NetworkGraph {
   edges: NetworkEdge[];
 }
 
+// ── Phase 5.5: Human-as-Agent types ───────────────────────────────────────
+
+export interface IncarnateResponse {
+  agent_id: string;
+  human_id: string;
+  name: string;
+  tokens: number;
+  money: number;
+  spawned_tick: number;
+}
+
+export interface HumanAgentStatus {
+  agent_id: string;
+  human_id: string;
+  name: string;
+  alive: boolean;
+  tokens: number;
+  money: number;
+  phase: string;
+  ticks_survived: number;
+  last_action_tick: number;
+  pending_actions: number;
+}
+
+export interface QueuedAction {
+  id: string;
+  agent_id: string;
+  action: string;
+  params: Record<string, unknown>;
+  enqueued_tick: number;
+  applied: boolean;
+}
+
+export interface ActionReceipt {
+  queued_id: string;
+  agent_id: string;
+  action: string;
+  enqueued_tick: number;
+}
+
+export interface HumanLeaderboardEntry {
+  rank: number;
+  agent_id: string;
+  name: string;
+  human_id: string;
+  tokens: number;
+  ticks_survived: number;
+  alive: boolean;
+}
+
+export interface HumanPlayStats {
+  total_incarnations: number;
+  alive: number;
+  dead: number;
+  pending_actions: number;
+}
+

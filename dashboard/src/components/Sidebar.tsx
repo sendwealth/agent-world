@@ -33,6 +33,7 @@ const navItems = [
 ];
 
 const humanNavItems = [
+  { href: "/play", label: "化身体验", icon: "🎮" },
   { href: "/human/agents", label: "我的 Agent", icon: "👤" },
   { href: "/human/oracle", label: "神谕编辑器", icon: "🔮" },
   { href: "/human/bounties", label: "悬赏市场", icon: "🎯" },
@@ -46,7 +47,7 @@ const settingsNavItems = [
 ];
 
 // Routes that use prefix matching for active state
-const PREFIX_ROUTES = new Set(["/agents", "/organizations", "/traces", "/governance", "/human", "/settings"]);
+const PREFIX_ROUTES = new Set(["/agents", "/organizations", "/traces", "/governance", "/human", "/settings", "/play"]);
 
 function NavList({ items, pathname, onClick }: { items: typeof navItems; pathname: string; onClick?: () => void }) {
   return (

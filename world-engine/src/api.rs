@@ -41,6 +41,7 @@ use crate::economy::trust::TrustNetwork;
 use crate::federation::{MigrationManager, MigrationPolicy, WorldRegistry};
 use crate::a2a::world_message_router::WorldMessageRouter;
 use crate::human::store::HumanParticipationStore;
+use crate::human_agent::{SharedHumanActionQueue, SharedHumanAgentRegistry};
 use crate::organization::governance::GovernanceSystem;
 use crate::organization::governance_metrics::GovernanceMetricsCollector;
 use crate::organization::legislation_cycle::LegislationCycleEngine;
@@ -264,6 +265,10 @@ pub struct AppState {
     /// Snapshot of the genesis config used at startup.
     /// Read by external agent registration to determine initial resources.
     pub genesis_config: Option<Arc<GenesisConfig>>,
+    /// Human-as-Agent queue (Phase 5.5).
+    pub human_action_queue: SharedHumanActionQueue,
+    /// Human-as-Agent incarnation registry (Phase 5.5).
+    pub human_agent_registry: SharedHumanAgentRegistry,
 }
 
 /// Optional subsystem overrides for test AppState construction.
@@ -304,6 +309,10 @@ pub struct TestOverrides {
     pub legislation_cycle_engine: Option<SharedLegislationCycleEngine>,
     pub world_state: Option<Arc<Mutex<WorldState>>>,
     pub genesis_config: Option<Arc<GenesisConfig>>,
+    /// Phase 5.5 — shared human action queue + registry.
+    /// Production wires these to `HumanAgentSubsystem` so the tick loop drains them.
+    pub human_action_queue: Option<SharedHumanActionQueue>,
+    pub human_agent_registry: Option<SharedHumanAgentRegistry>,
 }
 
 impl AppState {
@@ -380,6 +389,12 @@ impl AppState {
             legislation_cycle_engine: overrides.legislation_cycle_engine,
             world_state: overrides.world_state,
             genesis_config: overrides.genesis_config,
+            human_action_queue: overrides
+                .human_action_queue
+                .unwrap_or_else(crate::api_human_agent::shared_queue),
+            human_agent_registry: overrides
+                .human_agent_registry
+                .unwrap_or_else(crate::api_human_agent::shared_registry),
         }
     }
 
@@ -484,6 +499,8 @@ fn make_test_state(
         legislation_cycle_engine: None,
         world_state: None,
         genesis_config: None,
+        human_action_queue: crate::api_human_agent::shared_queue(),
+        human_agent_registry: crate::api_human_agent::shared_registry(),
     }
 }
 
@@ -564,6 +581,7 @@ pub fn build_full_router(state: AppState) -> Router {
         .merge(crate::api_buildings::building_routes())
         .merge(crate::api_auth_handlers::auth_routes())
         .merge(crate::api_human::human_routes())
+        .merge(crate::api_human_agent::human_agent_routes())
         .merge(crate::api_dsl::dsl_routes())
         .merge(crate::api_federation::federation_routes())
         .merge(crate::api_investment::investment_routes())

@@ -397,6 +397,95 @@ consumers should tolerate unknown keys.
 
 ---
 
+## Publishing a Dataset (Phase 5.3)
+
+Once an A/B experiment (or benchmark run) is complete, you can package and
+publish the artefacts to Zenodo or Dataverse and receive a citable DOI in a
+single command.
+
+### Quick start
+
+```bash
+# 1. Export your Zenodo sandbox token
+export ZENODO_TOKEN="your-sandbox-token"
+
+# 2. Publish
+python -m agent_runtime publish reports/benchmark --backend zenodo
+
+# Dataverse alternative
+export DATAVERSE_TOKEN="..."
+export DATAVERSE_URL="https://demo.dataverse.org"
+python -m agent_runtime publish reports/benchmark --backend dataverse
+```
+
+The command returns a JSON payload containing the DOI, record URL, and the
+package manifest (file list, checksums, provenance).
+
+### What gets packaged
+
+The publisher walks the experiment directory and bundles:
+
+| Artefact | Included when |
+|---|---|
+| `report.json` / `reference.json` | Always (the primary report) |
+| `events.csv` / `events.json` | If present — the event log |
+| `config.yaml` / `config.toml` | If present — world/experiment config |
+| `snapshots/` | If present — agent state snapshots |
+| `exports/`, `charts/`, `logs/` | If present |
+| `manifest.json` | **Always** — embedded provenance + file checksums |
+
+The manifest carries full provenance: engine version, experiment ID, agent
+count, skill list, tick range, LLM provider/model, and benchmark metrics.
+Anyone who downloads the ZIP can reproduce the experiment by reading the
+manifest.
+
+### Sandbox vs production
+
+By default the publisher targets the **Zenodo sandbox** so you can iterate
+without minting real DOIs.  Use `--production` only when you are ready to
+publish a final, citable dataset:
+
+```bash
+python -m agent_runtime publish reports/benchmark --production
+```
+
+### Inspect before uploading
+
+To produce the ZIP without uploading (e.g. to verify the manifest), pass
+`--package-only`:
+
+```bash
+python -m agent_runtime publish reports/benchmark --package-only --output ./out.zip
+```
+
+### Environment variables
+
+| Variable | Backend | Required | Purpose |
+|---|---|:-:|---|
+| `ZENODO_TOKEN` | Zenodo | ✅ | API token (`--production` uses the production key) |
+| `DATAVERSE_TOKEN` | Dataverse | ✅ | Native API token |
+| `DATAVERSE_URL` | Dataverse | ✅ | Server base URL |
+
+If a required token is missing, the CLI prints a clear error and exits —
+it never crashes or attempts an unauthenticated upload.
+
+### Programmatic API
+
+```python
+import asyncio
+from pathlib import Path
+from agent_runtime.publish import publish_experiment
+
+result = asyncio.run(publish_experiment(
+    experiment_dir=Path("reports/benchmark"),
+    backend="zenodo",
+    sandbox=True,
+))
+print(result["result"]["doi"])
+```
+
+---
+
 ## References
 
 - Park, J. S., O'Brien, J. C., Cai, C. J., Morris, M. R., Liang, P., &

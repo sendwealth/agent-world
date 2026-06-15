@@ -268,10 +268,15 @@ cd world-engine && cargo bench
 
 # Emergence Benchmark (Phase 5.1) — Park et al. reproduction + 6 metrics
 make benchmark
+
+# Publish an experiment to Zenodo (sandbox by default) — Phase 5.3
+# Requires ZENODO_TOKEN in env (or --env-file .env)
+python -m agent_runtime publish reports/benchmark --backend zenodo
 ```
 
 See [`docs/BENCHMARK.md`](docs/BENCHMARK.md) for the full metric catalogue,
-literature baselines, and reproducibility protocol.
+literature baselines, reproducibility protocol, and the **Publishing a
+Dataset** section.
 
 ---
 

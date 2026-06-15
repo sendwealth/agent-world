@@ -90,9 +90,7 @@ def setup_logging(verbose: bool = False, json_output: bool = True) -> None:
     if json_output:
         handler.setFormatter(JSONFormatter())
     else:
-        handler.setFormatter(
-            logging.Formatter("%(asctime)s [%(levelname)s] %(name)s: %(message)s")
-        )
+        handler.setFormatter(logging.Formatter("%(asctime)s [%(levelname)s] %(name)s: %(message)s"))
 
     root = logging.getLogger("agent_runtime")
     root.setLevel(level)
@@ -150,7 +148,9 @@ class RESTWorldClient:
         except httpx.HTTPStatusError as exc:
             logger.warning(
                 "World Engine returned %d for %s %s: %s",
-                exc.response.status_code, method, path,
+                exc.response.status_code,
+                method,
+                path,
                 exc.response.text[:200] if exc.response.text else "(empty)",
             )
             raise
@@ -158,9 +158,7 @@ class RESTWorldClient:
             logger.warning("World Engine request failed: %s %s", method, path, exc_info=True)
             raise
 
-    async def submit_action(
-        self, action: str, params: dict[str, Any]
-    ) -> dict[str, Any]:
+    async def submit_action(self, action: str, params: dict[str, Any]) -> dict[str, Any]:
         """Submit an action via the unified ``POST /api/v1/agents/{id}/action``."""
         return await self._request(
             "POST",
@@ -191,9 +189,7 @@ class RESTWorldClient:
     async def claim_task(self, task_id: str) -> dict[str, Any]:
         return await self.submit_action("claim_task", {"task_id": task_id})
 
-    async def submit_task(
-        self, task_id: str, result: dict[str, Any]
-    ) -> dict[str, Any]:
+    async def submit_task(self, task_id: str, result: dict[str, Any]) -> dict[str, Any]:
         return await self.submit_action("submit_task", {"task_id": task_id, "result": result})
 
     async def propose_deal(self, proposal: dict[str, Any]) -> dict[str, Any]:
@@ -202,22 +198,26 @@ class RESTWorldClient:
     async def teach_skill(
         self, target_agent_id: str, skill_name: str, level: int
     ) -> dict[str, Any]:
-        return await self.submit_action("communicate", {
-            "target_agent_id": target_agent_id,
-            "skill_name": skill_name,
-            "level": level,
-        })
+        return await self.submit_action(
+            "communicate",
+            {
+                "target_agent_id": target_agent_id,
+                "skill_name": skill_name,
+                "level": level,
+            },
+        )
 
     async def explore(self, parameters: dict[str, Any]) -> dict[str, Any]:
         return await self.submit_action("explore", parameters)
 
-    async def socialize(
-        self, target_agent_id: str, message: str = ""
-    ) -> dict[str, Any]:
-        return await self.submit_action("socialize", {
-            "target_agent_id": target_agent_id,
-            "message": message,
-        })
+    async def socialize(self, target_agent_id: str, message: str = "") -> dict[str, Any]:
+        return await self.submit_action(
+            "socialize",
+            {
+                "target_agent_id": target_agent_id,
+                "message": message,
+            },
+        )
 
     async def move(self, direction: str) -> dict[str, Any]:
         return await self.submit_action("move", {"direction": direction})
@@ -227,7 +227,8 @@ class RESTWorldClient:
 
     async def build(self, structure_type: str, **kwargs: Any) -> dict[str, Any]:
         return await self.submit_action(
-            "build", {"structure_type": structure_type, **kwargs},
+            "build",
+            {"structure_type": structure_type, **kwargs},
         )
 
     async def get_perception(self) -> dict[str, Any]:
@@ -252,9 +253,7 @@ class RESTWorldClient:
             f"/api/v1/agents/{self._agent_id}/status",
         )
 
-    async def broadcast_message(
-        self, payload: dict[str, object]
-    ) -> dict[str, object]:
+    async def broadcast_message(self, payload: dict[str, object]) -> dict[str, object]:
         """Broadcast a message to all agents via the World Engine REST API.
 
         Posts to ``POST /api/v1/messages`` with an empty ``to_agent`` field
@@ -284,7 +283,9 @@ class RESTWorldClient:
 
     async def join_org(self, org_id: str, member_data: dict[str, Any]) -> dict[str, Any]:
         return await self._request(
-            "POST", f"/api/v1/orgs/{org_id}/join", json=member_data,
+            "POST",
+            f"/api/v1/orgs/{org_id}/join",
+            json=member_data,
         )
 
 
@@ -494,7 +495,9 @@ async def register_agent(
 
     logger.info(
         "Registering agent %s (%s) with World Engine at %s",
-        state.name, state.id, url,
+        state.name,
+        state.id,
+        url,
     )
 
     last_exc: Exception | None = None
@@ -507,13 +510,15 @@ async def register_agent(
                     world_agent_id = body.get("agent_id")
                     logger.info(
                         "Agent registered successfully (world_id=%s) on attempt %d",
-                        world_agent_id, attempt,
+                        world_agent_id,
+                        attempt,
                         extra={"agent": state.name, "event": "registered"},
                     )
                     return world_agent_id
                 logger.warning(
                     "World Engine returned %d on attempt %d: %s",
-                    resp.status_code, attempt,
+                    resp.status_code,
+                    attempt,
                     resp.text[:200] if resp.text else "(empty)",
                 )
                 # Non-connection errors (4xx/5xx) — don't retry
@@ -523,13 +528,18 @@ async def register_agent(
             last_exc = exc
             logger.warning(
                 "World Engine unreachable at %s (attempt %d/%d) — %s",
-                world_url, attempt, max_retries, exc,
+                world_url,
+                attempt,
+                max_retries,
+                exc,
             )
         except Exception as exc:
             last_exc = exc
             logger.warning(
                 "Registration attempt %d/%d failed: %s",
-                attempt, max_retries, exc,
+                attempt,
+                max_retries,
+                exc,
                 exc_info=True,
             )
 
@@ -545,7 +555,8 @@ async def register_agent(
     logger.error(
         "Failed to register with World Engine after %d attempts — "
         "running in standalone mode (last error: %s)",
-        max_retries, last_exc,
+        max_retries,
+        last_exc,
     )
     return None
 
@@ -673,6 +684,7 @@ def spawn_agent(config: AgentSpawnConfig) -> AgentState:
 
     for skill_name, level in config.skills.items():
         from agent_runtime.models.skill import Skill
+
         state.add_skill(Skill(name=skill_name, level=level))
 
     logger.info(
@@ -712,6 +724,7 @@ def _init_data_dir(data_dir: Path, state: AgentState) -> None:
     memory_db = data_dir / "memory.db"
     if not memory_db.exists():
         import sqlite3
+
         conn = sqlite3.connect(str(memory_db))
         conn.execute(
             "CREATE TABLE IF NOT EXISTS memories ("
@@ -726,17 +739,14 @@ def _init_data_dir(data_dir: Path, state: AgentState) -> None:
 
     # Write skills.json
     skills_json = data_dir / "skills.json"
-    skills_data = {
-        name: skill.model_dump() for name, skill in state.skills.items()
-    }
-    skills_json.write_text(
-        json.dumps(skills_data, indent=2, default=str, ensure_ascii=False)
-    )
+    skills_data = {name: skill.model_dump() for name, skill in state.skills.items()}
+    skills_json.write_text(json.dumps(skills_data, indent=2, default=str, ensure_ascii=False))
 
     # Reserve trace.db (SQLite) — create empty DB if not present
     trace_db = data_dir / "trace.db"
     if not trace_db.exists():
         import sqlite3
+
         conn = sqlite3.connect(str(trace_db))
         conn.execute(
             "CREATE TABLE IF NOT EXISTS tick_snapshots ("
@@ -984,7 +994,9 @@ async def run_agent(config: RuntimeConfig) -> RunStats:
             emotion_hook = ThinkLoopEmotionHook(emotion_engine)
             logger.info(
                 "EmotionEngine wired (personality: O=%.1f E=%.1f N=%.1f)",
-                personality.openness, personality.extraversion, personality.neuroticism,
+                personality.openness,
+                personality.extraversion,
+                personality.neuroticism,
             )
         except Exception:
             logger.debug("EmotionEngine setup failed (non-fatal)", exc_info=True)
@@ -1158,9 +1170,7 @@ async def run_agent(config: RuntimeConfig) -> RunStats:
     return stats
 
 
-def _build_decision_provider(
-    config: RuntimeConfig, executor: ActionExecutor
-) -> Any | None:
+def _build_decision_provider(config: RuntimeConfig, executor: ActionExecutor) -> Any | None:
     """Build the best available decision provider.
 
     Priority:
@@ -1391,7 +1401,8 @@ def _create_social_context_provider(
         nearby_cache: list[dict[str, Any]] = []
 
         def _nearby_source(
-            aid: str, tick: int  # noqa: ARG001
+            aid: str,
+            tick: int,  # noqa: ARG001
         ) -> list[dict[str, Any]]:
             """Return cached nearby agents from the latest perception."""
             return list(nearby_cache)
@@ -1505,9 +1516,7 @@ class HealthCheckServer:
 
             # Read body if Content-Length is set
             if content_length > 0:
-                body_buf = await asyncio.wait_for(
-                    reader.readexactly(content_length), timeout=5.0
-                )
+                body_buf = await asyncio.wait_for(reader.readexactly(content_length), timeout=5.0)
 
             # Route the request
             parts = request_str.split()
@@ -1516,12 +1525,14 @@ class HealthCheckServer:
 
             if method == "GET" and path == "/health":
                 uptime = time.monotonic() - self._start_time
-                body = json.dumps({
-                    "status": "running" if self._think_loop.running else "stopped",
-                    "agent": self._agent_name,
-                    "tick": self._think_loop.tick,
-                    "uptime_s": round(uptime, 1),
-                })
+                body = json.dumps(
+                    {
+                        "status": "running" if self._think_loop.running else "stopped",
+                        "agent": self._agent_name,
+                        "tick": self._think_loop.tick,
+                        "uptime_s": round(uptime, 1),
+                    }
+                )
                 response = (
                     "HTTP/1.1 200 OK\r\n"
                     "Content-Type: application/json\r\n"
@@ -1573,9 +1584,11 @@ class HealthCheckServer:
         model = payload.get("model")
 
         if not agent_id or not provider_id or not model:
-            body = json.dumps({
-                "error": "Missing required fields: agent_id, provider_id, model",
-            })
+            body = json.dumps(
+                {
+                    "error": "Missing required fields: agent_id, provider_id, model",
+                }
+            )
             return (
                 "HTTP/1.1 400 Bad Request\r\n"
                 "Content-Type: application/json\r\n"
@@ -1599,13 +1612,15 @@ class HealthCheckServer:
                 f"{body}"
             )
 
-        body = json.dumps({
-            "status": "ok",
-            "agent_id": agent_id,
-            "provider_id": provider_id,
-            "model": model,
-            "tick": self._think_loop.tick,
-        })
+        body = json.dumps(
+            {
+                "status": "ok",
+                "agent_id": agent_id,
+                "provider_id": provider_id,
+                "model": model,
+                "tick": self._think_loop.tick,
+            }
+        )
         return (
             "HTTP/1.1 200 OK\r\n"
             "Content-Type: application/json\r\n"
@@ -1653,39 +1668,51 @@ def _extract_grpc_address(engine_url: str) -> str:
 
 def _add_spawn_args(parser: argparse.ArgumentParser) -> None:
     """Add spawn-related arguments to a sub-parser (shared by spawn and pool)."""
+    parser.add_argument("--name", default=None, help="Agent name (default: Agent)")
     parser.add_argument(
-        "--name", default=None, help="Agent name (default: Agent)"
-    )
-    parser.add_argument(
-        "--config", type=Path, default=None,
+        "--config",
+        type=Path,
+        default=None,
         help="Path to TOML or YAML config file",
     )
     parser.add_argument(
-        "--skills", default=None,
+        "--skills",
+        default=None,
         help="Comma-separated skill names (e.g. coding,trading,research)",
     )
     parser.add_argument(
-        "--traits", nargs="*", default=None,
+        "--traits",
+        nargs="*",
+        default=None,
         help="Personality traits as key=value pairs (e.g. curiosity=0.8 caution=0.3)",
     )
     parser.add_argument(
-        "--tokens", type=int, default=None,
+        "--tokens",
+        type=int,
+        default=None,
         help="Initial token balance",
     )
     parser.add_argument(
-        "--max-tokens", type=int, default=None,
+        "--max-tokens",
+        type=int,
+        default=None,
         help="Maximum token capacity",
     )
     parser.add_argument(
-        "--max-ticks", type=int, default=None,
+        "--max-ticks",
+        type=int,
+        default=None,
         help="Maximum ticks to run (0 = unlimited)",
     )
     parser.add_argument(
-        "--tick-interval", type=float, default=None,
+        "--tick-interval",
+        type=float,
+        default=None,
         help="Seconds between ticks",
     )
     parser.add_argument(
-        "--world-url", default=None,
+        "--world-url",
+        default=None,
         help="World Engine URL (default: http://localhost:3000)",
     )
     parser.add_argument(
@@ -1699,19 +1726,23 @@ def _add_spawn_args(parser: argparse.ArgumentParser) -> None:
         ),
     )
     parser.add_argument(
-        "--llm-model", default=None,
+        "--llm-model",
+        default=None,
         help="LLM model name (default: glm-4-flash)",
     )
     parser.add_argument(
-        "--llm-base-url", default=None,
+        "--llm-base-url",
+        default=None,
         help="LLM API base URL",
     )
     parser.add_argument(
-        "--no-llm", action="store_true",
+        "--no-llm",
+        action="store_true",
         help="Disable LLM and use mock random decisions",
     )
     parser.add_argument(
-        "--mock-llm", default=None,
+        "--mock-llm",
+        default=None,
         help=(
             "Use preset LLM mock for deterministic decisions. "
             "Options: hungry_gather, social_nearby, survival. "
@@ -1719,15 +1750,20 @@ def _add_spawn_args(parser: argparse.ArgumentParser) -> None:
         ),
     )
     parser.add_argument(
-        "--health-port", type=int, default=None,
+        "--health-port",
+        type=int,
+        default=None,
         help="Health check HTTP port (default: 9090, env: HEALTH_PORT)",
     )
     parser.add_argument(
-        "--data-dir", type=Path, default=None,
+        "--data-dir",
+        type=Path,
+        default=None,
         help="Agent data directory for isolated storage (memory.db, skills.json, trace.db)",
     )
     parser.add_argument(
-        "--preset", default=None,
+        "--preset",
+        default=None,
         help=(
             "Provider preset name (e.g. zhipu, deepseek, ollama-local, openrouter). "
             "Auto-fills --llm-provider, --llm-base-url, and --llm-model. "
@@ -1742,57 +1778,111 @@ def build_parser() -> argparse.ArgumentParser:
         prog="agent_runtime",
         description="Agent World — Agent Runtime CLI. Spawn and run AI agents.",
     )
+    parser.add_argument("--version", action="version", version=f"%(prog)s {__version__}")
+    parser.add_argument("-v", "--verbose", action="store_true", help="Enable debug logging")
     parser.add_argument(
-        "--version", action="version", version=f"%(prog)s {__version__}"
-    )
-    parser.add_argument(
-        "-v", "--verbose", action="store_true", help="Enable debug logging"
-    )
-    parser.add_argument(
-        "--log-text", action="store_true",
+        "--log-text",
+        action="store_true",
         help="Use human-readable log format instead of JSON (default: JSON)",
     )
 
     # Top-level --world shortcut (alias for spawn --world-url)
     parser.add_argument(
-        "--world", default=None, dest="world",
+        "--world",
+        default=None,
+        dest="world",
         help="World Engine URL — shorthand that implies 'spawn' (e.g. --world http://localhost:8080)",
     )
 
     sub = parser.add_subparsers(dest="command", help="Available commands")
 
     # -- spawn --
-    spawn_parser = sub.add_parser(
-        "spawn", help="Spawn and run a single agent"
-    )
+    spawn_parser = sub.add_parser("spawn", help="Spawn and run a single agent")
     _add_spawn_args(spawn_parser)
 
     # -- pool --
-    pool_parser = sub.add_parser(
-        "pool", help="Spawn and manage a pool of agents"
-    )
+    pool_parser = sub.add_parser("pool", help="Spawn and manage a pool of agents")
     pool_parser.add_argument(
-        "--count", type=int, default=1,
+        "--count",
+        type=int,
+        default=1,
         help="Number of agents to launch with auto-naming (Agent-1..N, default: 1)",
     )
     pool_parser.add_argument(
-        "--config-dir", type=Path, default=None,
+        "--config-dir",
+        type=Path,
+        default=None,
         help="Directory of .toml agent configs (one file per agent)",
     )
     pool_parser.add_argument(
-        "--max-restart", type=int, default=3,
+        "--max-restart",
+        type=int,
+        default=3,
         help="Max restart attempts per crashed agent (default: 3)",
     )
     pool_parser.add_argument(
-        "--health-interval", type=float, default=10.0,
+        "--health-interval",
+        type=float,
+        default=10.0,
         help="Health check interval in seconds (default: 10)",
     )
     pool_parser.add_argument(
-        "--api-port", type=int, default=9090,
+        "--api-port",
+        type=int,
+        default=9090,
         help="Pool API HTTP port (default: 9090)",
     )
     # Reuse all spawn args
     _add_spawn_args(pool_parser)
+
+    # -- publish --
+    publish_parser = sub.add_parser(
+        "publish",
+        help="Package and publish an experiment to Zenodo/Dataverse (DOI)",
+    )
+    publish_parser.add_argument(
+        "experiment_dir",
+        type=Path,
+        help="Path to experiment directory or report.json / reference.json",
+    )
+    publish_parser.add_argument(
+        "--backend",
+        choices=["zenodo", "dataverse"],
+        default="zenodo",
+        help="Publishing backend (default: zenodo)",
+    )
+    publish_parser.add_argument(
+        "--env-file",
+        type=Path,
+        default=None,
+        help="Path to .env file to load before publishing",
+    )
+    publish_parser.add_argument(
+        "--production",
+        action="store_true",
+        help="Use production Zenodo/Dataverse instead of sandbox",
+    )
+    publish_parser.add_argument(
+        "--package-only",
+        action="store_true",
+        help="Only create the dataset ZIP — skip upload",
+    )
+    publish_parser.add_argument(
+        "--output",
+        type=Path,
+        default=None,
+        help="Output path for the dataset ZIP (default: <dir>/dataset.zip)",
+    )
+    publish_parser.add_argument(
+        "--title",
+        default=None,
+        help="Dataset title override",
+    )
+    publish_parser.add_argument(
+        "--description",
+        default=None,
+        help="Dataset description override",
+    )
 
     return parser
 
@@ -2145,10 +2235,7 @@ class AgentPool:
 
     def _build_from_count(self) -> list[PoolAgentInfo]:
         """Build agent list from --count with auto-naming (Agent-1..N)."""
-        return [
-            PoolAgentInfo(index=i, name=f"Agent-{i + 1}")
-            for i in range(self._count)
-        ]
+        return [PoolAgentInfo(index=i, name=f"Agent-{i + 1}") for i in range(self._count)]
 
     def _build_from_config_dir(self) -> list[PoolAgentInfo]:
         """Build agent list from .toml files in --config-dir."""
@@ -2290,9 +2377,7 @@ class AgentPool:
                 port=self._api_port,
             )
         except OSError:
-            logger.warning(
-                "Pool API: port %d unavailable, skipping", self._api_port
-            )
+            logger.warning("Pool API: port %d unavailable, skipping", self._api_port)
             return
         logger.info(
             "Pool API listening on 0.0.0.0:%d",
@@ -2484,9 +2569,37 @@ def main() -> None:
     elif args.command == "pool":
         result = asyncio.run(run_pool(args))
         print(json.dumps(result, indent=2))
+    elif args.command == "publish":
+        _run_publish(args)
     else:
         parser.print_help()
         sys.exit(1)
+
+
+def _run_publish(args: argparse.Namespace) -> None:
+    """Execute the ``publish`` subcommand."""
+    from agent_runtime.publish import publish_experiment
+    from agent_runtime.publish.backends import TokenMissingError
+
+    if args.env_file is not None:
+        load_dotenv(args.env_file)
+
+    try:
+        result = asyncio.run(
+            publish_experiment(
+                experiment_dir=args.experiment_dir,
+                backend=args.backend,
+                sandbox=not args.production,
+                output_path=args.output,
+                title=args.title,
+                description=args.description,
+                package_only=args.package_only,
+            )
+        )
+    except TokenMissingError as exc:
+        print(f"error: {exc}", file=sys.stderr)
+        sys.exit(2)
+    print(json.dumps(result, indent=2, default=str))
 
 
 def _has_world_arg(argv: list[str]) -> bool:

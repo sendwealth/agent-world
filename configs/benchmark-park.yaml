@@ -1,0 +1,24 @@
+# Benchmark configuration — Park et al. (2023) reproduction.
+#
+# Used by `make benchmark` → `scripts/park_replication.py --config <path>`.
+# All keys are optional; defaults come from the CLI flags.
+
+# Operating mode: "synthetic" (no engine required, CI-friendly) or
+# "live" (consumes the world-engine REST API at engine_url).
+mode: synthetic
+
+# Population size. Park et al. (2023) Smallville uses 25 agents.
+agents: 25
+
+# Simulation length in ticks. For synthetic mode the cost is O(ticks × agents);
+# 200 ticks is enough for diffusion to complete on most seeds.
+ticks: 200
+
+# RNG seed for reproducible synthetic runs.
+seed: 42
+
+# Scenario label embedded in the report metadata and output filenames.
+scenario: park-benchmark
+
+# Engine URL for live mode. Ignored in synthetic mode.
+engine_url: http://localhost:8080

@@ -51,6 +51,7 @@ pub mod auth;
 pub mod config;
 pub mod dsl;
 pub mod economy;
+pub mod emergence_benchmark;
 pub mod error;
 pub mod evolution;
 pub mod federation;

@@ -1,6 +1,7 @@
 .PHONY: help setup dev dev-llm dev-detach dev-down dev-logs dev-ps dev-restart \
        dev-ci dev-ci-down test lint fmt proto clean build run demo demo-json demo-death \
-       bench stress test-e2e-integration screenshots screenshots-install
+       bench stress test-e2e-integration screenshots screenshots-install \
+       benchmark benchmark-synth benchmark-live
 
 help: ## Show this help
 	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) | sort | awk 'BEGIN {FS = ":.*?## "}; {printf "\033[36m%-20s\033[0m %s\n", $$1, $$2}'
@@ -108,6 +109,17 @@ bench: ## Run benchmark tests (P3-7: 100 agents × 2000 ticks)
 
 stress: ## Run stress tests (100 agents concurrent)
 	cd world-engine && cargo test --test stress_100_agents -- --nocapture
+
+# ── Emergence Benchmark (Phase 5.1) ──────────────────────
+
+benchmark: ## Run the Phase 5.1 Emergence Benchmark (synthetic, CI-safe)
+	python3 scripts/park_replication.py --config configs/benchmark-park.yaml
+
+benchmark-synth: ## Run benchmark in synthetic mode with explicit flags
+	python3 scripts/park_replication.py --mode synthetic --agents 25 --ticks 200
+
+benchmark-live: ## Run benchmark against a live world-engine (set ENGINE_URL)
+	python3 scripts/park_replication.py --mode live --engine-url $${ENGINE_URL:-http://localhost:8080}
 
 demo: ## Run E2E demo: 2 agents survive 1000 ticks with trading, tasks, death
 	python3 scripts/e2e_demo.py

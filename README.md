@@ -265,7 +265,13 @@ cd world-engine && cargo test stress_100
 
 # Benchmarks
 cd world-engine && cargo bench
+
+# Emergence Benchmark (Phase 5.1) — Park et al. reproduction + 6 metrics
+make benchmark
 ```
+
+See [`docs/BENCHMARK.md`](docs/BENCHMARK.md) for the full metric catalogue,
+literature baselines, and reproducibility protocol.
 
 ---
 

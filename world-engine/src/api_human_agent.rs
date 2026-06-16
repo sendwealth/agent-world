@@ -119,6 +119,15 @@ pub async fn play_incarnate(
     let agent_uid =
         Uuid::parse_str(&agent_id).unwrap_or_else(|_| Uuid::new_v4());
 
+    // Read initial token grant from genesis config (same path as /human/incarnate),
+    // falling back to the legacy constant when no config is present.
+    // initial_money has no config field yet — use the legacy constant.
+    let initial_tokens = match &state.genesis_config {
+        Some(cfg) => cfg.human_agent.initial_tokens,
+        None => HUMAN_INITIAL_TOKENS,
+    };
+    let initial_money = HUMAN_INITIAL_MONEY;
+
     // 1. Register the incarnation in the human_agent registry.
     let human_id = "default-human".to_string();
     let avatar = body.avatar.clone();
@@ -126,8 +135,8 @@ pub async fn play_incarnate(
         agent_id: agent_id.clone(),
         human_id: human_id.clone(),
         name: body.name.clone(),
-        initial_tokens: HUMAN_INITIAL_TOKENS,
-        initial_money: HUMAN_INITIAL_MONEY,
+        initial_tokens,
+        initial_money,
         spawned_tick: tick,
         last_action_tick: tick,
         alive: true,
@@ -161,8 +170,8 @@ pub async fn play_incarnate(
                 config: serde_json::json!({}),
                 alive: true,
                 phase: "adult".to_string(),
-                tokens: HUMAN_INITIAL_TOKENS,
-                money: HUMAN_INITIAL_MONEY,
+                tokens: initial_tokens,
+                money: initial_money,
                 position: Position { x: 0, y: 0 },
                 registered_tick: tick,
                 created_at: chrono::Utc::now().to_rfc3339(),
@@ -177,8 +186,8 @@ pub async fn play_incarnate(
             id: agent_id.clone(),
             name: body.name.clone(),
             phase: "adult".to_string(),
-            tokens: HUMAN_INITIAL_TOKENS,
-            money: HUMAN_INITIAL_MONEY,
+            tokens: initial_tokens,
+            money: initial_money,
             alive: true,
             ticks_survived: 0,
             personality: String::new(),
@@ -199,7 +208,7 @@ pub async fn play_incarnate(
                 id: agent_uid,
                 name: body.name.clone(),
                 phase: AgentPhase::Adult,
-                tokens: HUMAN_INITIAL_TOKENS,
+                tokens: initial_tokens,
                 skills: HashMap::new(),
                 personality: String::new(),
                 tasks_completed: 0,
@@ -220,8 +229,8 @@ pub async fn play_incarnate(
             agent_id,
             human_id,
             name: body.name,
-            tokens: HUMAN_INITIAL_TOKENS,
-            money: HUMAN_INITIAL_MONEY,
+            tokens: initial_tokens,
+            money: initial_money,
             spawned_tick: tick,
         }),
     )

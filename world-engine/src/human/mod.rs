@@ -6,10 +6,15 @@
 //! Key types: HumanParticipationStore, SharedHumanStore
 //! Depends on: auth (HumanUser), persistence (SQLite)
 //!
-pub mod action_queue;
+//! The HumanActionQueue / HumanAgentSubsystem types live in [`crate::human_agent`].
+//! This module re-exports [`HumanActionType`] for API handlers under `/human/*`
+//! that need typed action validation.
+//!
 pub mod store;
 
-pub use action_queue::{
-    HumanAction, HumanActionQueue, HumanActionType, HumanAgentState, SharedHumanActionQueue,
+// Re-export the unified types from `human_agent` so callers that
+// historically reached them via `crate::human::*` keep working.
+pub use crate::human_agent::{
+    HumanActionQueue, HumanActionType, QueuedAction, SharedHumanActionQueue,
 };
 pub use store::{HumanParticipationStore, SharedHumanStore, RechargeEntry, RechargeRequest};

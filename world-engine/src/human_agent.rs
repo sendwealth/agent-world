@@ -64,6 +64,90 @@ pub fn action_token_income(action: &str) -> u64 {
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
+// Human Action Type (typed enum for validation + cost/income lookup)
+// ═══════════════════════════════════════════════════════════════════════════
+
+/// Typed action types that a human player can submit.
+///
+/// Provides validated `token_cost()` / `token_income()` lookups and
+/// round-trip string conversion. Used by the `/human/*` routes for
+/// input validation before enqueuing a [`QueuedAction`].
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[serde(rename_all = "snake_case")]
+pub enum HumanActionType {
+    Communicate,
+    Trade,
+    Rest,
+    Explore,
+    Gather,
+    Build,
+    Socialize,
+    PracticeSkill,
+    TeachSkill,
+    Move,
+}
+
+impl HumanActionType {
+    /// Token cost for each action type (server-authoritative).
+    pub fn token_cost(&self) -> u64 {
+        match self {
+            HumanActionType::Communicate => 10,
+            HumanActionType::Trade => 10,
+            HumanActionType::Rest => 0,
+            HumanActionType::Explore => 3,
+            HumanActionType::Gather => 0,
+            HumanActionType::Build => 20,
+            HumanActionType::Socialize => 5,
+            HumanActionType::PracticeSkill => 8,
+            HumanActionType::TeachSkill => 15,
+            HumanActionType::Move => 12,
+        }
+    }
+
+    /// Token income for each action type.
+    pub fn token_income(&self) -> u64 {
+        match self {
+            HumanActionType::Rest => 5,
+            HumanActionType::Explore => 2,
+            HumanActionType::Gather => 3,
+            HumanActionType::Build => 5,
+            _ => 0,
+        }
+    }
+
+    pub fn as_str(&self) -> &'static str {
+        match self {
+            HumanActionType::Communicate => "communicate",
+            HumanActionType::Trade => "trade",
+            HumanActionType::Rest => "rest",
+            HumanActionType::Explore => "explore",
+            HumanActionType::Gather => "gather",
+            HumanActionType::Build => "build",
+            HumanActionType::Socialize => "socialize",
+            HumanActionType::PracticeSkill => "practice_skill",
+            HumanActionType::TeachSkill => "teach_skill",
+            HumanActionType::Move => "move",
+        }
+    }
+
+    pub fn from_str_lossy(s: &str) -> Option<Self> {
+        match s {
+            "communicate" => Some(HumanActionType::Communicate),
+            "trade" => Some(HumanActionType::Trade),
+            "rest" => Some(HumanActionType::Rest),
+            "explore" => Some(HumanActionType::Explore),
+            "gather" => Some(HumanActionType::Gather),
+            "build" => Some(HumanActionType::Build),
+            "socialize" => Some(HumanActionType::Socialize),
+            "practice_skill" => Some(HumanActionType::PracticeSkill),
+            "teach_skill" => Some(HumanActionType::TeachSkill),
+            "move" => Some(HumanActionType::Move),
+            _ => None,
+        }
+    }
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
 // Queued Action
 // ═══════════════════════════════════════════════════════════════════════════
 

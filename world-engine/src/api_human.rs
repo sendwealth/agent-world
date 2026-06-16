@@ -16,7 +16,7 @@ use crate::agentworld::a2a::v1::{
 };
 use crate::api::{AppState, ErrorResponse};
 use crate::auth::{extractors::require_capability, Capability, RequireAuth};
-use crate::human::action_queue::HumanActionType;
+use crate::human_agent::HumanActionType;
 use crate::human_agent::{HumanAgent, QueuedAction};
 use crate::human::store::{
     ClaimAgentRequest, ClaimBountyRequest, CompleteBountyRequest, CreateBountyRequest,
@@ -894,6 +894,13 @@ pub async fn human_submit_action(
             )
                 .into_response();
         }
+    }
+
+    // Touch last_action_tick immediately so auto-pilot doesn't fire before drain
+    // (matches /play/* behavior in play_submit_action).
+    {
+        let mut reg = state.human_agent_registry.lock().await;
+        reg.touch_action(&agent_id, tick);
     }
 
     (

@@ -16,7 +16,7 @@ use crate::agentworld::a2a::v1::{
 };
 use crate::api::{AppState, ErrorResponse};
 use crate::auth::{extractors::require_capability, Capability, RequireAuth};
-use crate::human::action_queue::HumanActionType;
+use crate::human_agent::HumanActionType;
 use crate::human_agent::{HumanAgent, QueuedAction};
 use crate::human::store::{
     ClaimAgentRequest, ClaimBountyRequest, CompleteBountyRequest, CreateBountyRequest,

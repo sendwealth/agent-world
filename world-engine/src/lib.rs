@@ -25,6 +25,7 @@ pub mod api_escrow;
 pub mod api_export;
 pub mod api_export_v1;
 pub mod api_federation;
+pub mod api_federation_trade;
 pub mod api_governance;
 pub mod api_human;
 pub mod api_human_agent;

@@ -8,9 +8,14 @@
 pub mod migration;
 pub mod registry;
 pub mod service;
+pub mod trade;
 
 pub use migration::{
     AgentSnapshot, MigrationApplication, MigrationManager, MigrationPolicy, MigrationRecord,
     MigrationStats, MigrationStatus, MigrationType,
 };
 pub use registry::{WorldEntry, WorldRegistry, WorldStatus};
+pub use trade::{
+    CrossWorldTrade, CrossWorldTradeManager, CrossWorldTradeOffer, TradeItem, TradeStats,
+    TradeStatus,
+};

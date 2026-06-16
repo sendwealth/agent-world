@@ -275,6 +275,8 @@ A (Research/Benchmark)  →  E (Documentary)  →  B (Human-as-Agent)  →  C (I
 | **5.4 Auto-Documentary** | E | Timeline → narrated "world history" video generator; sample film in README | A 3-min auto film linked from the README |
 | **5.5 Human-as-Agent MVP** | B | Humans incarnate as agents; mixed human-AI economy in a public demo world | ≥1 public "play a world" session with external participants |
 | **5.6 Federation Hub (hosted)** | C | Public world-discovery registry; real cross-world trade routes; ≥2 hosted demo worlds | ≥3 external self-hosted worlds federated |
+
+> **5.6 progress (in progress):** Cross-World Trade Routes module (`federation/trade.rs`) shipped — `CrossWorldTradeManager` with escrow-backed atomic swaps, full REST API (`api_federation_trade.rs`), 10 unit tests (create→accept→execute, cancel, expiry, service items, stats). WorldRegistry and MigrationManager already shipped in prior phases. Remaining: hosted demo worlds, public discovery.
 | **5.7 Agent-Spawned Sub-Worlds** | C | High-rank agents create and govern child worlds | E2E: an agent founds a world others can migrate to |
 | **5.8 Plugin Marketplace** | D | Distributable plugin registry; ≥5 community-contributed plugins | ≥1 third-party plugin not authored by core team |
 

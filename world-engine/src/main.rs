@@ -627,7 +627,10 @@ async fn main() {
     let migration_manager = Arc::new(Mutex::new(
         MigrationManager::new(migration_policy, event_bus.clone()),
     ));
-    println!("   Federation: WorldRegistry + MigrationManager initialized");
+    let trade_manager = Arc::new(Mutex::new(
+        agent_world_engine::federation::CrossWorldTradeManager::new(event_bus.clone()),
+    ));
+    println!("   Federation: WorldRegistry + MigrationManager + CrossWorldTradeManager initialized");
 
     // ── Initialize A/B Experiment Store ─────────────────────
     let ab_experiment_store: api::SharedABExperimentStore =
@@ -653,6 +656,7 @@ async fn main() {
         federation: Some(federation),
         federation_registry: Some(federation_registry),
         migration_manager: Some(migration_manager),
+        trade_manager: Some(trade_manager),
         auth_store: Some(Arc::new(Mutex::new(agent_world_engine::auth::AuthStore::new(
             &std::env::var("JWT_SECRET").unwrap_or_else(|_| {
                 use rand::Rng;

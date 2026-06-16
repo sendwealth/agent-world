@@ -244,6 +244,7 @@ pub struct AppState {
     pub federation: Option<Arc<Mutex<crate::a2a::federation::FederationEngine>>>,
     pub federation_registry: Option<Arc<Mutex<crate::federation::WorldRegistry>>>,
     pub migration_manager: Option<Arc<Mutex<crate::federation::MigrationManager>>>,
+    pub trade_manager: Option<Arc<Mutex<crate::federation::CrossWorldTradeManager>>>,
     pub api_key_store: Option<SharedApiKeyStore>,
     pub experiment_store: SharedExperimentStore,
     pub ab_experiment_store: SharedABExperimentStore,
@@ -294,6 +295,7 @@ pub struct TestOverrides {
     pub federation: Option<Arc<Mutex<crate::a2a::federation::FederationEngine>>>,
     pub federation_registry: Option<Arc<Mutex<crate::federation::WorldRegistry>>>,
     pub migration_manager: Option<Arc<Mutex<crate::federation::MigrationManager>>>,
+    pub trade_manager: Option<Arc<Mutex<crate::federation::CrossWorldTradeManager>>>,
     pub api_key_store: Option<SharedApiKeyStore>,
     pub auth_store: Option<SharedAuthStore>,
     pub ab_experiment_store: Option<SharedABExperimentStore>,
@@ -371,6 +373,7 @@ impl AppState {
             federation: overrides.federation,
             federation_registry: overrides.federation_registry,
             migration_manager: overrides.migration_manager,
+            trade_manager: overrides.trade_manager,
             api_key_store: overrides.api_key_store,
             experiment_store: Arc::new(Mutex::new(Vec::new())),
             ab_experiment_store: overrides
@@ -481,8 +484,11 @@ fn make_test_state(
         federation_registry: Some(Arc::new(Mutex::new(WorldRegistry::new(event_bus.clone())))),
         migration_manager: Some(Arc::new(Mutex::new(MigrationManager::new(
             MigrationPolicy::default(),
-            event_bus,
+            event_bus.clone(),
         )))),
+        trade_manager: Some(Arc::new(Mutex::new(
+            crate::federation::CrossWorldTradeManager::new(event_bus),
+        ))),
         api_key_store: None,
         experiment_store: Arc::new(Mutex::new(Vec::new())),
         ab_experiment_store: Arc::new(Mutex::new(Vec::new())),
@@ -584,6 +590,7 @@ pub fn build_full_router(state: AppState) -> Router {
         .merge(crate::api_human_agent::human_agent_routes())
         .merge(crate::api_dsl::dsl_routes())
         .merge(crate::api_federation::federation_routes())
+        .merge(crate::api_federation_trade::federation_trade_routes())
         .merge(crate::api_investment::investment_routes())
         .merge(crate::api_diplomacy::diplomacy_routes())
         .merge(crate::api_marketplace::marketplace_routes())

@@ -896,6 +896,13 @@ pub async fn human_submit_action(
         }
     }
 
+    // Touch last_action_tick immediately so auto-pilot doesn't fire before drain
+    // (matches /play/* behavior in play_submit_action).
+    {
+        let mut reg = state.human_agent_registry.lock().await;
+        reg.touch_action(&agent_id, tick);
+    }
+
     (
         StatusCode::ACCEPTED,
         Json(SubmitActionResponse {

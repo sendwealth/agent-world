@@ -51,7 +51,9 @@ scenario: park-benchmark
 The benchmark covers the three core emergent phenomena reported in
 Park et al. (2023), *"Generative Agents: Interactive Simulacra of Human
 Behavior"* (arXiv:2304.03442), and adds three further dimensions that
-Agent World's richer economy/governance makes measurable:
+Agent World's richer economy/governance makes measurable.
+
+### Park reproduction metrics (have Smallville baselines)
 
 | # | Phenomenon | Park § | Metric in this suite |
 |---|---|---|---|
@@ -59,9 +61,18 @@ Agent World's richer economy/governance makes measurable:
 | 2 | Relationship formation | §3.3 | [`network_metrics`](#2-social-network-density--clustering) |
 | 3 | Memory & reflection | §3.4 | (covered indirectly via role specialization) |
 | 4 | Role differentiation | §3.5 | [`specialization_metrics`](#3-role-specialization) |
-| 5 | Economic inequality | n/a | [`inequality_metrics`](#4-economic-inequality) |
-| 6 | Organization emergence | §3.5 | [`organization_metrics`](#5-organization-stability) |
-| 7 | Cultural diversity | §3.5 | [`diversity_metrics`](#6-cultural-diversity) |
+
+### Agent World extension metrics (no Smallville baseline)
+
+| # | Phenomenon | Park § | Metric in this suite |
+|---|---|---|---|
+| 5 | Economic inequality | n/a — Smallville has no economy | [`inequality_metrics`](#4-economic-inequality) |
+| 6 | Organization emergence | n/a — Park has no formal orgs | [`organization_metrics`](#5-organization-stability) |
+| 7 | Cultural diversity | §3.5 (qualitative only) | [`diversity_metrics`](#6-cultural-diversity) |
+
+> **Do not conflate the two groups.** Park reproduction metrics have
+> empirical Smallville numbers to compare against; AW extension metrics
+> are novel and only have internal/real-world anchors.
 
 Memory & reflection (Park §3.4) is qualitative in the original paper; we
 operationalise it as *role specialization* — agents that reflect and plan
@@ -75,12 +86,16 @@ entropy. A dedicated reflection-count metric is on the Phase 5.2 roadmap.
 Each metric is implemented twice and cross-checked:
 
 - **Rust** — `world-engine/src/emergence_benchmark.rs` (production path,
-  in-process, no allocations beyond `std`). 23 unit tests.
+  in-process, no allocations beyond `std`). 47 unit tests (including
+  golden-value parity tests that pin the same expected numbers as the
+  Python suite).
 - **Python** — `scripts/park_replication.py` (research path, runs from
   exported JSON without linking Rust).
 
 Both implementations produce identical numeric output for the same input
-(unit-tested in `sdk/tests/test_park_replication.py`).
+(≤1e-9 after round6), verified by the golden-value parity tests in
+`tests/test_emergence_benchmark.py` (`TestParityGolden*`) and the
+matching `parity_golden_*` tests in the Rust module.
 
 ### 1. Information Diffusion
 

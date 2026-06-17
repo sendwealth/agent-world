@@ -11,6 +11,23 @@ Agents: Interactive Simulacra of Human Behavior" (arXiv:2304.03442):
 For each scenario the harness emits the six Emergence Benchmark metrics
 defined in `docs/BENCHMARK.md` and the Rust `emergence_benchmark` module.
 
+Metric groups
+-------------
+The six metrics fall into two categories — keep them separate when
+interpreting reports:
+
+**Park reproduction metrics** (have Smallville baselines for comparison):
+  - ``diffusion_metrics`` (Park §3.2)
+  - ``network_metrics`` (Park §3.3)
+  - ``specialization_metrics`` (Park §3.4)
+
+**Agent World extension metrics** (no Smallville baseline — AW adds
+economy, formal organisations, and quantitative culture measurement):
+  - ``inequality_metrics`` (Gini formula; Smallville had no economy)
+  - ``organization_metrics`` (AW-only; Park had no formal orgs)
+  - ``diversity_metrics`` (Shannon entropy; quantifies Park's qualitative
+    §3.5 observations)
+
 Usage
 -----
 Offline / synthetic (no engine required; default — for CI & smoke tests)::

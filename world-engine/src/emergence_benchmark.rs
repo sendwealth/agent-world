@@ -8,14 +8,28 @@
 //!
 //! # Metric Catalogue
 //!
+//! The six metrics are split into two groups. The first three **reproduce**
+//! phenomena reported in Park et al. (2023) and should be compared directly
+//! against Smallville baselines. The last three are **Agent World extensions**:
+//! they apply the same methodology to richer phenomena that Smallville did not
+//! measure (no economy, no formal organisations, only qualitative culture).
+//! Do not conflate the two groups when interpreting benchmark reports.
+//!
+//! ## Park reproduction metrics (compare to Smallville)
+//!
 //! | # | Metric | Source paper | Section |
 //! |---|--------|--------------|--------|
 //! | 1 | Information Diffusion Curve + half-life | Rogers (1962); Park §3.2 | [`diffusion_metrics`] |
 //! | 2 | Social Network Density + Clustering Coefficient | Watts–Strogatz (1998); Park §3.3 | [`network_metrics`] |
 //! | 3 | Role Specialization Index (entropy-based) | Balding et al. (2023); Park §3.4 | [`specialization_metrics`] |
-//! | 4 | Economic Inequality (Gini slope + top-10% share) | Gini (1912); Park §3.2 | [`inequality_metrics`] |
-//! | 5 | Organization Emergence Stability | Park §3.5 ("events") | [`organization_metrics`] |
-//! | 6 | Cultural Diversity Index (Shannon entropy) | Shannon (1948); Park §3.5 | [`diversity_metrics`] |
+//!
+//! ## Agent World extension metrics (no Smallville baseline)
+//!
+//! | # | Metric | Source formula | Section |
+//! |---|--------|----------------|---------|
+//! | 4 | Economic Inequality (Gini slope + top-10% share) | Gini (1912); AW adds economy | [`inequality_metrics`] |
+//! | 5 | Organization Emergence Stability | AW-only (no Park orgs) | [`organization_metrics`] |
+//! | 6 | Cultural Diversity Index (Shannon entropy) | Shannon (1948); AW quantifies Park §3.5 qualitatively | [`diversity_metrics`] |
 //!
 //! Every metric returns a serialisable struct that documents its formula,
 //! the literature baseline it is compared against, and a human-readable
@@ -1305,5 +1319,331 @@ mod tests {
         assert_eq!(report.metric_count, 6);
         assert!(report.diffusion.final_coverage >= 0.0);
         assert!(report.network.density > 0.0);
+    }
+
+    // ── Golden-value parity tests ─────────────────────────
+    //
+    // These mirror the Python golden-value tests in
+    // `tests/test_emergence_benchmark.py` (`TestParityGolden*`). The
+    // expected numbers were produced by running both implementations on
+    // identical inputs and confirming they agree to ≤1e-9. If both
+    // suites stay green, Rust↔Python parity holds.
+
+    fn golden_diffusion_obs() -> Vec<DiffusionObservation> {
+        (0..10u32)
+            .map(|i| DiffusionObservation {
+                agent_id: i,
+                first_seen_tick: i as u64 * 2,
+            })
+            .collect()
+    }
+
+    fn golden_edges() -> Vec<InteractionEdge> {
+        vec![
+            InteractionEdge { a: 0, b: 1, weight: 1 },
+            InteractionEdge { a: 0, b: 2, weight: 1 },
+            InteractionEdge { a: 1, b: 2, weight: 1 },
+            InteractionEdge { a: 2, b: 3, weight: 1 },
+            InteractionEdge { a: 3, b: 4, weight: 1 },
+        ]
+    }
+
+    fn golden_profiles() -> Vec<AgentRoleProfile> {
+        let mk = |id: u32, counts: &[(&str, u64)]| {
+            let mut h = HashMap::new();
+            for (k, v) in counts {
+                h.insert(k.to_string(), *v);
+            }
+            AgentRoleProfile { agent_id: id, action_counts: h }
+        };
+        vec![
+            mk(0, &[("0", 10), ("1", 2), ("2", 1)]),
+            mk(1, &[("0", 1), ("1", 10), ("2", 2)]),
+            mk(2, &[("0", 2), ("1", 1), ("2", 10)]),
+        ]
+    }
+
+    fn golden_wealth() -> Vec<WealthSnapshot> {
+        vec![
+            WealthSnapshot { tick: 0, wealth: vec![100, 100, 100, 100, 100] },
+            WealthSnapshot { tick: 10, wealth: vec![50, 100, 100, 150, 200] },
+            WealthSnapshot { tick: 20, wealth: vec![0, 50, 100, 200, 400] },
+        ]
+    }
+
+    fn golden_orgs() -> Vec<OrgLifecycleEntry> {
+        vec![
+            OrgLifecycleEntry { org_id: 0, born_tick: 5, dissolved_tick: None, peak_members: 3 },
+            OrgLifecycleEntry { org_id: 1, born_tick: 10, dissolved_tick: Some(50), peak_members: 5 },
+            OrgLifecycleEntry { org_id: 2, born_tick: 20, dissolved_tick: None, peak_members: 2 },
+        ]
+    }
+
+    fn golden_culture() -> Vec<CulturalSignalSnapshot> {
+        let mut c1 = HashMap::new();
+        c1.insert("a".to_string(), 10);
+        c1.insert("b".to_string(), 5);
+        c1.insert("c".to_string(), 3);
+        c1.insert("d".to_string(), 2);
+        let mut c2 = HashMap::new();
+        c2.insert("a".to_string(), 8);
+        c2.insert("b".to_string(), 8);
+        c2.insert("c".to_string(), 4);
+        c2.insert("d".to_string(), 0);
+        vec![
+            CulturalSignalSnapshot { tick: 0, signal_counts: c1 },
+            CulturalSignalSnapshot { tick: 10, signal_counts: c2 },
+        ]
+    }
+
+    #[test]
+    fn parity_golden_diffusion() {
+        let m = diffusion_metrics(&golden_diffusion_obs(), 10, 100);
+        assert_eq!(m.total_population, 10);
+        assert_eq!(m.final_informed, 10);
+        assert!((m.final_coverage - 1.0).abs() < 1e-9);
+        assert!((m.adoption_rate - 0.274653).abs() < 1e-9,
+            "adoption_rate: {}", m.adoption_rate);
+        assert!((m.half_life_tick - 8.0).abs() < 1e-9,
+            "half_life_tick: {}", m.half_life_tick);
+        assert_eq!(m.ticks_to_90pct, Some(16));
+        assert!((m.mean_first_seen_tick - 9.0).abs() < 1e-9);
+    }
+
+    #[test]
+    fn parity_golden_network() {
+        let m = network_metrics(&golden_edges(), 5);
+        assert_eq!(m.node_count, 5);
+        assert_eq!(m.edge_count, 5);
+        assert!((m.density - 0.5).abs() < 1e-9, "density: {}", m.density);
+        assert!((m.global_clustering_coefficient - 0.5).abs() < 1e-9,
+            "C: {}", m.global_clustering_coefficient);
+        assert!((m.mean_degree - 2.0).abs() < 1e-9);
+        assert!((m.largest_component_ratio - 1.0).abs() < 1e-9);
+    }
+
+    #[test]
+    fn parity_golden_specialization() {
+        let m = specialization_metrics(&golden_profiles());
+        assert_eq!(m.agent_count, 3);
+        assert_eq!(m.role_count, 3);
+        assert!((m.mean_specialization - 0.374582).abs() < 1e-9,
+            "mean_specialization: {}", m.mean_specialization);
+        assert!((m.role_diversity_entropy - 1.584963).abs() < 1e-9,
+            "diversity_entropy: {}", m.role_diversity_entropy);
+        assert!((m.role_diversity_normalized - 1.0).abs() < 1e-9);
+        assert!((m.top_role_share - 0.333333).abs() < 1e-9,
+            "top_role_share: {}", m.top_role_share);
+    }
+
+    #[test]
+    fn parity_golden_inequality() {
+        let m = inequality_metrics(&golden_wealth());
+        assert_eq!(m.tick_count, 3);
+        assert!((m.mean_gini - 0.246667).abs() < 1e-9, "mean_gini: {}", m.mean_gini);
+        assert!((m.final_gini - 0.506667).abs() < 1e-9, "final_gini: {}", m.final_gini);
+        assert!((m.gini_trend_slope - 0.025333).abs() < 1e-9,
+            "slope: {}", m.gini_trend_slope);
+        assert!((m.final_top10_share - 0.533333).abs() < 1e-9,
+            "top10: {}", m.final_top10_share);
+    }
+
+    #[test]
+    fn parity_golden_organization() {
+        let m = organization_metrics(&golden_orgs(), 100);
+        assert_eq!(m.total_orgs_formed, 3);
+        assert_eq!(m.orgs_alive_at_end, 2);
+        assert!((m.mean_lifespan_ticks - 71.666667).abs() < 1e-6,
+            "mean_ls: {}", m.mean_lifespan_ticks);
+        assert!((m.median_lifespan_ticks - 80.0).abs() < 1e-9);
+        assert!((m.churn_rate - 0.333333).abs() < 1e-9,
+            "churn: {}", m.churn_rate);
+        assert!((m.mean_peak_members - 3.333333).abs() < 1e-9);
+    }
+
+    #[test]
+    fn parity_golden_diversity() {
+        let m = diversity_metrics(&golden_culture());
+        assert_eq!(m.tick_count, 2);
+        assert!((m.mean_entropy - 1.632333).abs() < 1e-9,
+            "mean_entropy: {}", m.mean_entropy);
+        assert!((m.mean_normalized_entropy - 0.816166).abs() < 1e-9,
+            "mean_norm: {}", m.mean_normalized_entropy);
+        assert!((m.final_entropy - 1.521928).abs() < 1e-9,
+            "final_entropy: {}", m.final_entropy);
+        assert_eq!(m.signal_categories, 4);
+    }
+
+    // ── Helper coverage ───────────────────────────────────
+
+    #[test]
+    fn linear_slope_empty() {
+        let points: Vec<(u64, f64)> = vec![];
+        assert!(linear_slope(&points).abs() < 1e-9);
+    }
+
+    #[test]
+    fn linear_slope_single_point() {
+        assert!(linear_slope(&[(0, 1.0)]).abs() < 1e-9);
+    }
+
+    #[test]
+    fn linear_slope_positive() {
+        // y = 2x → slope = 2.0
+        let points = vec![(0, 0.0), (1, 2.0), (2, 4.0)];
+        assert!((linear_slope(&points) - 2.0).abs() < 1e-9);
+    }
+
+    #[test]
+    fn linear_slope_zero() {
+        let points = vec![(0, 5.0), (1, 5.0), (2, 5.0)];
+        assert!(linear_slope(&points).abs() < 1e-9);
+    }
+
+    #[test]
+    fn linear_slope_vertical() {
+        // All x equal → denominator = 0 → 0.0
+        let points = vec![(5, 1.0), (5, 2.0), (5, 3.0)];
+        assert!(linear_slope(&points).abs() < 1e-9);
+    }
+
+    #[test]
+    fn round6_basic() {
+        assert!((round6(1.23456789) - 1.234568).abs() < 1e-9);
+        assert!((round6(0.0)).abs() < 1e-9);
+        assert!((round6(-1.5) - (-1.5)).abs() < 1e-9);
+    }
+
+    #[test]
+    fn first_tick_above_basic() {
+        let curve = vec![(0, 0.0), (5, 0.5), (10, 1.0)];
+        assert_eq!(first_tick_above(&curve, 0.5), Some(5));
+        assert_eq!(first_tick_above(&curve, 1.0), Some(10));
+        assert_eq!(first_tick_above(&curve, 1.5), None);
+        assert_eq!(first_tick_above(&curve, 0.0), Some(0));
+    }
+
+    #[test]
+    fn gini_two_agents_equal() {
+        assert!(gini_u64(&[10, 10]).abs() < 1e-9);
+    }
+
+    #[test]
+    fn gini_two_agents_unequal() {
+        // sorted [0, 100], n=2, weighted = (2*1-1-2)*0 + (2*2-1-2)*100 = 100
+        // g = 100 / (2*100) = 0.5
+        assert!((gini_u64(&[0, 100]) - 0.5).abs() < 1e-9);
+    }
+
+    #[test]
+    fn top_share_single_agent() {
+        assert!((top_percent_share_u64(&[42], 0.1) - 1.0).abs() < 1e-9);
+    }
+
+    #[test]
+    fn top_share_all_zero() {
+        assert!(top_percent_share_u64(&[0, 0, 0], 0.1).abs() < 1e-9);
+    }
+
+    #[test]
+    fn top_share_top_half() {
+        // 4 agents, top 50% = ceil(2.0) = 2 → 70/100 = 0.7
+        let s = top_percent_share_u64(&[10, 20, 30, 40], 0.5);
+        assert!((s - 0.7).abs() < 1e-9);
+    }
+
+    // ── Edge cases ────────────────────────────────────────
+
+    #[test]
+    fn network_isolated_nodes() {
+        // 5 nodes declared, but only 2 connected → density should reflect n=5
+        let edges = vec![InteractionEdge { a: 0, b: 1, weight: 1 }];
+        let m = network_metrics(&edges, 5);
+        // density = 2*1/(5*4) = 0.1
+        assert!((m.density - 0.1).abs() < 1e-9, "density: {}", m.density);
+        assert_eq!(m.node_count, 5);
+        assert_eq!(m.edge_count, 1);
+        // largest component = {0,1} = 2/5
+        assert!((m.largest_component_ratio - 0.4).abs() < 1e-9);
+    }
+
+    #[test]
+    fn diffusion_single_observation() {
+        let obs = vec![DiffusionObservation { agent_id: 0, first_seen_tick: 0 }];
+        let m = diffusion_metrics(&obs, 5, 100);
+        assert_eq!(m.final_informed, 1);
+        assert!((m.final_coverage - 0.2).abs() < 1e-9);
+        // Only one data point → can't fit logistic → rate = 0
+        assert!(m.adoption_rate.abs() < 1e-9);
+    }
+
+    #[test]
+    fn organization_single_dissolved() {
+        let entries = vec![
+            OrgLifecycleEntry {
+                org_id: 0,
+                born_tick: 10,
+                dissolved_tick: Some(50),
+                peak_members: 7,
+            },
+        ];
+        let m = organization_metrics(&entries, 100);
+        assert_eq!(m.total_orgs_formed, 1);
+        assert_eq!(m.orgs_alive_at_end, 0);
+        assert!((m.churn_rate - 1.0).abs() < 1e-9);
+        assert!((m.mean_lifespan_ticks - 40.0).abs() < 1e-9);
+        assert!((m.median_lifespan_ticks - 40.0).abs() < 1e-9);
+        assert!((m.mean_peak_members - 7.0).abs() < 1e-9);
+    }
+
+    #[test]
+    fn diversity_multi_tick_average() {
+        let mut c1 = HashMap::new();
+        c1.insert("a".to_string(), 4);
+        c1.insert("b".to_string(), 4);
+        let mut c2 = HashMap::new();
+        c2.insert("a".to_string(), 8);
+        c2.insert("b".to_string(), 0);
+        let snaps = vec![
+            CulturalSignalSnapshot { tick: 0, signal_counts: c1 },
+            CulturalSignalSnapshot { tick: 10, signal_counts: c2 },
+        ];
+        let m = diversity_metrics(&snaps);
+        // Tick 0: H = 1.0 (uniform over 2), norm = 1.0
+        // Tick 10: H = 0.0 (monoculture), norm = 0.0
+        // Mean H = 0.5, mean norm = 0.5
+        assert!((m.mean_entropy - 0.5).abs() < 1e-9, "mean_entropy: {}", m.mean_entropy);
+        assert!((m.mean_normalized_entropy - 0.5).abs() < 1e-9);
+        assert!((m.final_entropy - 0.0).abs() < 1e-9);
+    }
+
+    #[test]
+    fn specialization_two_roles_equal() {
+        // 2 agents, each does both roles equally → specialization = 0
+        let mk = |id: u32| AgentRoleProfile {
+            agent_id: id,
+            action_counts: {
+                let mut h = HashMap::new();
+                h.insert("x".to_string(), 5);
+                h.insert("y".to_string(), 5);
+                h
+            },
+        };
+        let profiles = vec![mk(0), mk(1)];
+        let m = specialization_metrics(&profiles);
+        assert!(m.mean_specialization.abs() < 1e-9,
+            "mean_specialization: {}", m.mean_specialization);
+        assert_eq!(m.role_count, 2);
+    }
+
+    #[test]
+    fn inequality_declining_slope() {
+        // Wealth goes from unequal to equal → slope < 0
+        let snaps = vec![
+            WealthSnapshot { tick: 0, wealth: vec![0, 0, 0, 0, 100] },   // gini 0.8
+            WealthSnapshot { tick: 10, wealth: vec![20, 20, 20, 20, 20] }, // gini 0.0
+        ];
+        let m = inequality_metrics(&snaps);
+        assert!(m.gini_trend_slope < 0.0, "slope should be < 0: {}", m.gini_trend_slope);
     }
 }

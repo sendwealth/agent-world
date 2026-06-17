@@ -630,7 +630,17 @@ async fn main() {
     let trade_manager = Arc::new(Mutex::new(
         agent_world_engine::federation::CrossWorldTradeManager::new(event_bus.clone()),
     ));
-    println!("   Federation: WorldRegistry + MigrationManager + CrossWorldTradeManager initialized");
+    // Phase 5.7: SubWorldManager shares the migration manager for inbound transfers.
+    let subworld_manager = Arc::new(
+        agent_world_engine::federation::SubWorldManager::new(
+            event_bus.clone(),
+            Arc::new(MigrationManager::new(
+                agent_world_engine::federation::MigrationPolicy::default(),
+                event_bus.clone(),
+            )),
+        ),
+    );
+    println!("   Federation: WorldRegistry + MigrationManager + CrossWorldTradeManager + SubWorldManager initialized");
 
     // ── Initialize A/B Experiment Store ─────────────────────
     let ab_experiment_store: api::SharedABExperimentStore =
@@ -657,6 +667,7 @@ async fn main() {
         federation_registry: Some(federation_registry),
         migration_manager: Some(migration_manager),
         trade_manager: Some(trade_manager),
+        subworld_manager: Some(subworld_manager),
         auth_store: Some(Arc::new(Mutex::new(agent_world_engine::auth::AuthStore::new(
             &std::env::var("JWT_SECRET").unwrap_or_else(|_| {
                 use rand::Rng;

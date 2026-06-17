@@ -8,6 +8,7 @@
 pub mod migration;
 pub mod registry;
 pub mod service;
+pub mod subworld;
 pub mod trade;
 
 pub use migration::{
@@ -15,6 +16,11 @@ pub use migration::{
     MigrationStats, MigrationStatus, MigrationType,
 };
 pub use registry::{WorldEntry, WorldRegistry, WorldStatus};
+pub use subworld::{
+    GovernanceConfig, RestCreateSubWorld, RestDissolve, RestEvict, RestInvite,
+    RestMigrateIn, RestSetStatus, RestUpdateGovernance, SubWorld, SubWorldManager,
+    SubWorldMember, SubWorldRegistry, SubWorldStatus,
+};
 pub use trade::{
     CrossWorldTrade, CrossWorldTradeManager, CrossWorldTradeOffer, TradeItem, TradeStats,
     TradeStatus,

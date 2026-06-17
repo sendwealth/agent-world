@@ -245,6 +245,8 @@ pub struct AppState {
     pub federation_registry: Option<Arc<Mutex<crate::federation::WorldRegistry>>>,
     pub migration_manager: Option<Arc<Mutex<crate::federation::MigrationManager>>>,
     pub trade_manager: Option<Arc<Mutex<crate::federation::CrossWorldTradeManager>>>,
+    /// Phase 5.7 — agent-spawned sub-worlds.
+    pub subworld_manager: Option<Arc<crate::federation::SubWorldManager>>,
     pub api_key_store: Option<SharedApiKeyStore>,
     pub experiment_store: SharedExperimentStore,
     pub ab_experiment_store: SharedABExperimentStore,
@@ -296,6 +298,7 @@ pub struct TestOverrides {
     pub federation_registry: Option<Arc<Mutex<crate::federation::WorldRegistry>>>,
     pub migration_manager: Option<Arc<Mutex<crate::federation::MigrationManager>>>,
     pub trade_manager: Option<Arc<Mutex<crate::federation::CrossWorldTradeManager>>>,
+    pub subworld_manager: Option<Arc<crate::federation::SubWorldManager>>,
     pub api_key_store: Option<SharedApiKeyStore>,
     pub auth_store: Option<SharedAuthStore>,
     pub ab_experiment_store: Option<SharedABExperimentStore>,
@@ -374,6 +377,7 @@ impl AppState {
             federation_registry: overrides.federation_registry,
             migration_manager: overrides.migration_manager,
             trade_manager: overrides.trade_manager,
+            subworld_manager: overrides.subworld_manager,
             api_key_store: overrides.api_key_store,
             experiment_store: Arc::new(Mutex::new(Vec::new())),
             ab_experiment_store: overrides
@@ -487,8 +491,14 @@ fn make_test_state(
             event_bus.clone(),
         )))),
         trade_manager: Some(Arc::new(Mutex::new(
-            crate::federation::CrossWorldTradeManager::new(event_bus),
+            crate::federation::CrossWorldTradeManager::new(event_bus.clone()),
         ))),
+        subworld_manager: Some(Arc::new(
+            crate::federation::SubWorldManager::new(
+                event_bus.clone(),
+                Arc::new(MigrationManager::new(MigrationPolicy::default(), event_bus)),
+            ),
+        )),
         api_key_store: None,
         experiment_store: Arc::new(Mutex::new(Vec::new())),
         ab_experiment_store: Arc::new(Mutex::new(Vec::new())),
@@ -591,6 +601,7 @@ pub fn build_full_router(state: AppState) -> Router {
         .merge(crate::api_dsl::dsl_routes())
         .merge(crate::api_federation::federation_routes())
         .merge(crate::api_federation_trade::federation_trade_routes())
+        .merge(crate::api_subworld::subworld_routes())
         .merge(crate::api_investment::investment_routes())
         .merge(crate::api_diplomacy::diplomacy_routes())
         .merge(crate::api_marketplace::marketplace_routes())

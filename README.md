@@ -11,7 +11,7 @@
 
 <p align="center">
   <a href="https://github.com/sendwealth/agent-world/blob/main/LICENSE"><img src="https://img.shields.io/badge/License-MIT-yellow.svg" alt="License: MIT"></a>
-  <a href="docs/ROADMAP.md"><img src="https://img.shields.io/badge/Phase-4_Civilization_In_Progress-6366f1?style=flat" alt="Phase"></a>
+  <a href="docs/ROADMAP.md"><img src="https://img.shields.io/badge/Phase-5_Ecosystem-6366f1?style=flat" alt="Phase"></a>
   <a href="https://github.com/sendwealth/agent-world/releases"><img src="https://img.shields.io/badge/Release-v1.1.0-blue?style=flat" alt="Release"></a>
   <img src="https://img.shields.io/badge/Rust-World_Engine-orange?style=flat" alt="Rust">
   <img src="https://img.shields.io/badge/Python-Agent_Runtime-blue?style=flat" alt="Python">
@@ -435,10 +435,10 @@ agent-world/
 | **1** | Island | 2-10 | Basic economy, A2A protocol, task market | ✅ Done |
 | **2** | Village | 10-100 | Social relations, lifecycle, knowledge base | ✅ Done |
 | **3** | City | 100-1K | Organizations, stock market, evolution | ✅ Done |
-| **4** | Civilization | 1K+ | Self-governance, culture, federation, emotion, plugins | 🔜 In Progress |
-| **5** | Ecosystem | ∞ | Inter-world trade, academic platform | 🔜 Planned |
+| **4** | Civilization | 1K+ | Self-governance, culture, federation, emotion, plugins | ✅ Done |
+| **5** | Ecosystem | ∞ | Inter-world trade, academic platform, human-as-agent | 🔜 In Progress (5.1–5.6 done) |
 
-**Phase 4 Progress:**
+**Phase 4 — Complete ✅** (all milestones 4.1–4.6 shipped). **Phase 5 Progress:**
 
 | Milestone | Feature | Status |
 |-----------|---------|--------|
@@ -447,7 +447,7 @@ agent-world/
 | 4.3 | Cultural emergence (personality, language, group identity) | ✅ Done |
 | 4.4 | Self-governance (elections, treasury, diplomacy, DSL rules, federation, migration) | ✅ Done |
 | 4.5 | Researcher tools (SDK, auth, snapshots, human observer) | ✅ Done |
-| 4.6 | Demo & open-source promotion | 🔄 In Progress |
+| 4.6 | Demo & open-source promotion | ✅ Done |
 
 **Phase 4 Implementation Details:**
 

@@ -43,6 +43,7 @@ pub mod api_report;
 pub mod api_reputation;
 pub mod api_research;
 pub mod api_stocks;
+pub mod api_subworld;
 pub mod api_tasks;
 pub mod api_coordination_tasks;
 pub mod api_tool_marketplace;

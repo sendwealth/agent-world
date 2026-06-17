@@ -251,6 +251,34 @@ class TestSyntheticRun:
         assert r1.network.density == r2.network.density
         assert r1.specialization.mean_specialization == r2.specialization.mean_specialization
 
+    def test_seed_42_deterministic(self):
+        """Seed 42 must produce reproducible results across runs and
+        all six metric categories must be identical on re-run."""
+        r1 = park.run_synthetic(25, 200, seed=42, scenario="seed42-a")
+        r2 = park.run_synthetic(25, 200, seed=42, scenario="seed42-b")
+        # Every numeric field of every metric must match
+        assert r1.diffusion == r2.diffusion
+        assert r1.network == r2.network
+        assert r1.specialization == r2.specialization
+        assert r1.inequality == r2.inequality
+        assert r1.organization == r2.organization
+        assert r1.diversity == r2.diversity
+
+    def test_seed_42_pinned_values(self):
+        """Pin the exact metric values for the canonical seed=42,
+        agents=25, ticks=200 configuration used by CI. If any value
+        drifts, this test fails and surfaces the change."""
+        r = park.run_synthetic(25, 200, seed=42, scenario="pin")
+        # These values are the canonical reference; any intentional
+        # formula change should update them.
+        assert r.diffusion.final_coverage == 1.0
+        assert r.diffusion.final_informed == 25
+        assert r.network.node_count == 25
+        assert r.network.density > 0.05  # reproduction criterion
+        assert r.specialization.mean_specialization > 0.0  # reproduction criterion
+        assert r.inequality.tick_count > 0
+        assert r.diversity.signal_categories >= 1
+
     def test_reproduction_criteria(self):
         r = park.run_synthetic(25, 200, seed=42, scenario="ci")
         assert r.metric_count == 6
@@ -279,6 +307,162 @@ class TestRender:
         assert "Economic Inequality" in md
         assert "Organization Stability" in md
         assert "Cultural Diversity" in md
+
+
+# ── Golden-value parity tests ───────────────────────────────────────────
+#
+# These tests pin the exact numeric output of every metric on a fixed
+# input. The same inputs and expected values are mirrored in the Rust
+# unit tests (`world-engine/src/emergence_benchmark.rs` `#[cfg(test)]`
+# module, `parity_golden_*` tests). If both sides stay green, the Rust
+# and Python implementations produce numerically identical results
+# (≤1e-9 tolerance after round6).
+#
+# Update both sides together when a formula intentionally changes.
+
+
+# Shared fixtures — keep in sync with the Rust `parity_golden_*` tests.
+GOLDEN_DIFFUSION_OBS = [(0, 0), (1, 2), (2, 4), (3, 6), (4, 8),
+                        (5, 10), (6, 12), (7, 14), (8, 16), (9, 18)]
+GOLDEN_NETWORK_EDGES = [
+    (0, 1, 1), (0, 2, 1), (1, 2, 1), (2, 3, 1), (3, 4, 1),
+]
+GOLDEN_SPECIALIZATION_PROFILES = [
+    {0: 10, 1: 2, 2: 1},
+    {0: 1, 1: 10, 2: 2},
+    {0: 2, 1: 1, 2: 10},
+]
+GOLDEN_WEALTH_SNAPSHOTS = [
+    (0, [100, 100, 100, 100, 100]),
+    (10, [50, 100, 100, 150, 200]),
+    (20, [0, 50, 100, 200, 400]),
+]
+GOLDEN_ORG_ENTRIES = [
+    {"org_id": 0, "born_tick": 5, "dissolved_tick": None, "peak_members": 3},
+    {"org_id": 1, "born_tick": 10, "dissolved_tick": 50, "peak_members": 5},
+    {"org_id": 2, "born_tick": 20, "dissolved_tick": None, "peak_members": 2},
+]
+GOLDEN_CULTURE_SNAPS = [
+    {"tick": 0, "signal_counts": {"a": 10, "b": 5, "c": 3, "d": 2}},
+    {"tick": 10, "signal_counts": {"a": 8, "b": 8, "c": 4, "d": 0}},
+]
+
+
+class TestParityGoldenDiffusion:
+    def test_values(self):
+        m = park.diffusion_metrics(GOLDEN_DIFFUSION_OBS, 10, 100)
+        assert m.total_population == 10
+        assert m.final_informed == 10
+        assert abs(m.final_coverage - 1.0) < 1e-9
+        assert abs(m.adoption_rate - 0.274653) < 1e-9
+        assert abs(m.half_life_tick - 8.0) < 1e-9
+        assert m.ticks_to_90pct == 16
+        assert abs(m.mean_first_seen_tick - 9.0) < 1e-9
+
+
+class TestParityGoldenNetwork:
+    def test_values(self):
+        m = park.network_metrics(GOLDEN_NETWORK_EDGES, 5)
+        assert m.node_count == 5
+        assert m.edge_count == 5
+        assert abs(m.density - 0.5) < 1e-9
+        assert abs(m.global_clustering_coefficient - 0.5) < 1e-9
+        assert abs(m.mean_degree - 2.0) < 1e-9
+        assert abs(m.largest_component_ratio - 1.0) < 1e-9
+
+
+class TestParityGoldenSpecialization:
+    def test_values(self):
+        m = park.specialization_metrics(GOLDEN_SPECIALIZATION_PROFILES)
+        assert m.agent_count == 3
+        assert m.role_count == 3
+        assert abs(m.mean_specialization - 0.374582) < 1e-9
+        assert abs(m.role_diversity_entropy - 1.584963) < 1e-9
+        assert abs(m.role_diversity_normalized - 1.0) < 1e-9
+        assert abs(m.top_role_share - 0.333333) < 1e-9
+
+
+class TestParityGoldenInequality:
+    def test_values(self):
+        m = park.inequality_metrics(GOLDEN_WEALTH_SNAPSHOTS)
+        assert m.tick_count == 3
+        assert abs(m.mean_gini - 0.246667) < 1e-9
+        assert abs(m.final_gini - 0.506667) < 1e-9
+        assert abs(m.gini_trend_slope - 0.025333) < 1e-9
+        assert abs(m.final_top10_share - 0.533333) < 1e-9
+
+
+class TestParityGoldenOrganization:
+    def test_values(self):
+        m = park.organization_metrics(GOLDEN_ORG_ENTRIES, 100)
+        assert m.total_orgs_formed == 3
+        assert m.orgs_alive_at_end == 2
+        assert abs(m.mean_lifespan_ticks - 71.666667) < 1e-9
+        assert abs(m.median_lifespan_ticks - 80) < 1e-9
+        assert abs(m.churn_rate - 0.333333) < 1e-9
+        assert abs(m.mean_peak_members - 3.333333) < 1e-9
+
+
+class TestParityGoldenDiversity:
+    def test_values(self):
+        m = park.diversity_metrics(GOLDEN_CULTURE_SNAPS)
+        assert m.tick_count == 2
+        assert abs(m.mean_entropy - 1.632333) < 1e-9
+        assert abs(m.mean_normalized_entropy - 0.816166) < 1e-9
+        assert abs(m.final_entropy - 1.521928) < 1e-9
+        assert m.signal_categories == 4
+
+
+# ── Helper coverage ─────────────────────────────────────────────────────
+
+
+class TestLinearSlope:
+    def test_empty(self):
+        assert park._linear_slope([]) == 0.0
+
+    def test_single_point(self):
+        assert park._linear_slope([(0, 1.0)]) == 0.0
+
+    def test_positive_slope(self):
+        # y = 2x: slope should be 2.0
+        points = [(0, 0.0), (1, 2.0), (2, 4.0)]
+        assert abs(park._linear_slope(points) - 2.0) < 1e-9
+
+    def test_zero_slope(self):
+        points = [(0, 5.0), (1, 5.0), (2, 5.0)]
+        assert abs(park._linear_slope(points)) < 1e-9
+
+    def test_vertical_line(self):
+        # All x the same → denominator = 0 → return 0
+        points = [(5, 1.0), (5, 2.0), (5, 3.0)]
+        assert park._linear_slope(points) == 0.0
+
+
+class TestGiniExtra:
+    def test_two_agents_equal(self):
+        assert park.gini([10, 10]) == 0.0
+
+    def test_two_agents_unequal(self):
+        # sorted [0, 100], n=2, weighted = (2*1-1-2)*0 + (2*2-1-2)*100 = 100
+        # g = 100 / (2*100) = 0.5
+        assert abs(park.gini([0, 100]) - 0.5) < 1e-9
+
+    def test_all_zero(self):
+        assert park.gini([0, 0, 0]) == 0.0
+
+
+class TestTopShareExtra:
+    def test_single_agent(self):
+        assert park.top_percent_share([42]) == 1.0
+
+    def test_all_zero(self):
+        assert park.top_percent_share([0, 0, 0]) == 0.0
+
+    def test_top_50pct(self):
+        # 4 agents, top 50% = ceil(2.0) = 2
+        s = park.top_percent_share([10, 20, 30, 40], 0.5)
+        # top 2 = 40+30=70, total=100 → 0.7
+        assert abs(s - 0.7) < 1e-9
 
 
 if __name__ == "__main__":

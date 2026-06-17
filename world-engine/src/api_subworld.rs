@@ -37,19 +37,7 @@ pub async fn subworld_create(
     Json(body): Json<RestCreateSubWorld>,
 ) -> impl IntoResponse {
     let mgr = get_manager!(state);
-    match mgr
-        .create_subworld(
-            &body.founder_agent_id,
-            body.founder_reputation,
-            &body.parent_world_id,
-            &body.name,
-            &body.description,
-            body.governance,
-            body.tick_interval_ms,
-            body.genesis_config,
-        )
-        .await
-    {
+    match mgr.create_subworld(body).await {
         Ok(sw) => api_ok(&sw),
         Err(e) => api_err(StatusCode::BAD_REQUEST, e),
     }

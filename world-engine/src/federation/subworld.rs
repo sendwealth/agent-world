@@ -320,34 +320,20 @@ impl SubWorldManager {
 
     /// Create a new sub-world.
     ///
-    /// # Arguments
-    /// * `founder_agent_id` - The agent founding the sub-world.
-    /// * `founder_reputation` - The founder's current reputation.
-    /// * `parent_world_id` - The world the sub-world is spawned from.
-    /// * `name` / `description` - Display fields.
-    /// * `governance` - Governance configuration.
-    /// * `tick_interval_ms` - Tick loop interval for the sub-world.
-    /// * `genesis_config` - Customised genesis config JSON.
+    /// Accepts a [`CreateSubWorldRequest`] which bundles all required fields.
     ///
     /// # Errors
     /// Returns an error string if the founder's reputation is too low or has
     /// already founded the maximum number of sub-worlds.
     pub async fn create_subworld(
         &self,
-        founder_agent_id: &str,
-        founder_reputation: f64,
-        parent_world_id: &str,
-        name: &str,
-        description: &str,
-        governance: GovernanceConfig,
-        tick_interval_ms: u64,
-        genesis_config: serde_json::Value,
+        req: CreateSubWorldRequest,
     ) -> Result<SubWorld, String> {
         // Check founder reputation
-        if founder_reputation < self.founder_min_reputation {
+        if req.founder_reputation < self.founder_min_reputation {
             return Err(format!(
                 "Founder reputation {:.1} below minimum {:.1} required to spawn a sub-world",
-                founder_reputation, self.founder_min_reputation
+                req.founder_reputation, self.founder_min_reputation
             ));
         }
 
@@ -355,34 +341,34 @@ impl SubWorldManager {
         let all = self.registry.list_all().await;
         let founded_count = all
             .iter()
-            .filter(|sw| sw.founder_agent_id == founder_agent_id)
+            .filter(|sw| sw.founder_agent_id == req.founder_agent_id)
             .count();
         if founded_count >= self.max_subworlds_per_agent as usize {
             return Err(format!(
                 "Agent {} has already founded {}/{} sub-worlds",
-                founder_agent_id, founded_count, self.max_subworlds_per_agent
+                req.founder_agent_id, founded_count, self.max_subworlds_per_agent
             ));
         }
 
         let world_id = Uuid::new_v4().to_string();
         let founder_member = SubWorldMember {
-            agent_id: founder_agent_id.to_string(),
+            agent_id: req.founder_agent_id.clone(),
             joined_at: Utc::now().to_rfc3339(),
             entry_contribution: 0,
         };
 
         let subworld = SubWorld {
             world_id: world_id.clone(),
-            parent_world_id: parent_world_id.to_string(),
-            founder_agent_id: founder_agent_id.to_string(),
-            name: name.to_string(),
-            description: description.to_string(),
+            parent_world_id: req.parent_world_id,
+            founder_agent_id: req.founder_agent_id,
+            name: req.name,
+            description: req.description,
             status: SubWorldStatus::Active,
-            governance,
+            governance: req.governance,
             members: vec![founder_member],
             resource_pool_tokens: 0,
-            tick_interval_ms,
-            genesis_config,
+            tick_interval_ms: req.tick_interval_ms,
+            genesis_config: req.genesis_config,
             created_at: Utc::now().to_rfc3339(),
         };
 
@@ -672,8 +658,12 @@ fn _ensure_json_used() -> serde_json::Value {
     json!(null)
 }
 
+/// Request payload for creating a sub-world.
+///
+/// Used both as the REST API JSON body and as the argument to
+/// [`SubWorldManager::create_subworld`] to avoid an over-long parameter list.
 #[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct RestCreateSubWorld {
+pub struct CreateSubWorldRequest {
     pub founder_agent_id: String,
     pub founder_reputation: f64,
     pub parent_world_id: String,
@@ -687,6 +677,9 @@ pub struct RestCreateSubWorld {
     #[serde(default)]
     pub genesis_config: serde_json::Value,
 }
+
+/// Backwards-compatible alias for the REST handler layer.
+pub type RestCreateSubWorld = CreateSubWorldRequest;
 
 fn default_tick_interval() -> u64 {
     1000
@@ -772,6 +765,26 @@ mod tests {
         SubWorldManager::new(event_bus(), migration_manager())
     }
 
+    /// Build a `CreateSubWorldRequest` with sensible defaults.
+    /// Only pass the fields you care about; the rest use defaults.
+    fn req(
+        founder: &str,
+        reputation: f64,
+        parent: &str,
+        name: &str,
+    ) -> CreateSubWorldRequest {
+        CreateSubWorldRequest {
+            founder_agent_id: founder.into(),
+            founder_reputation: reputation,
+            parent_world_id: parent.into(),
+            name: name.into(),
+            description: String::new(),
+            governance: GovernanceConfig::default(),
+            tick_interval_ms: 1000,
+            genesis_config: serde_json::Value::Null,
+        }
+    }
+
     fn snapshot(agent_id: &str, world: &str, tokens: u64, reputation: f64) -> AgentSnapshot {
         AgentSnapshot {
             agent_id: agent_id.into(),
@@ -794,16 +807,7 @@ mod tests {
     async fn test_create_subworld_ok() {
         let mgr = manager();
         let sw = mgr
-            .create_subworld(
-                "agent-founder",
-                100.0,
-                "world-parent",
-                "New Atlantis",
-                "desc",
-                GovernanceConfig::default(),
-                1000,
-                serde_json::Value::Null,
-            )
+            .create_subworld(req("agent-founder", 100.0, "world-parent", "New Atlantis"))
             .await
             .unwrap();
 
@@ -818,16 +822,7 @@ mod tests {
     async fn test_create_subworld_reputation_too_low() {
         let mgr = manager();
         let err = mgr
-            .create_subworld(
-                "agent-low",
-                10.0,
-                "world-parent",
-                "LowRep",
-                "",
-                GovernanceConfig::default(),
-                1000,
-                serde_json::Value::Null,
-            )
+            .create_subworld(req("agent-low", 10.0, "world-parent", "LowRep"))
             .await
             .unwrap_err();
         assert!(err.contains("reputation"));
@@ -836,30 +831,12 @@ mod tests {
     #[tokio::test]
     async fn test_create_subworld_quota_exceeded() {
         let mgr = manager();
-        mgr.create_subworld(
-            "agent-q",
-            100.0,
-            "p",
-            "first",
-            "",
-            GovernanceConfig::default(),
-            1000,
-            serde_json::Value::Null,
-        )
+        mgr.create_subworld(req("agent-q", 100.0, "p", "first"))
         .await
         .unwrap();
 
         let err = mgr
-            .create_subworld(
-                "agent-q",
-                100.0,
-                "p",
-                "second",
-                "",
-                GovernanceConfig::default(),
-                1000,
-                serde_json::Value::Null,
-            )
+            .create_subworld(req("agent-q", 100.0, "p", "second"))
             .await
             .unwrap_err();
         assert!(err.contains("already founded"));
@@ -871,16 +848,7 @@ mod tests {
     async fn test_update_governance_by_founder() {
         let mgr = manager();
         let sw = mgr
-            .create_subworld(
-                "f1",
-                100.0,
-                "p",
-                "GW",
-                "",
-                GovernanceConfig::default(),
-                1000,
-                serde_json::Value::Null,
-            )
+            .create_subworld(req("f1", 100.0, "p", "GW"))
             .await
             .unwrap();
 
@@ -899,16 +867,7 @@ mod tests {
     async fn test_update_governance_non_founder_rejected() {
         let mgr = manager();
         let sw = mgr
-            .create_subworld(
-                "f1",
-                100.0,
-                "p",
-                "GW",
-                "",
-                GovernanceConfig::default(),
-                1000,
-                serde_json::Value::Null,
-            )
+            .create_subworld(req("f1", 100.0, "p", "GW"))
             .await
             .unwrap();
 
@@ -925,16 +884,7 @@ mod tests {
     async fn test_set_status_freeze_and_dissolve() {
         let mgr = manager();
         let sw = mgr
-            .create_subworld(
-                "f1",
-                100.0,
-                "p",
-                "GW",
-                "",
-                GovernanceConfig::default(),
-                1000,
-                serde_json::Value::Null,
-            )
+            .create_subworld(req("f1", 100.0, "p", "GW"))
             .await
             .unwrap();
 
@@ -951,19 +901,8 @@ mod tests {
     async fn test_migrate_in_open_join_auto_approves() {
         let mgr = manager();
         let sw = mgr
-            .create_subworld(
-                "founder-a",
-                100.0,
-                "parent-w",
-                "Open World",
-                "",
-                GovernanceConfig {
-                    open_join: true,
-                    ..Default::default()
-                },
-                1000,
-                serde_json::Value::Null,
-            )
+            .create_subworld(CreateSubWorldRequest { founder_agent_id: "founder-a".into(), founder_reputation: 100.0, parent_world_id: "parent-w".into(), name: "Open World".into(), description: String::new(), governance: GovernanceConfig { open_join: true,
+                    ..Default::default() }, tick_interval_ms: 1000, genesis_config: serde_json::Value::Null })
             .await
             .unwrap();
 
@@ -977,19 +916,8 @@ mod tests {
     async fn test_migrate_in_closed_join_stays_pending() {
         let mgr = manager();
         let sw = mgr
-            .create_subworld(
-                "founder-a",
-                100.0,
-                "parent-w",
-                "Gated",
-                "",
-                GovernanceConfig {
-                    open_join: false,
-                    ..Default::default()
-                },
-                1000,
-                serde_json::Value::Null,
-            )
+            .create_subworld(CreateSubWorldRequest { founder_agent_id: "founder-a".into(), founder_reputation: 100.0, parent_world_id: "parent-w".into(), name: "Gated".into(), description: String::new(), governance: GovernanceConfig { open_join: false,
+                    ..Default::default() }, tick_interval_ms: 1000, genesis_config: serde_json::Value::Null })
             .await
             .unwrap();
 
@@ -1002,19 +930,8 @@ mod tests {
     async fn test_migrate_in_reputation_gate() {
         let mgr = manager();
         let sw = mgr
-            .create_subworld(
-                "founder-a",
-                100.0,
-                "p",
-                "Elite",
-                "",
-                GovernanceConfig {
-                    min_reputation: 80.0,
-                    ..Default::default()
-                },
-                1000,
-                serde_json::Value::Null,
-            )
+            .create_subworld(CreateSubWorldRequest { founder_agent_id: "founder-a".into(), founder_reputation: 100.0, parent_world_id: "p".into(), name: "Elite".into(), description: String::new(), governance: GovernanceConfig { min_reputation: 80.0,
+                    ..Default::default() }, tick_interval_ms: 1000, genesis_config: serde_json::Value::Null })
             .await
             .unwrap();
 
@@ -1027,19 +944,8 @@ mod tests {
     async fn test_migrate_in_entry_cost_gate() {
         let mgr = manager();
         let sw = mgr
-            .create_subworld(
-                "founder-a",
-                100.0,
-                "p",
-                "Paid",
-                "",
-                GovernanceConfig {
-                    entry_token_cost: 5000,
-                    ..Default::default()
-                },
-                1000,
-                serde_json::Value::Null,
-            )
+            .create_subworld(CreateSubWorldRequest { founder_agent_id: "founder-a".into(), founder_reputation: 100.0, parent_world_id: "p".into(), name: "Paid".into(), description: String::new(), governance: GovernanceConfig { entry_token_cost: 5000,
+                    ..Default::default() }, tick_interval_ms: 1000, genesis_config: serde_json::Value::Null })
             .await
             .unwrap();
 
@@ -1052,19 +958,8 @@ mod tests {
     async fn test_migrate_in_capacity() {
         let mgr = manager();
         let sw = mgr
-            .create_subworld(
-                "founder-a",
-                100.0,
-                "p",
-                "Tiny",
-                "",
-                GovernanceConfig {
-                    max_members: 1, // founder already fills capacity
-                    ..Default::default()
-                },
-                1000,
-                serde_json::Value::Null,
-            )
+            .create_subworld(CreateSubWorldRequest { founder_agent_id: "founder-a".into(), founder_reputation: 100.0, parent_world_id: "p".into(), name: "Tiny".into(), description: String::new(), governance: GovernanceConfig { max_members: 1, // founder already fills capacity
+                    ..Default::default() }, tick_interval_ms: 1000, genesis_config: serde_json::Value::Null })
             .await
             .unwrap();
 
@@ -1079,16 +974,7 @@ mod tests {
     async fn test_confirm_migration_adds_member() {
         let mgr = manager();
         let sw = mgr
-            .create_subworld(
-                "founder-a",
-                100.0,
-                "p",
-                "Test",
-                "",
-                GovernanceConfig::default(),
-                1000,
-                serde_json::Value::Null,
-            )
+            .create_subworld(req("founder-a", 100.0, "p", "Test"))
             .await
             .unwrap();
 
@@ -1105,16 +991,7 @@ mod tests {
     async fn test_confirm_migration_idempotent() {
         let mgr = manager();
         let sw = mgr
-            .create_subworld(
-                "f",
-                100.0,
-                "p",
-                "T",
-                "",
-                GovernanceConfig::default(),
-                1000,
-                serde_json::Value::Null,
-            )
+            .create_subworld(req("f", 100.0, "p", "T"))
             .await
             .unwrap();
 
@@ -1132,16 +1009,7 @@ mod tests {
     async fn test_evict_member() {
         let mgr = manager();
         let sw = mgr
-            .create_subworld(
-                "f",
-                100.0,
-                "p",
-                "T",
-                "",
-                GovernanceConfig::default(),
-                1000,
-                serde_json::Value::Null,
-            )
+            .create_subworld(req("f", 100.0, "p", "T"))
             .await
             .unwrap();
         mgr.confirm_migration(&sw.world_id, "victim", 0).await.unwrap();
@@ -1156,16 +1024,7 @@ mod tests {
     async fn test_evict_non_founder_rejected() {
         let mgr = manager();
         let sw = mgr
-            .create_subworld(
-                "f",
-                100.0,
-                "p",
-                "T",
-                "",
-                GovernanceConfig::default(),
-                1000,
-                serde_json::Value::Null,
-            )
+            .create_subworld(req("f", 100.0, "p", "T"))
             .await
             .unwrap();
         mgr.confirm_migration(&sw.world_id, "rogue", 0).await.unwrap();
@@ -1180,16 +1039,7 @@ mod tests {
     async fn test_evict_self_rejected() {
         let mgr = manager();
         let sw = mgr
-            .create_subworld(
-                "f",
-                100.0,
-                "p",
-                "T",
-                "",
-                GovernanceConfig::default(),
-                1000,
-                serde_json::Value::Null,
-            )
+            .create_subworld(req("f", 100.0, "p", "T"))
             .await
             .unwrap();
         let err = mgr.evict_member(&sw.world_id, "f", "f").await.unwrap_err();
@@ -1202,16 +1052,7 @@ mod tests {
     async fn test_dissolve_by_founder() {
         let mgr = manager();
         let sw = mgr
-            .create_subworld(
-                "f",
-                100.0,
-                "p",
-                "Doomed",
-                "",
-                GovernanceConfig::default(),
-                1000,
-                serde_json::Value::Null,
-            )
+            .create_subworld(req("f", 100.0, "p", "Doomed"))
             .await
             .unwrap();
 
@@ -1224,16 +1065,7 @@ mod tests {
     async fn test_dissolve_non_founder_rejected() {
         let mgr = manager();
         let sw = mgr
-            .create_subworld(
-                "f",
-                100.0,
-                "p",
-                "Doomed",
-                "",
-                GovernanceConfig::default(),
-                1000,
-                serde_json::Value::Null,
-            )
+            .create_subworld(req("f", 100.0, "p", "Doomed"))
             .await
             .unwrap();
         let err = mgr.dissolve(&sw.world_id, "other").await.unwrap_err();
@@ -1245,9 +1077,9 @@ mod tests {
     #[tokio::test]
     async fn test_registry_list_children() {
         let mgr = manager();
-        mgr.create_subworld("f1", 100.0, "parent-x", "A", "", GovernanceConfig::default(), 1000, serde_json::Value::Null).await.unwrap();
-        mgr.create_subworld("f2", 100.0, "parent-x", "B", "", GovernanceConfig::default(), 1000, serde_json::Value::Null).await.unwrap();
-        mgr.create_subworld("f3", 100.0, "parent-y", "C", "", GovernanceConfig::default(), 1000, serde_json::Value::Null).await.unwrap();
+        mgr.create_subworld(req("f1", 100.0, "parent-x", "A")).await.unwrap();
+        mgr.create_subworld(req("f2", 100.0, "parent-x", "B")).await.unwrap();
+        mgr.create_subworld(req("f3", 100.0, "parent-y", "C")).await.unwrap();
 
         let x_children = mgr.registry().list_children("parent-x").await;
         assert_eq!(x_children.len(), 2);
@@ -1259,7 +1091,7 @@ mod tests {
     async fn test_frozen_subworld_rejects_migrate_in() {
         let mgr = manager();
         let sw = mgr
-            .create_subworld("f", 100.0, "p", "F", "", GovernanceConfig::default(), 1000, serde_json::Value::Null)
+            .create_subworld(req("f", 100.0, "p", "F"))
             .await
             .unwrap();
         mgr.set_status(&sw.world_id, "f", SubWorldStatus::Frozen).await.unwrap();
@@ -1274,7 +1106,7 @@ mod tests {
     async fn test_illegal_transition_dissolved_to_active() {
         let mgr = manager();
         let sw = mgr
-            .create_subworld("f", 100.0, "p", "T", "", GovernanceConfig::default(), 1000, serde_json::Value::Null)
+            .create_subworld(req("f", 100.0, "p", "T"))
             .await
             .unwrap();
         // Active → Dissolved is legal (dissolve), but let's test via set_status
@@ -1292,7 +1124,7 @@ mod tests {
     async fn test_dissolve_returns_dissolved_status() {
         let mgr = manager();
         let sw = mgr
-            .create_subworld("f", 100.0, "p", "T", "", GovernanceConfig::default(), 1000, serde_json::Value::Null)
+            .create_subworld(req("f", 100.0, "p", "T"))
             .await
             .unwrap();
         let dissolved = mgr.dissolve(&sw.world_id, "f").await.unwrap();
@@ -1306,7 +1138,7 @@ mod tests {
     async fn test_dissolve_already_dissolved_fails() {
         let mgr = manager();
         let sw = mgr
-            .create_subworld("f", 100.0, "p", "T", "", GovernanceConfig::default(), 1000, serde_json::Value::Null)
+            .create_subworld(req("f", 100.0, "p", "T"))
             .await
             .unwrap();
         // First dissolve succeeds

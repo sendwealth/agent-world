@@ -84,6 +84,29 @@ impl std::fmt::Display for SubWorldStatus {
     }
 }
 
+impl SubWorldStatus {
+    /// Returns true if transitioning from `self` to `target` is a legal
+    /// state-machine transition.
+    ///
+    /// Legal transitions:
+    /// - Pending → Active
+    /// - Pending → Dissolved
+    /// - Active ↔ Frozen (bidirectional)
+    /// - Active → Dissolved
+    /// - Frozen → Dissolved
+    ///
+    /// Dissolved is terminal — no transitions out.
+    pub fn can_transition_to(self, target: SubWorldStatus) -> bool {
+        use SubWorldStatus::*;
+        match self {
+            Pending => matches!(target, Active | Dissolved),
+            Active => matches!(target, Frozen | Dissolved),
+            Frozen => matches!(target, Active | Dissolved),
+            Dissolved => false,
+        }
+    }
+}
+
 // ── Member ────────────────────────────────────────────────
 
 /// A member of a sub-world.
@@ -391,6 +414,10 @@ impl SubWorldManager {
     }
 
     /// Set the status of a sub-world. Only the founder can change status.
+    ///
+    /// Validates state-machine transitions via
+    /// [`SubWorldStatus::can_transition_to`]. Illegal transitions (e.g.
+    /// Dissolved → Active) are rejected.
     pub async fn set_status(
         &self,
         world_id: &str,
@@ -402,6 +429,12 @@ impl SubWorldManager {
         })?;
         if !sw.is_founder(actor_agent_id) {
             return Err("Only the founder can change sub-world status".into());
+        }
+        if !sw.status.can_transition_to(status) {
+            return Err(format!(
+                "Illegal status transition: {} → {}",
+                sw.status, status
+            ));
         }
         self.registry
             .update(world_id, |sw| {
@@ -534,7 +567,9 @@ impl SubWorldManager {
     /// credit the resource pool.
     ///
     /// Called after the migration is executed (either standalone or with the
-    /// agents list). Idempotent — if the agent is already a member, returns Ok.
+    /// agents list). Truly idempotent — if the agent is already a member, the
+    /// call returns Ok without re-crediting the resource pool (safe for network
+    /// retries).
     pub async fn confirm_migration(
         &self,
         world_id: &str,
@@ -544,13 +579,15 @@ impl SubWorldManager {
         let sw = self
             .registry
             .update(world_id, |sw| {
-                if !sw.is_member(agent_id) {
-                    sw.members.push(SubWorldMember {
-                        agent_id: agent_id.to_string(),
-                        joined_at: Utc::now().to_rfc3339(),
-                        entry_contribution,
-                    });
+                if sw.is_member(agent_id) {
+                    // Already a member — skip to keep the call idempotent.
+                    return;
                 }
+                sw.members.push(SubWorldMember {
+                    agent_id: agent_id.to_string(),
+                    joined_at: Utc::now().to_rfc3339(),
+                    entry_contribution,
+                });
                 sw.resource_pool_tokens += entry_contribution;
             })
             .await?;
@@ -588,7 +625,15 @@ impl SubWorldManager {
     }
 
     /// Dissolve a sub-world. Only the founder can do this.
-    /// Removes the sub-world from the registry entirely.
+    ///
+    /// This is a two-step operation:
+    /// 1. Sets the sub-world status to `Dissolved` (so observers reading the
+    ///    returned value see the final state).
+    /// 2. Removes the sub-world from the registry entirely.
+    ///
+    /// After dissolution the sub-world is gone from the registry and cannot be
+    /// queried via `get()`. The returned `SubWorld` carries `status: Dissolved`
+    /// for audit/logging purposes.
     pub async fn dissolve(
         &self,
         world_id: &str,
@@ -600,10 +645,21 @@ impl SubWorldManager {
         if !sw.is_founder(founder_agent_id) {
             return Err("Only the founder can dissolve a sub-world".into());
         }
+        // Step 1: mark as Dissolved (validates transition legality).
+        if !sw.status.can_transition_to(SubWorldStatus::Dissolved) {
+            return Err(format!(
+                "Cannot dissolve a sub-world in {} state",
+                sw.status
+            ));
+        }
+        let mut dissolved = sw.clone();
+        dissolved.status = SubWorldStatus::Dissolved;
+        // Step 2: physically remove from registry.
         self.registry
             .deregister(world_id)
             .await
-            .ok_or_else(|| "sub-world disappeared during dissolve".to_string())
+            .ok_or_else(|| "sub-world disappeared during dissolve".to_string())?;
+        Ok(dissolved)
     }
 }
 
@@ -1065,9 +1121,9 @@ mod tests {
         mgr.confirm_migration(&sw.world_id, "b", 100).await.unwrap();
         mgr.confirm_migration(&sw.world_id, "b", 100).await.unwrap();
         let sw2 = mgr.registry().get(&sw.world_id).await.unwrap();
-        // member added only once, but contributions stack
+        // Truly idempotent: member added once, contribution credited once.
         assert_eq!(sw2.member_count(), 2);
-        assert_eq!(sw2.resource_pool_tokens, 200);
+        assert_eq!(sw2.resource_pool_tokens, 100);
     }
 
     // ── evict_member ──
@@ -1210,5 +1266,53 @@ mod tests {
         let snap = snapshot("b", "p", 50_000, 60.0);
         let err = mgr.migrate_in(&sw.world_id, snap).await.unwrap_err();
         assert!(err.contains("frozen"));
+    }
+
+    // ── status transition validation (P1-3) ──
+
+    #[tokio::test]
+    async fn test_illegal_transition_dissolved_to_active() {
+        let mgr = manager();
+        let sw = mgr
+            .create_subworld("f", 100.0, "p", "T", "", GovernanceConfig::default(), 1000, serde_json::Value::Null)
+            .await
+            .unwrap();
+        // Active → Dissolved is legal (dissolve), but let's test via set_status
+        mgr.set_status(&sw.world_id, "f", SubWorldStatus::Frozen).await.unwrap();
+        mgr.set_status(&sw.world_id, "f", SubWorldStatus::Active).await.unwrap();
+        // Now try Active → Pending (illegal)
+        let err = mgr
+            .set_status(&sw.world_id, "f", SubWorldStatus::Pending)
+            .await
+            .unwrap_err();
+        assert!(err.contains("Illegal status transition"));
+    }
+
+    #[tokio::test]
+    async fn test_dissolve_returns_dissolved_status() {
+        let mgr = manager();
+        let sw = mgr
+            .create_subworld("f", 100.0, "p", "T", "", GovernanceConfig::default(), 1000, serde_json::Value::Null)
+            .await
+            .unwrap();
+        let dissolved = mgr.dissolve(&sw.world_id, "f").await.unwrap();
+        // Returned value should carry Dissolved status for audit
+        assert_eq!(dissolved.status, SubWorldStatus::Dissolved);
+        // Registry no longer has it
+        assert!(mgr.registry().get(&sw.world_id).await.is_none());
+    }
+
+    #[tokio::test]
+    async fn test_dissolve_already_dissolved_fails() {
+        let mgr = manager();
+        let sw = mgr
+            .create_subworld("f", 100.0, "p", "T", "", GovernanceConfig::default(), 1000, serde_json::Value::Null)
+            .await
+            .unwrap();
+        // First dissolve succeeds
+        mgr.dissolve(&sw.world_id, "f").await.unwrap();
+        // Second dissolve should fail (not found in registry)
+        let err = mgr.dissolve(&sw.world_id, "f").await.unwrap_err();
+        assert!(err.contains("not found"));
     }
 }

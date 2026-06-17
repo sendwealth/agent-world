@@ -630,14 +630,17 @@ async fn main() {
     let trade_manager = Arc::new(Mutex::new(
         agent_world_engine::federation::CrossWorldTradeManager::new(event_bus.clone()),
     ));
-    // Phase 5.7: SubWorldManager shares the migration manager for inbound transfers.
+    // Phase 5.7: SubWorldManager shares the SAME MigrationManager instance so that
+    // migration policy (token_cost, resource_tax_rate, daily_quota) and cooldown
+    // state are unified across the parent world and all sub-worlds.
+    let shared_migration_manager = {
+        let mgr = migration_manager.lock().await;
+        Arc::new(mgr.clone())
+    };
     let subworld_manager = Arc::new(
         agent_world_engine::federation::SubWorldManager::new(
             event_bus.clone(),
-            Arc::new(MigrationManager::new(
-                agent_world_engine::federation::MigrationPolicy::default(),
-                event_bus.clone(),
-            )),
+            shared_migration_manager,
         ),
     );
     println!("   Federation: WorldRegistry + MigrationManager + CrossWorldTradeManager + SubWorldManager initialized");

@@ -438,6 +438,18 @@ fn make_test_state(
     tick_rx: watch::Receiver<u64>,
     snapshot_store: Option<SharedSnapshotStore>,
 ) -> AppState {
+    // Build a single MigrationManager and clone it (clone shares all internal
+    // Arc<RwLock> state) so SubWorldManager and AppState.migration_manager
+    // observe unified policy/quota/cooldown state.
+    let migration_mgr_inner = MigrationManager::new(
+        MigrationPolicy::default(),
+        event_bus.clone(),
+    );
+    let subworld_mgr = Arc::new(crate::federation::SubWorldManager::new(
+        event_bus.clone(),
+        Arc::new(migration_mgr_inner.clone()),
+    ));
+
     AppState {
         board,
         wal,
@@ -486,19 +498,11 @@ fn make_test_state(
             crate::a2a::federation::FederationEngine::with_shared_event_bus(event_bus.clone()),
         ))),
         federation_registry: Some(Arc::new(Mutex::new(WorldRegistry::new(event_bus.clone())))),
-        migration_manager: Some(Arc::new(Mutex::new(MigrationManager::new(
-            MigrationPolicy::default(),
-            event_bus.clone(),
-        )))),
+        migration_manager: Some(Arc::new(Mutex::new(migration_mgr_inner))),
         trade_manager: Some(Arc::new(Mutex::new(
             crate::federation::CrossWorldTradeManager::new(event_bus.clone()),
         ))),
-        subworld_manager: Some(Arc::new(
-            crate::federation::SubWorldManager::new(
-                event_bus.clone(),
-                Arc::new(MigrationManager::new(MigrationPolicy::default(), event_bus)),
-            ),
-        )),
+        subworld_manager: Some(subworld_mgr),
         api_key_store: None,
         experiment_store: Arc::new(Mutex::new(Vec::new())),
         ab_experiment_store: Arc::new(Mutex::new(Vec::new())),

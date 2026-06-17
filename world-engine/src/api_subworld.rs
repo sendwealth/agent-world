@@ -249,22 +249,22 @@ mod tests {
         let board = Arc::new(Mutex::new(TaskBoard::new()));
         let wal = test_wal();
         let event_bus = Arc::new(crate::world::state::EventBus::new(256));
-        let migration_mgr = Arc::new(MigrationManager::new(
+        // Build one MigrationManager; clone shares all Arc<RwLock> internals so
+        // the AppState.migration_manager and SubWorldManager share unified state.
+        let migration_mgr_inner = MigrationManager::new(
             MigrationPolicy::default(),
             event_bus.clone(),
-        ));
+        );
         let subworld_mgr = Arc::new(SubWorldManager::new(
             event_bus.clone(),
-            migration_mgr.clone(),
+            Arc::new(migration_mgr_inner.clone()),
         ));
         AppState::new(
             board,
             wal,
             TestOverrides {
                 event_bus: Some(event_bus.clone()),
-                migration_manager: Some(Arc::new(Mutex::new(
-                    MigrationManager::new(MigrationPolicy::default(), event_bus.clone()),
-                ))),
+                migration_manager: Some(Arc::new(Mutex::new(migration_mgr_inner))),
                 subworld_manager: Some(subworld_mgr),
                 ..Default::default()
             },

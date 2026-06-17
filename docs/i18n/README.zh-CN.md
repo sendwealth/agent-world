@@ -1,7 +1,7 @@
 # Agent World 中文文档
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
-[![Phase](https://img.shields.io/badge/Phase-4_Civilization-6366f1?style=flat)](docs/ROADMAP.md)
+[![Phase](https://img.shields.io/badge/Phase-5_Ecosystem-6366f1?style=flat)](docs/ROADMAP.md)
 [![Status](https://img.shields.io/badge/Status-v1.0.0_Released-brightgreen?style=flat)](https://github.com/sendwealth/agent-world/releases/tag/v1.0.0)
 
 [English](../../README.md) | **中文**
@@ -279,10 +279,10 @@ agent-world/
 | **1** | Island | 月 1-3 | 2-10 | 基础经济、A2A v1、任务市场 | ✅ 完成 |
 | **2** | Village | 月 4-6 | 10-100 | 社会关系、生命周期、知识库 | ✅ 完成 |
 | **3** | City | 月 7-12 | 100-1K | 组织、复杂经济、进化 | ✅ 完成 |
-| **4** | Civilization | 月 13-18 | 1K+ | 自治理、文化涌现、研究工具 | 🔄 进行中 |
-| **5** | Ecosystem | 月 19+ | ∞ | 跨世界贸易、学术平台 | 计划中 |
+| **4** | Civilization | 月 13-18 | 1K+ | 自治理、文化涌现、研究工具 | ✅ 完成 |
+| **5** | Ecosystem | 月 19+ | ∞ | 跨世界贸易、学术平台、人类即智能体 | 🔜 进行中（5.1–5.6 已完成）|
 
-**Phase 4 进度：**
+**Phase 4 — 已完成 ✅**（4.1–4.6 全部交付）。**Phase 5 进度：**
 
 | 里程碑 | 功能 | 状态 |
 |--------|------|------|

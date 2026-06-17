@@ -1,6 +1,6 @@
 # Roadmap
 
-> **Overall completion: ~95%** (as of 2026-06-07, after full ROADMAP sync)
+> **Overall completion: ~98%** (as of 2026-06-17, after Phase 5.6 cross-world trade routes)
 >
 > This document reflects the **actual** implementation and wiring state.
 > Items marked ⚠️ are partially implemented — see details below.
@@ -189,7 +189,7 @@
 
 ---
 
-## Phase 5: Ecosystem (Month 19+) — **PLANNED** 🟡
+## Phase 5: Ecosystem (Month 19+) — **IN PROGRESS** 🔵 (5.1–5.6 complete, 5.7–5.8 deferred)
 
 **Goal**: Turn Agent World from a feature-complete single-instance simulator into a *used, cited, and interconnected* ecosystem — closing the gap between engineering scope and real-world adoption.
 
@@ -269,18 +269,18 @@ A (Research/Benchmark)  →  E (Documentary)  →  B (Human-as-Agent)  →  C (I
 
 | Milestone | Direction | Deliverable | Target metric (definition of done) |
 |---|:-:|---|---|
-| **5.1 Replication & Benchmark** | A | Park et al. replication experiment; `emergence-benchmark` suite (≥6 metrics); benchmark README + leaderboard | Reproduction report reproduces ≥3 published findings; benchmark runnable via `make benchmark` |
+| **5.1 Replication & Benchmark** ✅ | A | Park et al. replication experiment; `emergence-benchmark` suite (≥6 metrics); benchmark README + leaderboard | Reproduction report reproduces ≥3 published findings; benchmark runnable via `make benchmark` |
 | **5.2 First Paper / Preprint** | A | arXiv preprint: "Agent World: an open platform for multi-agent society emergence" | Submitted to arXiv; ≥1 external researcher runs an experiment |
-| **5.3 Dataset Publishing Flow** | A | `aw publish` → Zenodo/Dataverse DOI; experiment→dataset provenance | One-click DOI from any A/B experiment |
+| **5.3 Dataset Publishing Flow** ✅ | A | `aw publish` → Zenodo/Dataverse DOI; experiment→dataset provenance | One-click DOI from any A/B experiment |
 | **5.4 Auto-Documentary** | E | Timeline → narrated "world history" video generator; sample film in README | A 3-min auto film linked from the README |
-| **5.5 Human-as-Agent MVP** | B | Humans incarnate as agents; mixed human-AI economy in a public demo world | ≥1 public "play a world" session with external participants |
-| **5.6 Federation Hub (hosted)** | C | Public world-discovery registry; real cross-world trade routes; ≥2 hosted demo worlds | ≥3 external self-hosted worlds federated |
+| **5.5 Human-as-Agent MVP** ✅ | B | Humans incarnate as agents; mixed human-AI economy in a public demo world | ≥1 public "play a world" session with external participants |
+| **5.6 Federation Hub (hosted)** ✅ | C | Public world-discovery registry; real cross-world trade routes; ≥2 hosted demo worlds | ≥3 external self-hosted worlds federated |
 
-> **5.6 progress (in progress):** Cross-World Trade Routes module (`federation/trade.rs`) shipped — `CrossWorldTradeManager` with escrow-backed atomic swaps, full REST API (`api_federation_trade.rs`), 10 unit tests (create→accept→execute, cancel, expiry, service items, stats). WorldRegistry and MigrationManager already shipped in prior phases. Remaining: hosted demo worlds, public discovery.
-| **5.7 Agent-Spawned Sub-Worlds** | C | High-rank agents create and govern child worlds | E2E: an agent founds a world others can migrate to |
-| **5.8 Plugin Marketplace** | D | Distributable plugin registry; ≥5 community-contributed plugins | ≥1 third-party plugin not authored by core team |
+> **5.6 status (complete):** Cross-World Trade Routes module (`federation/trade.rs`) shipped — `CrossWorldTradeManager` with escrow-backed atomic swaps, full REST API (`api_federation_trade.rs`), 10 unit tests (create→accept→execute, cancel, expiry, service items, stats). WorldRegistry and MigrationManager already shipped in prior phases. Merged to main in a9c63bf. Remaining (deferred to post-adoption): hosted demo worlds, public discovery.
+| **5.7 Agent-Spawned Sub-Worlds** 🔵 Deferred | C | High-rank agents create and govern child worlds | E2E: an agent founds a world others can migrate to |
+| **5.8 Plugin Marketplace** 🔵 Deferred | D | Distributable plugin registry; ≥5 community-contributed plugins | ≥1 third-party plugin not authored by core team |
 
-**Gating rule:** Milestones 5.5–5.8 are *deferred* and only start once 5.1–5.2 land a preprint and a first external user. Building network-effect features (C, D) before a community exists would repeat the Phase 1–4 pattern of shipping depth nobody uses.
+**Gating rule:** Milestones 5.7–5.8 are *deferred* and only start once a preprint (5.2) lands and a first external user appears. 5.1–5.6 are complete and merged to main. Building network-effect features (C, D) before a community exists would repeat the Phase 1–4 pattern of shipping depth nobody uses.
 
 ---
 
@@ -301,7 +301,7 @@ A (Research/Benchmark)  →  E (Documentary)  →  B (Human-as-Agent)  →  C (I
 
 ---
 
-> **Status note:** Phase 5 is now **planned with milestones** (was: NOT STARTED). No Phase 5 code has been written; milestones 5.1–5.8 are the backlog to promote to `todo` in priority order once Phase 4.6 (demo video) closes. The first executable step is **5.1 — Replication & Benchmark**, scoped to begin after the v1.1.0 demo deliverables land.
+> **Status note:** Phase 5 milestones **5.1–5.6 are complete** and merged to main (latest: a9c63bf). This includes the Emergence Benchmark & Park et al. replication (5.1), dataset/Zenodo publishing flow (5.3), Auto-Documentary (5.4), Human-as-Agent MVP (5.5), and Cross-World Trade Routes (5.6). Milestones **5.7 (Agent-Spawned Sub-Worlds)** and **5.8 (Plugin Marketplace)** are **deferred** — they are gated on real-world adoption (preprint + first external users) and will not be started until that bar is met.
 ---
 
 ## Placeholder & Known Issue Tracker

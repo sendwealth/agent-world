@@ -436,7 +436,7 @@ agent-world/
 | **2** | Village | 10-100 | Social relations, lifecycle, knowledge base | ✅ Done |
 | **3** | City | 100-1K | Organizations, stock market, evolution | ✅ Done |
 | **4** | Civilization | 1K+ | Self-governance, culture, federation, emotion, plugins | ✅ Done |
-| **5** | Ecosystem | ∞ | Inter-world trade, academic platform, human-as-agent | 🔜 In Progress (5.1–5.6 done) |
+| **5** | Ecosystem | ∞ | Inter-world trade, academic platform, human-as-agent, sub-worlds | 🔜 In Progress (5.1–5.7 done) |
 
 **Phase 4 — Complete ✅** (all milestones 4.1–4.6 shipped). **Phase 5 Progress:**
 

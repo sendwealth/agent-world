@@ -1,6 +1,6 @@
 # Roadmap
 
-> **Overall completion: ~98%** (as of 2026-06-17, after Phase 5.6 cross-world trade routes)
+> **Overall completion: ~99%** (as of 2026-06-20, after Phase 5.7 agent-spawned sub-worlds)
 >
 > This document reflects the **actual** implementation and wiring state.
 > Items marked ⚠️ are partially implemented — see details below.
@@ -189,7 +189,7 @@
 
 ---
 
-## Phase 5: Ecosystem (Month 19+) — **IN PROGRESS** 🔵 (5.1–5.6 complete, 5.7–5.8 deferred)
+## Phase 5: Ecosystem (Month 19+) — **IN PROGRESS** 🔵 (5.1–5.7 complete, 5.8 deferred)
 
 **Goal**: Turn Agent World from a feature-complete single-instance simulator into a *used, cited, and interconnected* ecosystem — closing the gap between engineering scope and real-world adoption.
 
@@ -277,10 +277,13 @@ A (Research/Benchmark)  →  E (Documentary)  →  B (Human-as-Agent)  →  C (I
 | **5.6 Federation Hub (hosted)** ✅ | C | Public world-discovery registry; real cross-world trade routes; ≥2 hosted demo worlds | ≥3 external self-hosted worlds federated |
 
 > **5.6 status (complete):** Cross-World Trade Routes module (`federation/trade.rs`) shipped — `CrossWorldTradeManager` with escrow-backed atomic swaps, full REST API (`api_federation_trade.rs`), 10 unit tests (create→accept→execute, cancel, expiry, service items, stats). WorldRegistry and MigrationManager already shipped in prior phases. Merged to main in a9c63bf. Remaining (deferred to post-adoption): hosted demo worlds, public discovery.
-| **5.7 Agent-Spawned Sub-Worlds** 🔵 Deferred | C | High-rank agents create and govern child worlds | E2E: an agent founds a world others can migrate to |
+| **5.7 Agent-Spawned Sub-Worlds** ✅ | C | High-rank agents create and govern child worlds | E2E: an agent founds a world others can migrate to |
+
+> **5.7 status (complete):** Agent-Spawned Sub-Worlds module shipped — `SubWorld` data model (governance config, member list, resource pool), `SubWorldRegistry` with parent/child index, and `SubWorldManager` (create, govern, set rules, invite, `migrate_in` via the shared `MigrationManager`, confirm, evict, dissolve with terminal-state validation). 11 REST endpoints under `/api/v1/subworlds`, 20 unit tests + 4 E2E tests (create → migrate → evict → dissolve). Merged to main in 1f19469 (#188).
+
 | **5.8 Plugin Marketplace** 🔵 Deferred | D | Distributable plugin registry; ≥5 community-contributed plugins | ≥1 third-party plugin not authored by core team |
 
-**Gating rule:** Milestones 5.7–5.8 are *deferred* and only start once a preprint (5.2) lands and a first external user appears. 5.1–5.6 are complete and merged to main. Building network-effect features (C, D) before a community exists would repeat the Phase 1–4 pattern of shipping depth nobody uses.
+**Gating rule:** Milestone 5.8 is *deferred* and only starts once a preprint (5.2) lands and a first external user appears. 5.1–5.7 are complete and merged to main. Building network-effect features (D) before a community exists would repeat the Phase 1–4 pattern of shipping depth nobody uses.
 
 ---
 
@@ -301,7 +304,7 @@ A (Research/Benchmark)  →  E (Documentary)  →  B (Human-as-Agent)  →  C (I
 
 ---
 
-> **Status note:** Phase 5 milestones **5.1–5.6 are complete** and merged to main (latest: a9c63bf). This includes the Emergence Benchmark & Park et al. replication (5.1), dataset/Zenodo publishing flow (5.3), Auto-Documentary (5.4), Human-as-Agent MVP (5.5), and Cross-World Trade Routes (5.6). Milestones **5.7 (Agent-Spawned Sub-Worlds)** and **5.8 (Plugin Marketplace)** are **deferred** — they are gated on real-world adoption (preprint + first external users) and will not be started until that bar is met.
+> **Status note:** Phase 5 milestones **5.1–5.7 are complete** and merged to main (latest: 1f19469). This includes the Emergence Benchmark & Park et al. replication (5.1), dataset/Zenodo publishing flow (5.3), Auto-Documentary (5.4), Human-as-Agent MVP (5.5), Cross-World Trade Routes (5.6), and Agent-Spawned Sub-Worlds (5.7). Milestone **5.8 (Plugin Marketplace)** remains **deferred** — it is gated on real-world adoption (preprint + first external users) and will not be started until that bar is met.
 ---
 
 ## Placeholder & Known Issue Tracker

@@ -10,43 +10,28 @@ import {
   AreaChart,
   Area,
 } from "recharts";
-import type { StockData, Organization } from "@/types/world";
+import type { StockData, StockResponse } from "@/types/world";
 import { fetchJSON } from "@/lib/api";
 import { useSSEContext } from "@/components/SSEProvider";
 
-// Generate simulated stock data from organizations
-function generateStockData(orgs: Organization[]): StockData[] {
-  if (orgs.length === 0) return [];
-
-  return orgs
-    .filter((o) => o.status === "active")
-    .map((org) => {
-      const basePrice = Math.max(100, org.treasury / Math.max(org.member_count, 1));
-      const history = [];
-      for (let i = 20; i >= 0; i--) {
-        const variation = (Math.random() - 0.48) * basePrice * 0.1;
-        const price = Math.max(10, basePrice + variation - i * (basePrice * 0.005));
-        history.push({
-          tick: org.last_activity_tick - i * 2,
-          price: Math.round(price * 100) / 100,
-        });
-      }
-
-      const currentPrice = history[history.length - 1]?.price ?? basePrice;
-      const previousPrice = history[history.length - 2]?.price ?? currentPrice;
-      const change = currentPrice - previousPrice;
-      const changePercent = previousPrice > 0 ? (change / previousPrice) * 100 : 0;
-
-      return {
-        symbol: org.name.slice(0, 4).toUpperCase(),
-        name: org.name,
-        price: Math.round(currentPrice * 100) / 100,
-        change: Math.round(change * 100) / 100,
-        changePercent: Math.round(changePercent * 100) / 100,
-        volume: org.member_count * Math.floor(Math.random() * 100 + 50),
-        history,
-      };
-    });
+/**
+ * Map raw backend `StockResponse` rows to the page's `StockData` view-model.
+ *
+ * `change`, `changePercent`, `volume`, and `history` are not provided by the
+ * current API (it exposes only the latest snapshot), so they are zeroed /
+ * seeded with the current price. The chart and table degrade gracefully —
+ * showing a flat line — rather than rendering fabricated `Math.random()` data.
+ */
+function toStockData(s: StockResponse): StockData {
+  return {
+    symbol: s.ticker,
+    name: s.ticker,
+    price: s.price,
+    change: 0,
+    changePercent: 0,
+    volume: s.total_shares,
+    history: [{ tick: s.listed_tick, price: s.price }],
+  };
 }
 
 const CustomTooltip = ({ active, payload, label }: { active?: boolean; payload?: Array<{ value: number; name: string; color: string }>; label?: number }) => {
@@ -73,10 +58,15 @@ export default function StocksPage() {
 
   const loadData = useCallback(async () => {
     try {
-      const orgsData = await fetchJSON<Organization[]>("/api/v1/orgs");
-      setStocks(generateStockData(orgsData));
+      const raw = await fetchJSON<StockResponse[]>("/api/v1/stocks");
+      const listed = raw
+        .filter((s) => s.status === "listed")
+        .map(toStockData);
+      setStocks(listed);
     } catch {
-      // may not have orgs data yet
+      // Backend may return 503 when the stock market module isn't configured,
+      // or the world-engine may be temporarily unavailable. Show whatever we
+      // last had; if we never loaded, the empty state handles it.
     } finally {
       setLoading(false);
     }
@@ -133,7 +123,7 @@ export default function StocksPage() {
         <p className="text-sm text-zinc-500">
           {stocks.length > 0
             ? `${stocks.length} 只股票 · 总市值 $${marketCap >= 1000000 ? `${(marketCap / 1000000).toFixed(1)}M` : marketCap.toLocaleString()} · 总成交量 ${totalVolume.toLocaleString()}`
-            : "暂无股票数据 (基于组织数据生成)"}
+            : "暂无股票数据 (来自 world-engine 股市引擎)"}
         </p>
       </div>
 
@@ -224,7 +214,7 @@ export default function StocksPage() {
       {/* Stock List */}
       {stocks.length === 0 ? (
         <div className="flex h-48 items-center justify-center text-sm text-zinc-600">
-          暂无股票数据 — 需要先创建组织
+          暂无上市股票 — 当组织满足 IPO 条件后股票将在此显示
         </div>
       ) : (
         <div className="rounded-xl border border-zinc-800 bg-zinc-900/50">
@@ -270,7 +260,7 @@ export default function StocksPage() {
                               const min = Math.min(...arr.map((a) => a.price));
                               const max = Math.max(...arr.map((a) => a.price));
                               const range = max - min || 1;
-                              const x = (i / (arr.length - 1)) * 100;
+                              const x = arr.length > 1 ? (i / (arr.length - 1)) * 100 : 50;
                               const y = 28 - ((h.price - min) / range) * 26;
                               return `${x},${y}`;
                             })

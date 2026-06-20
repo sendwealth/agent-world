@@ -232,8 +232,25 @@ export interface Organization {
   last_activity_tick: number;
 }
 
-// Stock types (placeholder until backend stock API is available)
+// Stock types — mirrors Rust `StockResponse` from `api_stocks.rs`
 
+/** Raw shape returned by `GET /api/v1/stocks` and `GET /api/v1/stocks/:id`. */
+export interface StockResponse {
+  id: string;
+  org_id: string;
+  ticker: string;
+  total_shares: number;
+  price: number;
+  status: "pre_ipo" | "listed" | "delisted";
+  listed_tick: number;
+}
+
+/**
+ * View-model used by the stocks page. Mirrors `StockResponse` for listed
+ * stocks; `change`, `changePercent`, `volume`, and `history` are derived
+ * client-side because the backend does not yet expose per-tick price history
+ * or trade volume summaries.
+ */
 export interface StockData {
   symbol: string;
   name: string;

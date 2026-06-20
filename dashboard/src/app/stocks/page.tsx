@@ -10,27 +10,49 @@ import {
   AreaChart,
   Area,
 } from "recharts";
-import type { StockData, StockResponse } from "@/types/world";
+import type { StockData, StockHistoryPoint, StockResponse } from "@/types/world";
 import { fetchJSON } from "@/lib/api";
 import { useSSEContext } from "@/components/SSEProvider";
 
 /**
- * Map raw backend `StockResponse` rows to the page's `StockData` view-model.
+ * Map a raw backend `StockResponse` plus its price history into the page's
+ * `StockData` view-model.
  *
- * `change`, `changePercent`, `volume`, and `history` are not provided by the
- * current API (it exposes only the latest snapshot), so they are zeroed /
- * seeded with the current price. The chart and table degrade gracefully —
- * showing a flat line — rather than rendering fabricated `Math.random()` data.
+ * - `history` comes from `GET /api/v1/stocks/:id/history` (per-tick aggregated
+ *   trades). When empty (no trades yet) we seed a single point at the current
+ *   price so the chart degrades to a flat line instead of rendering nothing.
+ * - `change` / `changePercent` are derived from the first and last history
+ *   points. When history has fewer than 2 points they are zeroed.
+ * - `volume` reflects the sum of trade volumes across the history, falling back
+ *   to `total_shares` when no trades exist.
  */
-function toStockData(s: StockResponse): StockData {
+function toStockData(
+  s: StockResponse,
+  history: StockHistoryPoint[],
+): StockData {
+  const sorted = [...history].sort((a, b) => a.tick - b.tick);
+
+  const change =
+    sorted.length >= 2 ? sorted[sorted.length - 1].price - sorted[0].price : 0;
+  const changePercent =
+    sorted.length >= 2 && sorted[0].price !== 0
+      ? (change / sorted[0].price) * 100
+      : 0;
+  const tradeVolume = sorted.reduce((sum, p) => sum + p.volume, 0);
+
+  const chartHistory =
+    sorted.length > 0
+      ? sorted.map((p) => ({ tick: p.tick, price: p.price }))
+      : [{ tick: s.listed_tick, price: s.price }];
+
   return {
     symbol: s.ticker,
     name: s.ticker,
     price: s.price,
-    change: 0,
-    changePercent: 0,
-    volume: s.total_shares,
-    history: [{ tick: s.listed_tick, price: s.price }],
+    change,
+    changePercent,
+    volume: tradeVolume > 0 ? tradeVolume : s.total_shares,
+    history: chartHistory,
   };
 }
 
@@ -59,10 +81,21 @@ export default function StocksPage() {
   const loadData = useCallback(async () => {
     try {
       const raw = await fetchJSON<StockResponse[]>("/api/v1/stocks");
-      const listed = raw
-        .filter((s) => s.status === "listed")
-        .map(toStockData);
-      setStocks(listed);
+      const listed = raw.filter((s) => s.status === "listed");
+
+      // Fetch price history for each listed stock in parallel. Individual
+      // failures (e.g. transient 5xx) fall back to an empty history so the
+      // chart renders a flat line instead of crashing the whole page.
+      const histories = await Promise.all(
+        listed.map((s) =>
+          fetchJSON<StockHistoryPoint[]>(`/api/v1/stocks/${s.id}/history`).catch(
+            () => [] as StockHistoryPoint[],
+          ),
+        ),
+      );
+
+      const next = listed.map((s, i) => toStockData(s, histories[i]));
+      setStocks(next);
     } catch {
       // Backend may return 503 when the stock market module isn't configured,
       // or the world-engine may be temporarily unavailable. Show whatever we

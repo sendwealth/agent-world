@@ -7,6 +7,8 @@ use axum::{
 };
 use serde::{Deserialize, Serialize};
 
+use std::collections::BTreeMap;
+
 use crate::api::{AppState, ErrorResponse};
 use crate::economy::stock_market::{
     ListingStatus, Order as StockOrder, OrderKind, OrderType, StockListing,
@@ -134,6 +136,14 @@ impl From<&StockOrder> for OrderResponse {
     }
 }
 
+/// One aggregated price point in a stock's trade history.
+#[derive(Debug, Serialize)]
+pub struct StockHistoryPoint {
+    pub tick: u64,
+    pub price: u64,
+    pub volume: u64,
+}
+
 pub fn stock_error_status(e: &crate::economy::stock_market::StockMarketError) -> StatusCode {
     use crate::economy::stock_market::StockMarketError;
     match e {
@@ -244,6 +254,69 @@ pub async fn get_stock(State(state): State<AppState>, Path(id): Path<String>) ->
         )
             .into_response(),
     }
+}
+
+/// `GET /api/v1/stocks/:id/history`
+///
+/// Returns the per-tick aggregated price history for a stock.
+/// Trades are grouped by tick; each point contains the last trade price
+/// in that tick and the total volume. Points are sorted ascending by tick.
+/// Returns `[]` when the stock has no trades (e.g. pre-IPO or freshly listed).
+pub async fn get_stock_history(
+    State(state): State<AppState>,
+    Path(id): Path<String>,
+) -> impl IntoResponse {
+    let sm = match &state.stock_market {
+        Some(s) => s.clone(),
+        None => {
+            return (
+                StatusCode::SERVICE_UNAVAILABLE,
+                Json(ErrorResponse {
+                    error: "stock market not configured".into(),
+                }),
+            )
+                .into_response()
+        }
+    };
+
+    let sm = sm.lock().await;
+
+    // 404 if the stock itself doesn't exist — keeps the endpoint consistent
+    // with `GET /stocks/:id`.
+    if sm.get_stock(&id).is_none() {
+        return (
+            StatusCode::NOT_FOUND,
+            Json(ErrorResponse {
+                error: "stock not found".into(),
+            }),
+        )
+            .into_response();
+    }
+
+    // Aggregate trades by tick. `list_trades` returns trades in insertion
+    // order (chronological), so iterating and keeping the last price per
+    // tick yields a correct per-tick close. BTreeMap gives us ascending tick
+    // ordering for free.
+    let trades = sm.list_trades(Some(&id));
+
+    let mut by_tick: BTreeMap<u64, (u64, u64)> = BTreeMap::new();
+    for t in &trades {
+        let entry = by_tick.entry(t.tick).or_insert((t.price, 0));
+        // Last-write-wins for price (trades are chronological), sum volume.
+        entry.0 = t.price;
+        entry.1 += t.quantity;
+    }
+
+    let history: Vec<StockHistoryPoint> = by_tick
+        .into_iter()
+        .map(|(tick, (price, volume))| StockHistoryPoint {
+            tick,
+            price,
+            volume,
+        })
+        .collect();
+
+    Json(history).into_response()
 }
 
 pub async fn ipo_stock(
@@ -505,6 +578,7 @@ pub fn stock_routes() -> axum::Router<AppState> {
         .route("/stocks", get(list_stocks))
         .route("/stocks", post(issue_shares))
         .route("/stocks/:id", get(get_stock))
+        .route("/stocks/:id/history", get(get_stock_history))
         .route("/stocks/:id/ipo", post(ipo_stock))
         .route("/stocks/:id/dividend", post(distribute_dividend))
         .route("/orders", get(list_stock_orders))

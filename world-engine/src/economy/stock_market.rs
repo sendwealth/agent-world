@@ -1434,4 +1434,109 @@ mod tests {
         let holdings = sm.get_agent_holdings("agent-1");
         assert_eq!(holdings.len(), 2);
     }
+
+    // ── list_trades (backs the /stocks/:id/history endpoint) ──
+
+    /// Helper: set up a listed stock with shares credited to a seller so
+    /// trades can execute at a chosen tick.
+    fn setup_listed_stock_with_shares() -> (StockMarket, String) {
+        let mut sm = make_stock_market();
+        let stock = sm
+            .issue_shares("org-1".into(), "ACME".into(), 10000, 10, 100)
+            .unwrap();
+        sm.ipo(&stock.id, IPO_MIN_MEMBERS, IPO_MIN_TREASURY, 200)
+            .unwrap();
+        sm.credit_shares(&stock.id, "seller", 1000);
+        (sm, stock.id)
+    }
+
+    #[test]
+    fn list_trades_empty_for_stock_with_no_trades() {
+        let (sm, stock_id) = setup_listed_stock_with_shares();
+        // No trades placed yet.
+        let trades = sm.list_trades(Some(&stock_id));
+        assert!(trades.is_empty());
+    }
+
+    #[test]
+    fn list_trades_returns_only_matching_stock() {
+        let (mut sm, stock_a) = setup_listed_stock_with_shares();
+        let stock_b = sm
+            .issue_shares("org-2".into(), "BEE".into(), 10000, 10, 100)
+            .unwrap();
+        sm.ipo(&stock_b.id, IPO_MIN_MEMBERS, IPO_MIN_TREASURY, 200)
+            .unwrap();
+        sm.credit_shares(&stock_b.id, "seller-b", 1000);
+
+        // One trade on stock A at tick 300
+        sm.place_sell_order(&stock_a, "seller", OrderKind::Limit, 10, 50, 300)
+            .unwrap();
+        sm.place_buy_order(&stock_a, "buyer", OrderKind::Limit, 10, 50, 10000, 300)
+            .unwrap();
+
+        // One trade on stock B at tick 300
+        sm.place_sell_order(&stock_b.id, "seller-b", OrderKind::Limit, 20, 10, 300)
+            .unwrap();
+        sm.place_buy_order(&stock_b.id, "buyer-b", OrderKind::Limit, 20, 10, 10000, 300)
+            .unwrap();
+
+        let a_trades = sm.list_trades(Some(&stock_a));
+        assert_eq!(a_trades.len(), 1);
+        assert_eq!(a_trades[0].stock_id, stock_a);
+
+        let b_trades = sm.list_trades(Some(&stock_b.id));
+        assert_eq!(b_trades.len(), 1);
+        assert_eq!(b_trades[0].stock_id, stock_b.id);
+    }
+
+    #[test]
+    fn list_trades_multiple_trades_same_tick_aggregate_correctly() {
+        let (mut sm, stock_id) = setup_listed_stock_with_shares();
+
+        // Two trades at tick 300, two at tick 310 — different prices.
+        // Sell 1 @ 10 (tick 300)
+        sm.place_sell_order(&stock_id, "seller", OrderKind::Limit, 10, 20, 300)
+            .unwrap();
+        sm.place_buy_order(&stock_id, "buyer", OrderKind::Limit, 10, 20, 10000, 300)
+            .unwrap();
+
+        // Sell 2 @ 12 (tick 300)
+        sm.place_sell_order(&stock_id, "seller", OrderKind::Limit, 12, 10, 300)
+            .unwrap();
+        sm.place_buy_order(&stock_id, "buyer", OrderKind::Limit, 12, 10, 10000, 300)
+            .unwrap();
+
+        // Sell 3 @ 15 (tick 310)
+        sm.place_sell_order(&stock_id, "seller", OrderKind::Limit, 15, 5, 310)
+            .unwrap();
+        sm.place_buy_order(&stock_id, "buyer", OrderKind::Limit, 15, 5, 10000, 310)
+            .unwrap();
+
+        let trades = sm.list_trades(Some(&stock_id));
+        assert_eq!(trades.len(), 3);
+
+        // Verify trades are chronologically ordered by checking tick values.
+        let ticks: Vec<u64> = trades.iter().map(|t| t.tick).collect();
+        assert_eq!(ticks, vec![300, 300, 310]);
+
+        // Verify the aggregation logic the endpoint uses:
+        // last price per tick wins, volumes sum.
+        let mut by_tick: std::collections::BTreeMap<u64, (u64, u64)> =
+            std::collections::BTreeMap::new();
+        for t in &trades {
+            let entry = by_tick.entry(t.tick).or_insert((t.price, 0));
+            entry.0 = t.price;
+            entry.1 += t.quantity;
+        }
+
+        let points: Vec<(u64, u64, u64)> = by_tick
+            .into_iter()
+            .map(|(tick, (price, volume))| (tick, price, volume))
+            .collect();
+
+        // Two aggregated points, ascending by tick.
+        assert_eq!(points.len(), 2);
+        assert_eq!(points[0], (300, 12, 30)); // last price 12, total qty 20+10
+        assert_eq!(points[1], (310, 15, 5)); // single trade
+    }
 }

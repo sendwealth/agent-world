@@ -245,6 +245,13 @@ export interface StockResponse {
   listed_tick: number;
 }
 
+/** One point in the per-tick price history from `GET /api/v1/stocks/:id/history`. */
+export interface StockHistoryPoint {
+  tick: number;
+  price: number;
+  volume: number;
+}
+
 /**
  * View-model used by the stocks page. Mirrors `StockResponse` for listed
  * stocks; `change`, `changePercent`, `volume`, and `history` are derived

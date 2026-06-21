@@ -41,13 +41,30 @@ jobs:
       run:
         working-directory: world-engine
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
 
       - name: Install Protoc
-        uses: arduino/setup-protoc@v3
-        with:
-          version: "25.x"
-          repo-token: ${{ secrets.GITHUB_TOKEN }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          PROTOC_VERSION="25.6"
+          OS="$(uname -s)"
+          ARCH="$(uname -m)"
+          case "$OS" in
+            Linux)  PB_OS="linux" ;;
+            Darwin) PB_OS="osx"   ;;
+            *) echo "Unsupported OS: $OS"; exit 1 ;;
+          esac
+          case "$ARCH" in
+            x86_64)  PB_ARCH="x86_64" ;;
+            aarch64|arm64) PB_ARCH="aarch_64" ;;
+            *) echo "Unsupported arch: $ARCH"; exit 1 ;;
+          esac
+          PB="protoc-${PROTOC_VERSION}-${PB_OS}-${PB_ARCH}.zip"
+          curl -fsSL -o "/tmp/${PB}" "https://github.com/protocolbuffers/protobuf/releases/download/v${PROTOC_VERSION}/${PB}"
+          sudo unzip -o "/tmp/${PB}" -d /usr/local
+          sudo chmod +x /usr/local/bin/protoc
+          protoc --version
 
       - name: Install Rust toolchain
         uses: dtolnay/rust-toolchain@stable
@@ -62,7 +79,7 @@ jobs:
         shell: bash
 
       - name: Cache Cargo artifacts
-        uses: actions/cache@v4
+        uses: actions/cache@v5
         with:
           path: |
             ~/.cargo/registry/index/
@@ -95,7 +112,7 @@ jobs:
     name: Docker – build & push
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
 
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
@@ -149,7 +166,7 @@ jobs:
     needs: [build-binaries, docker]
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
 
       - name: Download all artifacts
         uses: actions/download-artifact@v4

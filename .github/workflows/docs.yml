@@ -19,7 +19,7 @@ jobs:
     name: Build & Check
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
 
       - uses: actions/setup-node@v4
         with:
@@ -42,7 +42,7 @@ jobs:
     name: Link Check
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
 
       - name: Check markdown links
         uses: gaurav-nelson/github-action-markdown-link-check@v1
@@ -55,7 +55,7 @@ jobs:
     name: Spell Check
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
 
       - uses: rojopolis/spellcheck-github-actions@v0
         with:

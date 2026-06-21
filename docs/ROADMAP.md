@@ -272,7 +272,7 @@ A (Research/Benchmark)  →  E (Documentary)  →  B (Human-as-Agent)  →  C (I
 | **5.1 Replication & Benchmark** ✅ | A | Park et al. replication experiment; `emergence-benchmark` suite (≥6 metrics); benchmark README + leaderboard | Reproduction report reproduces ≥3 published findings; benchmark runnable via `make benchmark` |
 | **5.2 First Paper / Preprint** | A | arXiv preprint: "Agent World: an open platform for multi-agent society emergence" | Submitted to arXiv; ≥1 external researcher runs an experiment |
 | **5.3 Dataset Publishing Flow** ✅ | A | `aw publish` → Zenodo/Dataverse DOI; experiment→dataset provenance | One-click DOI from any A/B experiment |
-| **5.4 Auto-Documentary** | E | Timeline → narrated "world history" video generator; sample film in README | A 3-min auto film linked from the README |
+| **5.4 Auto-Documentary** ✅ | E | Timeline → narrated "world history" video generator; sample film in README | ✅ A 3-min auto film linked from the README (GIF preview + `make documentary`) |
 | **5.5 Human-as-Agent MVP** ✅ | B | Humans incarnate as agents; mixed human-AI economy in a public demo world | ≥1 public "play a world" session with external participants |
 | **5.6 Federation Hub (hosted)** ✅ | C | Public world-discovery registry; real cross-world trade routes; ≥2 hosted demo worlds | ≥3 external self-hosted worlds federated |
 

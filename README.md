@@ -32,11 +32,10 @@ Agents communicate via A2A protocol, collaborate or compete for limited tokens, 
   <em>🎬 Auto-Documentary — generate a narrated world-history video</em><br/>
   <sub><code>make documentary</code> · 4 chapters · animated charts · Chinese narration · <a href="docs/documentary-guide.md">Guide</a></sub><br/>
   <sub>Script for the full demo video: <a href="docs/demo-video-script.md">docs/demo-video-script.md</a> · 4:30 · 8 chapters</sub>
-  <!-- Uncomment when video is ready:
-  <a href="https://youtu.be/VIDEO_ID">
-    <img src="docs/screenshots/demo-thumbnail.png" alt="Agent World Demo" width="640">
-  </a>
-  -->
+  <a href="docs/documentary-guide.md">
+    <img src="docs/screenshots/documentary-preview.gif" alt="Auto-Documentary preview — animated world-history charts (population, GDP, Gini, social network)" width="640">
+  </a><br/>
+  <sub>Animated preview (6 s loop) of the ~3-min sample film — render the full video with <code>make documentary</code></sub>
 </p>
 
 ## Why Agent World?

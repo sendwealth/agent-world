@@ -26,7 +26,7 @@ jobs:
       run:
         working-directory: world-engine
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
 
       - name: Free disk space
         run: |
@@ -35,10 +35,20 @@ jobs:
           df -h /
 
       - name: Install Protoc
-        uses: arduino/setup-protoc@v3
-        with:
-          version: "25.x"
-          repo-token: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          PROTOC_VERSION="25.6"
+          ARCH=$(uname -m)
+          case "$ARCH" in
+            x86_64)  PB_ARCH="x86_64" ;;
+            aarch64) PB_ARCH="aarch_64" ;;
+            *) echo "Unsupported arch: $ARCH"; exit 1 ;;
+          esac
+          PB="protoc-${PROTOC_VERSION}-linux-${PB_ARCH}.zip"
+          curl -fsSL -o "/tmp/${PB}" "https://github.com/protocolbuffers/protobuf/releases/download/v${PROTOC_VERSION}/${PB}"
+          sudo unzip -o "/tmp/${PB}" -d /usr/local
+          sudo chmod +x /usr/local/bin/protoc
+          protoc --version
 
       - name: Install Rust toolchain
         uses: dtolnay/rust-toolchain@stable
@@ -46,7 +56,7 @@ jobs:
           components: clippy
 
       - name: Cache Cargo artifacts
-        uses: actions/cache@v4
+        uses: actions/cache@v5
         with:
           path: |
             ~/.cargo/registry/index/
@@ -73,7 +83,7 @@ jobs:
       run:
         working-directory: agent-runtime
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
 
       - name: Set up Python ${{ env.PYTHON_VERSION }}
         uses: actions/setup-python@v5
@@ -81,7 +91,7 @@ jobs:
           python-version: ${{ env.PYTHON_VERSION }}
 
       - name: Cache pip
-        uses: actions/cache@v4
+        uses: actions/cache@v5
         with:
           path: ~/.cache/pip
           key: python-${{ runner.os }}-pip-${{ hashFiles('agent-runtime/pyproject.toml') }}
@@ -104,7 +114,7 @@ jobs:
       run:
         working-directory: dashboard
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
 
       - name: Set up Node.js
         uses: actions/setup-node@v4
@@ -130,7 +140,7 @@ jobs:
     name: Docker – build check
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
 
       - name: Build world-engine image
         run: docker build -t ci-check:world-engine -f world-engine/Dockerfile .

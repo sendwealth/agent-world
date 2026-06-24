@@ -36,6 +36,7 @@ from agent_runtime.llm.ollama_provider import (
     OllamaProvider,
 )
 from agent_runtime.llm.openai_provider import OpenAIProvider
+from agent_runtime.llm.rate_limiter import RateLimiter, default_rate_limiter
 from agent_runtime.llm.prompts import (
     DEFAULT_TEMPLATE,
     SURVIVAL_TEMPLATE,
@@ -83,10 +84,12 @@ __all__ = [
     "ProviderProtocol",
     "QueueConfig",
     "QueueStats",
+    "RateLimiter",
     "SURVIVAL_TEMPLATE",
     "TokenUsage",
     "create_provider",
     "create_provider_from_config",
+    "default_rate_limiter",
     "get_template",
     "register_template",
 ]

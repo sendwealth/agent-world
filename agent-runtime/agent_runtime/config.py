@@ -65,6 +65,7 @@ from typing import Any
 
 import yaml
 
+from agent_runtime import DEFAULT_INITIAL_TOKENS, DEFAULT_MAX_TOKENS
 from agent_runtime.core.think_loop import ThinkLoopConfig
 from agent_runtime.llm.base import LLMConfig, ProviderType
 from agent_runtime.llm.queue import QueueConfig as LLMQueueConfig
@@ -187,8 +188,8 @@ class AgentSpawnConfig:
     name: str = "Agent"
     traits: dict[str, float] = field(default_factory=dict)
     skills: dict[str, int] = field(default_factory=dict)
-    tokens: int = 100_000
-    max_tokens: int = 200_000
+    tokens: int = DEFAULT_INITIAL_TOKENS
+    max_tokens: int = DEFAULT_MAX_TOKENS
     money: float = 50.0
     health: float = 100.0
     identity: IdentityConfig = field(default_factory=IdentityConfig)
@@ -440,8 +441,8 @@ def parse_runtime_config(raw: dict[str, Any]) -> RuntimeConfig:
         name=agent_raw.get("name", "Agent"),
         traits=agent_raw.get("traits", {}),
         skills=skills,
-        tokens=agent_raw.get("tokens", 100_000),
-        max_tokens=agent_raw.get("max_tokens", 200_000),
+        tokens=agent_raw.get("tokens", DEFAULT_INITIAL_TOKENS),
+        max_tokens=agent_raw.get("max_tokens", DEFAULT_MAX_TOKENS),
         money=agent_raw.get("money", 50.0),
         health=agent_raw.get("health", 100.0),
         identity=identity_cfg,

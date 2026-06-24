@@ -5,6 +5,7 @@ from uuid import UUID, uuid4
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
+from .. import DEFAULT_INITIAL_TOKENS, DEFAULT_MAX_TOKENS
 from .enums import AgentPhase, DeathReason, SurvivalMode
 from .phase_abilities import PhaseAbilities, get_phase_abilities, is_alive, is_terminal
 from .skill import Skill
@@ -30,7 +31,7 @@ class AgentState(BaseModel):
     survival_mode: SurvivalMode = Field(
         default=SurvivalMode.CONSERVATION, description="Current survival strategy"
     )
-    tokens: int = Field(default=100, ge=0, description="Token resource balance")
+    tokens: int = Field(default=DEFAULT_INITIAL_TOKENS, ge=0, description="Token resource balance")
     money: float = Field(default=50.0, ge=0.0, description="Monetary balance")
     health: float = Field(default=100.0, ge=0.0, le=100.0, description="Health percentage (0-100)")
     reputation: float = Field(
@@ -46,7 +47,7 @@ class AgentState(BaseModel):
         default_factory=dict,
         description="Current emotional state (PAD dimensions + labels)",
     )
-    max_tokens: int = Field(default=1000, gt=0, description="Maximum token capacity")
+    max_tokens: int = Field(default=DEFAULT_MAX_TOKENS, gt=0, description="Maximum token capacity")
     current_task: Optional[str] = Field(default=None, description="Currently claimed task ID")
     tick: int = Field(default=0, ge=0, description="Current tick counter")
     world_sync_version: int = Field(

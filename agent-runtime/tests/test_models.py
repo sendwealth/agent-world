@@ -250,7 +250,7 @@ class TestAgentStateCreation:
         assert isinstance(agent.id, UUID)
         assert agent.phase == AgentPhase.BIRTH
         assert agent.survival_mode == SurvivalMode.CONSERVATION
-        assert agent.tokens == 100
+        assert agent.tokens == 100_000
         assert agent.money == 50.0
         assert agent.health == 100.0
         assert agent.reputation == 0.0
@@ -323,7 +323,7 @@ class TestAgentStateCreation:
 
 class TestAgentStateMutations:
     def setup_method(self):
-        self.agent = AgentState(name="TestAgent")
+        self.agent = AgentState(name="TestAgent", tokens=100)
 
     def test_add_skill(self):
         skill = Skill(name="mining", level=2)

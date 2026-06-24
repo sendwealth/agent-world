@@ -1,5 +1,5 @@
 # ── Build stage ──────────────────────────────────────────────
-FROM node:20-slim AS builder
+FROM node:22-slim AS builder
 
 ARG WORLD_ENGINE_URL=http://127.0.0.1:8080
 ENV WORLD_ENGINE_URL=${WORLD_ENGINE_URL}
@@ -16,7 +16,7 @@ COPY . .
 RUN npm run build
 
 # ── Runtime stage ────────────────────────────────────────────
-FROM node:20-slim
+FROM node:22-slim
 
 ARG WORLD_ENGINE_URL=http://127.0.0.1:8080
 ENV WORLD_ENGINE_URL=${WORLD_ENGINE_URL}

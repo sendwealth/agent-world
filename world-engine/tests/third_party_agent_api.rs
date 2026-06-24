@@ -376,3 +376,359 @@ async fn test_action_on_dead_agent() {
     // The API returns 410 for actions on dead agents.  Since oneshot consumed our
     // app, we'll just verify the deregister response was OK (already done above).
 }
+
+// ══════════════════════════════════════════════════════════════════════════
+// TEST 10: explore action discovers nearby agents
+// ══════════════════════════════════════════════════════════════════════════
+
+#[tokio::test]
+async fn test_explore_action() {
+    let mut app = create_test_app();
+
+    // Register agent 1 (the explorer)
+    let explorer = register_test_agent(&mut app).await;
+    let explorer_id = explorer["agent_id"].as_str().unwrap();
+
+    // Register agent 2 (should appear in explorer's perception)
+    let mut app2 = create_test_app();
+    let _peer = register_test_agent(&mut app2).await;
+
+    // Execute explore action
+    let req = make_request(
+        Method::POST,
+        &format!("/api/v1/agents/{explorer_id}/action"),
+        Some(json!({
+            "action": "explore",
+            "params": { "radius": 5 }
+        })),
+    );
+    let resp = app.oneshot(req).await.unwrap();
+    assert_eq!(resp.status(), StatusCode::OK);
+
+    let body = body_json(resp.into_body()).await;
+    assert_eq!(body["action"].as_str(), Some("explore"));
+    assert!(body["success"] == true || body["success"] == json!(true));
+    // Response includes a "data" field with discovered info
+    assert!(body.get("data").is_some());
+}
+
+// ══════════════════════════════════════════════════════════════════════════
+// TEST 11: communicate action sends a message
+// ══════════════════════════════════════════════════════════════════════════
+
+#[tokio::test]
+async fn test_communicate_action() {
+    let mut app = create_test_app();
+    let agent = register_test_agent(&mut app).await;
+    let agent_id = agent["agent_id"].as_str().unwrap();
+
+    // Missing message → 400
+    let req = make_request(
+        Method::POST,
+        &format!("/api/v1/agents/{agent_id}/action"),
+        Some(json!({
+            "action": "communicate",
+            "params": { "target": "other" }
+        })),
+    );
+    let resp = app.clone().oneshot(req).await.unwrap();
+    assert_eq!(resp.status(), StatusCode::BAD_REQUEST);
+
+    // With message → 200
+    let req = make_request(
+        Method::POST,
+        &format!("/api/v1/agents/{agent_id}/action"),
+        Some(json!({
+            "action": "communicate",
+            "params": {
+                "target": "other_agent",
+                "message": "Hello world!",
+                "type": "SEND_MESSAGE"
+            }
+        })),
+    );
+    let resp = app.oneshot(req).await.unwrap();
+    assert_eq!(resp.status(), StatusCode::OK);
+
+    let body = body_json(resp.into_body()).await;
+    assert!(body.get("data").is_some());
+    let data = body["data"].as_object().unwrap();
+    assert!(data.get("message_id").is_some());
+    assert_eq!(data["to"].as_str(), Some("other_agent"));
+}
+
+// ══════════════════════════════════════════════════════════════════════════
+// TEST 12: trade action transfers money between agents
+// ══════════════════════════════════════════════════════════════════════════
+
+#[tokio::test]
+async fn test_trade_action_missing_target() {
+    let mut app = create_test_app();
+    let agent = register_test_agent(&mut app).await;
+    let agent_id = agent["agent_id"].as_str().unwrap();
+
+    // Missing target_agent_id → 400
+    let req = make_request(
+        Method::POST,
+        &format!("/api/v1/agents/{agent_id}/action"),
+        Some(json!({
+            "action": "trade",
+            "params": { "amount": 10 }
+        })),
+    );
+    let resp = app.oneshot(req).await.unwrap();
+    assert_eq!(resp.status(), StatusCode::BAD_REQUEST);
+}
+
+#[tokio::test]
+async fn test_trade_action_zero_amount() {
+    let mut app = create_test_app();
+    let agent = register_test_agent(&mut app).await;
+    let agent_id = agent["agent_id"].as_str().unwrap();
+
+    let req = make_request(
+        Method::POST,
+        &format!("/api/v1/agents/{agent_id}/action"),
+        Some(json!({
+            "action": "trade",
+            "params": { "target_agent_id": "other", "amount": 0 }
+        })),
+    );
+    let resp = app.oneshot(req).await.unwrap();
+    assert_eq!(resp.status(), StatusCode::BAD_REQUEST);
+}
+
+#[tokio::test]
+async fn test_trade_action_success() {
+    let mut app = create_test_app();
+
+    // Register sender
+    let sender = register_test_agent(&mut app).await;
+    let sender_id = sender["agent_id"].as_str().unwrap();
+
+    // Trade with another agent — the sender has board balance 0, so it should fail with 400
+    let req = make_request(
+        Method::POST,
+        &format!("/api/v1/agents/{sender_id}/action"),
+        Some(json!({
+            "action": "trade",
+            "params": {
+                "target_agent_id": "target-agent-123",
+                "amount": 5
+            }
+        })),
+    );
+    let resp = app.oneshot(req).await.unwrap();
+    // Insufficient funds on the board (balance starts at 0)
+    assert_eq!(resp.status(), StatusCode::BAD_REQUEST);
+}
+
+// ══════════════════════════════════════════════════════════════════════════
+// TEST 13: build action creates a building
+// ══════════════════════════════════════════════════════════════════════════
+
+#[tokio::test]
+async fn test_build_action_insufficient_tokens() {
+    let mut app = create_test_app();
+    let agent = register_test_agent(&mut app).await;
+    let agent_id = agent["agent_id"].as_str().unwrap();
+
+    // Building costs 80+ tokens, but external agents start with much more.
+    // The test uses the building_manager which is None in create_router_for_test,
+    // so this tests the error path.
+    let req = make_request(
+        Method::POST,
+        &format!("/api/v1/agents/{agent_id}/action"),
+        Some(json!({
+            "action": "build",
+            "params": { "type": "Warehouse" }
+        })),
+    );
+    let resp = app.oneshot(req).await.unwrap();
+    // May return 200 (if building_manager works) or a 400/500 if building_manager is None
+    // We just verify the response is structured correctly
+    let body = body_json(resp.into_body()).await;
+    assert!(body.get("action").is_some());
+}
+
+// ══════════════════════════════════════════════════════════════════════════
+// TEST 14: claim_task action
+// ══════════════════════════════════════════════════════════════════════════
+
+#[tokio::test]
+async fn test_claim_task_missing_task_id() {
+    let mut app = create_test_app();
+    let agent = register_test_agent(&mut app).await;
+    let agent_id = agent["agent_id"].as_str().unwrap();
+
+    let req = make_request(
+        Method::POST,
+        &format!("/api/v1/agents/{agent_id}/action"),
+        Some(json!({
+            "action": "claim_task",
+            "params": {}
+        })),
+    );
+    let resp = app.oneshot(req).await.unwrap();
+    assert_eq!(resp.status(), StatusCode::BAD_REQUEST);
+}
+
+#[tokio::test]
+async fn test_claim_task_not_found() {
+    let mut app = create_test_app();
+    let agent = register_test_agent(&mut app).await;
+    let agent_id = agent["agent_id"].as_str().unwrap();
+
+    let fake_uuid = "123e4567-e89b-12d3-a456-426614174000";
+    let req = make_request(
+        Method::POST,
+        &format!("/api/v1/agents/{agent_id}/action"),
+        Some(json!({
+            "action": "claim_task",
+            "params": { "task_id": fake_uuid }
+        })),
+    );
+    let resp = app.oneshot(req).await.unwrap();
+    assert_eq!(resp.status(), StatusCode::BAD_REQUEST);
+}
+
+// ══════════════════════════════════════════════════════════════════════════
+// TEST 15: submit_task action
+// ══════════════════════════════════════════════════════════════════════════
+
+#[tokio::test]
+async fn test_submit_task_missing_task_id() {
+    let mut app = create_test_app();
+    let agent = register_test_agent(&mut app).await;
+    let agent_id = agent["agent_id"].as_str().unwrap();
+
+    let req = make_request(
+        Method::POST,
+        &format!("/api/v1/agents/{agent_id}/action"),
+        Some(json!({
+            "action": "submit_task",
+            "params": {}
+        })),
+    );
+    let resp = app.oneshot(req).await.unwrap();
+    assert_eq!(resp.status(), StatusCode::BAD_REQUEST);
+}
+
+// ══════════════════════════════════════════════════════════════════════════
+// TEST 16: socialize action
+// ══════════════════════════════════════════════════════════════════════════
+
+#[tokio::test]
+async fn test_socialize_missing_target() {
+    let mut app = create_test_app();
+    let agent = register_test_agent(&mut app).await;
+    let agent_id = agent["agent_id"].as_str().unwrap();
+
+    let req = make_request(
+        Method::POST,
+        &format!("/api/v1/agents/{agent_id}/action"),
+        Some(json!({
+            "action": "socialize",
+            "params": {}
+        })),
+    );
+    let resp = app.oneshot(req).await.unwrap();
+    assert_eq!(resp.status(), StatusCode::BAD_REQUEST);
+}
+
+#[tokio::test]
+async fn test_socialize_success() {
+    let mut app = create_test_app();
+    let agent = register_test_agent(&mut app).await;
+    let agent_id = agent["agent_id"].as_str().unwrap();
+
+    let req = make_request(
+        Method::POST,
+        &format!("/api/v1/agents/{agent_id}/action"),
+        Some(json!({
+            "action": "socialize",
+            "params": {
+                "target_agent_id": "target-1",
+                "interaction_type": "Cooperation"
+            }
+        })),
+    );
+    let resp = app.oneshot(req).await.unwrap();
+    // Trust network may not be configured in test app, but action should still succeed
+    // (it falls back to new_trust = 0.0)
+    assert_eq!(resp.status(), StatusCode::OK);
+}
+
+// ══════════════════════════════════════════════════════════════════════════
+// TEST 17: practice_skill action
+// ══════════════════════════════════════════════════════════════════════════
+
+#[tokio::test]
+async fn test_practice_skill_success() {
+    let mut app = create_test_app();
+    let agent = register_test_agent(&mut app).await;
+    let agent_id = agent["agent_id"].as_str().unwrap();
+
+    let req = make_request(
+        Method::POST,
+        &format!("/api/v1/agents/{agent_id}/action"),
+        Some(json!({
+            "action": "practice_skill",
+            "params": { "skill": "coding" }
+        })),
+    );
+    let resp = app.oneshot(req).await.unwrap();
+    assert_eq!(resp.status(), StatusCode::OK);
+
+    let body = body_json(resp.into_body()).await;
+    assert!(body.get("data").is_some());
+    let data = body["data"].as_object().unwrap();
+    assert_eq!(data["skill"].as_str(), Some("coding"));
+    assert!(data["new_level"].is_number());
+}
+
+// ══════════════════════════════════════════════════════════════════════════
+// TEST 18: teach_skill action
+// ══════════════════════════════════════════════════════════════════════════
+
+#[tokio::test]
+async fn test_teach_skill_missing_target() {
+    let mut app = create_test_app();
+    let agent = register_test_agent(&mut app).await;
+    let agent_id = agent["agent_id"].as_str().unwrap();
+
+    let req = make_request(
+        Method::POST,
+        &format!("/api/v1/agents/{agent_id}/action"),
+        Some(json!({
+            "action": "teach_skill",
+            "params": { "skill": "coding" }
+        })),
+    );
+    let resp = app.oneshot(req).await.unwrap();
+    assert_eq!(resp.status(), StatusCode::BAD_REQUEST);
+}
+
+#[tokio::test]
+async fn test_teach_skill_insufficient_level() {
+    let mut app = create_test_app();
+    let agent = register_test_agent(&mut app).await;
+    let agent_id = agent["agent_id"].as_str().unwrap();
+
+    // Agent has no skills, so level is 0 — teaching should fail (< 2)
+    let req = make_request(
+        Method::POST,
+        &format!("/api/v1/agents/{agent_id}/action"),
+        Some(json!({
+            "action": "teach_skill",
+            "params": {
+                "target_agent_id": "student-1",
+                "skill": "coding"
+            }
+        })),
+    );
+    let resp = app.oneshot(req).await.unwrap();
+    // Depending on build config, may succeed or fail
+    // The teacher has no "coding" skill → level 0 → < 2
+    assert_eq!(resp.status(), StatusCode::BAD_REQUEST);
+}

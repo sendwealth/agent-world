@@ -47,7 +47,7 @@ use agent_world_engine::world::subsystems::{
 use agent_world_engine::evolution::{EvolutionSubsystem, subsystem::EvolutionSubsystemConfig};
 use agent_world_engine::evolution::mutation::OffspringMutationConfig;
 use agent_world_engine::persistence::{SerializableWorldState, SqlitePersistence, StatePersistence};
-use agent_world_engine::world::{Scheduler, WorldState};
+use agent_world_engine::world::{Scheduler, HexPos, WorldMap, WorldState};
 use agent_world_engine::federation::{MigrationManager, MigrationPolicy, WorldRegistry};
 use agent_world_engine::human_agent::{HumanActionQueue, HumanAgentRegistry, HumanAgentSubsystem};
 
@@ -650,6 +650,26 @@ async fn main() {
         Arc::new(Mutex::new(Vec::new()));
     println!("   ABExperimentStore: initialized");
 
+    // ── Initialize WorldMap ──────────────────────────────
+    // Seed a small map so perception has data to work with.
+    // Uses the seeder to generate a deterministic terrain + resources grid.
+    let mut seeder = agent_world_engine::world::WorldSeeder::new(42);
+    let terrain_grid = seeder.generate_terrain(20, 20);
+    let mut map = WorldMap::from_seeder_grid(&terrain_grid);
+    // Add resources to tiles based on seeder resource generation
+    let resources = seeder.generate_resources(&terrain_grid, 0.4);
+    for res in resources {
+        let pos = HexPos::from_offset(res.x as i32, res.y as i32);
+        if let Some(tile) = map.get_mut(&pos) {
+            use agent_world_engine::world::map::ResourceNode;
+            tile.add_resource(ResourceNode::new(
+                &res.id, &res.kind, res.amount,
+            ));
+        }
+    }
+    let world_map = Arc::new(Mutex::new(map));
+    println!("   WorldMap: initialized ({} tiles with resources)", world_map.lock().await.tile_count());
+
     let mut app_state = AppState::new(task_board, wal_writer.clone(), api::TestOverrides {
         event_bus: Some(event_bus.clone()),
         tick_tx: Some(tick_tx),
@@ -704,6 +724,7 @@ async fn main() {
         legislation_cycle_engine: Some(legislation_cycle_engine),
         world_state: Some(world_state.clone()),
         genesis_config: Some(Arc::new(genesis_config.clone())),
+        world_map: Some(world_map),
         human_action_queue: Some(human_action_queue),
         human_agent_registry: Some(human_agent_registry),
     });

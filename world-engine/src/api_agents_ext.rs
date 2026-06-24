@@ -17,6 +17,7 @@ use crate::world::agent::AgentRecord;
 use crate::world::enums::AgentPhase;
 use crate::world::event::{TrustInteractionType, WorldEvent};
 use crate::world::map::building::{BuildingType, OwnerType};
+use crate::world::map::hex::HexPos;
 
 // ── Request Types ──────────────────────────────────────
 
@@ -1018,10 +1019,34 @@ pub async fn get_agent_perception(
         })
         .collect();
 
-    let nearby_resources: Vec<serde_json::Value> = vec![
-        serde_json::json!({ "type": "food", "position": { "x": 1, "y": 1 } }),
-        serde_json::json!({ "type": "wood", "position": { "x": 3, "y": 5 } }),
-    ];
+    let nearby_resources: Vec<serde_json::Value> = {
+        let map = state.world_map.lock().await;
+        // Convert the agent's offset-position (x, y) to a HexPos for map lookup.
+        // ExternalAgent.position uses offset (column, row) coordinates that match
+        // the seeder's coordinate system and hex.from_offset().
+        let agent_hex = HexPos::from_offset(agent.position.x as i32, agent.position.y as i32);
+
+        // Vision radius of 2 hexes — gives a reasonable neighbourhood (19 tiles).
+        const VISION_RADIUS: i32 = 2;
+
+        // Get all positions within vision radius, then find tiles that have resources.
+        agent_hex
+            .ring(VISION_RADIUS)
+            .iter()
+            .filter_map(|pos| map.get(pos).map(|t| (pos, t)))
+            .filter(|(_, tile)| !tile.resources.is_empty())
+            .flat_map(|(_pos, tile)| {
+                tile.resources.iter().map(move |res| {
+                    let (ox, oy) = tile.pos.to_offset();
+                    serde_json::json!({
+                        "type": res.kind,
+                        "position": { "x": ox, "y": oy },
+                        "amount": res.amount,
+                    })
+                }).collect::<Vec<_>>()
+            })
+            .collect()
+    };
 
     (
         StatusCode::OK,

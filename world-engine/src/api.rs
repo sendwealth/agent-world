@@ -50,6 +50,7 @@ use crate::organization::rule_engine::RuleEngine;
 use crate::time_capsule::SnapshotStore;
 use crate::wal::WAL;
 use crate::world::map::building::BuildingManager;
+use crate::world::map::WorldMap;
 use crate::world::state::EventBus;
 use crate::world::WorldState;
 
@@ -268,6 +269,9 @@ pub struct AppState {
     /// Snapshot of the genesis config used at startup.
     /// Read by external agent registration to determine initial resources.
     pub genesis_config: Option<Arc<GenesisConfig>>,
+    /// The hex-world map used for agent perception queries.
+    /// Wires in from `main.rs` so that perception endpoints can query tiles/resources.
+    pub world_map: Arc<Mutex<WorldMap>>,
     /// Human-as-Agent queue (Phase 5.5).
     pub human_action_queue: SharedHumanActionQueue,
     /// Human-as-Agent incarnation registry (Phase 5.5).
@@ -314,6 +318,7 @@ pub struct TestOverrides {
     pub legislation_cycle_engine: Option<SharedLegislationCycleEngine>,
     pub world_state: Option<Arc<Mutex<WorldState>>>,
     pub genesis_config: Option<Arc<GenesisConfig>>,
+    pub world_map: Option<Arc<Mutex<WorldMap>>>,
     /// Phase 5.5 — shared human action queue + registry.
     /// Production wires these to `HumanAgentSubsystem` so the tick loop drains them.
     pub human_action_queue: Option<SharedHumanActionQueue>,
@@ -396,6 +401,9 @@ impl AppState {
             legislation_cycle_engine: overrides.legislation_cycle_engine,
             world_state: overrides.world_state,
             genesis_config: overrides.genesis_config,
+            world_map: overrides
+                .world_map
+                .unwrap_or_else(|| Arc::new(Mutex::new(WorldMap::new()))),
             human_action_queue: overrides
                 .human_action_queue
                 .unwrap_or_else(crate::api_human_agent::shared_queue),
@@ -519,6 +527,7 @@ fn make_test_state(
         legislation_cycle_engine: None,
         world_state: None,
         genesis_config: None,
+        world_map: Arc::new(Mutex::new(WorldMap::new())),
         human_action_queue: crate::api_human_agent::shared_queue(),
         human_agent_registry: crate::api_human_agent::shared_registry(),
     }

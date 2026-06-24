@@ -10,4 +10,4 @@ coding = { level = 4 }
 teaching = { level = 1 }
 
 [think_loop]
-tick_interval = 1.0
+tick_interval = 5.0

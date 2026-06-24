@@ -64,4 +64,4 @@ question = "What is your goal?"
 answer = "To build the most efficient trading network in this world and become the person everyone comes to when they need something."
 
 [think_loop]
-tick_interval = 1.0
+tick_interval = 5.0

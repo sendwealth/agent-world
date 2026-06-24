@@ -26,6 +26,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import os
 from dataclasses import dataclass, field
 from enum import IntEnum
 from typing import Any
@@ -33,6 +34,25 @@ from typing import Any
 from agent_runtime.llm.base import LLMMessage, LLMProvider, LLMResponse
 
 logger = logging.getLogger(__name__)
+
+
+# ---------------------------------------------------------------------------
+# Rate-limiter integration (cross-process)
+# ---------------------------------------------------------------------------
+
+def _maybe_create_rate_limiter():
+    """Return a RateLimiter instance if LLM_RATE_LIMIT_ENABLED=1, else None."""
+    enabled = os.environ.get("LLM_RATE_LIMIT_ENABLED", "").lower()
+    if enabled != "1":
+        return None
+
+    try:
+        from agent_runtime.llm.rate_limiter import default_rate_limiter
+
+        return default_rate_limiter()
+    except ImportError:
+        logger.debug("LLM_RATE_LIMIT_ENABLED=1 but rate_limiter module not available")
+        return None
 
 
 # ---------------------------------------------------------------------------
@@ -164,6 +184,8 @@ class LLMQueue:
         self._worker_task: asyncio.Task[None] | None = None
         self._active_count = 0
         self._dispatch_tasks: set[asyncio.Task[None]] = set()
+        # Cross-process rate limiter (may be None if not enabled)
+        self._rate_limiter = _maybe_create_rate_limiter()
 
     def _get_semaphore(self) -> asyncio.Semaphore:
         if self._semaphore is None:
@@ -183,10 +205,16 @@ class LLMQueue:
         """Start the queue processor (background worker)."""
         self._running = True
         self._worker_task = asyncio.get_running_loop().create_task(self._worker())
+        limiter_note = ""
+        if self._rate_limiter is not None:
+            limiter_note = (
+                f" rate_limiter=enabled(rate={self._rate_limiter._rate:.1f}/s,burst={self._rate_limiter._burst})"
+            )
         logger.info(
-            "LLMQueue started: max_concurrency=%d timeout=%.1fs",
+            "LLMQueue started: max_concurrency=%d timeout=%.1fs%s",
             self._config.max_concurrency,
             self._config.timeout_seconds,
+            limiter_note,
         )
 
     async def stop(self) -> None:
@@ -289,7 +317,12 @@ class LLMQueue:
             raise
 
     async def _execute_with_semaphore(self, entry: _QueueEntry) -> None:
-        """Acquire semaphore and execute the LLM call."""
+        """Acquire rate limiter + semaphore and execute the LLM call."""
+        # 1. Acquire cross-process rate limiter (no-op if disabled)
+        if self._rate_limiter is not None:
+            await self._rate_limiter.acquire()
+
+        # 2. Acquire per-process concurrency semaphore
         async with self._get_semaphore():
             self._active_count += 1
             self._stats.active_requests = self._active_count

@@ -64,4 +64,4 @@ question = "What is your goal?"
 answer = "To explore every corner of this world and leave behind a complete map and field guide for those who come after."
 
 [think_loop]
-tick_interval = 1.0
+tick_interval = 5.0

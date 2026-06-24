@@ -5,8 +5,10 @@ Uses the Anthropic Messages API via httpx.
 
 from __future__ import annotations
 
+import asyncio
 import json
 import logging
+import os
 from typing import AsyncIterator
 
 import httpx
@@ -26,6 +28,9 @@ logger = logging.getLogger(__name__)
 _DEFAULT_BASE_URL = "https://api.anthropic.com/v1"
 _ANTHROPIC_VERSION = "2023-06-01"
 
+# Rate-limit retry configuration (same env vars as OpenAI provider)
+_ANTHROPIC_MAX_RETRIES = int(os.environ.get("LLM_MAX_RETRIES", "3"))
+
 
 class AnthropicProvider(LLMProvider):
     """Anthropic Messages API provider.
@@ -36,6 +41,7 @@ class AnthropicProvider(LLMProvider):
     def __init__(self, config: LLMConfig) -> None:
         super().__init__(config)
         self._base_url = (config.base_url or _DEFAULT_BASE_URL).rstrip("/")
+        self._max_retries = _ANTHROPIC_MAX_RETRIES
 
     # ------------------------------------------------------------------
     # chat (non-streaming)
@@ -56,21 +62,40 @@ class AnthropicProvider(LLMProvider):
             max_tokens=max_tokens,
             temperature=temperature,
         )
-        try:
-            resp = await self._client.post(
-                f"{self._base_url}/messages",
-                headers=self._headers(),
-                json=payload,
-            )
-            resp.raise_for_status()
-        except httpx.HTTPError as exc:
-            raise LLMError(
-                f"Anthropic request failed: {exc}",
-                provider="anthropic",
-                model=self._config.model,
-            ) from exc
-        data = resp.json()
-        return self._parse_response(data)
+        last_exc: Exception | None = None
+        for attempt in range(self._max_retries + 1):
+            try:
+                resp = await self._client.post(
+                    f"{self._base_url}/messages",
+                    headers=self._headers(),
+                    json=payload,
+                )
+                if resp.status_code == 429:
+                    delay = self._anthropic_backoff(attempt)
+                    logger.warning(
+                        "Anthropic rate-limited (429) on attempt %d/%d — "
+                        "retrying in %.1fs",
+                        attempt + 1,
+                        self._max_retries + 1,
+                        delay,
+                    )
+                    await asyncio.sleep(delay)
+                    continue
+                resp.raise_for_status()
+                data = resp.json()
+                return self._parse_response(data)
+            except httpx.HTTPError as exc:
+                last_exc = exc
+                break
+            except Exception as exc:
+                last_exc = exc
+                break
+
+        raise LLMError(
+            f"Anthropic request failed after {self._max_retries + 1} attempts: {last_exc}",
+            provider="anthropic",
+            model=self._config.model,
+        ) from last_exc
 
     # ------------------------------------------------------------------
     # chat_stream (streaming)
@@ -120,6 +145,19 @@ class AnthropicProvider(LLMProvider):
     # ------------------------------------------------------------------
     # Internal helpers
     # ------------------------------------------------------------------
+
+    @staticmethod
+    def _anthropic_backoff(attempt: int) -> float:
+        """Compute exponential backoff with jitter for 429 retries."""
+        import random
+
+        min_backoff = float(os.environ.get("LLM_MIN_BACKOFF_SECONDS", "1.0"))
+        max_backoff = float(os.environ.get("LLM_MAX_BACKOFF_SECONDS", "60.0"))
+        jitter_factor = float(os.environ.get("LLM_JITTER_FACTOR", "0.25"))
+        exponential = min_backoff * (2 ** attempt)
+        clamped = min(exponential, max_backoff)
+        jitter = clamped * jitter_factor * random.uniform(-1, 1)
+        return max(0.0, jitter)
 
     def _headers(self) -> dict[str, str]:
         headers: dict[str, str] = {

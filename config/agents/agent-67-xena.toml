@@ -8,4 +8,4 @@ teaching = { level = 5 }
 research = { level = 4 }
 
 [think_loop]
-tick_interval = 1.0
+tick_interval = 5.0

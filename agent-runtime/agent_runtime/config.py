@@ -304,9 +304,15 @@ def _parse_llm_config(data: dict[str, Any]) -> LLMConfig | None:
 
 
 def _parse_think_loop_config(data: dict[str, Any]) -> ThinkLoopConfig:
-    """Parse the ``[think_loop]`` section into a ThinkLoopConfig."""
+    """Parse the ``[think_loop]`` section into a ThinkLoopConfig.
+
+    Default tick_interval is raised from 1.0 to 5.0 seconds to stay within
+    typical LLM gateway rate limits (e.g. GLM-4-Flash ~2-3 req/s).  Agents
+    that explicitly set ``tick_interval`` in their config file keep their
+    configured value.
+    """
     return ThinkLoopConfig(
-        tick_interval=data.get("tick_interval", 1.0),
+        tick_interval=data.get("tick_interval", 5.0),
         max_ticks=data.get("max_ticks", 0),
         reflect_interval=data.get("reflect_interval", 10),
         error_backoff=data.get("error_backoff", 5.0),

@@ -23,6 +23,8 @@
 x-agent-common: &agent-common
   build:
     context: ./agent-runtime
+    args:
+      PYPI_MIRROR: pypi.tuna.tsinghua.edu.cn
   depends_on:
     world-engine:
       condition: service_healthy

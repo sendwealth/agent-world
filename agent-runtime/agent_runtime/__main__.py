@@ -288,6 +288,25 @@ class RESTWorldClient:
             json=member_data,
         )
 
+    async def practice_skill(self, skill_name: str) -> dict[str, Any]:
+        return await self.submit_action("practice_skill", {"skill_name": skill_name})
+
+    async def respond_to_oracle(self, oracle_id: str, response: str) -> dict[str, Any]:
+        return await self.submit_action(
+            "respond_oracle", {"oracle_id": oracle_id, "response": response}
+        )
+
+    async def check_bounties(self) -> dict[str, Any]:
+        return await self.submit_action("check_bounties", {})
+
+    async def claim_bounty(self, bounty_id: str) -> dict[str, Any]:
+        return await self.submit_action("accept_bounty", {"bounty_id": bounty_id})
+
+    async def complete_bounty(self, bounty_id: str, result: str) -> dict[str, Any]:
+        return await self.submit_action(
+            "complete_bounty", {"bounty_id": bounty_id, "result": result}
+        )
+
 
 # ---------------------------------------------------------------------------
 # REST perception provider

@@ -11,6 +11,7 @@ use serde::Deserialize;
 use uuid::Uuid;
 
 use crate::api::{A2AMessage, AgentDto, AppState, ErrorResponse, ExternalAgent, Position, ALLOWED_ACTIONS};
+use crate::human_agent::HumanActionType;
 use crate::config::GenesisConfig;
 use crate::economy::banking::{BankAccountType, BankingError};
 use crate::world::agent::AgentRecord;
@@ -277,30 +278,15 @@ pub async fn execute_agent_action(
     let tick = *state.tick_rx.borrow();
     let agent_name = agent.name.clone();
 
-    // Token cost per action (server-authoritative)
+    // Token cost and income per action — single source of truth via HumanActionType.
     // Aligned with agent-runtime/agent_runtime/core/decide.py:_TOKEN_COSTS
     // and act.py:_DEFAULT_TOKEN_COSTS
-    let action_cost: u64 = match body.action.as_str() {
-        "explore" => 3,
-        "move" => 12,
-        "build" => 20,
-        "trade" => 10,
-        "communicate" => 10, // maps to SEND_MESSAGE / RESPOND_MESSAGE
-        "claim_task" => 5,
-        "submit_task" => 8,
-        "socialize" => 5,
-        "practice_skill" => 8,
-        "teach_skill" => 15,
-        _ => 0, // rest, gather = free
-    };
-    // Token income per action
-    let token_income: u64 = match body.action.as_str() {
-        "rest" => 5,
-        "explore" => 2,
-        "build" => 5,
-        "submit_task" => 15,
-        _ => 0,
-    };
+    let action_cost = HumanActionType::from_str_lossy(&body.action)
+        .map(|a| a.token_cost())
+        .unwrap_or(0);
+    let token_income = HumanActionType::from_str_lossy(&body.action)
+        .map(|a| a.token_income())
+        .unwrap_or(0);
 
     // Deduct token cost
     let old_tokens = agent.tokens;

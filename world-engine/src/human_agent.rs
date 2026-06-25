@@ -35,32 +35,18 @@ pub const HUMAN_INITIAL_TOKENS: u64 = 200;
 /// Initial money grant for a freshly incarnated human agent.
 pub const HUMAN_INITIAL_MONEY: u64 = 100;
 
-/// Token cost per action. Matches `api_agents_ext::execute_agent_action`.
+/// Token cost per action — delegates to `HumanActionType::token_cost()` for a single source of truth.
 pub fn action_token_cost(action: &str) -> u64 {
-    match action {
-        "explore" => 3,
-        "move" => 12,
-        "build" => 20,
-        "trade" => 10,
-        "communicate" => 10,
-        "claim_task" => 5,
-        "submit_task" => 8,
-        "socialize" => 5,
-        "practice_skill" => 8,
-        "teach_skill" => 15,
-        _ => 0, // rest, gather = free
-    }
+    HumanActionType::from_str_lossy(action)
+        .map(|a| a.token_cost())
+        .unwrap_or(0)
 }
 
-/// Token income per action. Matches `api_agents_ext::execute_agent_action`.
+/// Token income per action — delegates to `HumanActionType::token_income()` for a single source of truth.
 pub fn action_token_income(action: &str) -> u64 {
-    match action {
-        "rest" => 5,
-        "explore" => 2,
-        "build" => 5,
-        "submit_task" => 15,
-        _ => 0,
-    }
+    HumanActionType::from_str_lossy(action)
+        .map(|a| a.token_income())
+        .unwrap_or(0)
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
@@ -85,6 +71,8 @@ pub enum HumanActionType {
     PracticeSkill,
     TeachSkill,
     Move,
+    ClaimTask,
+    SubmitTask,
 }
 
 impl HumanActionType {
@@ -101,6 +89,8 @@ impl HumanActionType {
             HumanActionType::PracticeSkill => 8,
             HumanActionType::TeachSkill => 15,
             HumanActionType::Move => 12,
+            HumanActionType::ClaimTask => 5,
+            HumanActionType::SubmitTask => 8,
         }
     }
 
@@ -111,6 +101,7 @@ impl HumanActionType {
             HumanActionType::Explore => 2,
             HumanActionType::Gather => 3,
             HumanActionType::Build => 5,
+            HumanActionType::SubmitTask => 15,
             _ => 0,
         }
     }
@@ -127,6 +118,8 @@ impl HumanActionType {
             HumanActionType::PracticeSkill => "practice_skill",
             HumanActionType::TeachSkill => "teach_skill",
             HumanActionType::Move => "move",
+            HumanActionType::ClaimTask => "claim_task",
+            HumanActionType::SubmitTask => "submit_task",
         }
     }
 
@@ -142,6 +135,8 @@ impl HumanActionType {
             "practice_skill" => Some(HumanActionType::PracticeSkill),
             "teach_skill" => Some(HumanActionType::TeachSkill),
             "move" => Some(HumanActionType::Move),
+            "claim_task" => Some(HumanActionType::ClaimTask),
+            "submit_task" => Some(HumanActionType::SubmitTask),
             _ => None,
         }
     }

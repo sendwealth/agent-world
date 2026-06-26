@@ -36,11 +36,24 @@ export function SSEProvider({ children }: { children: React.ReactNode }) {
   const listenersRef = useRef<Set<(event: WorldEvent) => void>>(new Set());
   const abortRef = useRef<AbortController | null>(null);
   const reconnectTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const connectFnRef = useRef<() => () => void>(() => () => {});
+  /** Cleanup from the currently active connect() — used to tear down old connections during reconnect. */
+  const cleanupRef = useRef<(() => void) | null>(null);
+  /** Callable connect for reconnection (avoids the eslint react-hooks/immutability rule for self-reference). */
+  const connectFnRef = useRef<() => () => void | undefined>(undefined);
 
   const connect = useCallback(() => {
-    if (abortRef.current) {
-      abortRef.current.abort();
+    // Properly tear down the previous connection before starting a new one.
+    // Without this, each reconnect creates a new AbortController while the
+    // old one's fetch stream and reader are left dangling — that's the leak.
+    if (cleanupRef.current) {
+      cleanupRef.current();
+      cleanupRef.current = null;
+    }
+
+    // Also cancel any pending reconnect timer so we don't race with a new one.
+    if (reconnectTimer.current) {
+      clearTimeout(reconnectTimer.current);
+      reconnectTimer.current = null;
     }
 
     const controller = new AbortController();
@@ -90,17 +103,23 @@ export function SSEProvider({ children }: { children: React.ReactNode }) {
         if (controller.signal.aborted) return;
         setConnected(false);
         setError(err instanceof Error ? err.message : "SSE disconnected");
-        reconnectTimer.current = setTimeout(
-          () => connectFnRef.current(),
-          RECONNECT_DELAY
-        );
+        reconnectTimer.current = setTimeout(() => {
+          connectFnRef.current?.();
+        }, RECONNECT_DELAY);
       });
 
-    return () => {
+    // Store the cleanup function so reconnects can call it first,
+    // and so the useEffect cleanup can also invoke it.
+    const cleanup = () => {
       controller.abort();
     };
+    cleanupRef.current = cleanup;
+
+    return cleanup;
   }, []);
 
+  // Keep connectFnRef in sync so the reconnection path can call back into connect
+  // without triggering the eslint react-hooks/immutability "access before declared" error.
   useEffect(() => {
     connectFnRef.current = connect;
   }, [connect]);
@@ -110,6 +129,7 @@ export function SSEProvider({ children }: { children: React.ReactNode }) {
     return () => {
       cleanup();
       if (reconnectTimer.current) clearTimeout(reconnectTimer.current);
+      cleanupRef.current = null;
     };
   }, [connect]);
 

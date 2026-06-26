@@ -288,6 +288,24 @@ class RESTWorldClient:
             json=member_data,
         )
 
+    async def propose_rule(
+        self, org_id: str, rule_data: dict[str, Any]
+    ) -> dict[str, Any]:
+        return await self._request(
+            "POST",
+            f"/api/v1/legislation/cycles/{org_id}/rules",
+            json=rule_data,
+        )
+
+    async def vote_rule(
+        self, rule_id: str, vote_data: dict[str, Any]
+    ) -> dict[str, Any]:
+        return await self._request(
+            "POST",
+            f"/api/v1/rules/dsl/rules/{rule_id}/vote",
+            json=vote_data,
+        )
+
     async def practice_skill(self, skill_name: str) -> dict[str, Any]:
         return await self.submit_action("practice_skill", {"skill_name": skill_name})
 

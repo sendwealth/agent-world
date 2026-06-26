@@ -17,7 +17,8 @@ Configuration (all via environment variables)::
 
     LLM_RATE_LIMIT_RATE       — tokens/sec  (default 2.0)
     LLM_RATE_LIMIT_BURST      — bucket size (default 4)
-    LLM_RATE_LIMIT_PATH       — lock file path (default $HOME/.cache/agent-world/llm_rate_limit.lock)
+    LLM_RATE_LIMIT_PATH — lock file path
+        (default $HOME/.cache/agent-world/llm_rate_limit.lock)
 """
 
 from __future__ import annotations

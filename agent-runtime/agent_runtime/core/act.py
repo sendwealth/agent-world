@@ -183,6 +183,18 @@ class WorldClientProtocol(Protocol):
 
     async def complete_bounty(self, bounty_id: str, result: str) -> dict[str, Any]: ...
 
+    async def form_org(self, org_data: dict[str, Any]) -> dict[str, Any]: ...
+
+    async def join_org(self, org_id: str, member_data: dict[str, Any]) -> dict[str, Any]: ...
+
+    async def propose_rule(
+        self, org_id: str, rule_data: dict[str, Any]
+    ) -> dict[str, Any]: ...
+
+    async def vote_rule(
+        self, rule_id: str, vote_data: dict[str, Any]
+    ) -> dict[str, Any]: ...
+
 
 @dataclass
 class ActionContext:
@@ -551,43 +563,29 @@ class ActionExecutor:
         message = context.parameters.get("message", "")
         return await context.world.socialize(target_agent_id, message)
     async def _handle_form_org(self, context: ActionContext) -> dict[str, Any]:
-        """Form a new organization — sent as a WILL message to World Engine."""
+        """Form a new organization — delegates to the world client REST endpoint."""
         org_name = context.parameters.get("org_name", "")
         org_type = context.parameters.get("org_type", "")
         charter = context.parameters.get("charter", "")
         founding_members = context.parameters.get("founding_members", [])
         if not org_name:
             raise ValueError("form_org requires 'org_name' parameter")
-        return await context.world.send_message(
-            {
-                "type": "WILL",
-                "payload": {
-                    "action": "form_org",
-                    "org_name": org_name,
-                    "org_type": org_type,
-                    "charter": charter,
-                    "founding_members": founding_members,
-                },
-            }
-        )
+        return await context.world.form_org({
+            "org_name": org_name,
+            "org_type": org_type,
+            "charter": charter,
+            "founding_members": founding_members,
+        })
 
     async def _handle_join_org(self, context: ActionContext) -> dict[str, Any]:
-        """Join an existing organization — sent as a PROPOSE message to World Engine."""
+        """Join an existing organization — delegates to the world client REST endpoint."""
         org_id = context.parameters.get("org_id", "")
         if not org_id:
             raise ValueError("join_org requires 'org_id' parameter")
-        return await context.world.send_message(
-            {
-                "type": "PROPOSE",
-                "payload": {
-                    "action": "join_org",
-                    "org_id": org_id,
-                },
-            }
-        )
+        return await context.world.join_org(org_id, {})
 
     async def _handle_propose_rule(self, context: ActionContext) -> dict[str, Any]:
-        """Propose a new soft rule — sent as a WILL message to World Engine."""
+        """Propose a new soft rule — delegates to the world client REST endpoint."""
         org_id = context.parameters.get("org_id", "")
         title = context.parameters.get("title", "")
         description = context.parameters.get("description", "")
@@ -598,37 +596,21 @@ class ActionExecutor:
             raise ValueError("propose_rule requires 'org_id' parameter")
         if not title:
             raise ValueError("propose_rule requires 'title' parameter")
-        return await context.world.send_message(
-            {
-                "type": "WILL",
-                "payload": {
-                    "action": "propose_rule",
-                    "org_id": org_id,
-                    "title": title,
-                    "description": description,
-                    "rule_type": rule_type,
-                    "conditions": conditions,
-                    "effects": effects,
-                },
-            }
-        )
+        return await context.world.propose_rule(org_id, {
+            "title": title,
+            "description": description,
+            "rule_type": rule_type,
+            "conditions": conditions,
+            "effects": effects,
+        })
 
     async def _handle_vote_rule(self, context: ActionContext) -> dict[str, Any]:
-        """Vote on a proposed soft rule — sent as a PROPOSE message to World Engine."""
+        """Vote on a proposed soft rule — delegates to the world client REST endpoint."""
         rule_id = context.parameters.get("rule_id", "")
         support = context.parameters.get("support", True)
         if not rule_id:
             raise ValueError("vote_rule requires 'rule_id' parameter")
-        return await context.world.send_message(
-            {
-                "type": "PROPOSE",
-                "payload": {
-                    "action": "vote_rule",
-                    "rule_id": rule_id,
-                    "support": support,
-                },
-            }
-        )
+        return await context.world.vote_rule(rule_id, {"support": support})
 
     async def _handle_respond_oracle(self, context: ActionContext) -> dict[str, Any]:
         """Respond to an Oracle message from a human."""

@@ -28,7 +28,6 @@ export default function TrustPage() {
   }, []);
 
   useEffect(() => {
-    /* eslint-disable react-hooks/set-state-in-effect */
     loadData();
     const interval = setInterval(loadData, 10000);
     return () => clearInterval(interval);
@@ -57,7 +56,6 @@ export default function TrustPage() {
   }, [agentFilter]);
 
   useEffect(() => {
-    /* eslint-disable react-hooks/set-state-in-effect */
     if (agentFilter.trim()) {
       loadRelationships();
     }

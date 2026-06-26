@@ -51,7 +51,6 @@ export default function LegislationPage() {
   }, []);
 
   useEffect(() => {
-    /* eslint-disable react-hooks/set-state-in-effect */
     loadData();
     const interval = setInterval(loadData, 10000);
     return () => clearInterval(interval);

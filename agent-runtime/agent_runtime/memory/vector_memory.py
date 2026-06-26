@@ -251,8 +251,11 @@ class VectorMemory:
         if self._count() > self._max_entries:
             self._evict_one()
 
+        row_id = cursor.lastrowid
+        assert row_id is not None, "INSERT should have produced a row ID"
+
         entry = VectorMemoryEntry(
-            id=cursor.lastrowid,
+            id=row_id,
             content=content,
             memory_type=memory_type,
             importance=importance,

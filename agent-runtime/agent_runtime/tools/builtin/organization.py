@@ -80,7 +80,7 @@ class OrganizationTool(WorldEngineTool):
             elif action == "list":
                 return await self._list(params)
             elif action == "get":
-                return await self._get(params)
+                return await self._get_org(params)
             elif action == "join":
                 return await self._join(params)
             elif action == "leave":
@@ -114,7 +114,7 @@ class OrganizationTool(WorldEngineTool):
         data = await self._get("/orgs")
         return ToolResult(tool_name=self.name, status=ToolStatus.SUCCESS, output=data)
 
-    async def _get(self, params: OrganizationParams) -> ToolResult:
+    async def _get_org(self, params: OrganizationParams) -> ToolResult:
         data = await self._get(f"/orgs/{params.org_id}")
         return ToolResult(tool_name=self.name, status=ToolStatus.SUCCESS, output=data)
 

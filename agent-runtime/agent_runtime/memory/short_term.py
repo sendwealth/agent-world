@@ -188,7 +188,7 @@ class ShortTermMemory:
             self._evict_one()
 
         entry = ShortTermMemoryEntry(
-            id=cursor.lastrowid,
+            id=cursor.lastrowid or 0,
             content=content,
             importance=importance,
             created_tick=tick,

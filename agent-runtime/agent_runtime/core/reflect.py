@@ -516,11 +516,11 @@ class ReflectionEngine:
         # Fallback: check long-term memory for strategies
         if self._ltm is not None:
             try:
-                strategies = self._ltm.get_recent(top_k=3, category="strategy")
-                if strategies:
+                ltm_strategies = self._ltm.get_recent(top_k=3, category="strategy")
+                if ltm_strategies:
                     return "\n".join(
                         f"  - {s.content} (importance: {s.importance:.2f})"
-                        for s in strategies
+                        for s in ltm_strategies
                     )
             except Exception:
                 pass

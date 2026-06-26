@@ -372,11 +372,11 @@ def _parse_live_metrics(timeline: Any) -> list[MetricSnapshot]:
             continue
         metrics.append(
             MetricSnapshot(
-                tick=int(s.get("tick", 0)),
-                population=int(s.get("total_population", s.get("population", 0))),
-                active_agents=int(s.get("active_agents", s.get("population", 0))),
-                gdp=float(s.get("gdp", 0.0)),
-                gini=float(s.get("gini_coefficient", s.get("gini", 0.0))),
+                tick=int(s.get("tick") or 0),
+                population=int(s.get("total_population", s.get("population")) or 0),
+                active_agents=int(s.get("active_agents", s.get("population")) or 0),
+                gdp=float(s.get("gdp") or 0.0),
+                gini=float(s.get("gini_coefficient", s.get("gini")) or 0.0),
             )
         )
     return metrics

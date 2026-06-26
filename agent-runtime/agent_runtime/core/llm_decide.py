@@ -121,7 +121,7 @@ class LLMDecisionProvider:
         dec_survival = _survival_to_assessment(survival)
 
         try:
-            result = await self._engine.decide(state, dec_perception, dec_survival)
+            result = await self._engine.decide(state, dec_perception, dec_survival)  # type: ignore[arg-type]
             action_type = _map_decision_action(result.action)
 
             # If the DecisionAction mapped to an unexecutable action,

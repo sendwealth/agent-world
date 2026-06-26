@@ -65,7 +65,7 @@ class TickSnapshot:
     finished_at: str = ""
     total_duration_ms: float = 0.0
 
-    def get_phase(self, phase: TracePhase) -> PhaseSnapshot | None:
+    def get_phase(self, phase: TracePhase | str) -> PhaseSnapshot | None:
         """Get the snapshot for a specific phase, if recorded."""
         for p in self.phases:
             if p.phase == phase:

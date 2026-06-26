@@ -313,7 +313,12 @@ class ABExperiment:
         """Run both experiments via the World Engine API."""
         from agent_runtime.experiment.world_engine_adapter import WorldEngineAdapter
 
-        async with WorldEngineAdapter(self.world_engine_url) as adapter:
+        # Narrow type: this method is only called when world_engine_url is truthy,
+        # but mypy cannot track the caller-side guard, so we assert here.
+        url = self.world_engine_url
+        assert url is not None
+
+        async with WorldEngineAdapter(url) as adapter:
             # Create experiment with two variants
             exp_id = await adapter.create_experiment(
                 name=f"{config_a.name} vs {config_b.name}",

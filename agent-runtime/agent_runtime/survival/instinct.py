@@ -550,11 +550,11 @@ class SurvivalInstinct:
         if a2a_client is not None:
             try:
                 if ema.action_type == EmergencyActionType.BROADCAST_SOS:
-                    token_ratio = ema.parameters.get("token_ratio", 0)
+                    token_ratio: object = ema.parameters.get("token_ratio", 0)
                     # Safely format the ratio — handle non-float values.
-                    try:
+                    if isinstance(token_ratio, (int, float)):
                         ratio_str = f"{float(token_ratio):.1%}"
-                    except (TypeError, ValueError):
+                    else:
                         ratio_str = "unknown"
 
                     msg_result = await a2a_client.broadcast_message(

@@ -193,7 +193,7 @@ class LongTermMemory:
             self._evict_one()
 
         entry = LongTermMemoryEntry(
-            id=cursor.lastrowid,
+            id=cursor.lastrowid or 0,
             content=content,
             category=category,
             importance=importance,

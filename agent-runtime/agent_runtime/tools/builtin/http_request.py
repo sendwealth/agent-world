@@ -112,7 +112,7 @@ class HttpRequestTool(Tool):
                 if params.body and method in {"POST", "PUT", "PATCH"}:
                     kwargs["content"] = params.body
 
-                response = await request_fn(params.url, **kwargs)
+                response = await request_fn(params.url, **kwargs)  # type: ignore[operator]
                 elapsed = (time.monotonic() - start) * 1000
 
                 # Try to parse JSON, fall back to text

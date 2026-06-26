@@ -213,7 +213,7 @@ def _render_title_card(
     for i in range(n_frames):
         fig = plt.figure(figsize=(FIG_W, FIG_H), dpi=DPI)
         fig.patch.set_facecolor(BG_COLOUR)
-        ax = fig.add_axes([0, 0, 1, 1])
+        ax = fig.add_axes((0, 0, 1, 1))
         ax.set_facecolor(BG_COLOUR)
         ax.set_xlim(0, 1)
         ax.set_ylim(0, 1)

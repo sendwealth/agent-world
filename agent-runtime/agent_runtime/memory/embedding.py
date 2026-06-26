@@ -266,6 +266,7 @@ class SentenceTransformerEmbeddingProvider:
     def embed_batch(self, texts: list[str]) -> list[list[float]]:
         """Generate embedding vectors for multiple texts using the local model."""
         self._load_model()
+        assert self._model is not None
         import numpy as np
 
         embeddings = self._model.encode(texts, convert_to_numpy=True, normalize_embeddings=True)

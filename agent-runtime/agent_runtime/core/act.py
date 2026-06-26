@@ -143,6 +143,9 @@ class AgentStateProtocol(Protocol):
     """Minimal interface ActionExecutor needs from agent state."""
 
     @property
+    def id(self) -> str: ...
+
+    @property
     def tokens(self) -> int: ...
 
     def adjust_tokens(self, delta: int) -> None: ...
@@ -273,6 +276,9 @@ class ActionExecutor:
         start_time = time.monotonic()
         start_ts = time.time()
 
+        # Declare result upfront so every branch assigns to the same typed variable.
+        result: ActionResult | None = None
+
         # 0. InterventionChecker — pre-dispatch safety gate
         intervention_result = self._intervention.check(
             action_type=action_type.value,
@@ -315,7 +321,6 @@ class ActionExecutor:
         # 3. Execute with retry
         last_error: str | None = None
         attempts = 0
-        result: ActionResult | None = None
 
         for attempt in range(1, self._max_retries + 1):
             attempts = attempt

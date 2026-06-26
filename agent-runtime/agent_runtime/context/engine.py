@@ -319,7 +319,7 @@ class DefaultSurvivalSource:
         items: list[ContextItem] = []
 
         mode = getattr(survival, "mode", None)
-        mode_value = mode.value if hasattr(mode, "value") else str(mode)
+        mode_value = mode.value if mode is not None and hasattr(mode, "value") else str(mode)
         token_ratio = getattr(survival, "token_ratio", 1.0)
 
         items.append(
@@ -357,7 +357,7 @@ class DefaultStateSource:
         money = getattr(state, "money", 0.0)
         reputation = getattr(state, "reputation", 0.0)
         phase = getattr(state, "phase", None)
-        phase_value = phase.value if hasattr(phase, "value") else str(phase)
+        phase_value = phase.value if phase is not None and hasattr(phase, "value") else str(phase)
 
         token_ratio = tokens / max_tokens if max_tokens > 0 else 0.0
 

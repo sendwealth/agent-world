@@ -107,11 +107,15 @@ class BehaviorLogExporter:
                 action = ""
                 output = phase.output_data
                 if isinstance(output, dict):
-                    action = output.get("action_type", output.get("action", ""))
+                    action = output.get("action_type", "") or ""
+                    if not action:
+                        action = output.get("action", "") or ""
                 elif isinstance(output, str):
                     try:
                         parsed = json.loads(output)
-                        action = parsed.get("action_type", parsed.get("action", ""))
+                        action = parsed.get("action_type", "") or ""
+                        if not action:
+                            action = parsed.get("action", "") or ""
                     except (json.JSONDecodeError, AttributeError):
                         pass
 

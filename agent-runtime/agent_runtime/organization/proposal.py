@@ -238,9 +238,14 @@ class ProposalGenerator:
         }
 
         if conditions.triggers:
-            trigger_type = type_purpose.get(
-                conditions.triggers[0],
-                type_purpose[OrgType.COLLECTIVE],
-            )
+            # Map primary trigger to an org-type purpose for appending.
+            trigger_reason = conditions.triggers[0]
+            reason_to_orgtype: dict[FormationReason, OrgType] = {
+                FormationReason.SHARED_INTERESTS: OrgType.GUILD,
+                FormationReason.GEOGRAPHIC_PROXIMITY: OrgType.ALLIANCE,
+                FormationReason.ECONOMIC_COMPLEMENTARITY: OrgType.SYNDICATE,
+            }
+            mapped_type = reason_to_orgtype.get(trigger_reason, OrgType.COLLECTIVE)
+            trigger_type = type_purpose[mapped_type]
             return f"{charter_body} {trigger_type}"
         return f"{charter_body} {type_purpose[OrgType.COLLECTIVE]}"

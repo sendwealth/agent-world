@@ -1376,11 +1376,11 @@ def _create_llm_decision_provider(config: RuntimeConfig) -> Any | None:
         # The inner LLMDecisionProvider talks through the queue (not the raw
         # provider) so all LLM calls are routed through priority scheduling
         # and concurrency control.
-        inner_provider = LLMDecisionProvider(llm_provider=queue)
+        inner_provider = LLMDecisionProvider(llm_provider=queue)  # type: ignore[arg-type]
         async_provider = AsyncDecisionProvider(inner=inner_provider)
 
         # Attach the queue so run_agent can stop it during shutdown
-        async_provider._queue = queue
+        setattr(async_provider, "_queue", queue)  # type: ignore[attr-defined]
 
         logger.info(
             "Using AsyncDecisionProvider + LLMQueue "
@@ -1445,8 +1445,8 @@ def _create_social_context_provider(
             return list(nearby_cache)
 
         provider = DefaultSocialContextProvider(
-            profile_source=_profile_source,
-            nearby_source=_nearby_source,
+            profile_source=_profile_source,  # type: ignore[arg-type]
+            nearby_source=_nearby_source,  # type: ignore[arg-type]
         )
         logger.info("SocialContextProvider created for agent %s", state.name)
         return provider, nearby_cache

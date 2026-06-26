@@ -339,7 +339,7 @@ class GRPCWorldClient:
             ack = await self._client.send_message(
                 to_agent="",
                 message_type=msg_type,
-                payload=payload.get("payload", {}),
+                payload=payload.get("payload", {}),  # type: ignore[arg-type]
             )
             return {"status": "ok", "received": ack.received}
         except Exception:

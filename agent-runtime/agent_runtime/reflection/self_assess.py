@@ -470,6 +470,7 @@ class ReflectionEngine:
         """Use the LLM to evaluate strategy and recommend adjustments."""
         prompt = self._build_prompt(state, tick, metrics)
 
+        assert self._llm is not None
         try:
             response = await self._llm.chat(
                 [LLMMessage(role="user", content=prompt)],

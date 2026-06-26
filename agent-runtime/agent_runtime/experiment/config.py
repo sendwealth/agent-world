@@ -275,7 +275,7 @@ class ExperimentConfig:
             exp = raw.get("experiment", raw)
 
         return cls(
-            experiment_id=exp.get("id", exp.get("experiment_id", "unnamed")),
+            experiment_id=str(exp.get("id", exp.get("experiment_id", "unnamed")) or "unnamed"),
             name=exp.get("name", "Unnamed Experiment"),
             seed=exp.get("seed", 42),
             duration_ticks=exp.get("duration_ticks", 10000),

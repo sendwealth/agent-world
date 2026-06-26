@@ -90,7 +90,7 @@ class EscrowTool(WorldEngineTool):
             handlers = {
                 "create": self._create,
                 "list": self._list,
-                "get": self._get,
+                "get": self._get_escrow,
                 "claim": self._claim,
                 "complete": self._complete,
                 "refund": self._refund,
@@ -124,7 +124,7 @@ class EscrowTool(WorldEngineTool):
         data = await self._get("/escrow")
         return ToolResult(tool_name=self.name, status=ToolStatus.SUCCESS, output=data)
 
-    async def _get(self, p: EscrowParams) -> ToolResult:
+    async def _get_escrow(self, p: EscrowParams) -> ToolResult:
         data = await self._get(f"/escrow/{p.escrow_id}")
         return ToolResult(tool_name=self.name, status=ToolStatus.SUCCESS, output=data)
 

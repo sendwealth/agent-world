@@ -12,7 +12,7 @@ import json
 import logging
 import os
 from dataclasses import dataclass
-from typing import AsyncIterator
+from typing import Any, AsyncIterator
 
 import httpx
 
@@ -233,8 +233,8 @@ class OllamaProvider(LLMProvider):
         stream: bool = False,
         max_tokens: int | None = None,
         temperature: float | None = None,
-    ) -> dict:
-        options: dict = {}
+    ) -> dict[str, Any]:
+        options: dict[str, Any] = {}
         if max_tokens is not None:
             options["num_predict"] = max_tokens
         else:
@@ -251,7 +251,7 @@ class OllamaProvider(LLMProvider):
         elif self._config.temperature is not None:
             options["temperature"] = self._config.temperature
 
-        payload: dict = {
+        payload: dict[str, Any] = {
             "model": self._config.model,
             "messages": [{"role": m.role, "content": m.content} for m in messages],
             "stream": stream,
@@ -261,7 +261,7 @@ class OllamaProvider(LLMProvider):
         return payload
 
     @staticmethod
-    def _parse_response(data: dict) -> LLMResponse:
+    def _parse_response(data: dict[str, Any]) -> LLMResponse:
         content = data.get("message", {}).get("content", "")
         eval_count = data.get("eval_count", 0) or 0
         prompt_eval_count = data.get("prompt_eval_count", 0) or 0

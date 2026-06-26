@@ -9,7 +9,7 @@ import asyncio
 import json
 import logging
 import os
-from typing import AsyncIterator
+from typing import Any, AsyncIterator
 
 import httpx
 
@@ -151,12 +151,15 @@ class AnthropicProvider(LLMProvider):
         """Compute exponential backoff with jitter for 429 retries."""
         import random
 
-        min_backoff = float(os.environ.get("LLM_MIN_BACKOFF_SECONDS", "1.0"))
-        max_backoff = float(os.environ.get("LLM_MAX_BACKOFF_SECONDS", "60.0"))
-        jitter_factor = float(os.environ.get("LLM_JITTER_FACTOR", "0.25"))
+        min_backoff_str = os.environ.get("LLM_MIN_BACKOFF_SECONDS", "1.0")
+        max_backoff_str = os.environ.get("LLM_MAX_BACKOFF_SECONDS", "60.0")
+        jitter_factor_str = os.environ.get("LLM_JITTER_FACTOR", "0.25")
+        min_backoff: float = float(min_backoff_str)
+        max_backoff: float = float(max_backoff_str)
+        jitter_factor: float = float(jitter_factor_str)
         exponential = min_backoff * (2 ** attempt)
         clamped = min(exponential, max_backoff)
-        jitter = clamped * jitter_factor * random.uniform(-1, 1)
+        jitter: float = clamped * jitter_factor * float(random.uniform(-1, 1))
         return max(0.0, jitter)
 
     def _headers(self) -> dict[str, str]:
@@ -176,8 +179,8 @@ class AnthropicProvider(LLMProvider):
         stream: bool = False,
         max_tokens: int | None = None,
         temperature: float | None = None,
-    ) -> dict:
-        payload: dict = {
+    ) -> dict[str, Any]:
+        payload: dict[str, Any] = {
             "model": self._config.model,
             "messages": [{"role": m.role, "content": m.content} for m in messages],
             "max_tokens": max_tokens if max_tokens is not None else self._config.max_tokens,
@@ -207,7 +210,7 @@ class AnthropicProvider(LLMProvider):
         return system, chat_msgs
 
     @staticmethod
-    def _parse_response(data: dict) -> LLMResponse:
+    def _parse_response(data: dict[str, Any]) -> LLMResponse:
         content_blocks = data.get("content", [])
         text = "".join(block["text"] for block in content_blocks if block.get("type") == "text")
         usage_data = data.get("usage", {})

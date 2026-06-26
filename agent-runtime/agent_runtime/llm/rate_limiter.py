@@ -151,6 +151,8 @@ class RateLimiter:
     _STATE_KEYS = {"tokens", "_now"}
 
     def _read_state(self) -> dict:
+        if self._lock_fd is None:
+            return {"tokens": float(self._burst), "_now": time.monotonic()}
         try:
             self._lock_fd.seek(0)
             text = self._lock_fd.read().strip()

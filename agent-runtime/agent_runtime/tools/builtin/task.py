@@ -106,7 +106,7 @@ class TaskTool(WorldEngineTool):
             elif action == "list":
                 return await self._list(params)
             elif action == "get":
-                return await self._get(params)
+                return await self._get_task(params)
             elif action == "claim":
                 return await self._claim(params)
             elif action == "start":
@@ -120,7 +120,7 @@ class TaskTool(WorldEngineTool):
             elif action == "expire":
                 return await self._expire(params)
             elif action == "delete":
-                return await self._delete(params)
+                return await self._delete_task(params)
             elif action == "list_coordination":
                 return await self._list_coordination(params)
             elif action == "join_coordination":
@@ -159,7 +159,7 @@ class TaskTool(WorldEngineTool):
         data = await self._get("/tasks", params=query)
         return ToolResult(tool_name=self.name, status=ToolStatus.SUCCESS, output=data)
 
-    async def _get(self, params: TaskParams) -> ToolResult:
+    async def _get_task(self, params: TaskParams) -> ToolResult:
         data = await self._get(f"/tasks/{params.task_id}")
         return ToolResult(tool_name=self.name, status=ToolStatus.SUCCESS, output=data)
 
@@ -200,7 +200,7 @@ class TaskTool(WorldEngineTool):
         data = await self._post(f"/tasks/{params.task_id}/expire", json={})
         return ToolResult(tool_name=self.name, status=ToolStatus.SUCCESS, output=data)
 
-    async def _delete(self, params: TaskParams) -> ToolResult:
+    async def _delete_task(self, params: TaskParams) -> ToolResult:
         data = await self._delete(f"/tasks/{params.task_id}")
         return ToolResult(tool_name=self.name, status=ToolStatus.SUCCESS, output=data)
 

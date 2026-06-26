@@ -103,6 +103,9 @@ jobs:
       - name: Ruff check
         run: ruff check .
 
+      - name: Mypy type check
+        run: mypy agent_runtime/
+
       - name: Pytest
         run: pytest -v
 

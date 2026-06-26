@@ -263,13 +263,13 @@ def survival_pie(
     sizes = [alive, dead]
     labels = [f"Alive ({alive})", f"Dead ({dead})"]
     colors = [_COLORS["success"], _COLORS["danger"]]
-    explode = (0.05, 0)
+    explode: tuple[float, ...] = (0.05, 0.0)
 
     if alive + dead == 0:
         sizes = [1]
         labels = ["No Data"]
         colors = [_COLORS["grid"]]
-        explode = (0,)
+        explode = (0.0,)
 
     wedges, texts, autotexts = ax.pie(
         sizes, explode=explode if len(sizes) > 1 else None,

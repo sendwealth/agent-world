@@ -66,15 +66,15 @@ class CulturalDiffusion:
         # Nudge each agent toward regional average
         total_adj: Dict[str, float] = {d: 0.0 for d in dim_names}
         for agent in agents:
-            v: ValueWeights = agent["values"]
+            agent_values: ValueWeights = agent["values"]
             for d in dim_names:
-                current = getattr(v, d)
+                current = getattr(agent_values, d)
                 diff = avg[d] - current
                 # Apply at most CULTURAL_DIFFUSION_RATE per dimension
                 delta = max(-CULTURAL_DIFFUSION_RATE, min(CULTURAL_DIFFUSION_RATE, diff))
                 new_val = max(0.0, min(1.0, current + delta))
                 actual_delta = new_val - current
-                object.__setattr__(v, d, new_val)
+                object.__setattr__(agent_values, d, new_val)
                 total_adj[d] += abs(actual_delta)
 
         logger.debug(
@@ -128,7 +128,7 @@ class CulturalDiffusion:
 
         for member in members:
             v: ValueWeights = member["values"]
-            p: PersonalityVector = member.get("personality", None)
+            p: PersonalityVector | None = member.get("personality")
 
             for d in dim_names:
                 current = getattr(v, d)

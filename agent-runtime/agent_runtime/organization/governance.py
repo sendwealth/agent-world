@@ -137,7 +137,7 @@ class Candidate:
     agent_id: str
     wealth: float = 0.0
     skills: dict[str, int] = field(default_factory=dict)
-    goals: list[str] = field(default_factory=dict)
+    goals: list[str] = field(default_factory=list)
     reputation: float = 0.5
 
 

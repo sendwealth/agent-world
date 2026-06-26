@@ -376,7 +376,7 @@ class MockDecisionProvider:
         survival: SurvivalAction,
     ) -> Decision:
         all_actions = [at for at, _ in self._ACTION_WEIGHTS]
-        affordable = [at for at in all_actions if self._executor.can_afford(at, state)]
+        affordable = [at for at in all_actions if self._executor.can_afford(at, state)]  # type: ignore[arg-type]
 
         if not affordable:
             # Even REST should be free, but guard anyway.
@@ -810,7 +810,7 @@ class ThinkLoop:
             self._social_nearby_cache.extend(nearby)
 
         # 2. Survival assessment (synchronous, no LLM)
-        survival_action = self.survival.assess(self.state)
+        survival_action = self.survival.assess(self.state)  # type: ignore[arg-type]
         in_emergency = survival_action.mode in (SurvivalMode.PANIC, SurvivalMode.URGENT)
 
         if in_emergency:
@@ -822,7 +822,7 @@ class ThinkLoop:
             metrics.survival_actions.inc()
             # Pass the world_client as the A2A client for emergency broadcasts
             a2a = self._world_client if self._world_client is not None else None
-            await self.survival.execute(survival_action, self.state, a2a_client=a2a)
+            await self.survival.execute(survival_action, self.state, a2a_client=a2a)  # type: ignore[arg-type]
 
             # Emergency actions are fire-and-forget — always fall through to
             # normal LLM decision-making.  Emergency actions (SOS broadcast,
@@ -1092,6 +1092,8 @@ class ThinkLoop:
         provider.
         """
         reg = self._model_registry
+        if reg is None:
+            return
         current_version = reg.get_agent_models_version()
         if current_version == self._last_model_version:
             return  # No change

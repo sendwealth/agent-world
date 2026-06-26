@@ -7,6 +7,7 @@ persisted to JSONL files for offline analysis.
 from __future__ import annotations
 
 import asyncio
+import io
 import json
 import logging
 from dataclasses import asdict, dataclass
@@ -59,7 +60,7 @@ class DecisionLogStore:
     def __init__(self, path: str | Path | None = None) -> None:
         self._logs: list[DecisionLog] = []
         self._path = Path(path) if path else None
-        self._fh: object | None = None  # TextIO when open
+        self._fh: io.IOBase | None = None  # TextIO when open
         self._lock: asyncio.Lock | None = None
 
     def _get_lock(self) -> asyncio.Lock:

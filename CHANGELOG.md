@@ -5,36 +5,38 @@ All notable changes to Agent World will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased]
+## [1.1.0] - 2026-06-26
 
-### Fixed — 外部 Agent 运行时关键修复 (2026-06-12)
+**External Agent Runtime (Python) + Docker mode critical fixes.** Resolves core bugs preventing external agents from operating correctly, including token exhaustion, deadlock in urgent mode, and world engine data sync issues.
 
-修复了外部 Agent（Python runtime + Docker）模式下多个导致系统无法正常运行的核心问题。
+### Fixed
 
 **Agent Runtime (Python)**
-- 初始 token 量从 500 → 100,000：`AgentSpawnConfig` 默认值和 `parse_runtime_config` fallback 均已修复（之前约 167 tick 后 token 耗尽进入 URGENT 模式）
-- URGENT 模式死循环：紧急操作（broadcast_message）在 REST 模式下不可用导致无限空转，现在连续失败 3 次后自动降级到正常 LLM 决策
-- Agent 创建时 phase 直接设为 `ADULT`，跳过不适用的 BIRTH/CHILDHOOD 阶段
-- `broadcast_message` 等不支持的操作降级为 warning 而非 NotImplementedError
+- Initial token cap from 500 → 100,000: `AgentSpawnConfig` default and `parse_runtime_config` fallback both fixed (before, tokens exhausted after ~167 ticks, entering URGENT mode)
+- URGENT mode infinite loop: urgent ops (`broadcast_message`) unavailable in REST mode caused idle spin — now auto-degrades to normal LLM decision after 3 consecutive failures
+- Agent creation sets phase to `ADULT` immediately, skipping inapplicable BIRTH/CHILDHOOD stages
+- Unsupported ops like `broadcast_message` degrade to warning instead of `NotImplementedError`
 
 **World Engine (Rust)**
-- `WorldState.agents` 注册同步：外部 agent 注册时同时写入 `AppState.agents` 和 `WorldState.agents`，metrics `agents_alive` 不再为 0
-- `AgentDto` 新增 `created_at` 时间戳字段（RFC3339），注册/spawn 时自动记录
-- Action handler 更新 `ticks_survived`（每次 +1）和 `phase`，agent 数据不再永远是初始值
-- `AppState` 新增 `world_state` 引用，桥接 API 层与调度器的数据隔离问题
+- `WorldState.agents` registration sync: external agents now update both `AppState.agents` and `WorldState.agents`, metrics `agents_alive` no longer 0
+- `AgentDto` adds `created_at` timestamp field (RFC3339), auto-recorded on register/spawn
+- Action handler updates `ticks_survived` (+1 each tick) and `phase`, agent data no longer stays at initial values
+- `AppState` adds `world_state` reference, bridging API layer and scheduler data isolation
 
 **Dashboard (Next.js)**
-- API 信封自动解包：`fetchJSON`/`postJSON` 统一处理 `{data, error}` 响应格式，修复 marketplace 等页面崩溃
-- Agent 类型兼容 `created_at`（snake_case）和 `createdAt`（camelCase），修复 "Invalid Date" 显示
-- `formatDate()` 安全处理 null/undefined，显示"未知"而非 "Invalid Date"
-- 21 个页面全部返回 HTTP 200（agents, tasks, governance, trust, traces, economy 等）
-- `NEXT_PUBLIC_API_URL` 通过 Dockerfile ARG 在构建时嵌入，解决 standalone 模式 API 连接问题
-- CORS 设为 `*`，浏览器直接调用 world-engine API
+- API envelope auto-unpack: `fetchJSON`/`postJSON` unify handling of `{data, error}` response format, fixing marketplace and other page crashes
+- Agent type compatible with `created_at` (snake_case) and `createdAt` (camelCase), fixes "Invalid Date" display
+- `formatDate()` safely handles null/undefined, shows "Unknown" instead of "Invalid Date"
+- All 21 pages return HTTP 200 (agents, tasks, governance, trust, traces, economy, etc.)
+- `NEXT_PUBLIC_API_URL` embedded at build time via Dockerfile ARG, solving standalone mode API connectivity
+- CORS set to `*`, allowing direct browser calls to world-engine API
 
 **Tests**
-- 新增 7 个 URGENT fallback 测试（连续失败触发、成功重置、手动重置、自定义阈值、think-loop 集成）
+- Added 7 URGENT fallback tests (consecutive failure trigger, success reset, manual reset, custom threshold, think-loop integration)
 
 ---
+
+## [Unreleased]
 
 ## [1.0.0] - 2026-05-20
 
@@ -280,7 +282,8 @@ Phase 1 (Island) initial release -- core subsystems with E2E tests, Docker Compo
 
 ---
 
-[Unreleased]: https://github.com/sendwealth/agent-world/compare/v1.0.0...HEAD
+[Unreleased]: https://github.com/sendwealth/agent-world/compare/v1.1.0...HEAD
+[1.1.0]: https://github.com/sendwealth/agent-world/compare/v1.0.0...v1.1.0
 [1.0.0]: https://github.com/sendwealth/agent-world/compare/v0.3.0...v1.0.0
 [0.3.0]: https://github.com/sendwealth/agent-world/compare/v0.2.0...v0.3.0
 [0.2.0]: https://github.com/sendwealth/agent-world/compare/v0.1.0...v0.2.0

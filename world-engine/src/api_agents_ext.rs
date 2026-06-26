@@ -276,7 +276,6 @@ pub async fn execute_agent_action(
 
     // Execute action -- update position for "move", etc.
     let tick = *state.tick_rx.borrow();
-    let agent_name = agent.name.clone();
 
     // Token cost and income per action — single source of truth via HumanActionType.
     // Aligned with agent-runtime/agent_runtime/core/decide.py:_TOKEN_COSTS
@@ -921,9 +920,10 @@ pub async fn execute_agent_action(
 
     // Emit BalanceChanged event for dashboard visibility (token changes)
     if action_cost > 0 || token_income > 0 {
+        let agent_name = agent.name.clone();
         state.event_bus.emit(WorldEvent::BalanceChanged {
             agent_id: id.clone(),
-            agent_name: agent_name.clone(),
+            agent_name,
             currency: crate::world::enums::Currency::Token,
             old_balance: old_tokens,
             new_balance: agent.tokens,

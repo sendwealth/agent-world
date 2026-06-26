@@ -26,7 +26,9 @@ interface SSEContextValue {
 const SSEContext = createContext<SSEContextValue | null>(null);
 
 const MAX_EVENTS = 200;
-const RECONNECT_DELAY = 3000;
+const RECONNECT_BASE_MS = 1000;
+const RECONNECT_MAX_MS = 30000;
+let reconnectAttemptCount = 0;
 
 export function SSEProvider({ children }: { children: React.ReactNode }) {
   const [events, setEvents] = useState<WorldEvent[]>([]);
@@ -38,9 +40,6 @@ export function SSEProvider({ children }: { children: React.ReactNode }) {
   const reconnectTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   /** Cleanup from the currently active connect() — used to tear down old connections during reconnect. */
   const cleanupRef = useRef<(() => void) | null>(null);
-  /** Callable connect for reconnection (avoids the eslint react-hooks/immutability rule for self-reference). */
-  const connectFnRef = useRef<() => () => void | undefined>(undefined);
-
   const connect = useCallback(() => {
     // Properly tear down the previous connection before starting a new one.
     // Without this, each reconnect creates a new AbortController while the
@@ -67,6 +66,8 @@ export function SSEProvider({ children }: { children: React.ReactNode }) {
 
         setConnected(true);
         setError(null);
+        // Reset backoff counter on successful connection
+        reconnectAttemptCount = 0;
 
         const reader = res.body?.getReader();
         if (!reader) return;
@@ -103,9 +104,14 @@ export function SSEProvider({ children }: { children: React.ReactNode }) {
         if (controller.signal.aborted) return;
         setConnected(false);
         setError(err instanceof Error ? err.message : "SSE disconnected");
+        const delay = Math.min(
+          RECONNECT_BASE_MS * 2 ** reconnectAttemptCount,
+          RECONNECT_MAX_MS,
+        );
+        reconnectAttemptCount++;
         reconnectTimer.current = setTimeout(() => {
-          connectFnRef.current?.();
-        }, RECONNECT_DELAY);
+          connect();
+        }, delay);
       });
 
     // Store the cleanup function so reconnects can call it first,
@@ -117,12 +123,6 @@ export function SSEProvider({ children }: { children: React.ReactNode }) {
 
     return cleanup;
   }, []);
-
-  // Keep connectFnRef in sync so the reconnection path can call back into connect
-  // without triggering the eslint react-hooks/immutability "access before declared" error.
-  useEffect(() => {
-    connectFnRef.current = connect;
-  }, [connect]);
 
   useEffect(() => {
     const cleanup = connect();

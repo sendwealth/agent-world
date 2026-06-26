@@ -82,7 +82,13 @@ export async function putJSON<T>(path: string, body: unknown): Promise<T> {
     const err = await res.json().catch(() => ({ error: res.statusText }));
     throw new Error(err.error ?? `API error: ${res.status}`);
   }
-  return res.json() as Promise<T>;
+  const json = await res.json();
+  // Auto-unwrap {data: ..., error: ..., request_id: ...} envelope from world-engine
+  if (json && typeof json === "object" && !Array.isArray(json) && "data" in json && "error" in json) {
+    if (json.error) throw new Error(json.error);
+    return json.data as T;
+  }
+  return json as T;
 }
 
 export async function deleteJSON<T>(path: string): Promise<T> {
@@ -93,7 +99,13 @@ export async function deleteJSON<T>(path: string): Promise<T> {
     const err = await res.json().catch(() => ({ error: res.statusText }));
     throw new Error(err.error ?? `API error: ${res.status}`);
   }
-  return res.json() as Promise<T>;
+  const json = await res.json();
+  // Auto-unwrap {data: ..., error: ..., request_id: ...} envelope from world-engine
+  if (json && typeof json === "object" && !Array.isArray(json) && "data" in json && "error" in json) {
+    if (json.error) throw new Error(json.error);
+    return json.data as T;
+  }
+  return json as T;
 }
 
 export function sseEndpoint(path: string): string {

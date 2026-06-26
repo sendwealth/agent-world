@@ -9,10 +9,10 @@ These enums are the ground truth for the Python Agent Runtime; all lifecycle
 logic should reference these values rather than hard-coding strings.
 """
 
-from enum import Enum
+from enum import StrEnum
 
 
-class AgentPhase(str, Enum):
+class AgentPhase(StrEnum):
     """Lifecycle phases — aligned 1:1 with World Engine AgentPhase.
 
     Phase transition rules (from lifecycle.rs LifecycleMachine::can_transition):
@@ -35,7 +35,7 @@ class AgentPhase(str, Enum):
     DEAD = "dead"
 
 
-class DeathReason(str, Enum):
+class DeathReason(StrEnum):
     """Reason an agent has died — mirrors World Engine DeathReason."""
 
     TOKEN_DEPLETED = "token_depleted"
@@ -44,7 +44,7 @@ class DeathReason(str, Enum):
     NATURAL_DEATH = "natural_death"
 
 
-class SurvivalMode(str, Enum):
+class SurvivalMode(StrEnum):
     """Agent survival strategy — used by SurvivalInstinct.
 
     This is a *runtime-local* concern (not mirrored in World Engine).

@@ -13,7 +13,7 @@ from __future__ import annotations
 
 import json
 from dataclasses import dataclass, field
-from enum import Enum
+from enum import StrEnum
 from typing import Any
 
 # ---------------------------------------------------------------------------
@@ -21,7 +21,7 @@ from typing import Any
 # ---------------------------------------------------------------------------
 
 
-class StabilityLevel(str, Enum):
+class StabilityLevel(StrEnum):
     """Governance stability classification."""
 
     STABLE = "stable"
@@ -30,7 +30,7 @@ class StabilityLevel(str, Enum):
     TURBULENT = "turbulent"
 
 
-class ExportFormat(str, Enum):
+class ExportFormat(StrEnum):
     """Supported export formats."""
 
     JSON = "json"

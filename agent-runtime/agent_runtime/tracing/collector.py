@@ -18,7 +18,7 @@ from __future__ import annotations
 import asyncio
 import logging
 import time
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from typing import TYPE_CHECKING, Any
 from uuid import UUID
 
@@ -82,7 +82,7 @@ class TraceCollector:
         """Start collecting a new tick snapshot."""
         if not self.enabled:
             return
-        now_iso = datetime.now(timezone.utc).isoformat()
+        now_iso = datetime.now(UTC).isoformat()
         self._tick_start_time = time.monotonic()
         self._current = TickSnapshot(
             agent_id=self.agent_id,
@@ -133,7 +133,7 @@ class TraceCollector:
         if not self.enabled or self._current is None:
             return None
 
-        now_iso = datetime.now(timezone.utc).isoformat()
+        now_iso = datetime.now(UTC).isoformat()
         self._current.finished_at = now_iso
         self._current.total_duration_ms = (
             (time.monotonic() - self._tick_start_time) * 1000

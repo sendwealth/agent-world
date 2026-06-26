@@ -13,7 +13,7 @@ from __future__ import annotations
 import json
 import logging
 import time
-from typing import Any, Dict, Optional
+from typing import Any
 
 import httpx
 
@@ -32,8 +32,8 @@ class HttpRequestParams(ToolParameters):
 
     url: str
     method: str = "GET"
-    headers: Dict[str, str] = {}
-    body: Optional[str] = None
+    headers: dict[str, str] = {}
+    body: str | None = None
     timeout_seconds: float = 10.0
     follow_redirects: bool = True
 
@@ -108,7 +108,7 @@ class HttpRequestTool(Tool):
                     "HEAD": client.head,
                 }[method]
 
-                kwargs: Dict[str, Any] = {"headers": params.headers}
+                kwargs: dict[str, Any] = {"headers": params.headers}
                 if params.body and method in {"POST", "PUT", "PATCH"}:
                     kwargs["content"] = params.body
 

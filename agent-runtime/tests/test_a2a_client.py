@@ -402,7 +402,7 @@ class TestA2AClientRetry:
 
             client._stub.SendMessage = fake_send
 
-            with pytest.raises(Exception):
+            with pytest.raises(real_grpc.aio.AioRpcError):
                 await client.send_message(to_agent="bob")
 
 

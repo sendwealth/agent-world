@@ -14,7 +14,8 @@ from __future__ import annotations
 import asyncio
 import logging
 import random
-from typing import TYPE_CHECKING, AsyncIterator
+from collections.abc import AsyncIterator
+from typing import TYPE_CHECKING
 
 import grpc
 from protocol.gen.python import a2a_pb2, a2a_pb2_grpc
@@ -103,7 +104,7 @@ class A2AClient:
                 self._channel.channel_ready(),  # type: ignore[union-attr]
                 timeout=self._config.timeout,
             )
-        except asyncio.TimeoutError:
+        except TimeoutError:
             await self._channel.close()
             self._channel = None
             self._stub = None
@@ -128,7 +129,7 @@ class A2AClient:
     # Context manager support
     # ------------------------------------------------------------------
 
-    async def __aenter__(self) -> "A2AClient":
+    async def __aenter__(self) -> A2AClient:
         """Async context manager entry — open the gRPC channel."""
         await self.connect()
         return self
@@ -247,7 +248,7 @@ class A2AClient:
                     self._get_incoming_queue().get(), timeout=1.0
                 )
                 yield msg
-            except asyncio.TimeoutError:
+            except TimeoutError:
                 continue
 
     def drain_incoming(self) -> list[a2a_pb2.A2AMessage]:
@@ -349,7 +350,7 @@ class A2AClient:
                         self._get_send_queue().get(), timeout=1.0
                     )
                     yield msg
-                except asyncio.TimeoutError:
+                except TimeoutError:
                     continue
 
         call = self._stub.StreamMessages(request_iter())

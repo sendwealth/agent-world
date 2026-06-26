@@ -11,8 +11,8 @@ from __future__ import annotations
 
 import uuid
 from dataclasses import dataclass, field
-from enum import Enum
-from typing import Any, Dict, List, Optional
+from enum import StrEnum
+from typing import Any
 
 import pytest
 
@@ -24,7 +24,7 @@ from agent_runtime.models.values import ValueWeights
 # ═══════════════════════════════════════════════════════════════
 
 
-class OrgType(str, Enum):
+class OrgType(StrEnum):
     """Mirror of Rust OrgType enum."""
     COMPANY = "company"
     GUILD = "guild"
@@ -32,7 +32,7 @@ class OrgType(str, Enum):
     UNIVERSITY = "university"
 
 
-class OrgStatus(str, Enum):
+class OrgStatus(StrEnum):
     ACTIVE = "active"
     INACTIVE = "inactive"
     DISSOLVED = "dissolved"
@@ -45,17 +45,17 @@ class SimulatedOrg:
     name: str
     org_type: OrgType
     status: OrgStatus = OrgStatus.ACTIVE
-    members: List[str] = field(default_factory=list)
+    members: list[str] = field(default_factory=list)
     treasury: int = 100
     created_tick: int = 0
-    territory: Optional[str] = None
+    territory: str | None = None
 
 
 @dataclass
 class SimulatedWorldEvent:
     """Simulates a WorldEvent from the World Engine."""
     event_type: str
-    payload: Dict[str, Any]
+    payload: dict[str, Any]
 
 
 class MockWorldEngine:
@@ -66,9 +66,9 @@ class MockWorldEngine:
     """
 
     def __init__(self) -> None:
-        self.orgs: Dict[str, SimulatedOrg] = {}
-        self.agent_org_map: Dict[str, str] = {}  # agent_id -> org_id
-        self.events: List[SimulatedWorldEvent] = []
+        self.orgs: dict[str, SimulatedOrg] = {}
+        self.agent_org_map: dict[str, str] = {}  # agent_id -> org_id
+        self.events: list[SimulatedWorldEvent] = []
         self.tick: int = 0
 
     def advance_tick(self) -> None:
@@ -78,7 +78,7 @@ class MockWorldEngine:
         self,
         name: str,
         org_type: OrgType,
-        founder_ids: List[str],
+        founder_ids: list[str],
         charter_purpose: str = "test",
     ) -> SimulatedOrg:
         """Create an org (mirrors Rust OrganizationStore::create_org)."""
@@ -135,7 +135,7 @@ class MockWorldEngine:
         ))
         return org
 
-    def get_org_for_agent(self, agent_id: str) -> Optional[SimulatedOrg]:
+    def get_org_for_agent(self, agent_id: str) -> SimulatedOrg | None:
         """Get the org an agent belongs to."""
         org_id = self.agent_org_map.get(agent_id)
         if org_id:
@@ -147,7 +147,7 @@ class MockWorldEngine:
         org_a_id: str,
         org_b_id: str,
         resource_id: str,
-    ) -> Dict[str, Any]:
+    ) -> dict[str, Any]:
         """Simulate organization competition over a resource.
 
         Returns competition result: winner gets a bonus, loser gets nothing.
@@ -200,11 +200,11 @@ class AgentContext:
     agent_id: str
     name: str
     position: tuple = (0.0, 0.0)
-    skills: List[str] = field(default_factory=list)
+    skills: list[str] = field(default_factory=list)
     values: ValueWeights = field(default_factory=ValueWeights)
     personality: PersonalityVector = field(default_factory=PersonalityVector)
     tokens: int = 100
-    current_org_id: Optional[str] = None
+    current_org_id: str | None = None
 
 
 class OrgFormationEvaluator:
@@ -223,10 +223,10 @@ class OrgFormationEvaluator:
 
     def evaluate_guild_formation(
         self,
-        agents: List[AgentContext],
+        agents: list[AgentContext],
         resource_point: tuple = (0.0, 0.0),
         proximity_radius: float = 5.0,
-    ) -> Optional[Dict[str, Any]]:
+    ) -> dict[str, Any] | None:
         """Evaluate if agents near a resource point should form a Guild.
 
         Conditions:
@@ -273,9 +273,9 @@ class OrgFormationEvaluator:
 
     def evaluate_alliance_formation(
         self,
-        agents: List[AgentContext],
+        agents: list[AgentContext],
         region_center: tuple = (0.0, 0.0),
-    ) -> Optional[Dict[str, Any]]:
+    ) -> dict[str, Any] | None:
         """Evaluate if agents in the same region should form an Alliance.
 
         Conditions:
@@ -318,8 +318,8 @@ class OrgRecruitmentEvaluator:
     def evaluate_recruitment_offers(
         self,
         agent: AgentContext,
-        offers: List[Dict[str, Any]],
-    ) -> Optional[str]:
+        offers: list[dict[str, Any]],
+    ) -> str | None:
         """Agent chooses the best org offer based on attractiveness.
 
         Factors:
@@ -689,7 +689,7 @@ class TestMultiOrgScenario:
 
         # Simulate 500 ticks
         org_types_formed: set = set()
-        orgs_created: List[SimulatedOrg] = []
+        orgs_created: list[SimulatedOrg] = []
 
         for tick in range(500):
             world.advance_tick()

@@ -10,7 +10,7 @@ from __future__ import annotations
 
 import logging
 import traceback
-from typing import Any, Dict
+from typing import Any
 
 from ..base import Tool, ToolParameters, ToolResult, ToolStatus
 
@@ -114,7 +114,7 @@ class CodeExecTool(Tool):
             )
 
         # Prepare restricted namespace
-        namespace: Dict[str, Any] = {
+        namespace: dict[str, Any] = {
             "__builtins__": _SAFE_BUILTINS,
             "result": None,
         }

@@ -5,7 +5,7 @@ Allows agents to query reputation scores, rankings, and system config.
 
 from __future__ import annotations
 
-from typing import Any, Dict, Optional
+from typing import Any
 
 from ..base import ToolParameters, ToolResult, ToolStatus
 from .world_engine_base import WorldEngineTool
@@ -15,8 +15,8 @@ class ReputationParams(ToolParameters):
     """Parameters for the reputation tool."""
 
     action: str  # get_score, rankings, low_reputation, config
-    agent_id: Optional[str] = None
-    limit: Optional[int] = None
+    agent_id: str | None = None
+    limit: int | None = None
 
 
 class ReputationTool(WorldEngineTool):
@@ -71,7 +71,7 @@ class ReputationTool(WorldEngineTool):
                 data = await self._get(f"/reputation/{params.agent_id}")
                 return ToolResult(tool_name=self.name, status=ToolStatus.SUCCESS, output=data)
             elif action == "rankings":
-                query: Dict[str, Any] = {}
+                query: dict[str, Any] = {}
                 if params.limit is not None:
                     query["limit"] = params.limit
                 data = await self._get("/reputation/rankings", params=query)

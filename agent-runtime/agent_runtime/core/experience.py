@@ -7,7 +7,7 @@ and supports relevance-based retrieval for LLM context injection.
 
 from __future__ import annotations
 
-from typing import Any, Dict, List, Optional
+from typing import Any
 
 from pydantic import BaseModel, Field
 
@@ -23,14 +23,14 @@ class Experience(BaseModel):
         ...,
         description="Event category: trade | cooperation | betrayal | exploration | death_witness",
     )
-    partner_id: Optional[str] = Field(
+    partner_id: str | None = Field(
         default=None, description="ID of the other agent involved (if any)"
     )
     outcome: float = Field(
         ..., ge=-1.0, le=1.0,
         description="Event outcome: -1.0 (severe loss) → +1.0 (huge gain)",
     )
-    context: Dict[str, Any] = Field(
+    context: dict[str, Any] = Field(
         default_factory=dict,
         description="Event context (resource state, environment, etc.)",
     )
@@ -69,7 +69,7 @@ class ExperienceAccumulator:
     ) -> None:
         self.personality = personality
         self.values = values
-        self._history: List[Experience] = []
+        self._history: list[Experience] = []
         self._max_history = max_history
 
     # ── Recording ──
@@ -100,9 +100,9 @@ class ExperienceAccumulator:
 
     def get_relevant_experiences(
         self,
-        current_context: Dict[str, Any],
+        current_context: dict[str, Any],
         top_k: int = 5,
-    ) -> List[Experience]:
+    ) -> list[Experience]:
         """Retrieve the most relevant historical experiences for the current context.
 
         Relevance is computed as a simple heuristic:
@@ -120,7 +120,7 @@ class ExperienceAccumulator:
         ctx_outcome = current_context.get("outcome", 0.0)
         ctx_partner = current_context.get("partner_id")
 
-        scored: List[tuple[float, Experience]] = []
+        scored: list[tuple[float, Experience]] = []
         total = len(self._history)
         for idx, exp in enumerate(self._history):
             score = 0.0
@@ -148,7 +148,7 @@ class ExperienceAccumulator:
 
     # ── Snapshot ──
 
-    def get_personality_snapshot(self) -> Dict[str, Any]:
+    def get_personality_snapshot(self) -> dict[str, Any]:
         """Export current personality state for Dashboard display."""
         return {
             "personality": self.personality.to_storage_dict(),
@@ -161,7 +161,7 @@ class ExperienceAccumulator:
     # ── History access ──
 
     @property
-    def history(self) -> List[Experience]:
+    def history(self) -> list[Experience]:
         """Read-only access to the full experience history."""
         return list(self._history)
 
@@ -173,12 +173,12 @@ class ExperienceAccumulator:
 
     def _compute_personality_offsets(
         self, experience: Experience
-    ) -> Dict[str, float]:
+    ) -> dict[str, float]:
         """Compute directional personality shifts based on an experience.
 
         Returns a dict of dimension -> small offset (typically ±0.02).
         """
-        offsets: Dict[str, float] = {}
+        offsets: dict[str, float] = {}
         outcome = experience.outcome
 
         if experience.event_type == "exploration":

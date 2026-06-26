@@ -16,7 +16,7 @@ from __future__ import annotations
 import logging
 import re
 from dataclasses import dataclass, field
-from enum import Enum
+from enum import StrEnum
 from typing import Any
 
 logger = logging.getLogger(__name__)
@@ -31,7 +31,7 @@ _REPUTATION_WEIGHT = 0.3
 _MIN_ACCEPTANCE_SCORE = 0.4
 
 
-class BountyDecision(str, Enum):
+class BountyDecision(StrEnum):
     """Decision outcome for bounty evaluation."""
 
     ACCEPT = "accept"

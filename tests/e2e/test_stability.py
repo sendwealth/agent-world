@@ -14,7 +14,6 @@ import time
 import urllib.request
 import urllib.error
 
-import pytest
 
 
 class TestStability10Agents:

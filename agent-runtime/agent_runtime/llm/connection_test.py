@@ -14,7 +14,7 @@ import ipaddress
 import logging
 import time
 from dataclasses import dataclass
-from enum import Enum
+from enum import StrEnum
 from typing import Any
 from urllib.parse import urlparse
 
@@ -27,7 +27,7 @@ logger = logging.getLogger(__name__)
 # ---------------------------------------------------------------------------
 
 
-class ConnectionTestKind(str, Enum):
+class ConnectionTestKind(StrEnum):
     """Classification of a connection test result."""
 
     SUCCESS = "success"

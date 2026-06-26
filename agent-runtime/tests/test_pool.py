@@ -8,7 +8,6 @@ from __future__ import annotations
 import signal
 import subprocess
 from pathlib import Path
-from typing import Optional
 from unittest.mock import MagicMock, patch
 
 import pytest
@@ -43,7 +42,7 @@ def manager(tmp_base: Path) -> AgentProcessManager:
     )
 
 
-def _mock_popen(pid: int = 12345, returncode: Optional[int] = None) -> MagicMock:
+def _mock_popen(pid: int = 12345, returncode: int | None = None) -> MagicMock:
     """Create a mock Popen object."""
     proc = MagicMock()
     proc.pid = pid
@@ -654,7 +653,7 @@ class TestFileHandleLeak:
         with patch("agent_runtime.pool.open", side_effect=_tracking_open):
             manager.spawn("leaky")
 
-            for i in range(10):
+            for _i in range(10):
                 manager.restart("leaky")
 
         # We should have 11 log handles total (1 spawn + 10 restarts)

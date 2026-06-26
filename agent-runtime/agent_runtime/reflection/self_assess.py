@@ -34,7 +34,7 @@ import logging
 import re
 from collections import deque
 from dataclasses import dataclass, field
-from enum import Enum
+from enum import StrEnum
 from typing import Protocol
 
 from agent_runtime.core.act import ActionResult, ActionStatus
@@ -60,7 +60,7 @@ _MAX_NAME_LENGTH = 64
 # ---------------------------------------------------------------------------
 
 
-class BehaviorStrategy(str, Enum):
+class BehaviorStrategy(StrEnum):
     """High-level strategy modes an agent can adopt.
 
     These influence decision-making by biasing action selection.

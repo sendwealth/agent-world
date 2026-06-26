@@ -145,10 +145,10 @@ class ExperimentConfig:
         except ModuleNotFoundError:
             try:
                 import tomli as tomllib  # type: ignore[no-redef]
-            except ModuleNotFoundError:
+            except ModuleNotFoundError as exc:
                 raise ImportError(
                     "TOML support requires Python 3.11+ (tomllib) or the 'tomli' package"
-                )
+                ) from exc
 
         with open(p, "rb") as f:
             raw = tomllib.load(f)

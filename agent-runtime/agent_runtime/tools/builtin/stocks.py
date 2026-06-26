@@ -5,7 +5,7 @@ Allows agents to manage stock listings, IPOs, buy/sell orders, dividends.
 
 from __future__ import annotations
 
-from typing import Any, Dict, Optional
+from typing import Any
 
 from ..base import ToolParameters, ToolResult, ToolStatus
 from .world_engine_base import WorldEngineTool
@@ -15,21 +15,21 @@ class StocksParams(ToolParameters):
     """Parameters for the stocks tool."""
 
     action: str
-    stock_id: Optional[str] = None
-    order_id: Optional[str] = None
-    org_id: Optional[str] = None
-    agent_id: Optional[str] = None
+    stock_id: str | None = None
+    order_id: str | None = None
+    org_id: str | None = None
+    agent_id: str | None = None
     # Stock listing
-    symbol: Optional[str] = None
-    total_shares: Optional[int] = None
-    initial_price: Optional[float] = None
+    symbol: str | None = None
+    total_shares: int | None = None
+    initial_price: float | None = None
     # Orders
-    order_type: Optional[str] = None  # market, limit
-    quantity: Optional[int] = None
-    price: Optional[float] = None
-    side: Optional[str] = None  # buy, sell
+    order_type: str | None = None  # market, limit
+    quantity: int | None = None
+    price: float | None = None
+    side: str | None = None  # buy, sell
     # Dividends
-    dividend_per_share: Optional[float] = None
+    dividend_per_share: float | None = None
 
 
 class StocksTool(WorldEngineTool):
@@ -114,7 +114,7 @@ class StocksTool(WorldEngineTool):
         return ToolResult(tool_name=self.name, status=ToolStatus.SUCCESS, output=data)
 
     async def _issue_shares(self, p: StocksParams) -> ToolResult:
-        body: Dict[str, Any] = {}
+        body: dict[str, Any] = {}
         if p.org_id:
             body["org_id"] = p.org_id
         if p.symbol:
@@ -135,7 +135,7 @@ class StocksTool(WorldEngineTool):
         return ToolResult(tool_name=self.name, status=ToolStatus.SUCCESS, output=data)
 
     async def _distribute_dividend(self, p: StocksParams) -> ToolResult:
-        body: Dict[str, Any] = {}
+        body: dict[str, Any] = {}
         if p.dividend_per_share is not None:
             body["dividend_per_share"] = p.dividend_per_share
         data = await self._post(f"/stocks/{p.stock_id}/dividend", json=body)
@@ -146,7 +146,7 @@ class StocksTool(WorldEngineTool):
         return ToolResult(tool_name=self.name, status=ToolStatus.SUCCESS, output=data)
 
     async def _buy_order(self, p: StocksParams) -> ToolResult:
-        body: Dict[str, Any] = {}
+        body: dict[str, Any] = {}
         if p.stock_id:
             body["stock_id"] = p.stock_id
         if p.agent_id:
@@ -161,7 +161,7 @@ class StocksTool(WorldEngineTool):
         return ToolResult(tool_name=self.name, status=ToolStatus.SUCCESS, output=data)
 
     async def _sell_order(self, p: StocksParams) -> ToolResult:
-        body: Dict[str, Any] = {}
+        body: dict[str, Any] = {}
         if p.stock_id:
             body["stock_id"] = p.stock_id
         if p.agent_id:

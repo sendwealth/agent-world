@@ -11,14 +11,12 @@ fast and deterministic.
 
 from __future__ import annotations
 
-import asyncio
 from typing import Any
 
 import pytest
 
 from agent_runtime.core.act import ActionExecutor, ActionType
 from agent_runtime.core.think_loop import (
-    Decision,
     Perception,
     ThinkLoop,
     ThinkLoopConfig,

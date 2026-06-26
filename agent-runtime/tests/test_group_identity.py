@@ -72,7 +72,7 @@ class TestOrgCultureSystem:
         agent_values = _make_vw(cooperation_weight=0.1)
         result = system.apply_culture_pressure(agent_values, "org_1")
 
-        for dim, delta in result["adjustments"].items():
+        for _dim, delta in result["adjustments"].items():
             assert abs(delta) <= MAX_CULTURE_PRESSURE_PER_TICK + 1e-9
 
     def test_culture_pressure_moves_toward_org(self):

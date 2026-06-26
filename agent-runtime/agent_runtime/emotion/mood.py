@@ -12,13 +12,13 @@ Emotional dimensions:
 
 from __future__ import annotations
 
-from enum import Enum
-from typing import Any, Optional
+from enum import StrEnum
+from typing import Any
 
 from pydantic import BaseModel, Field, model_validator
 
 
-class EmotionType(str, Enum):
+class EmotionType(StrEnum):
     """Discrete emotion categories mapped from PAD space."""
 
     HAPPY = "happy"
@@ -68,7 +68,7 @@ class EmotionalState(BaseModel):
         default=EmotionType.CALM,
         description="Dominant discrete emotion",
     )
-    secondary_emotion: Optional[EmotionType] = Field(
+    secondary_emotion: EmotionType | None = Field(
         default=None,
         description="Secondary emotion if mixed",
     )

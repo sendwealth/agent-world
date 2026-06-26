@@ -18,7 +18,7 @@ from __future__ import annotations
 
 import logging
 from dataclasses import dataclass, field
-from enum import Enum
+from enum import StrEnum
 from typing import Any, Protocol
 
 logger = logging.getLogger(__name__)
@@ -29,14 +29,14 @@ logger = logging.getLogger(__name__)
 # ---------------------------------------------------------------------------
 
 
-class LeadershipAmbition(str, Enum):
+class LeadershipAmbition(StrEnum):
     """Outcome of a leadership-run decision."""
 
     RUN = "run"
     ABSTAIN = "abstain"
 
 
-class TreatyResponse(str, Enum):
+class TreatyResponse(StrEnum):
     """Possible responses to a treaty proposal."""
 
     ACCEPT = "accept"
@@ -44,7 +44,7 @@ class TreatyResponse(str, Enum):
     COUNTER = "counter"
 
 
-class AllocationStrategy(str, Enum):
+class AllocationStrategy(StrEnum):
     """Resource allocation strategy choices."""
 
     EQUAL = "equal"

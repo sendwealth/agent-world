@@ -13,7 +13,7 @@ from __future__ import annotations
 import logging
 from dataclasses import dataclass, field
 from enum import Enum
-from typing import Any, Dict, Optional
+from typing import Any
 
 from ..models.skill import Skill
 from .registry import SkillRegistry
@@ -54,7 +54,7 @@ class SkillExecutionResult:
     skill_name: str
     output: Any
     xp_earned: int = 0
-    xp_breakdown: Dict[str, int] = field(default_factory=dict)
+    xp_breakdown: dict[str, int] = field(default_factory=dict)
     leveled_up: bool = False
 
 
@@ -77,7 +77,7 @@ class SkillExecutor:
         print(result.leveled_up)      # whether coding leveled up
     """
 
-    def __init__(self, registry: Optional[SkillRegistry] = None) -> None:
+    def __init__(self, registry: SkillRegistry | None = None) -> None:
         self._registry = registry or SkillRegistry()
 
     @property
@@ -87,7 +87,7 @@ class SkillExecutor:
     def execute(
         self,
         skill_name: str,
-        agent_skills: Dict[str, Skill],
+        agent_skills: dict[str, Skill],
         **kwargs: Any,
     ) -> SkillExecutionResult:
         """Execute a skill by name.
@@ -113,7 +113,7 @@ class SkillExecutor:
         output = defn.execute_fn(agent_skills, **kwargs)
 
         # Calculate XP
-        xp_breakdown: Dict[str, int] = {}
+        xp_breakdown: dict[str, int] = {}
         xp_breakdown["use"] = XPReward.USE.value
 
         # Check if the result signals success

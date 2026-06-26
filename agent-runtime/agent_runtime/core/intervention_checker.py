@@ -32,8 +32,8 @@ from __future__ import annotations
 import logging
 import time
 from dataclasses import dataclass, field
-from enum import Enum
-from typing import Any, Optional
+from enum import StrEnum
+from typing import Any
 
 logger = logging.getLogger(__name__)
 
@@ -42,7 +42,7 @@ logger = logging.getLogger(__name__)
 # Result types
 # ---------------------------------------------------------------------------
 
-class CheckVerdict(str, Enum):
+class CheckVerdict(StrEnum):
     """Outcome of a single safety check."""
     PASS = "pass"
     BLOCKED = "blocked"
@@ -61,8 +61,8 @@ class CheckResult:
     """
 
     verdict: CheckVerdict
-    rule: Optional[str] = None
-    reason: Optional[str] = None
+    rule: str | None = None
+    reason: str | None = None
     details: dict[str, Any] = field(default_factory=dict)
 
     @property

@@ -88,7 +88,7 @@ class AgentPool:
                     await asyncio.wait_for(
                         self._get_shutdown_event().wait(), timeout=self._health_interval
                     )
-                except asyncio.TimeoutError:
+                except TimeoutError:
                     pass
                 await self._health_check()
                 if all(a.status in ("stopped", "crashed") for a in self._agents):
@@ -187,7 +187,7 @@ class AgentPool:
             agent.process.terminate()
             try:
                 await asyncio.wait_for(agent.process.wait(), timeout=5.0)
-            except asyncio.TimeoutError:
+            except TimeoutError:
                 agent.process.kill()
                 await agent.process.wait()
             agent.status = "stopped"

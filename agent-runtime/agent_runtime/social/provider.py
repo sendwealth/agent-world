@@ -25,7 +25,7 @@ from __future__ import annotations
 
 import logging
 from dataclasses import dataclass
-from typing import Any, Dict, List, Optional, Protocol
+from typing import Any, Protocol
 
 from agent_runtime.core.decide import SocialContext
 from agent_runtime.models.personality import PersonalityVector
@@ -48,13 +48,13 @@ class NearbyAgentSource(Protocol):
     The think loop implements this to supply real-time perception data.
     """
 
-    def __call__(self, agent_id: str, tick: int) -> List[Dict[str, Any]]: ...
+    def __call__(self, agent_id: str, tick: int) -> list[dict[str, Any]]: ...
 
 
 class AgentProfileSource(Protocol):
     """Callable that provides the agent's own personality and values."""
 
-    def __call__(self, agent_id: str) -> Optional[AgentProfile]: ...
+    def __call__(self, agent_id: str) -> AgentProfile | None: ...
 
 
 @dataclass(frozen=True)
@@ -63,7 +63,7 @@ class AgentProfile:
 
     personality: PersonalityVector
     values: ValueWeights
-    group_ids: List[str]
+    group_ids: list[str]
 
 
 # ---------------------------------------------------------------------------
@@ -186,7 +186,7 @@ class DefaultSocialContextProvider:
 
     def _get_nearby_agents(
         self, agent_id: str, tick: int
-    ) -> List[Dict[str, Any]]:
+    ) -> list[dict[str, Any]]:
         """Resolve nearby agents from the nearby source."""
         if self._nearby_source is not None:
             try:
@@ -213,7 +213,7 @@ class RegionAgentSource(Protocol):
     Returns a mapping of region_id -> list of agent dicts.
     """
 
-    def __call__(self) -> Dict[str, List[Dict[str, Any]]]: ...
+    def __call__(self) -> dict[str, list[dict[str, Any]]]: ...
 
 
 # ---------------------------------------------------------------------------

@@ -6,7 +6,7 @@ contracts for secure transactions.
 
 from __future__ import annotations
 
-from typing import Any, Dict, Optional
+from typing import Any
 
 from ..base import ToolParameters, ToolResult, ToolStatus
 from .world_engine_base import WorldEngineTool
@@ -16,19 +16,19 @@ class EscrowParams(ToolParameters):
     """Parameters for the escrow tool."""
 
     action: str
-    escrow_id: Optional[str] = None
-    agent_id: Optional[str] = None
+    escrow_id: str | None = None
+    agent_id: str | None = None
     # Create
-    counterparty_id: Optional[str] = None
-    amount: Optional[float] = None
-    description: Optional[str] = None
-    timeout_ticks: Optional[int] = None
+    counterparty_id: str | None = None
+    amount: float | None = None
+    description: str | None = None
+    timeout_ticks: int | None = None
     # Dispute/resolve
-    reason: Optional[str] = None
-    resolution: Optional[str] = None
-    refund_amount: Optional[float] = None
+    reason: str | None = None
+    resolution: str | None = None
+    refund_amount: float | None = None
     # Admin
-    balance: Optional[float] = None
+    balance: float | None = None
 
 
 class EscrowTool(WorldEngineTool):
@@ -106,7 +106,7 @@ class EscrowTool(WorldEngineTool):
             return self._make_error_result(str(exc))
 
     async def _create(self, p: EscrowParams) -> ToolResult:
-        body: Dict[str, Any] = {}
+        body: dict[str, Any] = {}
         if p.agent_id:
             body["creator_id"] = p.agent_id
         if p.counterparty_id:
@@ -129,7 +129,7 @@ class EscrowTool(WorldEngineTool):
         return ToolResult(tool_name=self.name, status=ToolStatus.SUCCESS, output=data)
 
     async def _claim(self, p: EscrowParams) -> ToolResult:
-        body: Dict[str, Any] = {}
+        body: dict[str, Any] = {}
         if p.agent_id:
             body["claimer_id"] = p.agent_id
         data = await self._post(f"/escrow/{p.escrow_id}/claim", json=body)
@@ -144,7 +144,7 @@ class EscrowTool(WorldEngineTool):
         return ToolResult(tool_name=self.name, status=ToolStatus.SUCCESS, output=data)
 
     async def _dispute(self, p: EscrowParams) -> ToolResult:
-        body: Dict[str, Any] = {}
+        body: dict[str, Any] = {}
         if p.agent_id:
             body["disputer_id"] = p.agent_id
         if p.reason:
@@ -153,7 +153,7 @@ class EscrowTool(WorldEngineTool):
         return ToolResult(tool_name=self.name, status=ToolStatus.SUCCESS, output=data)
 
     async def _resolve(self, p: EscrowParams) -> ToolResult:
-        body: Dict[str, Any] = {}
+        body: dict[str, Any] = {}
         if p.resolution:
             body["resolution"] = p.resolution
         if p.refund_amount is not None:
@@ -162,7 +162,7 @@ class EscrowTool(WorldEngineTool):
         return ToolResult(tool_name=self.name, status=ToolStatus.SUCCESS, output=data)
 
     async def _set_balance(self, p: EscrowParams) -> ToolResult:
-        body: Dict[str, Any] = {}
+        body: dict[str, Any] = {}
         if p.agent_id:
             body["agent_id"] = p.agent_id
         if p.balance is not None:

@@ -10,7 +10,7 @@ Implements two transmission channels:
 from __future__ import annotations
 
 import logging
-from typing import Any, Dict
+from typing import Any
 
 from agent_runtime.core.experience import Experience
 from agent_runtime.models.personality import PersonalityVector
@@ -39,7 +39,7 @@ class KnowledgeTransfer:
         student_personality: PersonalityVector,
         student_values: ValueWeights,
         experience: Experience,
-    ) -> Dict[str, Any]:
+    ) -> dict[str, Any]:
         """Teacher imparts an experience lesson to a student.
 
         The student's values are updated via update_from_experience, scaled by
@@ -69,14 +69,14 @@ class KnowledgeTransfer:
 
         # Record the actual changes applied
         updated = student_values.to_storage_dict()
-        value_changes: Dict[str, float] = {}
+        value_changes: dict[str, float] = {}
         for dim in ValueWeights._dimension_names():
             delta = updated[dim] - original[dim]
             if abs(delta) > 1e-9:
                 value_changes[dim] = delta
 
         # Small personality shift: teaching tends to increase social orientation
-        personality_shift: Dict[str, float] = {}
+        personality_shift: dict[str, float] = {}
         if experience.outcome > 0:
             shift = 0.01 * learning_efficiency
             new_soc = min(1.0, student_personality.social_orientation + shift)
@@ -97,7 +97,7 @@ class KnowledgeTransfer:
     def transfer_skill(
         self,
         teacher_skill: Skill,
-        student_skills: Dict[str, Skill],
+        student_skills: dict[str, Skill],
         student_personality: PersonalityVector,
     ) -> float:
         """Transfer skill knowledge from teacher to student.

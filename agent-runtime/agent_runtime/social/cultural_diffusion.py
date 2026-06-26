@@ -10,7 +10,7 @@ from __future__ import annotations
 
 import logging
 import math
-from typing import Any, Dict, List
+from typing import Any
 
 from agent_runtime.models.personality import PersonalityVector
 from agent_runtime.models.values import ValueWeights
@@ -26,9 +26,9 @@ class CulturalDiffusion:
 
     def apply_regional_influence(
         self,
-        agents: List[Dict[str, Any]],
+        agents: list[dict[str, Any]],
         region_id: str,
-    ) -> Dict[str, Any]:
+    ) -> dict[str, Any]:
         """Apply regional culture influence to a group of agents.
 
         Computes the regional average values, then nudges each agent's values
@@ -55,16 +55,16 @@ class CulturalDiffusion:
 
         # Compute regional value average
         dim_names = ValueWeights._dimension_names()
-        sums: Dict[str, float] = {d: 0.0 for d in dim_names}
+        sums: dict[str, float] = {d: 0.0 for d in dim_names}
         for agent in agents:
             v: ValueWeights = agent["values"]
             for d in dim_names:
                 sums[d] += getattr(v, d)
 
-        avg: Dict[str, float] = {d: sums[d] / len(agents) for d in dim_names}
+        avg: dict[str, float] = {d: sums[d] / len(agents) for d in dim_names}
 
         # Nudge each agent toward regional average
-        total_adj: Dict[str, float] = {d: 0.0 for d in dim_names}
+        total_adj: dict[str, float] = {d: 0.0 for d in dim_names}
         for agent in agents:
             agent_values: ValueWeights = agent["values"]
             for d in dim_names:
@@ -95,8 +95,8 @@ class CulturalDiffusion:
         self,
         org_id: str,
         org_culture: ValueWeights,
-        members: List[Dict[str, Any]],
-    ) -> Dict[str, Any]:
+        members: list[dict[str, Any]],
+    ) -> dict[str, Any]:
         """Apply organizational culture to members.
 
         Unlike regional influence (converge to average), org culture has a
@@ -124,7 +124,7 @@ class CulturalDiffusion:
             }
 
         dim_names = ValueWeights._dimension_names()
-        total_adj: Dict[str, float] = {d: 0.0 for d in dim_names}
+        total_adj: dict[str, float] = {d: 0.0 for d in dim_names}
 
         for member in members:
             v: ValueWeights = member["values"]
@@ -162,8 +162,8 @@ class CulturalDiffusion:
 
     def compute_cultural_distance(
         self,
-        group_a: List[ValueWeights],
-        group_b: List[ValueWeights],
+        group_a: list[ValueWeights],
+        group_b: list[ValueWeights],
     ) -> float:
         """Compute Euclidean cultural distance between two agent groups.
 
@@ -178,7 +178,7 @@ class CulturalDiffusion:
         """
         dim_names = ValueWeights._dimension_names()
 
-        def _centroid(group: List[ValueWeights]) -> Dict[str, float]:
+        def _centroid(group: list[ValueWeights]) -> dict[str, float]:
             if not group:
                 return {d: 0.5 for d in dim_names}
             sums = {d: 0.0 for d in dim_names}

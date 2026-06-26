@@ -15,7 +15,7 @@ from __future__ import annotations
 import logging
 import math
 from dataclasses import dataclass, field
-from enum import Enum
+from enum import StrEnum
 
 logger = logging.getLogger(__name__)
 
@@ -25,7 +25,7 @@ logger = logging.getLogger(__name__)
 # ---------------------------------------------------------------------------
 
 
-class FormationReason(str, Enum):
+class FormationReason(StrEnum):
     """Why an organization formation is being considered."""
 
     SHARED_INTERESTS = "shared_interests"

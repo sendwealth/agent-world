@@ -10,7 +10,7 @@ from __future__ import annotations
 import json
 import sqlite3
 from pathlib import Path
-from typing import Any, Dict, Optional
+from typing import Any
 
 from agent_runtime.memory.long_term import LongTermMemory, LongTermMemoryEntry
 from agent_runtime.memory.vector_memory import VectorMemory, VectorMemoryEntry
@@ -70,7 +70,7 @@ class PersistentMemoryStore:
         conn.commit()
         conn.close()
 
-    def load_agent_state(self) -> Optional[AgentState]:
+    def load_agent_state(self) -> AgentState | None:
         """Load the most recent AgentState snapshot.
 
         Returns None if no state has been saved yet.
@@ -168,7 +168,7 @@ class PersistentMemoryStore:
 
     def backup_to_file(self, path: str) -> None:
         """Export all persistent data to a JSON file."""
-        data: Dict[str, Any] = {"agent_id": self.agent_id}
+        data: dict[str, Any] = {"agent_id": self.agent_id}
 
         state = self.load_agent_state()
         data["agent_state"] = json.loads(state.to_json()) if state else None

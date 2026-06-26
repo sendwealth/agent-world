@@ -11,14 +11,14 @@ import logging
 import sqlite3
 import time
 from dataclasses import dataclass, field
-from enum import Enum
+from enum import StrEnum
 from pathlib import Path
 from typing import Any
 
 logger = logging.getLogger(__name__)
 
 
-class MemoryCategory(str, Enum):
+class MemoryCategory(StrEnum):
     """Categories of long-term memory entries."""
 
     DECISION = "decision"

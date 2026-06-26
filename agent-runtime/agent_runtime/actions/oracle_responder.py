@@ -16,14 +16,14 @@ from __future__ import annotations
 
 import logging
 from dataclasses import dataclass
-from enum import Enum
+from enum import StrEnum
 
 from agent_runtime.llm.base import LLMMessage, LLMProvider
 
 logger = logging.getLogger(__name__)
 
 
-class OracleType(str, Enum):
+class OracleType(StrEnum):
     """Oracle types -- aligned with World Engine OracleType."""
 
     GUIDANCE = "guidance"
@@ -32,7 +32,7 @@ class OracleType(str, Enum):
     CURSE = "curse"
 
 
-class OracleResponseStrategy(str, Enum):
+class OracleResponseStrategy(StrEnum):
     """Response strategy chosen based on Oracle type."""
 
     ACKNOWLEDGE_GUIDANCE = "acknowledge_guidance"

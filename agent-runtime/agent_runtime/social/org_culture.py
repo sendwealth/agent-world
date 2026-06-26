@@ -9,7 +9,7 @@ from __future__ import annotations
 
 import math
 import random
-from typing import Any, Dict, List, Optional
+from typing import Any
 
 from pydantic import BaseModel, Field
 
@@ -35,7 +35,7 @@ class CultureVector(BaseModel):
     tradition_strength: float = Field(default=0.3, ge=0.0, le=1.0)
     innovation_norm: float = Field(default=0.3, ge=0.0, le=1.0)
 
-    def distance(self, other: "CultureVector") -> float:
+    def distance(self, other: CultureVector) -> float:
         """Euclidean distance to another culture vector."""
         dims = [
             "cooperation_norm",
@@ -46,7 +46,7 @@ class CultureVector(BaseModel):
         ]
         return math.sqrt(sum((getattr(self, d) - getattr(other, d)) ** 2 for d in dims))
 
-    def to_storage_dict(self) -> Dict[str, float]:
+    def to_storage_dict(self) -> dict[str, float]:
         return {
             "cooperation_norm": self.cooperation_norm,
             "competition_norm": self.competition_norm,
@@ -65,16 +65,16 @@ class OrgCultureSystem:
 
     def __init__(self) -> None:
         # org_id -> CultureVector
-        self._org_cultures: Dict[str, CultureVector] = {}
+        self._org_cultures: dict[str, CultureVector] = {}
         # org_id -> {agent_id: tenure_ticks}
-        self._members: Dict[str, Dict[str, int]] = {}
+        self._members: dict[str, dict[str, int]] = {}
 
     # ── Org culture computation ──
 
     def compute_org_culture(
         self,
         org_id: str,
-        member_values: List[ValueWeights],
+        member_values: list[ValueWeights],
     ) -> CultureVector:
         """Compute organization culture vector as weighted average of member values.
 
@@ -105,7 +105,7 @@ class OrgCultureSystem:
         self,
         agent_values: ValueWeights,
         org_id: str,
-    ) -> Dict[str, Any]:
+    ) -> dict[str, Any]:
         """Apply gradual cultural pressure on an agent toward the org culture.
 
         Pressure is bounded by MAX_CULTURE_PRESSURE_PER_TICK (0.1%).
@@ -123,8 +123,8 @@ class OrgCultureSystem:
         if culture is None:
             return {"adjustments": {}, "org_id": org_id, "updated_values": agent_values}
 
-        adjustments: Dict[str, float] = {}
-        updates: Dict[str, float] = {}
+        adjustments: dict[str, float] = {}
+        updates: dict[str, float] = {}
         mapping = {
             "cooperation_weight": "cooperation_norm",
             "competition_weight": "competition_norm",
@@ -154,7 +154,7 @@ class OrgCultureSystem:
 
     # ── Natural culture drift ──
 
-    def culture_drift(self, org_id: str, tick: int) -> Dict[str, Any]:
+    def culture_drift(self, org_id: str, tick: int) -> dict[str, Any]:
         """Apply small random drift to org culture (simulates natural evolution).
 
         Drift is very small (NATURAL_DRIFT_RATE) and random in direction.
@@ -179,8 +179,8 @@ class OrgCultureSystem:
             "innovation_norm",
         ]
 
-        drift: Dict[str, float] = {}
-        updates: Dict[str, float] = {}
+        drift: dict[str, float] = {}
+        updates: dict[str, float] = {}
         for dim in dims:
             current = getattr(culture, dim)
             noise = random.uniform(-NATURAL_DRIFT_RATE, NATURAL_DRIFT_RATE)
@@ -194,7 +194,7 @@ class OrgCultureSystem:
 
     # ── Accessors ──
 
-    def get_org_culture(self, org_id: str) -> Optional[CultureVector]:
+    def get_org_culture(self, org_id: str) -> CultureVector | None:
         """Get the stored culture vector for an organization."""
         return self._org_cultures.get(org_id)
 

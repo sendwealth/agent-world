@@ -20,8 +20,6 @@ Integration points:
 
 from __future__ import annotations
 
-from typing import Optional, Set
-
 from .base import Tool, ToolParameters, ToolResult, ToolStatus
 from .builtin import (
     BankTool,
@@ -49,9 +47,9 @@ from .registry import ToolRegistry
 def create_registry_with_builtins(
     *,
     sandbox_http: bool = True,
-    file_ops_base_dir: Optional[str] = None,
-    allowed_tools: Optional[Set[str]] = None,
-    world_engine_url: Optional[str] = None,
+    file_ops_base_dir: str | None = None,
+    allowed_tools: set[str] | None = None,
+    world_engine_url: str | None = None,
     sandbox_world_engine: bool = True,
 ) -> ToolRegistry:
     """Create a ToolRegistry pre-loaded with all built-in tools.

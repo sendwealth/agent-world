@@ -3,9 +3,9 @@
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
+from collections.abc import AsyncIterator
 from dataclasses import dataclass, field
-from enum import Enum
-from typing import AsyncIterator
+from enum import StrEnum
 
 import httpx
 
@@ -67,7 +67,7 @@ class LLMStreamChunk:
     finish_reason: str | None = None
 
 
-class ProviderType(str, Enum):
+class ProviderType(StrEnum):
     """Supported LLM provider types."""
 
     OPENAI = "openai"

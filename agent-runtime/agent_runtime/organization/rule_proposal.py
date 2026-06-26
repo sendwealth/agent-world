@@ -9,7 +9,7 @@ from __future__ import annotations
 
 import uuid
 from dataclasses import dataclass
-from enum import Enum
+from enum import StrEnum
 from typing import Any, Protocol
 
 # ---------------------------------------------------------------------------
@@ -17,7 +17,7 @@ from typing import Any, Protocol
 # ---------------------------------------------------------------------------
 
 
-class RuleCategory(str, Enum):
+class RuleCategory(StrEnum):
     """Category of a soft rule."""
 
     TAX = "tax"

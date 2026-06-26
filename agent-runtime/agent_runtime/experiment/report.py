@@ -308,7 +308,7 @@ th, td {{ border: 1px solid #ddd; padding: 0.5rem; text-align: left; }}
 
     def generate_rich_report(
         self,
-        result: "ExperimentResult",
+        result: ExperimentResult,
         format: str = "html",
     ) -> str:
         """Generate a rich report with embedded charts.
@@ -360,7 +360,7 @@ th, td {{ border: 1px solid #ddd; padding: 0.5rem; text-align: left; }}
 
     def _rich_report_html(
         self,
-        result: "ExperimentResult",
+        result: ExperimentResult,
         charts: dict[str, str],
     ) -> str:
         """Generate a rich HTML report with embedded chart images."""
@@ -439,7 +439,7 @@ th, td {{ border: 1px solid #ddd; padding: 0.5rem; text-align: left; }}
 
     def _rich_report_markdown(
         self,
-        result: "ExperimentResult",
+        result: ExperimentResult,
         charts: dict[str, str],
     ) -> str:
         """Generate a rich Markdown report (charts as placeholders)."""
@@ -512,7 +512,7 @@ th, td {{ border: 1px solid #ddd; padding: 0.5rem; text-align: left; }}
 
         return "\n".join(lines)
 
-    def _section_overview_html(self, result: "ExperimentResult") -> str:
+    def _section_overview_html(self, result: ExperimentResult) -> str:
         """Build the overview card section."""
         return (
             '<h2>Overview</h2>\n'
@@ -529,7 +529,7 @@ th, td {{ border: 1px solid #ddd; padding: 0.5rem; text-align: left; }}
         )
 
     def _section_demographics_html(
-        self, result: "ExperimentResult", charts: dict[str, str]
+        self, result: ExperimentResult, charts: dict[str, str]
     ) -> str:
         """Build the demographics section."""
         snap = result.final_snapshot
@@ -550,7 +550,7 @@ th, td {{ border: 1px solid #ddd; padding: 0.5rem; text-align: left; }}
         )
 
     def _section_economics_html(
-        self, result: "ExperimentResult", charts: dict[str, str]
+        self, result: ExperimentResult, charts: dict[str, str]
     ) -> str:
         """Build the economics section."""
         if not result.metrics_timeline:
@@ -579,7 +579,7 @@ th, td {{ border: 1px solid #ddd; padding: 0.5rem; text-align: left; }}
             '</div>'
         )
 
-    def _section_social_html(self, result: "ExperimentResult") -> str:
+    def _section_social_html(self, result: ExperimentResult) -> str:
         """Build the social network section."""
         snap = result.final_snapshot
         if not snap or not snap.get("social_network"):
@@ -593,7 +593,7 @@ th, td {{ border: 1px solid #ddd; padding: 0.5rem; text-align: left; }}
             '</div>'
         )
 
-    def _section_cultural_html(self, result: "ExperimentResult") -> str:
+    def _section_cultural_html(self, result: ExperimentResult) -> str:
         """Build the cultural emergence section."""
         snap = result.final_snapshot
         if not snap or not snap.get("cultural_metrics"):
@@ -602,7 +602,7 @@ th, td {{ border: 1px solid #ddd; padding: 0.5rem; text-align: left; }}
         items = "".join(f"<li><strong>{k}</strong>: {v}</li>" for k, v in cm.items())
         return f'<h2>\U0001f3ad Cultural Emergence</h2>\n<div class="card"><ul>{items}</ul></div>'
 
-    def _section_events_html(self, result: "ExperimentResult") -> str:
+    def _section_events_html(self, result: ExperimentResult) -> str:
         """Build the emergence events timeline section."""
         if not result.emergence_events:
             return ""

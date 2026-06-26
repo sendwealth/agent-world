@@ -17,7 +17,7 @@ import asyncio
 import logging
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import Any
 
 import httpx
 import yaml
@@ -35,7 +35,7 @@ class FederationClient:
     def _url(self, path: str) -> str:
         return f"{self.base_url}{path}"
 
-    def _unwrap(self, resp: httpx.Response) -> Dict[str, Any]:
+    def _unwrap(self, resp: httpx.Response) -> dict[str, Any]:
         """Parse the { data, error, request_id } envelope."""
         resp.raise_for_status()
         body = resp.json()
@@ -48,7 +48,7 @@ class FederationClient:
         method: str,
         path: str,
         *,
-        json: Optional[Dict[str, Any]] = None,
+        json: dict[str, Any] | None = None,
         default: Any = None,
     ) -> Any:
         """Execute an HTTP request with graceful error handling.
@@ -90,10 +90,10 @@ class FederationClient:
         grpc_port: int = 50051,
         http_port: int = 8080,
         description: str = "",
-        capabilities: Optional[List[str]] = None,
+        capabilities: list[str] | None = None,
         max_agents: int = 100,
-        labels: Optional[Dict[str, str]] = None,
-    ) -> Dict[str, Any]:
+        labels: dict[str, str] | None = None,
+    ) -> dict[str, Any]:
         return self._safe_request(
             "POST",
             "/api/v1/federation/worlds",
@@ -110,17 +110,17 @@ class FederationClient:
             },
         )
 
-    def list_worlds(self) -> List[Dict[str, Any]]:
+    def list_worlds(self) -> list[dict[str, Any]]:
         result = self._safe_request("GET", "/api/v1/federation/worlds", default=[])
         return result if isinstance(result, list) else []
 
-    def get_world(self, world_id: str) -> Dict[str, Any]:
+    def get_world(self, world_id: str) -> dict[str, Any]:
         return self._safe_request("GET", f"/api/v1/federation/worlds/{world_id}")
 
-    def deregister_world(self, world_id: str) -> Dict[str, Any]:
+    def deregister_world(self, world_id: str) -> dict[str, Any]:
         return self._safe_request("DELETE", f"/api/v1/federation/worlds/{world_id}")
 
-    def heartbeat(self, world_id: str, metrics: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
+    def heartbeat(self, world_id: str, metrics: dict[str, Any] | None = None) -> dict[str, Any]:
         return self._safe_request(
             "POST",
             f"/api/v1/federation/worlds/{world_id}/heartbeat",
@@ -139,9 +139,9 @@ class FederationClient:
         tokens: int = 0,
         money: int = 0,
         reputation: float = 0.0,
-        skills: Optional[Dict[str, int]] = None,
+        skills: dict[str, int] | None = None,
         public_key: str = "",
-    ) -> Dict[str, Any]:
+    ) -> dict[str, Any]:
         return self._safe_request(
             "POST",
             "/api/v1/migration/submit",
@@ -164,8 +164,8 @@ class FederationClient:
         migration_id: str,
         approved: bool,
         reviewer_world_id: str,
-        rejection_reason: Optional[str] = None,
-    ) -> Dict[str, Any]:
+        rejection_reason: str | None = None,
+    ) -> dict[str, Any]:
         return self._safe_request(
             "POST",
             f"/api/v1/migration/{migration_id}/review",
@@ -177,33 +177,33 @@ class FederationClient:
             },
         )
 
-    def execute_migration(self, migration_id: str) -> Dict[str, Any]:
+    def execute_migration(self, migration_id: str) -> dict[str, Any]:
         return self._safe_request("POST", f"/api/v1/migration/{migration_id}/execute")
 
     def cancel_migration(
         self,
         migration_id: str,
         cancelled_by: str,
-        reason: Optional[str] = None,
-    ) -> Dict[str, Any]:
+        reason: str | None = None,
+    ) -> dict[str, Any]:
         return self._safe_request(
             "POST",
             f"/api/v1/migration/{migration_id}/cancel",
             json={"cancelled_by": cancelled_by, "reason": reason},
         )
 
-    def get_migration_status(self, migration_id: str) -> Dict[str, Any]:
+    def get_migration_status(self, migration_id: str) -> dict[str, Any]:
         return self._safe_request("GET", f"/api/v1/migration/{migration_id}")
 
     def list_migrations(
         self,
-        world_id: Optional[str] = None,
+        world_id: str | None = None,
         inbound: bool = True,
-        status_filter: Optional[str] = None,
+        status_filter: str | None = None,
         limit: int = 10,
         offset: int = 0,
-    ) -> List[Dict[str, Any]]:
-        body: Dict[str, Any] = {
+    ) -> list[dict[str, Any]]:
+        body: dict[str, Any] = {
             "inbound": inbound,
             "limit": limit,
             "offset": offset,
@@ -217,16 +217,16 @@ class FederationClient:
         )
         return result if isinstance(result, list) else []
 
-    def get_migration_policy(self) -> Dict[str, Any]:
+    def get_migration_policy(self) -> dict[str, Any]:
         return self._safe_request("GET", "/api/v1/migration/policy")
 
-    def update_migration_policy(self, **kwargs: Any) -> Dict[str, Any]:
+    def update_migration_policy(self, **kwargs: Any) -> dict[str, Any]:
         return self._safe_request("PUT", "/api/v1/migration/policy", json=kwargs)
 
-    def get_migration_stats(self) -> Dict[str, Any]:
+    def get_migration_stats(self) -> dict[str, Any]:
         return self._safe_request("GET", "/api/v1/migration/stats")
 
-    def get_agent_immigration_status(self, agent_id: str) -> Dict[str, Any]:
+    def get_agent_immigration_status(self, agent_id: str) -> dict[str, Any]:
         return self._safe_request("GET", f"/api/v1/agents/{agent_id}/immigration-status")
 
 

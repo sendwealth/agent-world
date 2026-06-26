@@ -6,8 +6,6 @@ CulturalInfluenceHook integration in ThinkLoop.
 
 from __future__ import annotations
 
-from typing import Dict
-
 from agent_runtime.core.experience import Experience
 from agent_runtime.models.personality import PersonalityVector
 from agent_runtime.models.skill import Skill
@@ -112,7 +110,7 @@ class TestKnowledgeTransferSkill:
         teacher_skill = Skill(
             name="mining", max_level=10, level=8, experience=0, next_level_exp=100
         )
-        student_skills: Dict[str, Skill] = {}
+        student_skills: dict[str, Skill] = {}
         student_p = make_personality(openness=0.7)
 
         xp = kt.transfer_skill(teacher_skill, student_skills, student_p)
@@ -126,7 +124,7 @@ class TestKnowledgeTransferSkill:
         teacher_skill = Skill(
             name="mining", max_level=10, level=1, experience=0, next_level_exp=100
         )
-        student_skills: Dict[str, Skill] = {}
+        student_skills: dict[str, Skill] = {}
 
         xp = kt.transfer_skill(teacher_skill, student_skills, make_personality())
 
@@ -140,7 +138,7 @@ class TestKnowledgeTransferSkill:
         teacher_skill = Skill(
             name="mining", max_level=10, level=5, experience=0, next_level_exp=100
         )
-        student_skills: Dict[str, Skill] = {}
+        student_skills: dict[str, Skill] = {}
         student_p = make_personality(openness=0.0)
 
         xp = kt.transfer_skill(teacher_skill, student_skills, student_p)

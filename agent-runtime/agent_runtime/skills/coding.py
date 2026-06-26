@@ -6,13 +6,13 @@ debug code. Higher levels unlock more complex tasks and faster execution.
 
 from __future__ import annotations
 
-from typing import Any, Dict
+from typing import Any
 
 from ..models.skill import Skill
 from .registry import SkillDefinition
 
 
-def _execute_coding(agent_skills: Dict[str, Skill], **kwargs: Any) -> Dict[str, Any]:
+def _execute_coding(agent_skills: dict[str, Skill], **kwargs: Any) -> dict[str, Any]:
     """Execute a coding task.
 
     Kwargs:

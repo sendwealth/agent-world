@@ -36,7 +36,7 @@ import json
 import logging
 import re
 from dataclasses import dataclass, field
-from enum import Enum
+from enum import StrEnum
 from typing import Any, Protocol
 
 from agent_runtime.llm.base import LLMMessage, LLMProvider
@@ -60,7 +60,7 @@ _REFLECTION_TOKEN_OVERHEAD: int = 10  # Fixed token cost for reflection processi
 # ---------------------------------------------------------------------------
 
 
-class ReflectionCategory(str, Enum):
+class ReflectionCategory(StrEnum):
     """Categories for reflection-generated memories."""
 
     STRATEGY = "strategy"        # Strategy adjustments

@@ -20,8 +20,6 @@ Provides:
 
 from __future__ import annotations
 
-from typing import List, Optional
-
 from ..base import Tool
 from .bank import BankTool
 from .code_exec import CodeExecTool
@@ -65,10 +63,10 @@ __all__ = [
 def create_builtin_tools(
     *,
     sandbox_http: bool = True,
-    file_ops_base_dir: Optional[str] = None,
-    world_engine_url: Optional[str] = None,
+    file_ops_base_dir: str | None = None,
+    world_engine_url: str | None = None,
     sandbox_world_engine: bool = True,
-) -> List[Tool]:
+) -> list[Tool]:
     """Create instances of all built-in tools.
 
     Args:

@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from typing import Any, Dict, Optional
+from typing import Any
 from uuid import UUID, uuid4
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator
@@ -37,18 +37,18 @@ class AgentState(BaseModel):
     reputation: float = Field(
         default=0.0, ge=-100.0, le=100.0, description="Reputation score (-100 to 100)"
     )
-    skills: Dict[str, Skill] = Field(
+    skills: dict[str, Skill] = Field(
         default_factory=dict, description="Skill name -> Skill mapping"
     )
-    personality: Dict[str, Any] = Field(
+    personality: dict[str, Any] = Field(
         default_factory=dict, description="Flexible personality traits"
     )
-    emotion: Dict[str, Any] = Field(
+    emotion: dict[str, Any] = Field(
         default_factory=dict,
         description="Current emotional state (PAD dimensions + labels)",
     )
     max_tokens: int = Field(default=DEFAULT_MAX_TOKENS, gt=0, description="Maximum token capacity")
-    current_task: Optional[str] = Field(default=None, description="Currently claimed task ID")
+    current_task: str | None = Field(default=None, description="Currently claimed task ID")
     tick: int = Field(default=0, ge=0, description="Current tick counter")
     world_sync_version: int = Field(
         default=0, description="Monotonic version counter for World Engine sync"
@@ -56,7 +56,7 @@ class AgentState(BaseModel):
     spawn_tick: int = Field(
         default=0, ge=0, description="Tick when agent was spawned (set by World Engine)"
     )
-    death_reason: Optional[DeathReason] = Field(
+    death_reason: DeathReason | None = Field(
         default=None, description="Reason for death (set when agent enters Dying/Dead)"
     )
 
@@ -75,7 +75,7 @@ class AgentState(BaseModel):
         self.skills[skill.name] = skill
         self._bump_version()
 
-    def remove_skill(self, skill_name: str) -> Optional[Skill]:
+    def remove_skill(self, skill_name: str) -> Skill | None:
         """Remove a skill by name. Returns the removed skill or None."""
         removed = self.skills.pop(skill_name, None)
         if removed is not None:
@@ -160,7 +160,7 @@ class AgentState(BaseModel):
 
         abilities = get_phase_abilities(self.phase)
 
-        action_ability_map: Dict[str, str] = {
+        action_ability_map: dict[str, str] = {
             "claim_task": "can_take_tasks",
             "submit_task": "can_take_tasks",
             "propose_deal": "can_trade",
@@ -177,7 +177,7 @@ class AgentState(BaseModel):
 
     # --- World Engine sync ---
 
-    def to_sync_payload(self) -> Dict[str, Any]:
+    def to_sync_payload(self) -> dict[str, Any]:
         """Serialize state for sending to the World Engine.
 
         Returns a JSON-serializable dict with a sync version stamp.
@@ -190,14 +190,14 @@ class AgentState(BaseModel):
         return payload
 
     @classmethod
-    def from_sync_payload(cls, data: Dict[str, Any]) -> AgentState:
+    def from_sync_payload(cls, data: dict[str, Any]) -> AgentState:
         """Deserialize state received from the World Engine.
 
         Validates all fields and bumps the sync version.
         """
         return cls(**data)
 
-    def apply_sync(self, remote: Dict[str, Any]) -> None:
+    def apply_sync(self, remote: dict[str, Any]) -> None:
         """Apply a remote state update from the World Engine.
 
         Uses last-writer-wins semantics: if the remote version is newer,

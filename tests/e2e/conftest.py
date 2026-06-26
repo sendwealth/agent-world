@@ -369,7 +369,6 @@ def _read_stderr(proc: subprocess.Popen, tail: int = 2000) -> str:
         if proc.stderr is None:
             return ""
         # Don't block — read whatever is available
-        import select
         import fcntl
 
         fd = proc.stderr.fileno()

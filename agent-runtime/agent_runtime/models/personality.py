@@ -8,7 +8,7 @@ from __future__ import annotations
 
 import math
 import random
-from typing import Any, Dict
+from typing import Any
 
 from pydantic import BaseModel, Field, model_validator
 
@@ -71,7 +71,7 @@ class PersonalityVector(BaseModel):
     def mutate(
         self,
         rate: float = 0.05,
-        experience_offsets: Dict[str, float] | None = None,
+        experience_offsets: dict[str, float] | None = None,
     ) -> PersonalityVector:
         """Return a new PersonalityVector with small random perturbations.
 
@@ -83,7 +83,7 @@ class PersonalityVector(BaseModel):
         Returns:
             A new PersonalityVector with mutated values.
         """
-        shifts: Dict[str, float] = {}
+        shifts: dict[str, float] = {}
         for dim in self._dimension_names():
             noise = random.uniform(-rate, rate)
             exp_shift = 0.0
@@ -92,7 +92,7 @@ class PersonalityVector(BaseModel):
                 exp_shift = max(-rate, min(rate, experience_offsets[dim]))
             shifts[dim] = noise + exp_shift
 
-        kwargs: Dict[str, Any] = {}
+        kwargs: dict[str, Any] = {}
         for dim in self._dimension_names():
             kwargs[dim] = _clamp(getattr(self, dim) + shifts.get(dim, 0.0))
         return PersonalityVector(**kwargs)
@@ -165,12 +165,12 @@ class PersonalityVector(BaseModel):
 
     # ── Serialization helpers ──
 
-    def to_storage_dict(self) -> Dict[str, float]:
+    def to_storage_dict(self) -> dict[str, float]:
         """Export as a plain dict for JSON storage/transmission."""
         return {d: getattr(self, d) for d in self._dimension_names()}
 
     @classmethod
-    def from_storage_dict(cls, data: Dict[str, float]) -> PersonalityVector:
+    def from_storage_dict(cls, data: dict[str, float]) -> PersonalityVector:
         """Restore from a plain dict (tolerant of missing keys)."""
         return cls(**{k: v for k, v in data.items() if k in cls._dimension_names_set()})
 

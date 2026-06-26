@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from typing import Dict, Optional
 
 
 @dataclass
@@ -14,7 +13,7 @@ class KeyRegistry:
     message verification to look up the signer's key.
     """
 
-    _keys: Dict[str, bytes] = field(default_factory=dict)
+    _keys: dict[str, bytes] = field(default_factory=dict)
 
     def register(self, agent_id: str, public_key_bytes: bytes) -> None:
         """Register or update an agent's public key.
@@ -29,7 +28,7 @@ class KeyRegistry:
             )
         self._keys[agent_id] = public_key_bytes
 
-    def lookup(self, agent_id: str) -> Optional[bytes]:
+    def lookup(self, agent_id: str) -> bytes | None:
         """Look up an agent's public key.
 
         Returns None if the agent is not registered.

@@ -35,7 +35,6 @@ export default function MentorshipPage() {
   }, []);
 
   useEffect(() => {
-    /* eslint-disable react-hooks/set-state-in-effect */
     loadData();
     const interval = setInterval(loadData, 10000);
     return () => clearInterval(interval);
@@ -66,7 +65,6 @@ export default function MentorshipPage() {
   }, [agentFilter, filterType]);
 
   useEffect(() => {
-    /* eslint-disable react-hooks/set-state-in-effect */
     if (agentFilter.trim()) {
       loadSessions();
     }

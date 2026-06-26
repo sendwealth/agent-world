@@ -198,7 +198,6 @@ export default function AgentChatPage() {
     }
 
     chatMsgs.sort((a, b) => a.tick - b.tick);
-    // eslint-disable-next-line react-hooks/set-state-in-effect
     setMessages(chatMsgs);
   }, [oracles, diaries]);
 

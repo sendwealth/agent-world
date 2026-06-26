@@ -97,7 +97,6 @@ export default function FeedPage() {
   }, []);
 
   useEffect(() => {
-    /* eslint-disable react-hooks/set-state-in-effect */
     loadFeed();
     loadTrending();
     const interval = setInterval(loadFeed, 5000);

@@ -114,7 +114,6 @@ export default function DiaryPage() {
   // Initial load + reload on daysFilter change
   useEffect(() => {
     if (!searchQuery) {
-      // eslint-disable-next-line react-hooks/set-state-in-effect
       loadEntries();
     }
   }, [loadEntries, searchQuery]);

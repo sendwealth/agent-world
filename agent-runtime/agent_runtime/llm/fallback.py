@@ -14,8 +14,8 @@ anywhere a single ``LLMProvider`` is expected.
 from __future__ import annotations
 
 import logging
+from collections.abc import AsyncIterator
 from dataclasses import dataclass, field
-from typing import AsyncIterator
 
 from .base import (
     LLMError,

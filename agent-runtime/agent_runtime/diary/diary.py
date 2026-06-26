@@ -16,7 +16,7 @@ import json
 import logging
 import sqlite3
 from dataclasses import dataclass, field
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 from uuid import UUID
@@ -186,7 +186,7 @@ class DiaryStore:
 
         Returns the entry with its auto-generated ``id`` and ``created_at``.
         """
-        now = datetime.now(timezone.utc)
+        now = datetime.now(UTC)
         created_at = now.isoformat()
         created_ts = now.timestamp()
 
@@ -249,7 +249,7 @@ class DiaryStore:
             List of entries ordered by tick ASC (oldest first).
         """
         cutoff_ts = (
-            datetime.now(timezone.utc).timestamp() - days * 86400
+            datetime.now(UTC).timestamp() - days * 86400
         )
         rows = self._conn.execute(
             "SELECT id, agent_id, tick, phase, mood, summary, key_events, "

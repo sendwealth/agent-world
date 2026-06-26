@@ -26,8 +26,8 @@ import json
 import logging
 import sqlite3
 from dataclasses import dataclass, field
-from datetime import datetime, timezone
-from enum import Enum
+from datetime import UTC, datetime
+from enum import StrEnum
 from pathlib import Path
 from typing import Any, Protocol, runtime_checkable
 
@@ -70,7 +70,7 @@ CREATE INDEX IF NOT EXISTS idx_vm_importance ON vector_memories(importance);
 # ---------------------------------------------------------------------------
 
 
-class MemoryType(str, Enum):
+class MemoryType(StrEnum):
     """Types of long-term vector memories."""
 
     EXPERIENCE = "experience"  # Things the agent has done / observed
@@ -580,11 +580,11 @@ class VectorMemory:
         try:
             last_dt = datetime.fromisoformat(last_accessed)
             if last_dt.tzinfo is None:
-                last_dt = last_dt.replace(tzinfo=timezone.utc)
+                last_dt = last_dt.replace(tzinfo=UTC)
         except (ValueError, TypeError):
             return 1.0
 
-        now_dt = datetime.now(timezone.utc)
+        now_dt = datetime.now(UTC)
         days_since = (now_dt - last_dt).total_seconds() / 86400.0
 
         if days_since <= 0:
@@ -634,4 +634,4 @@ def _blob_to_floats(blob: bytes) -> list[float]:
 
 def _now_iso() -> str:
     """Return the current UTC time as an ISO 8601 string."""
-    return datetime.now(timezone.utc).isoformat()
+    return datetime.now(UTC).isoformat()

@@ -15,6 +15,7 @@ from __future__ import annotations
 import asyncio
 import logging
 from dataclasses import dataclass, field
+from datetime import UTC
 from typing import Any
 
 from agent_runtime.experiment.config import ExperimentConfig
@@ -252,12 +253,12 @@ class ABExperiment:
         In local mode, generates deterministic placeholder data using seeded RNG.
         In World Engine mode, this method is not called directly.
         """
-        from datetime import datetime, timezone
+        from datetime import datetime
 
         repro_mgr = ReproducibilityManager(config)
         snapshot = repro_mgr.snapshot_config()
 
-        started = datetime.now(timezone.utc).isoformat()
+        started = datetime.now(UTC).isoformat()
 
         logger.info(
             "Starting experiment %s (seed=%d, ticks=%d)",
@@ -289,7 +290,7 @@ class ABExperiment:
                 "description": "Agents自发形成合作组织",
             })
 
-        finished = datetime.now(timezone.utc).isoformat()
+        finished = datetime.now(UTC).isoformat()
 
         return ExperimentResult(
             experiment_id=config.experiment_id,

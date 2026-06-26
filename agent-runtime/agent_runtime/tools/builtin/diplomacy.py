@@ -6,7 +6,7 @@ propose/accept/reject treaties, impose sanctions, declare war, propose peace.
 
 from __future__ import annotations
 
-from typing import Any, Dict, Optional
+from typing import Any
 
 from ..base import ToolParameters, ToolResult, ToolStatus
 from .world_engine_base import WorldEngineTool
@@ -17,31 +17,31 @@ class DiplomacyParams(ToolParameters):
 
     action: str
     # World management
-    world_name: Optional[str] = None
-    world_url: Optional[str] = None
-    world_id: Optional[str] = None
-    world_type: Optional[str] = None
+    world_name: str | None = None
+    world_url: str | None = None
+    world_id: str | None = None
+    world_type: str | None = None
     # Diplomatic relations
-    from_world_id: Optional[str] = None
-    to_world_id: Optional[str] = None
-    relation_type: Optional[str] = None
+    from_world_id: str | None = None
+    to_world_id: str | None = None
+    relation_type: str | None = None
     # Treaties
     # non_aggression, trade_pact, military_alliance, research_exchange,
     # cultural_exchange
-    treaty_type: Optional[str] = None
-    treaty_id: Optional[str] = None
-    terms: Optional[str] = None
-    proposer_world_id: Optional[str] = None
+    treaty_type: str | None = None
+    treaty_id: str | None = None
+    terms: str | None = None
+    proposer_world_id: str | None = None
     # Sanctions
-    target_world_id: Optional[str] = None
-    sanction_type: Optional[str] = None
-    reason: Optional[str] = None
-    sanction_id: Optional[str] = None
+    target_world_id: str | None = None
+    sanction_type: str | None = None
+    reason: str | None = None
+    sanction_id: str | None = None
     # War & peace
-    aggressor_world_id: Optional[str] = None
-    defender_world_id: Optional[str] = None
-    peace_id: Optional[str] = None
-    peace_terms: Optional[str] = None
+    aggressor_world_id: str | None = None
+    defender_world_id: str | None = None
+    peace_id: str | None = None
+    peace_terms: str | None = None
 
 
 class DiplomacyTool(WorldEngineTool):
@@ -140,7 +140,7 @@ class DiplomacyTool(WorldEngineTool):
             return self._make_error_result(str(exc))
 
     async def _register_world(self, p: DiplomacyParams) -> ToolResult:
-        body: Dict[str, Any] = {}
+        body: dict[str, Any] = {}
         if p.world_name:
             body["name"] = p.world_name
         if p.world_url:
@@ -163,7 +163,7 @@ class DiplomacyTool(WorldEngineTool):
         return ToolResult(tool_name=self.name, status=ToolStatus.SUCCESS, output=data)
 
     async def _establish_relations(self, p: DiplomacyParams) -> ToolResult:
-        body: Dict[str, Any] = {}
+        body: dict[str, Any] = {}
         if p.from_world_id:
             body["from_world_id"] = p.from_world_id
         if p.to_world_id:
@@ -174,7 +174,7 @@ class DiplomacyTool(WorldEngineTool):
         return ToolResult(tool_name=self.name, status=ToolStatus.SUCCESS, output=data)
 
     async def _propose_treaty(self, p: DiplomacyParams) -> ToolResult:
-        body: Dict[str, Any] = {}
+        body: dict[str, Any] = {}
         if p.treaty_type:
             body["treaty_type"] = p.treaty_type
         if p.from_world_id:
@@ -207,7 +207,7 @@ class DiplomacyTool(WorldEngineTool):
         return ToolResult(tool_name=self.name, status=ToolStatus.SUCCESS, output=data)
 
     async def _impose_sanctions(self, p: DiplomacyParams) -> ToolResult:
-        body: Dict[str, Any] = {}
+        body: dict[str, Any] = {}
         if p.from_world_id:
             body["imposer_world_id"] = p.from_world_id
         if p.target_world_id:
@@ -224,7 +224,7 @@ class DiplomacyTool(WorldEngineTool):
         return ToolResult(tool_name=self.name, status=ToolStatus.SUCCESS, output=data)
 
     async def _sever_ties(self, p: DiplomacyParams) -> ToolResult:
-        body: Dict[str, Any] = {}
+        body: dict[str, Any] = {}
         if p.from_world_id:
             body["world_id"] = p.from_world_id
         if p.to_world_id:
@@ -233,7 +233,7 @@ class DiplomacyTool(WorldEngineTool):
         return ToolResult(tool_name=self.name, status=ToolStatus.SUCCESS, output=data)
 
     async def _declare_war(self, p: DiplomacyParams) -> ToolResult:
-        body: Dict[str, Any] = {}
+        body: dict[str, Any] = {}
         if p.aggressor_world_id:
             body["aggressor_world_id"] = p.aggressor_world_id
         if p.defender_world_id:
@@ -244,7 +244,7 @@ class DiplomacyTool(WorldEngineTool):
         return ToolResult(tool_name=self.name, status=ToolStatus.SUCCESS, output=data)
 
     async def _propose_peace(self, p: DiplomacyParams) -> ToolResult:
-        body: Dict[str, Any] = {}
+        body: dict[str, Any] = {}
         if p.from_world_id:
             body["proposer_world_id"] = p.from_world_id
         if p.to_world_id:

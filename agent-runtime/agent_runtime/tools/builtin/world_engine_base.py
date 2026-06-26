@@ -8,7 +8,7 @@ tools return simulated responses without making network calls.
 from __future__ import annotations
 
 import logging
-from typing import Any, Dict, Optional
+from typing import Any
 
 import httpx
 
@@ -43,8 +43,8 @@ class WorldEngineTool(Tool):
         self._base_url = base_url.rstrip("/")
         self._sandbox = sandbox
         self._timeout_seconds = timeout_seconds
-        self._client: Optional[httpx.Client] = None
-        self._async_client: Optional[httpx.AsyncClient] = None
+        self._client: httpx.Client | None = None
+        self._async_client: httpx.AsyncClient | None = None
 
     # ------------------------------------------------------------------
     # HTTP helpers
@@ -66,25 +66,25 @@ class WorldEngineTool(Tool):
             )
         return self._async_client
 
-    async def _get(self, path: str, *, params: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
+    async def _get(self, path: str, *, params: dict[str, Any] | None = None) -> dict[str, Any]:
         client = self._get_async_client()
         resp = await client.get(f"{API_PREFIX}{path}", params=params)
         resp.raise_for_status()
         return resp.json()
 
-    async def _post(self, path: str, *, json: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
+    async def _post(self, path: str, *, json: dict[str, Any] | None = None) -> dict[str, Any]:
         client = self._get_async_client()
         resp = await client.post(f"{API_PREFIX}{path}", json=json)
         resp.raise_for_status()
         return resp.json()
 
-    async def _put(self, path: str, *, json: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
+    async def _put(self, path: str, *, json: dict[str, Any] | None = None) -> dict[str, Any]:
         client = self._get_async_client()
         resp = await client.put(f"{API_PREFIX}{path}", json=json)
         resp.raise_for_status()
         return resp.json()
 
-    async def _delete(self, path: str) -> Dict[str, Any]:
+    async def _delete(self, path: str) -> dict[str, Any]:
         client = self._get_async_client()
         resp = await client.delete(f"{API_PREFIX}{path}")
         resp.raise_for_status()
@@ -97,8 +97,8 @@ class WorldEngineTool(Tool):
     def _sandbox_response(
         self,
         action: str,
-        params: Dict[str, Any],
-        output: Optional[Dict[str, Any]] = None,
+        params: dict[str, Any],
+        output: dict[str, Any] | None = None,
     ) -> ToolResult:
         """Generate a simulated response in sandbox mode."""
         return ToolResult(

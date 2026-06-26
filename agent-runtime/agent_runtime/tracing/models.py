@@ -12,12 +12,12 @@ from __future__ import annotations
 
 import json
 from dataclasses import dataclass, field
-from enum import Enum
+from enum import StrEnum
 from typing import Any
 from uuid import UUID
 
 
-class TracePhase(str, Enum):
+class TracePhase(StrEnum):
     """Phases in the think loop that are traced."""
 
     SENSE = "sense"

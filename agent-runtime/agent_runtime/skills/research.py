@@ -7,13 +7,13 @@ and faster information retrieval.
 
 from __future__ import annotations
 
-from typing import Any, Dict
+from typing import Any
 
 from ..models.skill import Skill
 from .registry import SkillDefinition
 
 
-def _execute_research(agent_skills: Dict[str, Skill], **kwargs: Any) -> Dict[str, Any]:
+def _execute_research(agent_skills: dict[str, Skill], **kwargs: Any) -> dict[str, Any]:
     """Execute a research task.
 
     Kwargs:

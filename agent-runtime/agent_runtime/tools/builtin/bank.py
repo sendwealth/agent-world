@@ -6,7 +6,7 @@ central bank operations.
 
 from __future__ import annotations
 
-from typing import Any, Dict, Optional
+from typing import Any
 
 from ..base import ToolParameters, ToolResult, ToolStatus
 from .world_engine_base import WorldEngineTool
@@ -16,19 +16,19 @@ class BankParams(ToolParameters):
     """Parameters for the bank tool."""
 
     action: str
-    account_id: Optional[str] = None
-    agent_id: Optional[str] = None
-    account_type: Optional[str] = None  # savings, checking
-    amount: Optional[float] = None
+    account_id: str | None = None
+    agent_id: str | None = None
+    account_type: str | None = None  # savings, checking
+    amount: float | None = None
     # Loans
-    loan_id: Optional[str] = None
-    loan_amount: Optional[float] = None
-    loan_purpose: Optional[str] = None
-    term_ticks: Optional[int] = None
+    loan_id: str | None = None
+    loan_amount: float | None = None
+    loan_purpose: str | None = None
+    term_ticks: int | None = None
     # Central bank
-    savings_rate: Optional[float] = None
-    loan_rate: Optional[float] = None
-    mint_amount: Optional[float] = None
+    savings_rate: float | None = None
+    loan_rate: float | None = None
+    mint_amount: float | None = None
 
 
 class BankTool(WorldEngineTool):
@@ -120,7 +120,7 @@ class BankTool(WorldEngineTool):
             return self._make_error_result(str(exc))
 
     async def _open_account(self, p: BankParams) -> ToolResult:
-        body: Dict[str, Any] = {}
+        body: dict[str, Any] = {}
         if p.agent_id:
             body["agent_id"] = p.agent_id
         if p.account_type:
@@ -137,7 +137,7 @@ class BankTool(WorldEngineTool):
         return ToolResult(tool_name=self.name, status=ToolStatus.SUCCESS, output=data)
 
     async def _deposit(self, p: BankParams) -> ToolResult:
-        body: Dict[str, Any] = {}
+        body: dict[str, Any] = {}
         if p.account_id:
             body["account_id"] = p.account_id
         if p.amount is not None:
@@ -146,7 +146,7 @@ class BankTool(WorldEngineTool):
         return ToolResult(tool_name=self.name, status=ToolStatus.SUCCESS, output=data)
 
     async def _withdraw(self, p: BankParams) -> ToolResult:
-        body: Dict[str, Any] = {}
+        body: dict[str, Any] = {}
         if p.account_id:
             body["account_id"] = p.account_id
         if p.amount is not None:
@@ -155,7 +155,7 @@ class BankTool(WorldEngineTool):
         return ToolResult(tool_name=self.name, status=ToolStatus.SUCCESS, output=data)
 
     async def _apply_loan(self, p: BankParams) -> ToolResult:
-        body: Dict[str, Any] = {}
+        body: dict[str, Any] = {}
         if p.agent_id:
             body["agent_id"] = p.agent_id
         if p.loan_amount is not None:
@@ -184,14 +184,14 @@ class BankTool(WorldEngineTool):
         return ToolResult(tool_name=self.name, status=ToolStatus.SUCCESS, output=data)
 
     async def _repay_loan(self, p: BankParams) -> ToolResult:
-        body: Dict[str, Any] = {}
+        body: dict[str, Any] = {}
         if p.amount is not None:
             body["amount"] = p.amount
         data = await self._post(f"/bank/loans/{p.loan_id}/repay", json=body)
         return ToolResult(tool_name=self.name, status=ToolStatus.SUCCESS, output=data)
 
     async def _set_rates(self, p: BankParams) -> ToolResult:
-        body: Dict[str, Any] = {}
+        body: dict[str, Any] = {}
         if p.savings_rate is not None:
             body["savings_rate"] = p.savings_rate
         if p.loan_rate is not None:
@@ -200,7 +200,7 @@ class BankTool(WorldEngineTool):
         return ToolResult(tool_name=self.name, status=ToolStatus.SUCCESS, output=data)
 
     async def _mint(self, p: BankParams) -> ToolResult:
-        body: Dict[str, Any] = {}
+        body: dict[str, Any] = {}
         if p.mint_amount is not None:
             body["amount"] = p.mint_amount
         data = await self._post("/bank/central-bank/mint", json=body)

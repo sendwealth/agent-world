@@ -13,7 +13,7 @@ from __future__ import annotations
 import logging
 import threading
 from dataclasses import dataclass
-from enum import Enum
+from enum import StrEnum
 
 from .base import LLMConfig, LLMProvider, ProviderType
 from .factory import create_provider
@@ -25,7 +25,7 @@ logger = logging.getLogger(__name__)
 # ---------------------------------------------------------------------------
 
 
-class ProviderProtocol(str, Enum):
+class ProviderProtocol(StrEnum):
     """Supported LLM wire protocols.
 
     Each value corresponds to a concrete HTTP chat-completion dialect.

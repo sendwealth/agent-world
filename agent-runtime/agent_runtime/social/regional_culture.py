@@ -9,7 +9,7 @@ from __future__ import annotations
 
 import math
 import random
-from typing import Any, Dict, List, Optional
+from typing import Any
 
 from pydantic import BaseModel, Field
 
@@ -23,7 +23,7 @@ class Cluster(BaseModel):
     cluster_id: str
     center_personality: PersonalityVector
     center_values: ValueWeights
-    agent_ids: List[str] = Field(default_factory=list)
+    agent_ids: list[str] = Field(default_factory=list)
     region_id: str = ""
 
 
@@ -37,15 +37,15 @@ class RegionalCulture:
     def __init__(self, n_clusters: int = 5, max_iterations: int = 20) -> None:
         self._n_clusters = n_clusters
         self._max_iterations = max_iterations
-        self._clusters: Dict[str, Cluster] = {}
+        self._clusters: dict[str, Cluster] = {}
 
     # ── Public API ──
 
     def compute_regional_culture(
         self,
         region_id: str,
-        agents: List[Dict[str, Any]],
-    ) -> Dict[str, Any]:
+        agents: list[dict[str, Any]],
+    ) -> dict[str, Any]:
         """Compute the aggregate culture for a specific region.
 
         Args:
@@ -65,13 +65,13 @@ class RegionalCulture:
 
         # Average each personality dimension
         dim_names = PersonalityVector._dimension_names()
-        avg_p: Dict[str, float] = {}
+        avg_p: dict[str, float] = {}
         for dim in dim_names:
             avg_p[dim] = sum(getattr(p, dim) for p in personalities) / n
 
         # Average each value dimension
         val_names = ValueWeights._dimension_names()
-        avg_v: Dict[str, float] = {}
+        avg_v: dict[str, float] = {}
         for dim in val_names:
             avg_v[dim] = sum(getattr(v, dim) for v in values) / n
 
@@ -84,9 +84,9 @@ class RegionalCulture:
 
     def detect_cultural_clusters(
         self,
-        world_agents: List[Dict[str, Any]],
-        n_clusters: Optional[int] = None,
-    ) -> List[Cluster]:
+        world_agents: list[dict[str, Any]],
+        n_clusters: int | None = None,
+    ) -> list[Cluster]:
         """Auto-detect cultural clusters using K-means on personality + value vectors.
 
         Args:
@@ -101,7 +101,7 @@ class RegionalCulture:
 
         if len(world_agents) <= k:
             # Fewer agents than clusters — each agent is its own cluster
-            clusters: List[Cluster] = []
+            clusters: list[Cluster] = []
             for i, agent in enumerate(world_agents):
                 cluster = Cluster(
                     cluster_id=f"cluster_{i}",
@@ -123,11 +123,11 @@ class RegionalCulture:
         centroids = [features[i] for i in initial_indices]
 
         # K-means iterations
-        assignments: List[int] = [0] * len(world_agents)
+        assignments: list[int] = [0] * len(world_agents)
 
         for _ in range(self._max_iterations):
             # Assign each agent to nearest centroid
-            new_assignments: List[int] = []
+            new_assignments: list[int] = []
             for feat in features:
                 min_dist = float("inf")
                 best = 0
@@ -144,7 +144,7 @@ class RegionalCulture:
             assignments = new_assignments
 
             # Update centroids
-            new_centroids: List[List[float]] = []
+            new_centroids: list[list[float]] = []
             for ci in range(k):
                 members = [
                     features[j] for j in range(len(features)) if assignments[j] == ci
@@ -160,7 +160,7 @@ class RegionalCulture:
             centroids = new_centroids
 
         # Build Cluster objects
-        result: List[Cluster] = []
+        result: list[Cluster] = []
         for ci in range(k):
             member_indices = [j for j in range(len(world_agents)) if assignments[j] == ci]
             member_agents = [world_agents[j] for j in member_indices]
@@ -202,7 +202,7 @@ class RegionalCulture:
         self,
         cluster_a: Cluster,
         cluster_b: Cluster,
-    ) -> Dict[str, Any]:
+    ) -> dict[str, Any]:
         """Compute boundary characteristics between two cultural clusters.
 
         Returns the distance between cluster centers and the dimensions
@@ -211,7 +211,7 @@ class RegionalCulture:
         p_dist = cluster_a.center_personality.distance(cluster_b.center_personality)
 
         val_names = ValueWeights._dimension_names()
-        val_diffs: Dict[str, float] = {}
+        val_diffs: dict[str, float] = {}
         for dim in val_names:
             va = getattr(cluster_a.center_values, dim)
             vb = getattr(cluster_b.center_values, dim)
@@ -232,11 +232,11 @@ class RegionalCulture:
 
     # ── Accessors ──
 
-    def get_cluster(self, cluster_id: str) -> Optional[Cluster]:
+    def get_cluster(self, cluster_id: str) -> Cluster | None:
         """Get a cluster by ID."""
         return self._clusters.get(cluster_id)
 
-    def find_agent_cluster(self, agent_id: str) -> Optional[Cluster]:
+    def find_agent_cluster(self, agent_id: str) -> Cluster | None:
         """Find which cluster an agent belongs to."""
         for cluster in self._clusters.values():
             if agent_id in cluster.agent_ids:
@@ -246,14 +246,14 @@ class RegionalCulture:
     # ── Internals ──
 
     def _build_feature_vectors(
-        self, agents: List[Dict[str, Any]]
-    ) -> List[List[float]]:
+        self, agents: list[dict[str, Any]]
+    ) -> list[list[float]]:
         """Combine personality + value dimensions into flat feature vectors."""
-        vectors: List[List[float]] = []
+        vectors: list[list[float]] = []
         for agent in agents:
             p = agent["personality"]
             v = agent["values"]
-            feat: List[float] = []
+            feat: list[float] = []
             for dim in PersonalityVector._dimension_names():
                 feat.append(getattr(p, dim))
             for dim in ValueWeights._dimension_names():
@@ -262,5 +262,5 @@ class RegionalCulture:
         return vectors
 
     @staticmethod
-    def _euclidean_distance(a: List[float], b: List[float]) -> float:
-        return math.sqrt(sum((x - y) ** 2 for x, y in zip(a, b)))
+    def _euclidean_distance(a: list[float], b: list[float]) -> float:
+        return math.sqrt(sum((x - y) ** 2 for x, y in zip(a, b, strict=False)))

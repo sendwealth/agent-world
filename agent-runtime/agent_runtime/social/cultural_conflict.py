@@ -9,7 +9,7 @@ from __future__ import annotations
 
 import math
 import random
-from typing import Any, Dict, List, Optional
+from typing import Any
 
 from pydantic import BaseModel, Field
 
@@ -30,8 +30,8 @@ class AgentInteraction(BaseModel):
     agent_b_id: str
     agent_a_values: ValueWeights
     agent_b_values: ValueWeights
-    agent_a_personality: Optional[PersonalityVector] = None
-    agent_b_personality: Optional[PersonalityVector] = None
+    agent_a_personality: PersonalityVector | None = None
+    agent_b_personality: PersonalityVector | None = None
     interaction_type: str = "generic"
     tick: int = 0
 
@@ -42,8 +42,8 @@ class ConflictReport(BaseModel):
     agent_a_id: str
     agent_b_id: str
     conflict_score: float = Field(ge=0.0, le=1.0)
-    conflicting_dimensions: List[str]
-    value_differences: Dict[str, float]
+    conflicting_dimensions: list[str]
+    value_differences: dict[str, float]
     tick: int = 0
 
 
@@ -58,14 +58,14 @@ class CulturalConflictAndFusion:
 
     def __init__(self, conflict_threshold: float = CONFLICT_THRESHOLD) -> None:
         self._conflict_threshold = conflict_threshold
-        self._conflict_history: List[ConflictReport] = []
+        self._conflict_history: list[ConflictReport] = []
 
     # ── Conflict detection ──
 
     def detect_cultural_conflict(
         self,
         interaction: AgentInteraction,
-    ) -> Optional[ConflictReport]:
+    ) -> ConflictReport | None:
         """Detect whether an interaction involves cultural conflict.
 
         A conflict exists when the value difference in any dimension exceeds
@@ -79,8 +79,8 @@ class CulturalConflictAndFusion:
             A ConflictReport if conflict detected, None otherwise.
         """
         val_names = ValueWeights._dimension_names()
-        differences: Dict[str, float] = {}
-        conflicting_dims: List[str] = []
+        differences: dict[str, float] = {}
+        conflicting_dims: list[str] = []
 
         for dim in val_names:
             va = getattr(interaction.agent_a_values, dim)
@@ -113,9 +113,9 @@ class CulturalConflictAndFusion:
 
     def apply_fusion_effect(
         self,
-        border_agents: List[Dict[str, Any]],
+        border_agents: list[dict[str, Any]],
         intensity: float = 1.0,
-    ) -> Dict[str, Any]:
+    ) -> dict[str, Any]:
         """Apply cultural fusion to agents at cultural boundaries.
 
         Border agents are those who interact frequently with agents from
@@ -132,12 +132,12 @@ class CulturalConflictAndFusion:
             'updated_values' mapping agent_id -> new ValueWeights instance.
         """
         affected = 0
-        adjustments: Dict[str, Dict[str, float]] = {}
-        updated_values: Dict[str, ValueWeights] = {}
+        adjustments: dict[str, dict[str, float]] = {}
+        updated_values: dict[str, ValueWeights] = {}
 
         for agent_data in border_agents:
             agent_values: ValueWeights = agent_data["values"]
-            neighbors: List[ValueWeights] = agent_data.get("neighbor_values", [])
+            neighbors: list[ValueWeights] = agent_data.get("neighbor_values", [])
             agent_id: str = agent_data["id"]
 
             if not neighbors:
@@ -146,8 +146,8 @@ class CulturalConflictAndFusion:
 
             n = len(neighbors)
             val_names = ValueWeights._dimension_names()
-            agent_adjustments: Dict[str, float] = {}
-            updates: Dict[str, float] = {}
+            agent_adjustments: dict[str, float] = {}
+            updates: dict[str, float] = {}
 
             for dim in val_names:
                 current = getattr(agent_values, dim)
@@ -184,7 +184,7 @@ class CulturalConflictAndFusion:
 
     def compute_cultural_diversity_index(
         self,
-        world_agents: List[Dict[str, Any]],
+        world_agents: list[dict[str, Any]],
     ) -> float:
         """Compute world cultural diversity index in [0, 1].
 
@@ -248,11 +248,11 @@ class CulturalConflictAndFusion:
     # ── History access ──
 
     @property
-    def conflict_history(self) -> List[ConflictReport]:
+    def conflict_history(self) -> list[ConflictReport]:
         """Read-only access to conflict history."""
         return list(self._conflict_history)
 
-    def get_conflicts_for_agent(self, agent_id: str) -> List[ConflictReport]:
+    def get_conflicts_for_agent(self, agent_id: str) -> list[ConflictReport]:
         """Get all conflicts involving a specific agent."""
         return [
             r

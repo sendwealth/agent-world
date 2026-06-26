@@ -66,9 +66,9 @@ async def connect_world_engine(
                 client._channel.channel_ready(),  # type: ignore[union-attr]
                 timeout=2.0,
             )
-        except Exception:
+        except Exception as exc:
             await client.close()
-            raise ConnectionError(f"gRPC channel not ready: {grpc_address}")
+            raise ConnectionError(f"gRPC channel not ready: {grpc_address}") from exc
 
         world_client = GRPCWorldClient(client)
         perception_provider = GRPCPerceptionProvider(client)
@@ -109,7 +109,7 @@ async def register_agent(
     world_url: str,
     *,
     public_key_b64: str | None = None,
-    timeout: float = 5.0,
+    timeout: float = 5.0,  # noqa: ASYNC109
     max_retries: int = 3,
     retry_delay: float = 2.0,
 ) -> str | None:
@@ -218,7 +218,7 @@ async def deregister_agent(
     agent_id: str,
     world_url: str,
     *,
-    timeout: float = 5.0,
+    timeout: float = 5.0,  # noqa: ASYNC109
 ) -> bool:
     """Deregister the agent from the World Engine REST API.
 

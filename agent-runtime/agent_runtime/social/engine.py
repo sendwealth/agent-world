@@ -27,7 +27,7 @@ from __future__ import annotations
 import logging
 import math
 from dataclasses import dataclass, field
-from typing import Any, Dict, List, Optional
+from typing import Any
 
 from agent_runtime.models.personality import PersonalityVector
 from agent_runtime.models.values import ValueWeights
@@ -75,13 +75,13 @@ class SocialContext:
     should_socialize: bool = False
 
     # Nearby agents that are viable social targets, ranked by affinity.
-    targets: List[SocialTarget] = field(default_factory=list)
+    targets: list[SocialTarget] = field(default_factory=list)
 
     # Best target (highest affinity) if should_socialize is True.
-    recommended_target: Optional[SocialTarget] = None
+    recommended_target: SocialTarget | None = None
 
     # Trust snapshot: target_agent_id -> trust_value [0, 1].
-    trust_snapshot: Dict[str, float] = field(default_factory=dict)
+    trust_snapshot: dict[str, float] = field(default_factory=dict)
 
     # Personality summary for LLM prompt injection.
     personality_description: str = ""
@@ -117,10 +117,10 @@ class SocialEngine:
         agent_id: str,
         personality: PersonalityVector,
         values: ValueWeights,
-        nearby_agents: List[Dict[str, Any]],
+        nearby_agents: list[dict[str, Any]],
         tick: int,
         *,
-        agent_groups: Optional[List[str]] = None,
+        agent_groups: list[str] | None = None,
     ) -> SocialContext:
         """Build the social context for an agent at decision time.
 
@@ -145,8 +145,8 @@ class SocialEngine:
         )
 
         # 2. Evaluate each nearby agent as a social target
-        targets: List[SocialTarget] = []
-        trust_snapshot: Dict[str, float] = {}
+        targets: list[SocialTarget] = []
+        trust_snapshot: dict[str, float] = {}
 
         for nearby in nearby_agents:
             # Defensive key access: the REST perception API returns "id"
@@ -258,7 +258,7 @@ class SocialEngine:
     @staticmethod
     def _should_socialize(
         propensity: float,
-        targets: List[SocialTarget],
+        targets: list[SocialTarget],
     ) -> bool:
         """Decide if the agent should socialize this tick.
 
@@ -281,7 +281,7 @@ class SocialEngine:
         target_personality: PersonalityVector,
         target_values: ValueWeights,
         tick: int,
-    ) -> Dict[str, Any]:
+    ) -> dict[str, Any]:
         """Execute the SOCIALIZE action — perform social interactions.
 
         This triggers:
@@ -301,7 +301,7 @@ class SocialEngine:
         Returns:
             Dict with interaction results.
         """
-        results: Dict[str, Any] = {
+        results: dict[str, Any] = {
             "agent_id": agent_id,
             "target_id": target_id,
             "tick": tick,
@@ -360,8 +360,8 @@ class SocialEngine:
 
     def apply_tick_diffusion(
         self,
-        agents_by_region: Dict[str, List[Dict[str, Any]]],
-    ) -> List[Dict[str, Any]]:
+        agents_by_region: dict[str, list[dict[str, Any]]],
+    ) -> list[dict[str, Any]]:
         """Apply regional cultural diffusion for one tick.
 
         Call this once per tick (not per agent).

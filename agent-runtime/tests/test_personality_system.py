@@ -7,6 +7,7 @@ experience recording, value updates, and personality drift.
 import math
 
 import pytest
+from pydantic import ValidationError
 
 from agent_runtime.core.experience import Experience, ExperienceAccumulator
 from agent_runtime.models.personality import PersonalityVector
@@ -35,9 +36,9 @@ class TestPersonalityVectorCreation:
         assert pv.greed == 0.1
 
     def test_bounds_validation(self):
-        with pytest.raises(Exception):
+        with pytest.raises(ValidationError):
             PersonalityVector(openness=1.5)
-        with pytest.raises(Exception):
+        with pytest.raises(ValidationError):
             PersonalityVector(openness=-0.1)
 
     def test_random_creation(self):
@@ -155,7 +156,7 @@ class TestValueWeightsCreation:
         assert vw.innovation_tendency == 0.3
 
     def test_bounds_validation(self):
-        with pytest.raises(Exception):
+        with pytest.raises(ValidationError):
             ValueWeights(survival_priority=1.5)
 
 
@@ -247,7 +248,7 @@ class TestExperience:
         assert exp.outcome == 0.8
 
     def test_outcome_bounds(self):
-        with pytest.raises(Exception):
+        with pytest.raises(ValidationError):
             Experience(tick=1, event_type="trade", outcome=2.0)
 
 

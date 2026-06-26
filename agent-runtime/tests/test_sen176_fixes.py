@@ -345,8 +345,8 @@ class TestCostTrackerAgentAndTime:
         await tracker.record(resp1, agent_id="a1")
         await tracker.record(resp2, agent_id="a2")
         records = tracker._records
-        records[0].timestamp
-        records[1].timestamp
+        _ = records[0].timestamp
+        _ = records[1].timestamp
         # Query full range
         result = tracker.by_time_range("2000-01-01T00:00:00+00:00", "2099-12-31T23:59:59+00:00")
         assert result["calls"] == 2

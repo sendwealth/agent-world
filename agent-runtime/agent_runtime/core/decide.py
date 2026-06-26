@@ -28,7 +28,7 @@ import random
 import re
 from collections import OrderedDict
 from dataclasses import dataclass, field
-from enum import Enum
+from enum import StrEnum
 from typing import Any, Protocol
 
 from agent_runtime.context.engine import ContextEnginePipeline, PipelineResult
@@ -61,7 +61,7 @@ class SocialContext:
 # ---------------------------------------------------------------------------
 
 
-class DecisionAction(str, Enum):
+class DecisionAction(StrEnum):
     """All possible actions an agent can choose in a single tick.
 
     Token costs are aligned with ``act.py:_DEFAULT_TOKEN_COSTS`` (the values

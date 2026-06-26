@@ -238,10 +238,10 @@ def load_config_file(path: Path) -> dict[str, Any]:
         except ModuleNotFoundError:
             try:
                 import tomli as tomllib  # type: ignore[no-redef]
-            except ModuleNotFoundError:
+            except ModuleNotFoundError as exc:
                 raise ImportError(
                     "TOML support requires Python 3.11+ (tomllib) or the 'tomli' package"
-                )
+                ) from exc
         with open(path, "rb") as f:
             return tomllib.load(f)
     elif suffix in (".yaml", ".yml"):
@@ -279,11 +279,11 @@ def _parse_llm_config(data: dict[str, Any]) -> LLMConfig | None:
 
     try:
         provider = ProviderType(effective_str)
-    except ValueError:
+    except ValueError as exc:
         valid = ", ".join(p.value for p in ProviderType)
         raise ValueError(
             f"Unknown LLM provider {provider_str!r} in config. Valid options: {valid}"
-        )
+        ) from exc
 
     # Load API key from environment, never from config file
     api_key = (

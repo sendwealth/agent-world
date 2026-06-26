@@ -270,7 +270,7 @@ class LLMQueue:
                 entry = await asyncio.wait_for(
                     self._get_queue().get(), timeout=1.0,
                 )
-            except asyncio.TimeoutError:
+            except TimeoutError:
                 # No items in the queue — loop back and check _running
                 continue
             except asyncio.CancelledError:
@@ -300,7 +300,7 @@ class LLMQueue:
                 self._execute_with_semaphore(entry),
                 timeout=self._config.timeout_seconds,
             )
-        except asyncio.TimeoutError:
+        except TimeoutError:
             # Timeout covers both semaphore acquisition and LLM call.
             # Propagate so the caller (DecisionEngine) can use its own
             # fallback_decision() which validates against available_actions.
@@ -311,7 +311,7 @@ class LLMQueue:
                 entry.request.priority,
             )
             if not entry.future.done():
-                entry.future.set_exception(asyncio.TimeoutError())
+                entry.future.set_exception(TimeoutError())
         except asyncio.CancelledError:
             # Queue is shutting down — resolve with fallback
             if not entry.future.done():

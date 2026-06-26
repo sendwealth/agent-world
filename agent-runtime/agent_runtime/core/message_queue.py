@@ -22,8 +22,8 @@ from __future__ import annotations
 import asyncio
 import logging
 from dataclasses import dataclass
-from enum import Enum
-from typing import Any, Union
+from enum import StrEnum
+from typing import Any
 
 logger = logging.getLogger(__name__)
 
@@ -33,7 +33,7 @@ logger = logging.getLogger(__name__)
 # ---------------------------------------------------------------------------
 
 
-class OracleType(str, Enum):
+class OracleType(StrEnum):
     """Type of Oracle message from a human."""
 
     GUIDANCE = "guidance"
@@ -117,7 +117,7 @@ class BountyMessage:
 
 
 # Union type for queue items
-WorldQueueMessage = Union[OracleMessage, BountyMessage]
+WorldQueueMessage = OracleMessage | BountyMessage
 
 
 # ---------------------------------------------------------------------------

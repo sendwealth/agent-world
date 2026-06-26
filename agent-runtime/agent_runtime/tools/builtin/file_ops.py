@@ -12,7 +12,7 @@ from __future__ import annotations
 import logging
 import os
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import Any
 
 from ..base import Tool, ToolParameters, ToolResult, ToolStatus
 
@@ -29,7 +29,7 @@ class FileOpsParams(ToolParameters):
 
     operation: str  # read, write, list, exists, delete
     path: str  # relative path within sandbox
-    content: Optional[str] = None  # for write operation
+    content: str | None = None  # for write operation
     encoding: str = "utf-8"
     create_dirs: bool = True  # create parent dirs on write
 
@@ -53,7 +53,7 @@ class FileOpsTool(Tool):
         - **delete**: Delete a file.
     """
 
-    def __init__(self, base_dir: Optional[str] = None) -> None:
+    def __init__(self, base_dir: str | None = None) -> None:
         super().__init__()
         if base_dir is None:
             base_dir = os.environ.get(
@@ -204,7 +204,7 @@ class FileOpsTool(Tool):
             )
 
         try:
-            entries: List[Dict[str, Any]] = []
+            entries: list[dict[str, Any]] = []
             for entry in sorted(target.iterdir()):
                 entries.append({
                     "name": entry.name,

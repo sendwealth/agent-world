@@ -10,7 +10,7 @@ from __future__ import annotations
 import logging
 import math
 import random
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any
 
 from agent_runtime.models.personality import PersonalityVector
 from agent_runtime.models.values import ValueWeights
@@ -38,8 +38,8 @@ class ImitationEngine:
         observed_personality: PersonalityVector,
         observed_values: ValueWeights,
         observed_success_score: float,
-        context: Dict[str, Any],
-    ) -> Optional[Dict[str, Any]]:
+        context: dict[str, Any],
+    ) -> dict[str, Any] | None:
         """Observer considers imitating an observed agent.
 
         Imitation probability is determined by:
@@ -83,7 +83,7 @@ class ImitationEngine:
         rate = min(rate, 0.1)  # hard cap at 10% per observation
 
         # Weighted fusion: move observer toward observed
-        personality_deltas: Dict[str, float] = {}
+        personality_deltas: dict[str, float] = {}
         for dim in PersonalityVector._dimension_names():
             obs_val = getattr(observer_personality, dim)
             tgt_val = getattr(observed_personality, dim)
@@ -92,7 +92,7 @@ class ImitationEngine:
             personality_deltas[dim] = new_val - obs_val
             object.__setattr__(observer_personality, dim, new_val)
 
-        value_deltas: Dict[str, float] = {}
+        value_deltas: dict[str, float] = {}
         for dim in ValueWeights._dimension_names():
             obs_val = getattr(observer_values, dim)
             tgt_val = getattr(observed_values, dim)
@@ -118,10 +118,10 @@ class ImitationEngine:
     def get_role_models(
         self,
         agent_personality: PersonalityVector,
-        candidates: List[Dict[str, Any]],
-        current_context: Dict[str, Any],
+        candidates: list[dict[str, Any]],
+        current_context: dict[str, Any],
         top_k: int = 3,
-    ) -> List[Dict[str, Any]]:
+    ) -> list[dict[str, Any]]:
         """Identify the best role models for an agent in the current context.
 
         Scoring considers:
@@ -147,7 +147,7 @@ class ImitationEngine:
         ctx_tags = set(current_context.get("tags", []))
         event_type = current_context.get("event_type", "")
 
-        scored: List[Tuple[float, Dict[str, Any]]] = []
+        scored: list[tuple[float, dict[str, Any]]] = []
         for candidate in candidates:
             score = candidate.get("success_score", 0.0)
 

@@ -7,8 +7,7 @@
 # decisions (policy checks, resource tax, blocked skills, quotas) by
 # reimplementing the core rules in Python.
 from dataclasses import dataclass, field
-from datetime import datetime, timezone
-from typing import Dict, List, Optional
+from datetime import UTC, datetime
 from uuid import uuid4
 
 import pytest
@@ -22,8 +21,8 @@ class AgentSnapshot:
     tokens: int = 50_000
     money: int = 10_000
     reputation: float = 10.0
-    skills: Dict[str, int] = field(default_factory=dict)
-    metadata: Dict[str, str] = field(default_factory=dict)
+    skills: dict[str, int] = field(default_factory=dict)
+    metadata: dict[str, str] = field(default_factory=dict)
     source_world_id: str = ""
     memory_data: bytes = b""
     public_key: str = ""
@@ -38,7 +37,7 @@ class MigrationPolicy:
     token_cost: int = 10_000
     resource_tax_rate: float = 0.2
     require_skill_certification: bool = False
-    blocked_skills: List[str] = field(default_factory=list)
+    blocked_skills: list[str] = field(default_factory=list)
     cooldown_ticks: int = 100
 
 
@@ -50,10 +49,10 @@ class MigrationApplication:
     target_world_id: str
     status: str  # pending, approved, rejected, executing, completed, cancelled, failed
     agent_snapshot: AgentSnapshot
-    rejection_reason: Optional[str] = None
+    rejection_reason: str | None = None
     submitted_at: str = ""
-    reviewed_at: Optional[str] = None
-    completed_at: Optional[str] = None
+    reviewed_at: str | None = None
+    completed_at: str | None = None
     token_cost: int = 0
     resource_tax_rate: float = 0.0
 
@@ -61,11 +60,11 @@ class MigrationApplication:
 class PyMigrationManager:
     """Python reimplementation of MigrationManager for testing design rules."""
 
-    def __init__(self, policy: Optional[MigrationPolicy] = None):
+    def __init__(self, policy: MigrationPolicy | None = None):
         self.policy = policy or MigrationPolicy()
-        self.applications: Dict[str, MigrationApplication] = {}
-        self.daily_count: Dict[str, int] = {}
-        self.agent_last_migration: Dict[str, int] = {}
+        self.applications: dict[str, MigrationApplication] = {}
+        self.daily_count: dict[str, int] = {}
+        self.agent_last_migration: dict[str, int] = {}
         self.current_tick = 0
 
     def submit(self, snapshot: AgentSnapshot, target_world_id: str) -> MigrationApplication:
@@ -92,7 +91,7 @@ class PyMigrationManager:
                 raise ValueError("Agent is in migration cooldown")
 
         # Check daily quota
-        today = datetime.now(timezone.utc).strftime("%Y-%m-%d")
+        today = datetime.now(UTC).strftime("%Y-%m-%d")
         if self.daily_count.get(today, 0) >= p.daily_quota:
             raise ValueError("Daily migration quota reached")
         self.daily_count[today] = self.daily_count.get(today, 0) + 1
@@ -128,7 +127,7 @@ class PyMigrationManager:
             target_world_id=target_world_id,
             status="pending",
             agent_snapshot=new_snapshot,
-            submitted_at=datetime.now(timezone.utc).isoformat(),
+            submitted_at=datetime.now(UTC).isoformat(),
             token_cost=p.token_cost,
             resource_tax_rate=p.resource_tax_rate,
         )
@@ -136,7 +135,7 @@ class PyMigrationManager:
         return app
 
     def review(self, migration_id: str, approved: bool, reviewer_world_id: str,
-               rejection_reason: Optional[str] = None) -> MigrationApplication:
+               rejection_reason: str | None = None) -> MigrationApplication:
         app = self.applications.get(migration_id)
         if not app:
             raise ValueError(f"Migration {migration_id} not found")
@@ -147,7 +146,7 @@ class PyMigrationManager:
 
         app.status = "approved" if approved else "rejected"
         app.rejection_reason = rejection_reason
-        app.reviewed_at = datetime.now(timezone.utc).isoformat()
+        app.reviewed_at = datetime.now(UTC).isoformat()
         return app
 
     def execute(self, migration_id: str) -> MigrationApplication:
@@ -158,12 +157,12 @@ class PyMigrationManager:
             raise ValueError(f"Migration must be approved, current: {app.status}")
 
         app.status = "completed"
-        app.completed_at = datetime.now(timezone.utc).isoformat()
+        app.completed_at = datetime.now(UTC).isoformat()
         self.agent_last_migration[app.agent_id] = self.current_tick
         return app
 
     def cancel(self, migration_id: str, cancelled_by: str,
-               reason: Optional[str] = None) -> MigrationApplication:
+               reason: str | None = None) -> MigrationApplication:
         app = self.applications.get(migration_id)
         if not app:
             raise ValueError(f"Migration {migration_id} not found")
@@ -172,14 +171,14 @@ class PyMigrationManager:
 
         app.status = "cancelled"
         app.rejection_reason = reason
-        app.completed_at = datetime.now(timezone.utc).isoformat()
+        app.completed_at = datetime.now(UTC).isoformat()
         return app
 
-    def get(self, migration_id: str) -> Optional[MigrationApplication]:
+    def get(self, migration_id: str) -> MigrationApplication | None:
         return self.applications.get(migration_id)
 
-    def list_migrations(self, world_id: Optional[str] = None, inbound: bool = True,
-                        status_filter: Optional[str] = None) -> List[MigrationApplication]:
+    def list_migrations(self, world_id: str | None = None, inbound: bool = True,
+                        status_filter: str | None = None) -> list[MigrationApplication]:
         results = []
         for app in self.applications.values():
             if world_id:

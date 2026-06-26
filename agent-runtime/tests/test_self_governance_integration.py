@@ -9,8 +9,8 @@ from __future__ import annotations
 
 import uuid
 from dataclasses import dataclass, field
-from enum import Enum
-from typing import Any, Dict, List, Optional
+from enum import StrEnum
+from typing import Any
 
 import pytest
 
@@ -30,7 +30,7 @@ from agent_runtime.organization.governance import (
 # ═══════════════════════════════════════════════════════════════
 
 
-class OrgType(str, Enum):
+class OrgType(StrEnum):
     COMPANY = "company"
     GUILD = "guild"
     ALLIANCE = "alliance"
@@ -41,7 +41,7 @@ class OrgType(str, Enum):
 class SimulatedEvent:
     """Simulates a WorldEvent from the Rust engine."""
     event_type: str
-    payload: Dict[str, Any]
+    payload: dict[str, Any]
 
 
 @dataclass
@@ -50,12 +50,12 @@ class SimulatedOrg:
     id: str
     name: str
     org_type: OrgType
-    members: List[str] = field(default_factory=list)
+    members: list[str] = field(default_factory=list)
     treasury: int = 100
     avg_wealth: float = 100.0
     total_wealth: float = 0.0
     tax_rate: float = 0.10
-    leader_id: Optional[str] = None
+    leader_id: str | None = None
     created_tick: int = 0
 
     @property
@@ -71,12 +71,12 @@ class GovernanceEventBus:
     """Collects governance events for verification."""
 
     def __init__(self) -> None:
-        self.events: List[SimulatedEvent] = []
+        self.events: list[SimulatedEvent] = []
 
-    def publish(self, event_type: str, payload: Dict[str, Any]) -> None:
+    def publish(self, event_type: str, payload: dict[str, Any]) -> None:
         self.events.append(SimulatedEvent(event_type=event_type, payload=payload))
 
-    def find_by_type(self, event_type: str) -> List[SimulatedEvent]:
+    def find_by_type(self, event_type: str) -> list[SimulatedEvent]:
         return [e for e in self.events if e.event_type == event_type]
 
 
@@ -89,7 +89,7 @@ class SimulatedGovernanceWorld:
     """
 
     def __init__(self) -> None:
-        self.orgs: Dict[str, SimulatedOrg] = {}
+        self.orgs: dict[str, SimulatedOrg] = {}
         self.event_bus = GovernanceEventBus()
         self.tick: int = 0
         self.decider = GovernanceDecider()
@@ -101,7 +101,7 @@ class SimulatedGovernanceWorld:
         self,
         name: str,
         org_type: OrgType,
-        member_ids: List[str],
+        member_ids: list[str],
     ) -> SimulatedOrg:
         org_id = str(uuid.uuid4())
         org = SimulatedOrg(
@@ -412,10 +412,10 @@ class TestMultiOrgGovernanceSimulation:
         ])
 
         # Tracking for verification
-        leadership_decisions: List[str] = []
-        tax_proposals: List[float] = []
-        treaty_decisions: List[str] = []
-        allocation_decisions: List[str] = []
+        leadership_decisions: list[str] = []
+        tax_proposals: list[float] = []
+        treaty_decisions: list[str] = []
+        allocation_decisions: list[str] = []
 
         for tick in range(1, 251):
             world.advance_tick()

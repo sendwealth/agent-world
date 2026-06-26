@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import json
-from typing import Any, Dict, Optional
+from typing import Any
 
 from cryptography.exceptions import InvalidSignature
 from cryptography.hazmat.primitives.asymmetric.ed25519 import (
@@ -13,7 +13,7 @@ from cryptography.hazmat.primitives.asymmetric.ed25519 import (
 from .keys import KeyPair
 
 
-def canonicalize(data: Dict[str, Any]) -> bytes:
+def canonicalize(data: dict[str, Any]) -> bytes:
     """Deterministically serialize a dict to UTF-8 JSON bytes.
 
     Rules:
@@ -39,9 +39,9 @@ def _sort_keys_recursive(obj: Any) -> Any:
 
 
 def sign_message(
-    message: Dict[str, Any],
+    message: dict[str, Any],
     key_pair: KeyPair,
-    fields: Optional[list[str]] = None,
+    fields: list[str] | None = None,
 ) -> str:
     """Sign selected fields of a message and return hex-encoded signature.
 
@@ -64,10 +64,10 @@ def sign_message(
 
 
 def verify_message(
-    message: Dict[str, Any],
+    message: dict[str, Any],
     signature_hex: str,
     public_key_bytes: bytes,
-    fields: Optional[list[str]] = None,
+    fields: list[str] | None = None,
 ) -> bool:
     """Verify an ed25519 signature on a message.
 

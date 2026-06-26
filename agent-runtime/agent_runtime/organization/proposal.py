@@ -11,7 +11,7 @@ import logging
 import random
 import uuid
 from dataclasses import dataclass, field
-from enum import Enum
+from enum import StrEnum
 
 from .formation import AgentProfile, FormationConditions, FormationReason
 
@@ -23,7 +23,7 @@ logger = logging.getLogger(__name__)
 # ---------------------------------------------------------------------------
 
 
-class OrgType(str, Enum):
+class OrgType(StrEnum):
     """Types of organizations agents can form."""
 
     GUILD = "guild"  # Skill-based collaboration

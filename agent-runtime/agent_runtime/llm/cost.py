@@ -9,8 +9,7 @@ from __future__ import annotations
 import asyncio
 import logging
 from dataclasses import dataclass, field
-from datetime import datetime, timezone
-from typing import Dict
+from datetime import UTC, datetime
 
 from .base import LLMResponse
 
@@ -59,7 +58,7 @@ def _get_pricing(model: str) -> dict[str, float]:
 
 def _now_iso() -> str:
     """Return the current UTC time as an ISO 8601 string."""
-    return datetime.now(timezone.utc).isoformat()
+    return datetime.now(UTC).isoformat()
 
 
 @dataclass(frozen=True)
@@ -129,7 +128,7 @@ class CostTracker:
     def total_cost_usd(self) -> float:
         return sum(r.cost_usd for r in self._records)
 
-    def summary(self) -> Dict[str, float | int]:
+    def summary(self) -> dict[str, float | int]:
         """Return a summary dict of total usage and cost."""
         return {
             "calls": len(self._records),
@@ -139,9 +138,9 @@ class CostTracker:
             "total_cost_usd": round(self.total_cost_usd, 6),
         }
 
-    def by_model(self) -> Dict[str, Dict[str, float | int]]:
+    def by_model(self) -> dict[str, dict[str, float | int]]:
         """Break down usage and cost by model."""
-        result: Dict[str, Dict[str, float | int]] = {}
+        result: dict[str, dict[str, float | int]] = {}
         for rec in self._records:
             if rec.model not in result:
                 result[rec.model] = {
@@ -159,9 +158,9 @@ class CostTracker:
             entry["cost_usd"] = round(entry["cost_usd"] + rec.cost_usd, 6)  # type: ignore[operator]
         return result
 
-    def by_agent(self) -> Dict[str, Dict[str, float | int]]:
+    def by_agent(self) -> dict[str, dict[str, float | int]]:
         """Break down usage and cost by agent."""
-        result: Dict[str, Dict[str, float | int]] = {}
+        result: dict[str, dict[str, float | int]] = {}
         for rec in self._records:
             aid = rec.agent_id or "(unknown)"
             if aid not in result:
@@ -180,7 +179,7 @@ class CostTracker:
             entry["cost_usd"] = round(entry["cost_usd"] + rec.cost_usd, 6)  # type: ignore[operator]
         return result
 
-    def by_time_range(self, start: str, end: str) -> Dict[str, float | int]:
+    def by_time_range(self, start: str, end: str) -> dict[str, float | int]:
         """Aggregate usage and cost for records within an ISO 8601 time window.
 
         All timestamps are UTC.  Comparison is lexicographic, so callers must

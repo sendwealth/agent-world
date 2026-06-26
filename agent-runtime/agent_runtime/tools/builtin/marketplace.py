@@ -6,7 +6,7 @@ the marketplace, and manage token balances.
 
 from __future__ import annotations
 
-from typing import Any, Dict, List, Optional
+from typing import Any
 
 from ..base import ToolParameters, ToolResult, ToolStatus
 from .world_engine_base import WorldEngineTool
@@ -16,28 +16,28 @@ class MarketplaceParams(ToolParameters):
     """Parameters for the marketplace tool."""
 
     action: str
-    listing_id: Optional[str] = None
-    agent_id: Optional[str] = None
+    listing_id: str | None = None
+    agent_id: str | None = None
     # Listing
-    title: Optional[str] = None
-    description: Optional[str] = None
-    listing_type: Optional[str] = None
-    price: Optional[float] = None
-    tags: Optional[List[str]] = None
-    content_ref: Optional[str] = None
+    title: str | None = None
+    description: str | None = None
+    listing_type: str | None = None
+    price: float | None = None
+    tags: list[str] | None = None
+    content_ref: str | None = None
     # Search
-    query: Optional[str] = None
-    category: Optional[str] = None
-    min_price: Optional[float] = None
-    max_price: Optional[float] = None
+    query: str | None = None
+    category: str | None = None
+    min_price: float | None = None
+    max_price: float | None = None
     # Rating
-    rating: Optional[int] = None
-    review: Optional[str] = None
+    rating: int | None = None
+    review: str | None = None
     # Transfer
-    to_agent_id: Optional[str] = None
-    transfer_amount: Optional[float] = None
+    to_agent_id: str | None = None
+    transfer_amount: float | None = None
     # Balance
-    balance: Optional[float] = None
+    balance: float | None = None
 
 
 class MarketplaceTool(WorldEngineTool):
@@ -120,7 +120,7 @@ class MarketplaceTool(WorldEngineTool):
             return self._make_error_result(str(exc))
 
     async def _publish(self, p: MarketplaceParams) -> ToolResult:
-        body: Dict[str, Any] = {}
+        body: dict[str, Any] = {}
         if p.title:
             body["title"] = p.title
         if p.description:
@@ -139,7 +139,7 @@ class MarketplaceTool(WorldEngineTool):
         return ToolResult(tool_name=self.name, status=ToolStatus.SUCCESS, output=data)
 
     async def _search(self, p: MarketplaceParams) -> ToolResult:
-        query: Dict[str, Any] = {}
+        query: dict[str, Any] = {}
         if p.query:
             query["q"] = p.query
         if p.category:
@@ -158,7 +158,7 @@ class MarketplaceTool(WorldEngineTool):
         return ToolResult(tool_name=self.name, status=ToolStatus.SUCCESS, output=data)
 
     async def _update_listing(self, p: MarketplaceParams) -> ToolResult:
-        body: Dict[str, Any] = {}
+        body: dict[str, Any] = {}
         if p.title:
             body["title"] = p.title
         if p.description:
@@ -175,14 +175,14 @@ class MarketplaceTool(WorldEngineTool):
         return ToolResult(tool_name=self.name, status=ToolStatus.SUCCESS, output=data)
 
     async def _purchase(self, p: MarketplaceParams) -> ToolResult:
-        body: Dict[str, Any] = {}
+        body: dict[str, Any] = {}
         if p.agent_id:
             body["buyer_id"] = p.agent_id
         data = await self._post(f"/marketplace/listings/{p.listing_id}/purchase", json=body)
         return ToolResult(tool_name=self.name, status=ToolStatus.SUCCESS, output=data)
 
     async def _rate(self, p: MarketplaceParams) -> ToolResult:
-        body: Dict[str, Any] = {}
+        body: dict[str, Any] = {}
         if p.rating is not None:
             body["rating"] = p.rating
         if p.review:
@@ -201,7 +201,7 @@ class MarketplaceTool(WorldEngineTool):
         return ToolResult(tool_name=self.name, status=ToolStatus.SUCCESS, output=data)
 
     async def _set_balance(self, p: MarketplaceParams) -> ToolResult:
-        body: Dict[str, Any] = {}
+        body: dict[str, Any] = {}
         if p.agent_id:
             body["agent_id"] = p.agent_id
         if p.balance is not None:
@@ -210,7 +210,7 @@ class MarketplaceTool(WorldEngineTool):
         return ToolResult(tool_name=self.name, status=ToolStatus.SUCCESS, output=data)
 
     async def _transfer(self, p: MarketplaceParams) -> ToolResult:
-        body: Dict[str, Any] = {}
+        body: dict[str, Any] = {}
         if p.agent_id:
             body["from_agent_id"] = p.agent_id
         if p.to_agent_id:

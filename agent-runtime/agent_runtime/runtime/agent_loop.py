@@ -402,7 +402,7 @@ def _create_llm_decision_provider(config: RuntimeConfig) -> Any | None:
         async_provider = AsyncDecisionProvider(inner=inner_provider)
 
         # Attach the queue so run_agent can stop it during shutdown
-        setattr(async_provider, "_queue", queue)  # type: ignore[attr-defined]
+        async_provider._queue = queue  # type: ignore[attr-defined]
 
         logger.info(
             "Using AsyncDecisionProvider + LLMQueue "

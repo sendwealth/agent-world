@@ -13,8 +13,9 @@ from __future__ import annotations
 import csv
 import io
 import json
+from collections.abc import Iterator
 from dataclasses import dataclass
-from typing import TYPE_CHECKING, Any, Iterator
+from typing import TYPE_CHECKING, Any
 
 if TYPE_CHECKING:
     from agent_runtime.tracing.store import TraceStore

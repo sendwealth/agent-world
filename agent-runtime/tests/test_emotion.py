@@ -10,6 +10,8 @@ Covers:
 
 from __future__ import annotations
 
+import enum
+
 import pytest
 
 from agent_runtime.core.decide import (
@@ -280,7 +282,7 @@ class TestEmotionEngine:
         personality = _default_personality()
         engine = EmotionEngine(personality=personality)
 
-        for i in range(15):
+        for _i in range(15):
             engine.update("rest")
 
         assert len(engine.state.triggers) <= 10
@@ -442,7 +444,6 @@ class TestEmotionInPrompt:
 
     def test_prompt_contains_mood_description(self):
         from dataclasses import dataclass
-        from enum import Enum
 
         @dataclass
         class MockSkill:
@@ -464,7 +465,7 @@ class TestEmotionInPrompt:
                 if self.skills is None:
                     self.skills = {}
 
-        class MockPhase(str, Enum):
+        class MockPhase(enum.StrEnum):
             EXPLORATION = "exploration"
 
         state = MockState(phase=MockPhase.EXPLORATION)
@@ -485,7 +486,6 @@ class TestEmotionInPrompt:
 
     def test_prompt_without_mood_shows_default(self):
         from dataclasses import dataclass
-        from enum import Enum
 
         @dataclass
         class MockSkill:
@@ -507,7 +507,7 @@ class TestEmotionInPrompt:
                 if self.skills is None:
                     self.skills = {}
 
-        class MockPhase(str, Enum):
+        class MockPhase(enum.StrEnum):
             EXPLORATION = "exploration"
 
         state = MockState(phase=MockPhase.EXPLORATION)

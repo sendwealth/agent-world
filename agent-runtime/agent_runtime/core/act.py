@@ -27,7 +27,7 @@ from __future__ import annotations
 import logging
 import time
 from dataclasses import dataclass, field
-from enum import Enum
+from enum import StrEnum
 from typing import Any, Protocol
 
 from agent_runtime.core.intervention_checker import (
@@ -43,7 +43,7 @@ logger = logging.getLogger(__name__)
 # ---------------------------------------------------------------------------
 
 
-class ActionType(str, Enum):
+class ActionType(StrEnum):
     """All supported action types."""
 
     SEND_MESSAGE = "send_message"
@@ -68,7 +68,7 @@ class ActionType(str, Enum):
     COMPLETE_BOUNTY = "complete_bounty"
 
 
-class ActionStatus(str, Enum):
+class ActionStatus(StrEnum):
     """Outcome status of an action execution."""
 
     SUCCESS = "success"

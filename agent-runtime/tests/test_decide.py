@@ -14,7 +14,7 @@ from __future__ import annotations
 
 import json
 from dataclasses import dataclass
-from enum import Enum
+from enum import StrEnum
 from typing import Any
 from unittest.mock import AsyncMock
 
@@ -42,7 +42,7 @@ from agent_runtime.llm.base import LLMResponse, TokenUsage
 # ---------------------------------------------------------------------------
 
 
-class MockPhase(str, Enum):
+class MockPhase(StrEnum):
     """Mock phase enum matching the shape of AgentPhase."""
 
     INITIALIZATION = "initialization"

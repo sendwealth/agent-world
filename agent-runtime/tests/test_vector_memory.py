@@ -16,7 +16,7 @@ Covers:
 from __future__ import annotations
 
 import math
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 
 import pytest
 
@@ -43,7 +43,7 @@ def make_vector_memory(**kwargs):
 
 
 def _cosine_sim(a: list[float], b: list[float]) -> float:
-    dot = sum(x * y for x, y in zip(a, b))
+    dot = sum(x * y for x, y in zip(a, b, strict=False))
     na = math.sqrt(sum(x * x for x in a))
     nb = math.sqrt(sum(x * x for x in b))
     if na == 0 or nb == 0:
@@ -328,7 +328,7 @@ class TestVectorMemoryRecallWithDecay:
         vm.store("old lesson about trading", memory_type="lesson", importance=0.9)
 
         # Manually update last_accessed to simulate 60 days ago
-        old_date = (datetime.now(timezone.utc) - timedelta(days=60)).isoformat()
+        old_date = (datetime.now(UTC) - timedelta(days=60)).isoformat()
         vm._conn.execute(
             "UPDATE vector_memories SET last_accessed = ? WHERE id = 1",
             (old_date,),
@@ -389,21 +389,21 @@ class TestForgettingCurve:
     def test_30_day_decay(self):
         """Memory accessed 30 days ago should decay to ~0.5."""
         vm = make_vector_memory(decay_days=30.0)
-        old_date = (datetime.now(timezone.utc) - timedelta(days=30)).isoformat()
+        old_date = (datetime.now(UTC) - timedelta(days=30)).isoformat()
         factor = vm._compute_decay(old_date)
         assert abs(factor - 0.5) < 0.05  # Should be approximately 0.5
 
     def test_60_day_decay(self):
         """Memory accessed 60 days ago should decay to ~0.25."""
         vm = make_vector_memory(decay_days=30.0)
-        old_date = (datetime.now(timezone.utc) - timedelta(days=60)).isoformat()
+        old_date = (datetime.now(UTC) - timedelta(days=60)).isoformat()
         factor = vm._compute_decay(old_date)
         assert abs(factor - 0.25) < 0.05  # Should be approximately 0.25
 
     def test_future_access_no_decay(self):
         """Future-dated access should result in 1.0."""
         vm = make_vector_memory()
-        future = (datetime.now(timezone.utc) + timedelta(days=10)).isoformat()
+        future = (datetime.now(UTC) + timedelta(days=10)).isoformat()
         factor = vm._compute_decay(future)
         assert factor == 1.0
 
@@ -416,7 +416,7 @@ class TestForgettingCurve:
     def test_custom_decay_days(self):
         """Custom decay_days should change the half-life."""
         vm = make_vector_memory(decay_days=10.0)
-        old_date = (datetime.now(timezone.utc) - timedelta(days=10)).isoformat()
+        old_date = (datetime.now(UTC) - timedelta(days=10)).isoformat()
         factor = vm._compute_decay(old_date)
         assert abs(factor - 0.5) < 0.05  # 10 days = half-life for decay_days=10
 
@@ -424,13 +424,13 @@ class TestForgettingCurve:
         """Decay should be continuous, not a step function."""
         vm = make_vector_memory(decay_days=30.0)
         factor_15 = vm._compute_decay(
-            (datetime.now(timezone.utc) - timedelta(days=15)).isoformat()
+            (datetime.now(UTC) - timedelta(days=15)).isoformat()
         )
         factor_30 = vm._compute_decay(
-            (datetime.now(timezone.utc) - timedelta(days=30)).isoformat()
+            (datetime.now(UTC) - timedelta(days=30)).isoformat()
         )
         factor_45 = vm._compute_decay(
-            (datetime.now(timezone.utc) - timedelta(days=45)).isoformat()
+            (datetime.now(UTC) - timedelta(days=45)).isoformat()
         )
         # 15-day factor should be between 30-day (0.5) and 1.0
         assert factor_30 < factor_15 < 1.0
@@ -535,5 +535,7 @@ class TestVectorMemoryClose:
         vm.store("test")
         vm.close()
         # After close, operations should fail
-        with pytest.raises(Exception):
+        import sqlite3
+
+        with pytest.raises(sqlite3.ProgrammingError):
             vm.count()

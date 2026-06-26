@@ -6,7 +6,7 @@ vote, tally, and query legislation effects.
 
 from __future__ import annotations
 
-from typing import Any, Dict, Optional
+from typing import Any
 
 from ..base import ToolParameters, ToolResult, ToolStatus
 from .world_engine_base import WorldEngineTool
@@ -16,25 +16,25 @@ class LegislationParams(ToolParameters):
     """Parameters for the legislation tool."""
 
     action: str
-    org_id: Optional[str] = None
-    cycle_id: Optional[str] = None
+    org_id: str | None = None
+    cycle_id: str | None = None
     # Cycle management
-    leader_id: Optional[str] = None
+    leader_id: str | None = None
     # Rules
-    rule_type: Optional[str] = None  # tax, trade, behavior, diplomacy, custom
-    rule_name: Optional[str] = None
-    rule_description: Optional[str] = None
-    rule_parameters: Optional[str] = None  # JSON string
-    proposer_id: Optional[str] = None
+    rule_type: str | None = None  # tax, trade, behavior, diplomacy, custom
+    rule_name: str | None = None
+    rule_description: str | None = None
+    rule_parameters: str | None = None  # JSON string
+    proposer_id: str | None = None
     # Voting
-    voter_id: Optional[str] = None
-    vote: Optional[str] = None  # for, against, abstain
+    voter_id: str | None = None
+    vote: str | None = None  # for, against, abstain
     # Repeal
-    rule_id: Optional[str] = None
-    repeal_reason: Optional[str] = None
+    rule_id: str | None = None
+    repeal_reason: str | None = None
     # Filters
-    status: Optional[str] = None
-    include_completed: Optional[bool] = None
+    status: str | None = None
+    include_completed: bool | None = None
 
 
 class LegislationTool(WorldEngineTool):
@@ -122,14 +122,14 @@ class LegislationTool(WorldEngineTool):
             return self._make_error_result(str(exc))
 
     async def _start_cycle(self, p: LegislationParams) -> ToolResult:
-        body: Dict[str, Any] = {}
+        body: dict[str, Any] = {}
         if p.org_id:
             body["org_id"] = p.org_id
         data = await self._post("/legislation/cycles", json=body)
         return ToolResult(tool_name=self.name, status=ToolStatus.SUCCESS, output=data)
 
     async def _start_cycle_with_leader(self, p: LegislationParams) -> ToolResult:
-        body: Dict[str, Any] = {}
+        body: dict[str, Any] = {}
         if p.org_id:
             body["org_id"] = p.org_id
         if p.leader_id:
@@ -138,7 +138,7 @@ class LegislationTool(WorldEngineTool):
         return ToolResult(tool_name=self.name, status=ToolStatus.SUCCESS, output=data)
 
     async def _full_cycle(self, p: LegislationParams) -> ToolResult:
-        body: Dict[str, Any] = {}
+        body: dict[str, Any] = {}
         if p.org_id:
             body["org_id"] = p.org_id
         data = await self._post("/legislation/cycles/full", json=body)
@@ -161,7 +161,7 @@ class LegislationTool(WorldEngineTool):
         return ToolResult(tool_name=self.name, status=ToolStatus.SUCCESS, output=data)
 
     async def _submit_rule(self, p: LegislationParams) -> ToolResult:
-        body: Dict[str, Any] = {}
+        body: dict[str, Any] = {}
         if p.rule_type:
             body["rule_type"] = p.rule_type
         if p.rule_name:
@@ -180,7 +180,7 @@ class LegislationTool(WorldEngineTool):
         return ToolResult(tool_name=self.name, status=ToolStatus.SUCCESS, output=data)
 
     async def _cast_vote(self, p: LegislationParams) -> ToolResult:
-        body: Dict[str, Any] = {}
+        body: dict[str, Any] = {}
         if p.voter_id:
             body["voter_id"] = p.voter_id
         if p.vote:
@@ -199,7 +199,7 @@ class LegislationTool(WorldEngineTool):
         return ToolResult(tool_name=self.name, status=ToolStatus.SUCCESS, output=data)
 
     async def _repeal(self, p: LegislationParams) -> ToolResult:
-        body: Dict[str, Any] = {}
+        body: dict[str, Any] = {}
         if p.rule_id:
             body["rule_id"] = p.rule_id
         if p.repeal_reason:

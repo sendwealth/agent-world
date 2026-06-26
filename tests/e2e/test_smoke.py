@@ -17,7 +17,6 @@ import subprocess
 import urllib.request
 import urllib.error
 
-import pytest
 
 
 # ── World Engine smoke tests ────────────────────────────────────

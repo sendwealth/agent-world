@@ -13,7 +13,7 @@ import json
 import random
 from collections import Counter
 from dataclasses import dataclass
-from enum import Enum
+from enum import StrEnum
 from typing import Any
 
 import pytest
@@ -45,7 +45,7 @@ from agent_runtime.survival.instinct import SurvivalAction, SurvivalMode
 # --------------------------------------------------------------------------- #
 
 
-class MockPhase(str, Enum):
+class MockPhase(StrEnum):
     EXPLORATION = "exploration"
     DEAD = "dead"
 

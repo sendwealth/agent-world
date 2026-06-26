@@ -19,7 +19,7 @@ from __future__ import annotations
 
 import math
 import random
-from typing import Any, Dict, List
+from typing import Any
 
 import pytest
 
@@ -77,7 +77,7 @@ class SimAgent:
         self.values = values
         self.region_id = region_id
         self.group_ids = group_ids or []
-        self.skills: Dict[str, Skill] = {
+        self.skills: dict[str, Skill] = {
             "trading": Skill(
                 name="trading", max_level=10, level=1,
                 experience=0, next_level_exp=100,
@@ -87,9 +87,9 @@ class SimAgent:
                 experience=0, next_level_exp=100,
             ),
         }
-        self.messages: List[str] = []
+        self.messages: list[str] = []
 
-    def to_nearby_dict(self) -> Dict[str, Any]:
+    def to_nearby_dict(self) -> dict[str, Any]:
         return {
             "agent_id": self.agent_id,
             "personality": self.personality,
@@ -97,7 +97,7 @@ class SimAgent:
             "group_ids": self.group_ids,
         }
 
-    def to_region_dict(self) -> Dict[str, Any]:
+    def to_region_dict(self) -> dict[str, Any]:
         return {
             "agent_id": self.agent_id,
             "values": self.values,
@@ -106,15 +106,15 @@ class SimAgent:
         }
 
 
-def _snapshot_personality(p: PersonalityVector) -> Dict[str, float]:
+def _snapshot_personality(p: PersonalityVector) -> dict[str, float]:
     return {d: getattr(p, d) for d in PersonalityVector._dimension_names()}
 
 
-def _snapshot_values(v: ValueWeights) -> Dict[str, float]:
+def _snapshot_values(v: ValueWeights) -> dict[str, float]:
     return {d: getattr(v, d) for d in ValueWeights._dimension_names()}
 
 
-def _personality_distance_sum(agents: List[SimAgent]) -> float:
+def _personality_distance_sum(agents: list[SimAgent]) -> float:
     """Average pairwise personality distance among agents."""
     total = 0.0
     count = 0
@@ -125,7 +125,7 @@ def _personality_distance_sum(agents: List[SimAgent]) -> float:
     return total / count if count > 0 else 0.0
 
 
-def _value_distance_sum(agents: List[SimAgent]) -> float:
+def _value_distance_sum(agents: list[SimAgent]) -> float:
     """Average pairwise value distance among agents."""
     dim_names = ValueWeights._dimension_names()
     total = 0.0
@@ -158,9 +158,9 @@ def rng() -> random.Random:
 
 
 @pytest.fixture
-def agents(rng: random.Random) -> List[SimAgent]:
+def agents(rng: random.Random) -> list[SimAgent]:
     """Create 10 agents across 2 regions and 3 groups."""
-    agents_list: List[SimAgent] = []
+    agents_list: list[SimAgent] = []
 
     # Region 0: agents 0-4, Groups A and B
     for i in range(5):
@@ -205,7 +205,7 @@ def agents(rng: random.Random) -> List[SimAgent]:
 # ---------------------------------------------------------------------------
 
 
-def run_simulation(agents: List[SimAgent], rng: random.Random) -> Dict[str, Any]:
+def run_simulation(agents: list[SimAgent], rng: random.Random) -> dict[str, Any]:
     """Run 500 ticks of social simulation and collect metrics.
 
     Returns a dict of simulation results and metrics.
@@ -243,10 +243,10 @@ def run_simulation(agents: List[SimAgent], rng: random.Random) -> Dict[str, Any]
     initial_val_distance = _value_distance_sum(agents)
 
     # Track metrics over time
-    trust_history: List[Dict[str, float]] = []
-    personality_distance_history: List[float] = []
-    value_distance_history: List[float] = []
-    diversity_index_history: List[float] = []
+    trust_history: list[dict[str, float]] = []
+    personality_distance_history: list[float] = []
+    value_distance_history: list[float] = []
+    diversity_index_history: list[float] = []
 
     # Message templates for language emergence testing
     message_templates = {
@@ -317,7 +317,7 @@ def run_simulation(agents: List[SimAgent], rng: random.Random) -> Dict[str, Any]
 
                     # 4. Skill transfer (5% chance)
                     if rng.random() < 0.05:
-                        for skill_name, teacher_skill in target.skills.items():
+                        for _skill_name, teacher_skill in target.skills.items():
                             knowledge_transfer.transfer_skill(
                                 teacher_skill=teacher_skill,
                                 student_skills=agent.skills,
@@ -334,7 +334,7 @@ def run_simulation(agents: List[SimAgent], rng: random.Random) -> Dict[str, Any]
                 agent.messages.append(base_msg)
 
         # 6. Regional cultural diffusion (once per tick)
-        agents_by_region: Dict[str, List[Dict[str, Any]]] = {}
+        agents_by_region: dict[str, list[dict[str, Any]]] = {}
         for agent in agents:
             agents_by_region.setdefault(agent.region_id, []).append(agent.to_region_dict())
 
@@ -424,7 +424,7 @@ def run_simulation(agents: List[SimAgent], rng: random.Random) -> Dict[str, Any]
     clusters = regional_culture.detect_cultural_clusters(world_agents_data, n_clusters=3)
 
     # Communication analysis
-    group_messages: Dict[str, List[str]] = {}
+    group_messages: dict[str, list[str]] = {}
     for agent in agents:
         for gid in agent.group_ids:
             group_messages.setdefault(gid, []).extend(agent.messages)
@@ -456,7 +456,7 @@ def run_simulation(agents: List[SimAgent], rng: random.Random) -> Dict[str, Any]
         # Split messages into time windows
         window_size = max(1, len(agents[0].messages) // 4) if agents[0].messages else 1
         for w in range(4):
-            period_msgs: Dict[str, List[str]] = {}
+            period_msgs: dict[str, list[str]] = {}
             for gid in groups_list[:2]:
                 group_messages[gid]
                 start = w * window_size
@@ -479,7 +479,7 @@ def run_simulation(agents: List[SimAgent], rng: random.Random) -> Dict[str, Any]
     )
 
     # Final trust matrix
-    final_trust: Dict[str, float] = {}
+    final_trust: dict[str, float] = {}
     trust = engine.trust
     trust.register_membership("agent_0", "group_A")
     final_trust["in_group"] = trust.compute_in_group_trust("agent_0", "group_A")
@@ -520,7 +520,7 @@ class Test500TickSimulation:
     """Full 500-tick simulation with 10 agents verifying emergent social phenomena."""
 
     @pytest.fixture(autouse=True)
-    def _setup(self, agents: List[SimAgent], rng: random.Random) -> None:
+    def _setup(self, agents: list[SimAgent], rng: random.Random) -> None:
         self.results = run_simulation(agents, rng)
 
     # ── Cultural Diffusion ──
@@ -721,7 +721,7 @@ class Test500TickSimulation:
                 group_ids=a.group_ids,
             )
 
-        def nearby_source(aid: str, tick: int) -> List[Dict[str, Any]]:
+        def nearby_source(aid: str, tick: int) -> list[dict[str, Any]]:
             a = agent_map.get(aid)
             if a is None:
                 return []
@@ -1012,7 +1012,7 @@ class TestKnowledgeTransferIntegration:
             name="crafting", max_level=10, level=8,
             experience=0, next_level_exp=100,
         )
-        student_skills: Dict[str, Skill] = {}
+        student_skills: dict[str, Skill] = {}
         student_p = PersonalityVector(openness=0.9)
 
         for _ in range(500):
@@ -1046,7 +1046,7 @@ class TestOrgCultureIntegration:
         agent_v = ValueWeights(cooperation_weight=0.1)
         initial_coop = agent_v.cooperation_weight
 
-        for tick in range(500):
+        for _tick in range(500):
             result = org.apply_culture_pressure(agent_v, "guild_1")
             if result["updated_values"] is not agent_v:
                 for d in ValueWeights._dimension_names():
@@ -1315,7 +1315,7 @@ class TestSocialContextProviderIntegration:
                 group_ids=a.group_ids,
             ) if a else None
 
-        def nearby(aid: str, tick: int) -> List[Dict[str, Any]]:
+        def nearby(aid: str, tick: int) -> list[dict[str, Any]]:
             a = agent_map.get(aid)
             if a is None:
                 return []
@@ -1349,7 +1349,7 @@ class TestSocialContextProviderIntegration:
         def bad_profile(aid: str) -> AgentProfile:
             raise RuntimeError("profile source failure")
 
-        def bad_nearby(aid: str, tick: int) -> List[Dict]:
+        def bad_nearby(aid: str, tick: int) -> list[dict]:
             raise RuntimeError("nearby source failure")
 
         provider = DefaultSocialContextProvider(
@@ -1367,7 +1367,7 @@ class TestSocialContextProviderIntegration:
 # Utility
 # ---------------------------------------------------------------------------
 
-def _std(values: List[float]) -> float:
+def _std(values: list[float]) -> float:
     """Compute population standard deviation."""
     if not values:
         return 0.0

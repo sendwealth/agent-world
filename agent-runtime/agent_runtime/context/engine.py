@@ -11,9 +11,10 @@ from __future__ import annotations
 
 import json
 import logging
+from collections.abc import Callable
 from dataclasses import dataclass, field
-from enum import Enum, IntEnum
-from typing import Any, Callable, Optional, Protocol, runtime_checkable
+from enum import IntEnum, StrEnum
+from typing import Any, Protocol, runtime_checkable
 
 from agent_runtime.context.budget import PipelineConfig, TokenBudget
 from agent_runtime.context.processors import ContextProcessor
@@ -47,7 +48,7 @@ class ContextPriority(IntEnum):
     P3_EXPLORATION = 3
 
 
-class ContextSource(str, Enum):
+class ContextSource(StrEnum):
     """Origin of a context item."""
 
     PERCEPTION = "perception"
@@ -402,7 +403,7 @@ class DefaultMemorySource:
             based on tick, task, or other context at integration time.
     """
 
-    def __init__(self, query_builder: Optional[Callable[[], str]] = None) -> None:
+    def __init__(self, query_builder: Callable[[], str] | None = None) -> None:
         self._query_builder = query_builder
 
     def collect(self, memory_recall: Any) -> list[ContextItem]:

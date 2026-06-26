@@ -301,9 +301,9 @@ def parse_traits(trait_args: list[str] | None) -> dict[str, float]:
             key, val = item.split("=", 1)
             try:
                 traits[key.strip()] = float(val.strip())
-            except ValueError:
+            except ValueError as exc:
                 logger.error("Invalid trait value for %r: %r (expected number)", key, val)
-                raise SystemExit(1)
+                raise SystemExit(1) from exc
         else:
             logger.warning("Ignoring malformed trait: %r (expected key=value)", item)
     return traits
@@ -337,7 +337,7 @@ def _apply_preset_defaults(args: argparse.Namespace) -> None:
         provider_cfg = get_provider_preset(preset_name)
     except ValueError as exc:
         logger.error("%s", exc)
-        raise SystemExit(1)
+        raise SystemExit(1) from exc
 
     # Map preset protocol to CLI --llm-provider choices
     protocol = provider_cfg.get("protocol", "openai")

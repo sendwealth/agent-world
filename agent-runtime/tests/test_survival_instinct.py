@@ -921,7 +921,7 @@ class TestUrgentFallback:
 
         llm_calls = 0
 
-        for tick in range(5):
+        for _tick in range(5):
             action = instinct.assess(agent)
             if action.mode in (SurvivalMode.PANIC, SurvivalMode.URGENT):
                 await instinct.execute(action, agent, failing)

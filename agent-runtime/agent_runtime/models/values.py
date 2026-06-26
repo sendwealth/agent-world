@@ -6,8 +6,6 @@ through experience events and naturally decay to prevent extreme polarization.
 
 from __future__ import annotations
 
-from typing import Dict
-
 from pydantic import BaseModel, Field
 
 
@@ -121,12 +119,12 @@ class ValueWeights(BaseModel):
 
     # ── Serialization ──
 
-    def to_storage_dict(self) -> Dict[str, float]:
+    def to_storage_dict(self) -> dict[str, float]:
         """Export as a plain dict for JSON storage/transmission."""
         return {d: getattr(self, d) for d in self._dimension_names()}
 
     @classmethod
-    def from_storage_dict(cls, data: Dict[str, float]) -> ValueWeights:
+    def from_storage_dict(cls, data: dict[str, float]) -> ValueWeights:
         """Restore from a plain dict (tolerant of missing keys)."""
         names = cls._dimension_names_set()
         return cls(**{k: v for k, v in data.items() if k in names})

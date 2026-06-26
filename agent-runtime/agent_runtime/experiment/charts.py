@@ -231,7 +231,7 @@ def skill_distribution(
     bars = ax.barh(names, counts, color=bar_colors, height=0.6, edgecolor="none")
 
     # Value labels
-    for bar, count in zip(bars, counts):
+    for bar, count in zip(bars, counts, strict=False):
         ax.text(bar.get_width() + 0.3, bar.get_y() + bar.get_height() / 2,
                 str(count), va="center", color=_COLORS["text"], fontsize=9)
 

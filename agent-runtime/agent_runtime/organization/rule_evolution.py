@@ -8,7 +8,7 @@ governance efficiency metrics.
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from enum import Enum
+from enum import StrEnum
 from typing import Any
 
 # ---------------------------------------------------------------------------
@@ -16,7 +16,7 @@ from typing import Any
 # ---------------------------------------------------------------------------
 
 
-class RuleLifecycleEventType(str, Enum):
+class RuleLifecycleEventType(StrEnum):
     """Types of events in a rule's lifecycle."""
 
     PROPOSED = "proposed"

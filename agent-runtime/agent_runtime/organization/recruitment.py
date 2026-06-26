@@ -9,7 +9,7 @@ from __future__ import annotations
 import logging
 import uuid
 from dataclasses import dataclass
-from enum import Enum
+from enum import StrEnum
 from typing import Any, Protocol
 
 from .proposal import OrgProposal
@@ -22,7 +22,7 @@ logger = logging.getLogger(__name__)
 # ---------------------------------------------------------------------------
 
 
-class InvitationStatus(str, Enum):
+class InvitationStatus(StrEnum):
     """Status of a recruitment invitation."""
 
     PENDING = "pending"

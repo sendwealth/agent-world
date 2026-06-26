@@ -177,7 +177,7 @@ class RateLimiter:
 
     # -- context-manager protocol -------------------------------------------
 
-    async def __aenter__(self) -> "RateLimiter":
+    async def __aenter__(self) -> RateLimiter:
         await self.acquire()
         return self
 

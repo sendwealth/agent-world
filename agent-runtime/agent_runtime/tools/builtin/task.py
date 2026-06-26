@@ -6,7 +6,7 @@ in the world-engine task system.
 
 from __future__ import annotations
 
-from typing import Any, Dict, Optional
+from typing import Any
 
 from ..base import ToolParameters, ToolResult, ToolStatus
 from .world_engine_base import WorldEngineTool
@@ -19,21 +19,21 @@ class TaskParams(ToolParameters):
     # delete, list_coordination, join_coordination, contribute_coordination,
     # complete_coordination, cancel_coordination
     action: str
-    task_id: Optional[str] = None
-    coordination_task_id: Optional[str] = None
-    title: Optional[str] = None
-    description: Optional[str] = None
-    reward: Optional[float] = None
-    deadline_tick: Optional[int] = None
-    creator_id: Optional[str] = None
-    claimer_id: Optional[str] = None
-    result_data: Optional[str] = None
-    reviewer_id: Optional[str] = None
-    approved: Optional[bool] = None
-    rating: Optional[int] = None
-    contribution_data: Optional[str] = None
-    contributor_id: Optional[str] = None
-    status: Optional[str] = None
+    task_id: str | None = None
+    coordination_task_id: str | None = None
+    title: str | None = None
+    description: str | None = None
+    reward: float | None = None
+    deadline_tick: int | None = None
+    creator_id: str | None = None
+    claimer_id: str | None = None
+    result_data: str | None = None
+    reviewer_id: str | None = None
+    approved: bool | None = None
+    rating: int | None = None
+    contribution_data: str | None = None
+    contributor_id: str | None = None
+    status: str | None = None
 
 
 class TaskTool(WorldEngineTool):
@@ -137,7 +137,7 @@ class TaskTool(WorldEngineTool):
             return self._make_error_result(str(exc))
 
     async def _create(self, params: TaskParams) -> ToolResult:
-        body: Dict[str, Any] = {}
+        body: dict[str, Any] = {}
         if params.title:
             body["title"] = params.title
         if params.description:
@@ -153,7 +153,7 @@ class TaskTool(WorldEngineTool):
         return ToolResult(tool_name=self.name, status=ToolStatus.SUCCESS, output=data)
 
     async def _list(self, params: TaskParams) -> ToolResult:
-        query: Dict[str, Any] = {}
+        query: dict[str, Any] = {}
         if params.status:
             query["status"] = params.status
         data = await self._get("/tasks", params=query)
@@ -164,7 +164,7 @@ class TaskTool(WorldEngineTool):
         return ToolResult(tool_name=self.name, status=ToolStatus.SUCCESS, output=data)
 
     async def _claim(self, params: TaskParams) -> ToolResult:
-        body: Dict[str, Any] = {}
+        body: dict[str, Any] = {}
         if params.claimer_id:
             body["agent_id"] = params.claimer_id
         data = await self._post(f"/tasks/{params.task_id}/claim", json=body)
@@ -175,14 +175,14 @@ class TaskTool(WorldEngineTool):
         return ToolResult(tool_name=self.name, status=ToolStatus.SUCCESS, output=data)
 
     async def _submit(self, params: TaskParams) -> ToolResult:
-        body: Dict[str, Any] = {}
+        body: dict[str, Any] = {}
         if params.result_data:
             body["result"] = params.result_data
         data = await self._post(f"/tasks/{params.task_id}/submit", json=body)
         return ToolResult(tool_name=self.name, status=ToolStatus.SUCCESS, output=data)
 
     async def _review(self, params: TaskParams) -> ToolResult:
-        body: Dict[str, Any] = {}
+        body: dict[str, Any] = {}
         if params.approved is not None:
             body["approved"] = params.approved
         if params.reviewer_id:
@@ -209,7 +209,7 @@ class TaskTool(WorldEngineTool):
         return ToolResult(tool_name=self.name, status=ToolStatus.SUCCESS, output=data)
 
     async def _join_coordination(self, params: TaskParams) -> ToolResult:
-        body: Dict[str, Any] = {}
+        body: dict[str, Any] = {}
         if params.claimer_id:
             body["agent_id"] = params.claimer_id
         data = await self._post(
@@ -219,7 +219,7 @@ class TaskTool(WorldEngineTool):
         return ToolResult(tool_name=self.name, status=ToolStatus.SUCCESS, output=data)
 
     async def _contribute_coordination(self, params: TaskParams) -> ToolResult:
-        body: Dict[str, Any] = {}
+        body: dict[str, Any] = {}
         if params.contribution_data:
             body["contribution"] = params.contribution_data
         if params.contributor_id:

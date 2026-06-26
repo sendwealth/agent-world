@@ -7,8 +7,9 @@ registry into their own skill set.
 
 from __future__ import annotations
 
+from collections.abc import Callable
 from dataclasses import dataclass
-from typing import Any, Callable, Dict, List, Optional
+from typing import Any
 
 from ..models.skill import Skill
 
@@ -33,7 +34,7 @@ class SkillDefinition:
     name: str
     description: str = ""
     max_level: int = 10
-    execute_fn: Optional[Callable[..., Any]] = None
+    execute_fn: Callable[..., Any] | None = None
     category: str = "general"
 
 
@@ -55,7 +56,7 @@ class SkillRegistry:
     """
 
     def __init__(self) -> None:
-        self._definitions: Dict[str, SkillDefinition] = {}
+        self._definitions: dict[str, SkillDefinition] = {}
 
     # -- Register / Unregister --
 
@@ -105,14 +106,14 @@ class SkillRegistry:
         """Check whether a skill is registered."""
         return name in self._definitions
 
-    def list_skills(self, category: Optional[str] = None) -> List[SkillDefinition]:
+    def list_skills(self, category: str | None = None) -> list[SkillDefinition]:
         """Return all registered definitions, optionally filtered by category."""
         defs = list(self._definitions.values())
         if category is not None:
             defs = [d for d in defs if d.category == category]
         return sorted(defs, key=lambda d: d.name)
 
-    def categories(self) -> List[str]:
+    def categories(self) -> list[str]:
         """Return unique category names."""
         return sorted({d.category for d in self._definitions.values()})
 

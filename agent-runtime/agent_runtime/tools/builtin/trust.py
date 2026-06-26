@@ -6,7 +6,7 @@ discover allies and enemies.
 
 from __future__ import annotations
 
-from typing import Any, Dict, Optional
+from typing import Any
 
 from ..base import ToolParameters, ToolResult, ToolStatus
 from .world_engine_base import WorldEngineTool
@@ -16,12 +16,12 @@ class TrustParams(ToolParameters):
     """Parameters for the trust tool."""
 
     action: str  # interact, get_score, relationships, allies, enemies, stats
-    from_agent_id: Optional[str] = None
-    to_agent_id: Optional[str] = None
-    agent_id: Optional[str] = None
-    interaction_type: Optional[str] = None
-    value: Optional[float] = None
-    context: Optional[str] = None
+    from_agent_id: str | None = None
+    to_agent_id: str | None = None
+    agent_id: str | None = None
+    interaction_type: str | None = None
+    value: float | None = None
+    context: str | None = None
 
 
 class TrustTool(WorldEngineTool):
@@ -75,7 +75,7 @@ class TrustTool(WorldEngineTool):
 
         try:
             if action == "interact":
-                body: Dict[str, Any] = {}
+                body: dict[str, Any] = {}
                 if params.from_agent_id:
                     body["from_agent_id"] = params.from_agent_id
                 if params.to_agent_id:

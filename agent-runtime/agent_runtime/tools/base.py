@@ -15,8 +15,8 @@ import asyncio
 import logging
 from abc import ABC
 from dataclasses import dataclass, field
-from enum import Enum
-from typing import Any, Dict
+from enum import StrEnum
+from typing import Any
 
 from pydantic import BaseModel
 
@@ -27,7 +27,7 @@ logger = logging.getLogger(__name__)
 # ---------------------------------------------------------------------------
 
 
-class ToolStatus(str, Enum):
+class ToolStatus(StrEnum):
     """Outcome of a tool invocation."""
 
     SUCCESS = "success"
@@ -52,7 +52,7 @@ class ToolResult:
     status: ToolStatus = ToolStatus.SUCCESS
     output: Any = None
     error: str = ""
-    metadata: Dict[str, Any] = field(default_factory=dict)
+    metadata: dict[str, Any] = field(default_factory=dict)
 
     @property
     def success(self) -> bool:
@@ -81,7 +81,7 @@ class ToolParameters(BaseModel):
 # ---------------------------------------------------------------------------
 
 
-class Tool(ABC):
+class Tool(ABC):  # noqa: B024
     """Abstract base class for all agent tools.
 
     Subclasses must implement:
@@ -134,7 +134,7 @@ class Tool(ABC):
         """Return the Pydantic model class for this tool's parameters."""
         return ToolParameters
 
-    def validate_params(self, params: Dict[str, Any]) -> ToolParameters:
+    def validate_params(self, params: dict[str, Any]) -> ToolParameters:
         """Validate and coerce raw params into the schema model.
 
         Raises:
@@ -142,7 +142,7 @@ class Tool(ABC):
         """
         return self.parameters_schema.model_validate(params)
 
-    def get_schema_dict(self) -> Dict[str, Any]:
+    def get_schema_dict(self) -> dict[str, Any]:
         """Return a JSON-serialisable schema description (for LLM function-calling)."""
         return {
             "name": self.name,
@@ -178,7 +178,7 @@ class Tool(ABC):
     # Convenience entry point
     # ------------------------------------------------------------------
 
-    async def run(self, raw_params: Dict[str, Any]) -> ToolResult:
+    async def run(self, raw_params: dict[str, Any]) -> ToolResult:
         """Validate params, execute the tool, and return a ToolResult.
 
         This is the primary entry point called by ToolRegistry.
@@ -200,7 +200,7 @@ class Tool(ABC):
                 timeout=self.timeout,
             )
             return result
-        except asyncio.TimeoutError:
+        except TimeoutError:
             return ToolResult(
                 tool_name=self.name,
                 status=ToolStatus.TIMEOUT,

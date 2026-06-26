@@ -978,7 +978,7 @@ class TestActionExecutorCompatibility:
         """Engine should only analyse the last N actions."""
         executor = ActionExecutor()
         # Add 100 actions
-        for i in range(100):
+        for _i in range(100):
             executor._history.append(
                 make_action_result(ActionType.REST, ActionStatus.SUCCESS, 0)
             )

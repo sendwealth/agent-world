@@ -15,8 +15,8 @@ Backend support status (``world-engine/src/api_tool_marketplace.rs``):
 from __future__ import annotations
 
 import logging
-from enum import Enum
-from typing import Any, Dict, List, Optional
+from enum import StrEnum
+from typing import Any
 
 import httpx
 
@@ -30,7 +30,7 @@ logger = logging.getLogger(__name__)
 # ---------------------------------------------------------------------------
 
 
-class ToolCategory(str, Enum):
+class ToolCategory(StrEnum):
     computation = "computation"
     communication = "communication"
     analysis = "analysis"
@@ -41,7 +41,7 @@ class ToolCategory(str, Enum):
     utility = "utility"
 
 
-class ListingMode(str, Enum):
+class ListingMode(StrEnum):
     sale = "sale"
     rent = "rent"
     both = "both"
@@ -69,7 +69,7 @@ class ToolMarketplaceClient:
     def _url(self, path: str) -> str:
         return f"{self._base_url}{path}"
 
-    async def _get(self, path: str, params: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
+    async def _get(self, path: str, params: dict[str, Any] | None = None) -> dict[str, Any]:
         try:
             async with httpx.AsyncClient(timeout=self._timeout) as client:
                 resp = await client.get(self._url(path), params=params)
@@ -86,7 +86,7 @@ class ToolMarketplaceClient:
             logger.warning("Tool Marketplace GET %s failed: %s", path, exc)
             return {"data": [], "error": str(exc)}
 
-    async def _post(self, path: str, json: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
+    async def _post(self, path: str, json: dict[str, Any] | None = None) -> dict[str, Any]:
         try:
             async with httpx.AsyncClient(timeout=self._timeout) as client:
                 resp = await client.post(self._url(path), json=json)
@@ -103,7 +103,7 @@ class ToolMarketplaceClient:
             logger.warning("Tool Marketplace POST %s failed: %s", path, exc)
             return {"error": str(exc)}
 
-    async def _put(self, path: str, json: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
+    async def _put(self, path: str, json: dict[str, Any] | None = None) -> dict[str, Any]:
         try:
             async with httpx.AsyncClient(timeout=self._timeout) as client:
                 resp = await client.put(self._url(path), json=json)
@@ -132,9 +132,9 @@ class ToolMarketplaceClient:
         rental_price_per_tick: int,
         currency: str,
         listing_mode: str,
-        tags: Optional[List[str]] = None,
+        tags: list[str] | None = None,
         created_tick: int = 0,
-    ) -> Dict[str, Any]:
+    ) -> dict[str, Any]:
         payload = {
             "name": name,
             "description": description,
@@ -149,23 +149,23 @@ class ToolMarketplaceClient:
         }
         return await self._post("/api/v1/tool-marketplace/tools", json=payload)
 
-    async def search_tools(self, **params: Any) -> List[Dict[str, Any]]:
+    async def search_tools(self, **params: Any) -> list[dict[str, Any]]:
         result = await self._get("/api/v1/tool-marketplace/tools", params=params)
         return result.get("data", []) if isinstance(result, dict) else result
 
-    async def get_tool(self, tool_id: str) -> Dict[str, Any]:
+    async def get_tool(self, tool_id: str) -> dict[str, Any]:
         return await self._get(f"/api/v1/tool-marketplace/tools/{tool_id}")
 
     async def update_tool(
         self,
         tool_id: str,
         owner_id: str,
-        purchase_price: Optional[int] = None,
-        rental_price_per_tick: Optional[int] = None,
-        status: Optional[str] = None,
-        tags: Optional[List[str]] = None,
-    ) -> Dict[str, Any]:
-        payload: Dict[str, Any] = {"owner_id": owner_id}
+        purchase_price: int | None = None,
+        rental_price_per_tick: int | None = None,
+        status: str | None = None,
+        tags: list[str] | None = None,
+    ) -> dict[str, Any]:
+        payload: dict[str, Any] = {"owner_id": owner_id}
         if purchase_price is not None:
             payload["purchase_price"] = purchase_price
         if rental_price_per_tick is not None:
@@ -176,7 +176,7 @@ class ToolMarketplaceClient:
             payload["tags"] = tags
         return await self._put(f"/api/v1/tool-marketplace/tools/{tool_id}", json=payload)
 
-    async def delist_tool(self, tool_id: str, owner_id: str) -> Dict[str, Any]:
+    async def delist_tool(self, tool_id: str, owner_id: str) -> dict[str, Any]:
         return await self._post(
             f"/api/v1/tool-marketplace/tools/{tool_id}/delist",
             json={"owner_id": owner_id},
@@ -184,7 +184,7 @@ class ToolMarketplaceClient:
 
     # -- Purchase / Rent --
 
-    async def purchase_tool(self, tool_id: str, buyer_id: str, tick: int = 0) -> Dict[str, Any]:
+    async def purchase_tool(self, tool_id: str, buyer_id: str, tick: int = 0) -> dict[str, Any]:
         return await self._post(
             f"/api/v1/tool-marketplace/tools/{tool_id}/purchase",
             json={"buyer_id": buyer_id, "tick": tick},
@@ -196,7 +196,7 @@ class ToolMarketplaceClient:
         renter_id: str,
         duration_ticks: int,
         current_tick: int = 0,
-    ) -> Dict[str, Any]:
+    ) -> dict[str, Any]:
         return await self._post(
             f"/api/v1/tool-marketplace/tools/{tool_id}/rent",
             json={
@@ -206,13 +206,13 @@ class ToolMarketplaceClient:
             },
         )
 
-    async def cancel_rental(self, rental_id: str, renter_id: str) -> Dict[str, Any]:
+    async def cancel_rental(self, rental_id: str, renter_id: str) -> dict[str, Any]:
         return await self._post(
             f"/api/v1/tool-marketplace/rentals/{rental_id}/cancel",
             json={"renter_id": renter_id},
         )
 
-    async def active_rentals(self, agent_id: str) -> List[Dict[str, Any]]:
+    async def active_rentals(self, agent_id: str) -> list[dict[str, Any]]:
         result = await self._get(f"/api/v1/tool-marketplace/rentals/active/{agent_id}")
         return result.get("data", []) if isinstance(result, dict) else result
 
@@ -223,10 +223,10 @@ class ToolMarketplaceClient:
         tool_id: str,
         rater_id: str,
         score: int,
-        review: Optional[str] = None,
+        review: str | None = None,
         tick: int = 0,
-    ) -> Dict[str, Any]:
-        payload: Dict[str, Any] = {"rater_id": rater_id, "score": score, "tick": tick}
+    ) -> dict[str, Any]:
+        payload: dict[str, Any] = {"rater_id": rater_id, "score": score, "tick": tick}
         if review is not None:
             payload["review"] = review
         return await self._post(
@@ -234,13 +234,13 @@ class ToolMarketplaceClient:
             json=payload,
         )
 
-    async def tool_ratings(self, tool_id: str) -> List[Dict[str, Any]]:
+    async def tool_ratings(self, tool_id: str) -> list[dict[str, Any]]:
         result = await self._get(f"/api/v1/tool-marketplace/tools/{tool_id}/ratings")
         return result.get("data", []) if isinstance(result, dict) else result
 
     # -- Ownership --
 
-    async def check_ownership(self, tool_id: str, agent_id: str) -> Dict[str, Any]:
+    async def check_ownership(self, tool_id: str, agent_id: str) -> dict[str, Any]:
         return await self._get(f"/api/v1/tool-marketplace/tools/{tool_id}/ownership/{agent_id}")
 
     # -- Balance --
@@ -252,7 +252,7 @@ class ToolMarketplaceClient:
         data = result.get("data", result)
         return data.get("balance", 0)
 
-    async def set_balance(self, agent_id: str, amount: int) -> Dict[str, Any]:
+    async def set_balance(self, agent_id: str, amount: int) -> dict[str, Any]:
         return await self._post(
             "/api/v1/tool-marketplace/balance",
             json={"agent_id": agent_id, "amount": amount},
@@ -260,7 +260,7 @@ class ToolMarketplaceClient:
 
     # -- Purchases --
 
-    async def tool_purchases(self, tool_id: str) -> List[Dict[str, Any]]:
+    async def tool_purchases(self, tool_id: str) -> list[dict[str, Any]]:
         result = await self._get(f"/api/v1/tool-marketplace/tools/{tool_id}/purchases")
         return result.get("data", []) if isinstance(result, dict) else result
 
@@ -270,7 +270,7 @@ class ToolMarketplaceClient:
 # ---------------------------------------------------------------------------
 
 
-def _execute_tool_marketplace(agent_skills: Dict[str, Skill], **kwargs: Any) -> Dict[str, Any]:
+def _execute_tool_marketplace(agent_skills: dict[str, Skill], **kwargs: Any) -> dict[str, Any]:
     """Execute a tool marketplace operation (synchronous wrapper).
 
     This is the execute_fn registered in the SkillDefinition.

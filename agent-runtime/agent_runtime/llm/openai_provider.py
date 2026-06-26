@@ -9,7 +9,7 @@ import asyncio
 import json
 import logging
 import os
-from typing import AsyncIterator
+from collections.abc import AsyncIterator
 
 import httpx
 

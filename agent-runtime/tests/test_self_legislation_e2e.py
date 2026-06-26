@@ -778,7 +778,7 @@ class TestMultiTickLegislationSimulation:
 
         enacted_per_org: dict[str, int] = {oid: 0 for oid in orgs}
 
-        for tick in range(0, 50, 10):
+        for _tick in range(0, 50, 10):
             for org_id, org_data in orgs.items():
                 snapshot = _make_org_snapshot(org_id=org_id)
                 events = _make_events(org_id, count=3)

@@ -10,17 +10,17 @@ import asyncio
 import io
 import json
 import logging
+from collections.abc import Iterator
 from dataclasses import asdict, dataclass
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
-from typing import Iterator
 
 logger = logging.getLogger(__name__)
 
 
 def _now_iso() -> str:
     """Return the current UTC time as an ISO 8601 string."""
-    return datetime.now(timezone.utc).isoformat()
+    return datetime.now(UTC).isoformat()
 
 
 @dataclass
@@ -73,7 +73,7 @@ class DecisionLogStore:
     async def __aenter__(self) -> DecisionLogStore:
         if self._path is not None:
             self._path.parent.mkdir(parents=True, exist_ok=True)
-            self._fh = open(self._path, "a", encoding="utf-8")  # noqa: SIM115
+            self._fh = open(self._path, "a", encoding="utf-8")  # noqa: ASYNC230,SIM115
         return self
 
     async def __aexit__(self, *exc: object) -> None:

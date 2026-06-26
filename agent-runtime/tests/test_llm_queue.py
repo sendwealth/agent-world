@@ -271,7 +271,7 @@ class TestLLMQueue:
         try:
             response = await asyncio.wait_for(task, timeout=2.0)
             assert response.model == "fallback"
-        except (asyncio.CancelledError, asyncio.TimeoutError):
+        except (TimeoutError, asyncio.CancelledError):
             # In some Python versions the task is cancelled — that's acceptable
             pass
 

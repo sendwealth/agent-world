@@ -6,7 +6,7 @@ organization details.
 
 from __future__ import annotations
 
-from typing import Any, Dict, Optional
+from typing import Any
 
 from ..base import ToolParameters, ToolResult, ToolStatus
 from .world_engine_base import WorldEngineTool
@@ -16,12 +16,12 @@ class OrganizationParams(ToolParameters):
     """Parameters for the organization tool."""
 
     action: str  # create, list, get, join, leave, dissolve, distribution
-    org_id: Optional[str] = None
-    name: Optional[str] = None
-    org_type: Optional[str] = None  # company, guild, alliance, university
-    description: Optional[str] = None
-    charter: Optional[str] = None
-    agent_id: Optional[str] = None
+    org_id: str | None = None
+    name: str | None = None
+    org_type: str | None = None  # company, guild, alliance, university
+    description: str | None = None
+    charter: str | None = None
+    agent_id: str | None = None
 
 
 class OrganizationTool(WorldEngineTool):
@@ -95,7 +95,7 @@ class OrganizationTool(WorldEngineTool):
             return self._make_error_result(str(exc))
 
     async def _create(self, params: OrganizationParams) -> ToolResult:
-        body: Dict[str, Any] = {}
+        body: dict[str, Any] = {}
         if params.name:
             body["name"] = params.name
         if params.org_type:
@@ -119,14 +119,14 @@ class OrganizationTool(WorldEngineTool):
         return ToolResult(tool_name=self.name, status=ToolStatus.SUCCESS, output=data)
 
     async def _join(self, params: OrganizationParams) -> ToolResult:
-        body: Dict[str, Any] = {}
+        body: dict[str, Any] = {}
         if params.agent_id:
             body["agent_id"] = params.agent_id
         data = await self._post(f"/orgs/{params.org_id}/join", json=body)
         return ToolResult(tool_name=self.name, status=ToolStatus.SUCCESS, output=data)
 
     async def _leave(self, params: OrganizationParams) -> ToolResult:
-        body: Dict[str, Any] = {}
+        body: dict[str, Any] = {}
         if params.agent_id:
             body["agent_id"] = params.agent_id
         data = await self._post(f"/orgs/{params.org_id}/leave", json=body)

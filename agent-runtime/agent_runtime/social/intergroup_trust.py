@@ -6,8 +6,7 @@ Trust is shaped by direct interaction history and group-level events.
 
 from __future__ import annotations
 
-from enum import Enum
-from typing import Dict
+from enum import StrEnum
 
 from pydantic import BaseModel, Field
 
@@ -24,7 +23,7 @@ DEFAULT_OUT_GROUP_TRUST = 0.3
 TRUST_EVENT_DELTA = 0.05
 
 
-class InterGroupEventType(str, Enum):
+class InterGroupEventType(StrEnum):
     """Types of events that affect intergroup trust."""
 
     TRADE_SUCCESS = "trade_success"
@@ -70,11 +69,11 @@ class IntergroupTrust:
 
     def __init__(self) -> None:
         # (agent_id, group_id) -> TrustRecord  — individual agent↔group trust
-        self._agent_group_trust: Dict[tuple[str, str], TrustRecord] = {}
+        self._agent_group_trust: dict[tuple[str, str], TrustRecord] = {}
         # (source_group, target_group) -> TrustRecord  — group↔group trust
-        self._group_group_trust: Dict[tuple[str, str], TrustRecord] = {}
+        self._group_group_trust: dict[tuple[str, str], TrustRecord] = {}
         # agent_id -> set of group_ids the agent belongs to
-        self._agent_groups: Dict[str, set[str]] = {}
+        self._agent_groups: dict[str, set[str]] = {}
 
     # ── In-group trust ──
 
@@ -179,12 +178,12 @@ class IntergroupTrust:
         record = self._group_group_trust.get((source, target))
         return record.trust_value if record else DEFAULT_OUT_GROUP_TRUST
 
-    def get_all_group_trust(self, group_id: str) -> Dict[str, float]:
+    def get_all_group_trust(self, group_id: str) -> dict[str, float]:
         """Get trust levels from one group toward all known groups.
 
         Combines records from both agent→group and group→group trust stores.
         """
-        result: Dict[str, float] = {}
+        result: dict[str, float] = {}
         for (src, tgt), record in self._agent_group_trust.items():
             if src == group_id:
                 result[tgt] = record.trust_value

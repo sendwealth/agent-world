@@ -30,7 +30,7 @@ from __future__ import annotations
 
 import logging
 from dataclasses import dataclass
-from typing import Any, Dict, List, Optional, Set
+from typing import Any
 
 from .base import Tool, ToolResult, ToolStatus
 
@@ -69,7 +69,7 @@ class ToolRegistry:
     - Permission-aware invocation
     """
 
-    def __init__(self, allowed_tools: Optional[Set[str]] = None) -> None:
+    def __init__(self, allowed_tools: set[str] | None = None) -> None:
         """Initialise the registry.
 
         Args:
@@ -77,8 +77,8 @@ class ToolRegistry:
                            Registration is unrestricted, but invocation of
                            non-allowed tools will return PERMISSION_DENIED.
         """
-        self._entries: Dict[str, _RegistryEntry] = {}
-        self._allowed_tools: Optional[Set[str]] = allowed_tools
+        self._entries: dict[str, _RegistryEntry] = {}
+        self._allowed_tools: set[str] | None = allowed_tools
 
     # ------------------------------------------------------------------
     # Registration
@@ -165,9 +165,9 @@ class ToolRegistry:
 
     def list_tools(
         self,
-        category: Optional[str] = None,
+        category: str | None = None,
         enabled_only: bool = False,
-    ) -> List[Tool]:
+    ) -> list[Tool]:
         """Return registered tools, optionally filtered.
 
         Args:
@@ -177,7 +177,7 @@ class ToolRegistry:
         Returns:
             List of Tool instances sorted by name.
         """
-        results: List[Tool] = []
+        results: list[Tool] = []
         for entry in self._entries.values():
             if enabled_only and not entry.enabled:
                 continue
@@ -186,7 +186,7 @@ class ToolRegistry:
             results.append(entry.tool)
         return sorted(results, key=lambda t: t.name)
 
-    def categories(self) -> List[str]:
+    def categories(self) -> list[str]:
         """Return unique category names across all registered tools."""
         return sorted({e.tool.category for e in self._entries.values()})
 
@@ -202,7 +202,7 @@ class ToolRegistry:
     async def invoke(
         self,
         name: str,
-        params: Dict[str, Any],
+        params: dict[str, Any],
         *,
         skip_permission_check: bool = False,
     ) -> ToolResult:
@@ -262,7 +262,7 @@ class ToolRegistry:
     def invoke_sync(
         self,
         name: str,
-        params: Dict[str, Any],
+        params: dict[str, Any],
         **kwargs: Any,
     ) -> ToolResult:
         """Synchronous wrapper around invoke().
@@ -296,9 +296,9 @@ class ToolRegistry:
 
     def get_all_schemas(
         self,
-        category: Optional[str] = None,
+        category: str | None = None,
         enabled_only: bool = True,
-    ) -> List[Dict[str, Any]]:
+    ) -> list[dict[str, Any]]:
         """Return JSON-serialisable schemas for all (or filtered) tools.
 
         Suitable for injecting into LLM prompts as function definitions.
@@ -310,7 +310,7 @@ class ToolRegistry:
     # Stats
     # ------------------------------------------------------------------
 
-    def get_stats(self) -> Dict[str, Dict[str, Any]]:
+    def get_stats(self) -> dict[str, dict[str, Any]]:
         """Return invocation statistics for all tools."""
         return {
             name: {

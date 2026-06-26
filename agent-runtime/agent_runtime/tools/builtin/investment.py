@@ -6,7 +6,7 @@ and query investment metrics.
 
 from __future__ import annotations
 
-from typing import Any, Dict, Optional
+from typing import Any
 
 from ..base import ToolParameters, ToolResult, ToolStatus
 from .world_engine_base import WorldEngineTool
@@ -16,20 +16,20 @@ class InvestmentParams(ToolParameters):
     """Parameters for the investment tool."""
 
     action: str
-    product_id: Optional[str] = None
-    product_name: Optional[str] = None
-    product_type: Optional[str] = None
-    description: Optional[str] = None
-    min_investment: Optional[float] = None
-    max_investment: Optional[float] = None
-    expected_return: Optional[float] = None
-    risk_level: Optional[str] = None
-    duration_ticks: Optional[int] = None
-    investor_id: Optional[str] = None
-    amount: Optional[float] = None
-    shares: Optional[float] = None
-    performance_score: Optional[float] = None
-    status: Optional[str] = None
+    product_id: str | None = None
+    product_name: str | None = None
+    product_type: str | None = None
+    description: str | None = None
+    min_investment: float | None = None
+    max_investment: float | None = None
+    expected_return: float | None = None
+    risk_level: str | None = None
+    duration_ticks: int | None = None
+    investor_id: str | None = None
+    amount: float | None = None
+    shares: float | None = None
+    performance_score: float | None = None
+    status: str | None = None
 
 
 class InvestmentTool(WorldEngineTool):
@@ -117,7 +117,7 @@ class InvestmentTool(WorldEngineTool):
             return self._make_error_result(str(exc))
 
     async def _create_product(self, p: InvestmentParams) -> ToolResult:
-        body: Dict[str, Any] = {}
+        body: dict[str, Any] = {}
         if p.product_name:
             body["name"] = p.product_name
         if p.product_type:
@@ -146,7 +146,7 @@ class InvestmentTool(WorldEngineTool):
         return ToolResult(tool_name=self.name, status=ToolStatus.SUCCESS, output=data)
 
     async def _buy(self, p: InvestmentParams) -> ToolResult:
-        body: Dict[str, Any] = {}
+        body: dict[str, Any] = {}
         if p.product_id:
             body["product_id"] = p.product_id
         if p.investor_id:
@@ -159,7 +159,7 @@ class InvestmentTool(WorldEngineTool):
         return ToolResult(tool_name=self.name, status=ToolStatus.SUCCESS, output=data)
 
     async def _sell(self, p: InvestmentParams) -> ToolResult:
-        body: Dict[str, Any] = {}
+        body: dict[str, Any] = {}
         if p.product_id:
             body["product_id"] = p.product_id
         if p.investor_id:
@@ -186,7 +186,7 @@ class InvestmentTool(WorldEngineTool):
         return ToolResult(tool_name=self.name, status=ToolStatus.SUCCESS, output=data)
 
     async def _update_performance(self, p: InvestmentParams) -> ToolResult:
-        body: Dict[str, Any] = {}
+        body: dict[str, Any] = {}
         if p.performance_score is not None:
             body["performance_score"] = p.performance_score
         data = await self._post(f"/investments/products/{p.product_id}/performance", json=body)

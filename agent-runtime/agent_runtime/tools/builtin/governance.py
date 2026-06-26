@@ -6,7 +6,7 @@ vote on proposals, tally votes, and query governance metrics.
 
 from __future__ import annotations
 
-from typing import Any, Dict, List, Optional
+from typing import Any
 
 from ..base import ToolParameters, ToolResult, ToolStatus
 from .world_engine_base import WorldEngineTool
@@ -19,21 +19,21 @@ class GovernanceParams(ToolParameters):
     # add_argument, list_proposals, get_proposal, summary, org_metrics,
     # timeline, comparison, list_legislation
     action: str
-    org_id: Optional[str] = None
-    proposal_id: Optional[str] = None
+    org_id: str | None = None
+    proposal_id: str | None = None
     # amend_charter, accept_member, expel_member, dissolve_org,
     # change_profit_sharing
-    proposal_type: Optional[str] = None
-    title: Optional[str] = None
-    description: Optional[str] = None
-    vote: Optional[str] = None  # for, against, abstain
-    argument: Optional[str] = None
-    argument_side: Optional[str] = None  # for, against
-    proposer_id: Optional[str] = None
-    voter_id: Optional[str] = None
-    status: Optional[str] = None  # filter by proposal status
-    org_ids: Optional[List[str]] = None  # for comparison action
-    rule_type: Optional[str] = None  # for legislation filter
+    proposal_type: str | None = None
+    title: str | None = None
+    description: str | None = None
+    vote: str | None = None  # for, against, abstain
+    argument: str | None = None
+    argument_side: str | None = None  # for, against
+    proposer_id: str | None = None
+    voter_id: str | None = None
+    status: str | None = None  # filter by proposal status
+    org_ids: list[str] | None = None  # for comparison action
+    rule_type: str | None = None  # for legislation filter
 
 
 class GovernanceTool(WorldEngineTool):
@@ -133,7 +133,7 @@ class GovernanceTool(WorldEngineTool):
             return self._make_error_result(str(exc))
 
     async def _create_proposal(self, params: GovernanceParams) -> ToolResult:
-        body: Dict[str, Any] = {}
+        body: dict[str, Any] = {}
         if params.proposal_type:
             body["proposal_type"] = params.proposal_type
         if params.title:
@@ -147,7 +147,7 @@ class GovernanceTool(WorldEngineTool):
         return ToolResult(tool_name=self.name, status=ToolStatus.SUCCESS, output=data)
 
     async def _vote(self, params: GovernanceParams) -> ToolResult:
-        body: Dict[str, Any] = {}
+        body: dict[str, Any] = {}
         if params.vote:
             body["vote"] = params.vote
         if params.voter_id:
@@ -169,7 +169,7 @@ class GovernanceTool(WorldEngineTool):
         return ToolResult(tool_name=self.name, status=ToolStatus.SUCCESS, output=data)
 
     async def _add_argument(self, params: GovernanceParams) -> ToolResult:
-        body: Dict[str, Any] = {}
+        body: dict[str, Any] = {}
         if params.argument:
             body["argument"] = params.argument
         if params.argument_side:
@@ -201,14 +201,14 @@ class GovernanceTool(WorldEngineTool):
         return ToolResult(tool_name=self.name, status=ToolStatus.SUCCESS, output=data)
 
     async def _comparison(self, params: GovernanceParams) -> ToolResult:
-        query_params: Dict[str, Any] = {}
+        query_params: dict[str, Any] = {}
         if params.org_ids:
             query_params["org_ids"] = ",".join(params.org_ids)
         data = await self._get("/governance/comparison", params=query_params)
         return ToolResult(tool_name=self.name, status=ToolStatus.SUCCESS, output=data)
 
     async def _list_legislation(self, params: GovernanceParams) -> ToolResult:
-        query_params: Dict[str, Any] = {}
+        query_params: dict[str, Any] = {}
         if params.status:
             query_params["status"] = params.status
         if params.rule_type:

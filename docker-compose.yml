@@ -4,13 +4,14 @@
 #
 # Services:
 #   world-engine   — Rust world state / economy / rules engine
-#   agent-01..10   — 10 Python agent-runtime instances
+#   agent-01..10   — 10 Python agent-runtime instances (each uses its own config)
 #   dashboard      — Next.js observability UI
 #   ollama         — Optional local LLM (only started with profile: local-llm)
 #   prometheus     — Metrics collection (profile: observability)
 #   grafana        — Metrics dashboards (profile: observability)
 #
-# CI profile (world-engine + 1 agent only):
+# Resource limits: each agent capped at 512M RAM / 0.5 CPU via deploy.resources.limits
+# CI profile (world-engine + ci-agent only):
 #   docker compose --profile ci up
 #
 # Observability profile (adds Prometheus + Grafana):
@@ -33,7 +34,7 @@ x-agent-common: &agent-common
   environment:
     - WORLD_ENGINE_URL=http://world-engine:${ENGINE_PORT:-8080}
     - HEALTH_PORT=9090
-    - LLM_PROVIDER=${LLM_PROVIDER:-ollama}
+    - LLM_PROVIDER=${LLM_PROVIDER:-zhipu}
     - LLM_MODEL=${LLM_MODEL:-glm-4-flash}
     - LLM_API_KEY=${LLM_API_KEY:-}
     - LLM_BASE_URL=${LLM_BASE_URL:-}
@@ -48,6 +49,11 @@ x-agent-common: &agent-common
     start_period: 20s
   networks:
     - agent-world
+  deploy:
+    resources:
+      limits:
+        memory: 512M
+        cpus: '0.5'
 
 services:
   # ── World Engine (Rust) ──────────────────────────────────────

@@ -577,15 +577,12 @@ fn build_cors_layer() -> CorsLayer {
             "http://localhost:8080",
         ]
         .into_iter()
-            .filter_map(|s| s.parse().ok())
+            .filter_map(ensure_header_value)
             .collect()
     } else {
         origins_env
             .split(',')
-            .filter_map(|s| {
-                let s = s.trim();
-                ensure_uri_path(s)
-            })
+            .filter_map(ensure_header_value)
             .collect()
     };
     CorsLayer::new()
@@ -600,23 +597,9 @@ fn build_cors_layer() -> CorsLayer {
         .allow_headers([CONTENT_TYPE, AUTHORIZATION])
 }
 
-/// Normalize a CORS origin string into a valid `http::Uri`.
-///
-/// `http::Uri` requires a path component, so bare hostnames like
-/// `https://custom.example.com` need a `/` appended.
-fn ensure_uri_path(s: &str) -> Option<axum::http::header::HeaderValue> {
-    // HeaderValue requires valid HTTP header syntax; URIs are fine as long as
-    // they're well-formed. If the raw string doesn't parse (e.g., missing path),
-    // append "/" and retry.
-    if let Ok(v) = s.trim().parse() {
-        return Some(v);
-    }
-    if s.contains("//") && !s.ends_with('/') && !s.contains('?') {
-        if let Ok(v) = format!("{}/", s.trim()).parse() {
-            return Some(v);
-        }
-    }
-    None
+/// Parse a CORS origin string into a valid `HeaderValue`.
+fn ensure_header_value(s: &str) -> Option<axum::http::header::HeaderValue> {
+    s.trim().parse().ok()
 }
 
 /// Build the full router by merging all domain sub-routers.
@@ -1282,6 +1265,7 @@ mod tests {
 
     /// Verify that the default CORS layer (empty CORS_ORIGINS) allows localhost:3001.
     #[tokio::test]
+    #[allow(clippy::await_holding_lock)] // lock held for full duration to prevent env var races
     async fn test_cors_defaults_to_localhost_whitelist() {
         let _guard = cors_serial::LOCK.lock().unwrap();
         std::env::remove_var("CORS_ORIGINS");
@@ -1311,6 +1295,7 @@ mod tests {
 
         // Allowed origin: localhost:8080
         let response = app
+            .clone()
             .oneshot(
                 axum::http::Request::builder()
                     .method("GET")
@@ -1322,10 +1307,12 @@ mod tests {
             .await
             .unwrap();
         assert_eq!(response.status(), StatusCode::OK);
+        drop(app);
     }
 
     /// Verify that an origin not in the default allowlist is rejected.
     #[tokio::test]
+    #[allow(clippy::await_holding_lock)] // lock held for full duration to prevent env var races
     async fn test_cors_rejects_non_whitelisted_origin() {
         let _guard = cors_serial::LOCK.lock().unwrap();
         std::env::remove_var("CORS_ORIGINS");
@@ -1357,6 +1344,7 @@ mod tests {
 
     /// Verify that a user-set CORS_ORIGINS value overrides the default allowlist.
     #[tokio::test]
+    #[allow(clippy::await_holding_lock)] // lock held for full duration to prevent env var races
     async fn test_cors_respects_custom_origins() {
         let _guard = cors_serial::LOCK.lock().unwrap();
         std::env::set_var("CORS_ORIGINS", "https://custom.example.com");

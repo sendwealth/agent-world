@@ -208,7 +208,9 @@ class LLMQueue:
         limiter_note = ""
         if self._rate_limiter is not None:
             limiter_note = (
-                f" rate_limiter=enabled(rate={self._rate_limiter._rate:.1f}/s,burst={self._rate_limiter._burst})"
+                f" rate_limiter=enabled("
+                f"rate={self._rate_limiter._rate:.1f}/s,"
+                f"burst={self._rate_limiter._burst})"
             )
         logger.info(
             "LLMQueue started: max_concurrency=%d timeout=%.1fs%s",

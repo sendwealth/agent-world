@@ -9,7 +9,6 @@ import asyncio
 import json
 import logging
 import os
-import time
 from typing import AsyncIterator
 
 import httpx

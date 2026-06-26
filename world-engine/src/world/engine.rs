@@ -5,6 +5,7 @@
 //! the world by one step.
 
 use std::collections::HashMap;
+use std::mem;
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::Arc;
 
@@ -206,6 +207,8 @@ impl WorldState {
     }
 
     /// Get agent record by ID string.
+    /// Clone is unavoidable here — returning through a mutex guard requires
+    /// ownership, and changing to return a reference would break the API contract.
     pub async fn get_agent(&self, id: &str) -> Option<AgentRecord> {
         let agents = self.agents.lock().await;
         let uid = Uuid::parse_str(id).ok()?;
@@ -269,7 +272,7 @@ impl WorldState {
         {
             let mut agents = self.agents.lock().await;
             for subsystem in &self.subsystems {
-                let result = run_subsystem_isolated(subsystem.as_ref(), new_tick, &mut agents);
+                let mut result = run_subsystem_isolated(subsystem.as_ref(), new_tick, &mut agents);
                 if !result.success {
                     eprintln!(
                         "[Scheduler] Subsystem '{}' failed: {}",
@@ -277,7 +280,8 @@ impl WorldState {
                         result.error.as_deref().unwrap_or("unknown error")
                     );
                 }
-                all_events.extend(result.events.clone());
+                let events = mem::take(&mut result.events);
+                all_events.extend(events);
                 subsystem_results.push(result);
             }
         }
@@ -290,7 +294,9 @@ impl WorldState {
             for (_agent_id, results) in rule_results {
                 for rule_result in results {
                     for event in rule_result.events {
-                        // Track death events
+                        // Track death events — dead_id.clone() is unavoidable
+                        // because the event itself is moved into all_events below,
+                        // and we need the ID as a String in dead_agents.
                         if let WorldEvent::AgentDied {
                             agent_id: dead_id, ..
                         } = &event
@@ -309,10 +315,10 @@ impl WorldState {
             let _expired = rule_engine.expire_rules(new_tick);
         }
 
-        // Step 3: Broadcast all collected events
-        for event in &all_events {
-            self.event_bus.emit(event.clone());
-        }
+        // Step 3: Broadcast all collected events in a single batch call.
+        // broadcast::Sender::send clones internally per receiver; emit_batch
+        // keeps the same semantics but avoids an extra outer loop.
+        self.event_bus.emit_batch(&all_events);
 
         // Step 4: Process task expiry
         {

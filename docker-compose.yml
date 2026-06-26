@@ -67,6 +67,7 @@ services:
       - PORT=${ENGINE_PORT:-8080}
       - GRPC_ADDR=0.0.0.0:${GRPC_PORT:-50051}
       - RUST_LOG=${RUST_LOG:-info}
+      - CORS_ORIGINS=${CORS_ORIGINS:-}
       - GENESIS_PATH=/app/config/genesis.yaml
       - WAL_DIR=/app/data
       - PERSISTENCE_DB=/app/data/world.db

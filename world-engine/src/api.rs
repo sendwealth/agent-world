@@ -559,7 +559,9 @@ pub fn create_router_with_wal_and_snapshots(
 
 /// Build a CORS layer based on the `CORS_ORIGINS` environment variable.
 ///
-/// - If `CORS_ORIGINS` is unset or empty → permissive (allow any origin, dev-friendly).
+/// - If `CORS_ORIGINS` is unset or empty → defaults to a localhost allowlist
+///   (`http://localhost:3001`, `http://localhost:8080`), covering the dashboard
+///   and direct API access in local development.
 /// - If set → only the listed origins are allowed (production-safe).
 ///   Multiple origins can be separated by commas, e.g. `CORS_ORIGINS=https://app.example.com,https://admin.example.com`
 fn build_cors_layer() -> CorsLayer {
@@ -567,25 +569,37 @@ fn build_cors_layer() -> CorsLayer {
     use axum::http::Method;
     use tower_http::cors::AllowOrigin;
 
-    let origins_env = std::env::var("CORS_ORIGINS").unwrap_or_default();
-    if origins_env.is_empty() {
-        CorsLayer::permissive()
+    let origins_env = std::env::var("CORS_ORIGINS").unwrap_or_default().trim().to_string();
+    let origins: Vec<_> = if origins_env.is_empty() {
+        // Default to localhost allowlist when not configured.
+        vec![
+            "http://localhost:3001",
+            "http://localhost:8080",
+        ]
+        .into_iter()
+            .filter_map(ensure_header_value)
+            .collect()
     } else {
-        let origins: Vec<_> = origins_env
+        origins_env
             .split(',')
-            .filter_map(|s| s.trim().parse().ok())
-            .collect();
-        CorsLayer::new()
-            .allow_origin(AllowOrigin::list(origins))
-            .allow_methods([
-                Method::GET,
-                Method::POST,
-                Method::PUT,
-                Method::DELETE,
-                Method::OPTIONS,
-            ])
-            .allow_headers([CONTENT_TYPE, AUTHORIZATION])
-    }
+            .filter_map(ensure_header_value)
+            .collect()
+    };
+    CorsLayer::new()
+        .allow_origin(AllowOrigin::list(origins))
+        .allow_methods([
+            Method::GET,
+            Method::POST,
+            Method::PUT,
+            Method::DELETE,
+            Method::OPTIONS,
+        ])
+        .allow_headers([CONTENT_TYPE, AUTHORIZATION])
+}
+
+/// Parse a CORS origin string into a valid `HeaderValue`.
+fn ensure_header_value(s: &str) -> Option<axum::http::header::HeaderValue> {
+    s.trim().parse().ok()
 }
 
 /// Build the full router by merging all domain sub-routers.
@@ -685,6 +699,12 @@ mod tests {
     use axum::body::Body;
     use http_body_util::BodyExt;
     use tower::ServiceExt;
+
+    /// Serializes access to CORS tests so they don't race on env vars.
+    mod cors_serial {
+        use std::sync::Mutex;
+        pub(crate)  static LOCK: Mutex<()> = Mutex::new(());
+    }
 
     /// Build a test AppState with governance_metrics wired up.
     fn build_test_state() -> (AppState, tempfile::TempDir) {
@@ -1239,5 +1259,138 @@ mod tests {
         assert_eq!(entries.len(), 1);
         assert_eq!(entries[0]["rule_type"], "tax");
         assert_eq!(entries[0]["status"], "proposed");
+    }
+
+    // ── CORS Layer Tests ──────────────────────────────────────
+
+    /// Verify that the default CORS layer (empty CORS_ORIGINS) allows localhost:3001.
+    #[tokio::test]
+    #[allow(clippy::await_holding_lock)] // lock held for full duration to prevent env var races
+    async fn test_cors_defaults_to_localhost_whitelist() {
+        let _guard = cors_serial::LOCK.lock().unwrap();
+        std::env::remove_var("CORS_ORIGINS");
+
+        let (state, _tmp) = build_test_state();
+        let app = build_full_router(state);
+
+        // Allowed origin: localhost:3001 (dashboard)
+        let response = app
+            .clone()
+            .oneshot(
+                axum::http::Request::builder()
+                    .method("GET")
+                    .uri("/api/v1/world/stats")
+                    .header("origin", "http://localhost:3001")
+                    .body(Body::empty())
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        assert_eq!(response.status(), StatusCode::OK);
+        let headers = response.headers();
+        assert!(
+            headers.get(axum::http::header::ACCESS_CONTROL_ALLOW_ORIGIN).is_some(),
+            "Allowed origin should have Access-Control-Allow-Origin header"
+        );
+
+        // Allowed origin: localhost:8080
+        let response = app
+            .clone()
+            .oneshot(
+                axum::http::Request::builder()
+                    .method("GET")
+                    .uri("/api/v1/world/stats")
+                    .header("origin", "http://localhost:8080")
+                    .body(Body::empty())
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        assert_eq!(response.status(), StatusCode::OK);
+        drop(app);
+    }
+
+    /// Verify that an origin not in the default allowlist is rejected.
+    #[tokio::test]
+    #[allow(clippy::await_holding_lock)] // lock held for full duration to prevent env var races
+    async fn test_cors_rejects_non_whitelisted_origin() {
+        let _guard = cors_serial::LOCK.lock().unwrap();
+        std::env::remove_var("CORS_ORIGINS");
+
+        let (state, _tmp) = build_test_state();
+        let app = build_full_router(state);
+
+        // Disallowed origin: external site
+        let response = app
+            .oneshot(
+                axum::http::Request::builder()
+                    .method("GET")
+                    .uri("/api/v1/world/stats")
+                    .header("origin", "https://evil.example.com")
+                    .body(Body::empty())
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        // CORS is enforced — tower-http strips the ACAO header for disallowed origins
+        // and the response should not have it. The response status may be 200 (the API
+        // doesn't require CORS to pass) but the ACAO header must be absent.
+        let headers = response.headers();
+        assert!(
+            headers.get(axum::http::header::ACCESS_CONTROL_ALLOW_ORIGIN).is_none(),
+            "Disallowed origin should NOT have Access-Control-Allow-Origin header"
+        );
+    }
+
+    /// Verify that a user-set CORS_ORIGINS value overrides the default allowlist.
+    #[tokio::test]
+    #[allow(clippy::await_holding_lock)] // lock held for full duration to prevent env var races
+    async fn test_cors_respects_custom_origins() {
+        let _guard = cors_serial::LOCK.lock().unwrap();
+        std::env::set_var("CORS_ORIGINS", "https://custom.example.com");
+
+        let (state, _tmp) = build_test_state();
+        let app = build_full_router(state);
+
+        // Custom origin should be allowed
+        let response = app
+            .clone()
+            .oneshot(
+                axum::http::Request::builder()
+                    .method("GET")
+                    .uri("/api/v1/world/stats")
+                    .header("origin", "https://custom.example.com")
+                    .body(Body::empty())
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        assert_eq!(response.status(), StatusCode::OK);
+        let headers = response.headers();
+        assert!(
+            headers.get(axum::http::header::ACCESS_CONTROL_ALLOW_ORIGIN).is_some(),
+            "Custom origin should have Access-Control-Allow-Origin header"
+        );
+
+        // localhost:3001 should NOT be allowed when custom origins are set
+        let response = app
+            .oneshot(
+                axum::http::Request::builder()
+                    .method("GET")
+                    .uri("/api/v1/world/stats")
+                    .header("origin", "http://localhost:3001")
+                    .body(Body::empty())
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        let headers = response.headers();
+        assert!(
+            headers.get(axum::http::header::ACCESS_CONTROL_ALLOW_ORIGIN).is_none(),
+            "localhost should not be allowed when custom origins are set"
+        );
+
+        // Restore the default state
+        std::env::remove_var("CORS_ORIGINS");
     }
 }

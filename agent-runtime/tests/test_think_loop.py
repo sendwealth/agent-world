@@ -693,7 +693,6 @@ class TestThinkLoopAntiRepetition:
     @pytest.mark.asyncio
     async def test_five_consecutive_triggers(self):
         """[explore, explore, explore, explore, explore] → triggers."""
-        forced: list[bool] = []
 
         class CountingExplore:
             call_count = 0

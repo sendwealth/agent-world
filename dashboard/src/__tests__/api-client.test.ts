@@ -59,7 +59,7 @@ describe("API Client", () => {
 
   it("putJSON makes PUT request with correct body", async () => {
     const responseData = { id: "1", updated: true };
-    mockFetch.mockResolvedValueOnce(mockFetchResponse(responseData));
+    mockFetch.mockResolvedValueOnce(mockFetchResponse({ data: responseData, error: null }));
     const { putJSON } = await import("@/lib/api");
     const result = await putJSON("/api/v1/tasks/1", { status: "done" });
     expect(result).toEqual(responseData);
@@ -72,7 +72,7 @@ describe("API Client", () => {
 
   it("deleteJSON makes DELETE request", async () => {
     const responseData = { deleted: true };
-    mockFetch.mockResolvedValueOnce(mockFetchResponse(responseData));
+    mockFetch.mockResolvedValueOnce(mockFetchResponse({ data: responseData, error: null }));
     const { deleteJSON } = await import("@/lib/api");
     const result = await deleteJSON("/api/v1/tasks/1");
     expect(result).toEqual(responseData);

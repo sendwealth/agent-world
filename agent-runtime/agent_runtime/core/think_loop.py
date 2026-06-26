@@ -1501,6 +1501,22 @@ class _NoOpWorldClient:
     async def complete_bounty(self, bounty_id: str, result: str) -> dict[str, Any]:
         return {"status": "ok", "action": "complete_bounty", "bounty_id": bounty_id}
 
+    async def form_org(self, org_data: dict[str, Any]) -> dict[str, Any]:
+        return {"status": "ok", "action": "form_org"}
+
+    async def join_org(self, org_id: str, member_data: dict[str, Any]) -> dict[str, Any]:
+        return {"status": "ok", "action": "join_org", "org_id": org_id}
+
+    async def propose_rule(
+        self, org_id: str, rule_data: dict[str, Any]
+    ) -> dict[str, Any]:
+        return {"status": "ok", "action": "propose_rule", "org_id": org_id}
+
+    async def vote_rule(
+        self, rule_id: str, vote_data: dict[str, Any]
+    ) -> dict[str, Any]:
+        return {"status": "ok", "action": "vote_rule", "rule_id": rule_id}
+
 
 # ---------------------------------------------------------------------------
 # Concurrent multi-agent runner

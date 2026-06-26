@@ -143,6 +143,42 @@ class FakeWorldClient:
             ],
         }
 
+    async def form_org(self, org_data: dict[str, Any]) -> dict[str, Any]:
+        self._call_count += 1
+        self.calls.append(("form_org", org_data))
+        if self._should_fail or self._call_count <= self._fail_times:
+            raise RuntimeError("Failed to form organization")
+        return {
+            "status": "formed",
+            "org_id": "org-123",
+            "org_name": org_data.get("org_name", ""),
+        }
+
+    async def join_org(self, org_id: str, member_data: dict[str, Any]) -> dict[str, Any]:
+        self._call_count += 1
+        self.calls.append(("join_org", {"org_id": org_id}))
+        if self._should_fail or self._call_count <= self._fail_times:
+            raise RuntimeError("Failed to join organization")
+        return {"status": "joined", "org_id": org_id}
+
+    async def propose_rule(
+        self, org_id: str, rule_data: dict[str, Any]
+    ) -> dict[str, Any]:
+        self._call_count += 1
+        self.calls.append(("propose_rule", {"org_id": org_id, "title": rule_data.get("title", "")}))
+        if self._should_fail or self._call_count <= self._fail_times:
+            raise RuntimeError("Failed to propose rule")
+        return {"status": "proposed", "rule_id": "rule-123"}
+
+    async def vote_rule(
+        self, rule_id: str, vote_data: dict[str, Any]
+    ) -> dict[str, Any]:
+        self._call_count += 1
+        self.calls.append(("vote_rule", {"rule_id": rule_id}))
+        if self._should_fail or self._call_count <= self._fail_times:
+            raise RuntimeError("Failed to vote on rule")
+        return {"status": "voted", "rule_id": rule_id}
+
 
 # ---------------------------------------------------------------------------
 # Enum tests

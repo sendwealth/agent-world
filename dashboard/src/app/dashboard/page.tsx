@@ -461,7 +461,7 @@ function EventStream({ events, connected }: { events: WorldEvent[]; connected: b
   return (
     <section className="rounded-[var(--radius)] border border-border bg-card">
       <div className="flex items-center justify-between p-4 pb-3 border-b border-border/50">
-        <h3 className="text-sm font-semibold text-fg">事件流</h3>
+        <h3 id="event-stream-heading" className="text-sm font-semibold text-fg">事件流</h3>
         <span className={`inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full ${connected ? "bg-success/10 text-success" : "bg-warning/10 text-warning"} text-[10px] font-mono`}>
           <span className="relative flex h-1.5 w-1.5">
             {connected && <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-success opacity-75" />}
@@ -472,6 +472,9 @@ function EventStream({ events, connected }: { events: WorldEvent[]; connected: b
       </div>
       <div
         className="overflow-y-auto max-h-[320px] scrollbar-thin"
+        role="log"
+        aria-live="polite"
+        aria-labelledby="event-stream-heading"
       >
         {displayEvents.length === 0 ? (
           <div className="p-4 text-xs text-muted text-center">

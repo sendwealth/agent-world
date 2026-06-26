@@ -78,7 +78,7 @@ export function EventStream({ events, connected }: EventStreamProps) {
   return (
     <div className="rounded-xl border border-zinc-800 bg-zinc-900/50 p-4">
       <div className="mb-3 flex items-center justify-between">
-        <h2 className="text-sm font-semibold text-zinc-200">实时事件流</h2>
+        <h2 id="event-stream-title" className="text-sm font-semibold text-zinc-200">实时事件流</h2>
         <div className="flex items-center gap-1.5">
           <span
             className={`inline-block h-2 w-2 rounded-full ${
@@ -91,7 +91,13 @@ export function EventStream({ events, connected }: EventStreamProps) {
         </div>
       </div>
 
-      <div className="max-h-[400px] space-y-1.5 overflow-y-auto pr-1 scrollbar-thin">
+      <div
+        id="event-log"
+        className="max-h-[400px] space-y-1.5 overflow-y-auto pr-1 scrollbar-thin"
+        role="log"
+        aria-labelledby="event-stream-title"
+        aria-live="polite"
+      >
         {events.length === 0 ? (
           <div className="flex h-32 items-center justify-center text-sm text-zinc-600">
             等待事件...

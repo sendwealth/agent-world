@@ -680,3 +680,103 @@ class TestThinkLoopActionExecution:
         # EXPLORE costs 3 tokens per tick
         assert state.tokens < initial_tokens
         assert loop.total_errors == 0
+
+
+# ---------------------------------------------------------------------------
+# ThinkLoop — anti-repetition (consecutive trailing count)
+# ---------------------------------------------------------------------------
+
+
+class TestThinkLoopAntiRepetition:
+    """Verify consecutive only counts the trailing run of identical actions."""
+
+    @pytest.mark.asyncio
+    async def test_five_consecutive_triggers(self):
+        """[explore, explore, explore, explore, explore] → triggers."""
+
+        class CountingExplore:
+            call_count = 0
+
+            async def decide(self, state, perception, survival):
+                self.call_count += 1
+                d = Decision(action_type=ActionType.EXPLORE)
+                if self.call_count == 1:
+                    d = Decision(action_type=ActionType.EXPLORE)
+                return d
+
+        state = make_state(tokens=5000, max_tokens=10000)
+        loop = ThinkLoop(
+            state=state,
+            survival=SurvivalInstinct(),
+            executor=ActionExecutor(),
+            config=ThinkLoopConfig(tick_interval=0.0),
+            decision_provider=CountingExplore(),
+        )
+        # Seed _recent_actions with 5 explores so the guard fires on the
+        # next tick; decision provider switches to REST after tick 1.
+        for _ in range(5):
+            loop._recent_actions.append("explore")
+
+        # Force diversity check: a sixth EXPLORE decision should be overridden
+        class SixthExplore:
+            async def decide(self, state, perception, survival):
+                return Decision(action_type=ActionType.EXPLORE)
+
+        loop._decision = SixthExplore()
+        await loop.run(max_ticks=1)
+        # Forced diversity should have changed the action — _recent_actions
+        # should now contain something other than "explore" at the tail.
+        assert loop._recent_actions[-1] != "explore", (
+            "Expected forced diversity to kick in after 5 consecutive explores"
+        )
+
+    @pytest.mark.asyncio
+    async def test_interleaved_does_not_trigger(self):
+        """[explore, rest, explore] trailing run = 1 → no forced diversity."""
+        # Seed 4 non-explores + 1 explore at the end → consecutive=1
+        state = make_state(tokens=5000, max_tokens=10000)
+        loop = ThinkLoop(
+            state=state,
+            survival=SurvivalInstinct(),
+            executor=ActionExecutor(),
+            config=ThinkLoopConfig(tick_interval=0.0),
+        )
+        loop._recent_actions.clear()
+        for v in ("explore", "rest", "explore", "rest"):
+            loop._recent_actions.append(v)
+        # Now only 4 items; add one more explore to hit len>=5
+        loop._recent_actions.append("explore")
+        assert len(loop._recent_actions) == 5
+        # Decision returns explore again — should NOT be forced diverse
+        # because trailing run = 1.
+        class AlwaysExplore:
+            async def decide(self, state, perception, survival):
+                return Decision(action_type=ActionType.EXPLORE)
+
+        loop._decision = AlwaysExplore()
+        await loop.run(max_ticks=1)
+        # Action should still be explore (no forced diversity).
+        assert loop._recent_actions[-1] == "explore"
+
+    @pytest.mark.asyncio
+    async def test_alternating_does_not_trigger(self):
+        """[explore, rest, explore, rest, explore] → trailing run = 1 → no force."""
+        state = make_state(tokens=5000, max_tokens=10000)
+        loop = ThinkLoop(
+            state=state,
+            survival=SurvivalInstinct(),
+            executor=ActionExecutor(),
+            config=ThinkLoopConfig(tick_interval=0.0),
+        )
+        loop._recent_actions.clear()
+        for v in ("explore", "rest", "explore", "rest", "explore"):
+            loop._recent_actions.append(v)
+        assert len(loop._recent_actions) == 5
+
+        class AlwaysExplore:
+            async def decide(self, state, perception, survival):
+                return Decision(action_type=ActionType.EXPLORE)
+
+        loop._decision = AlwaysExplore()
+        await loop.run(max_ticks=1)
+        assert loop._recent_actions[-1] == "explore"

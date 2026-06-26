@@ -852,9 +852,13 @@ class ThinkLoop:
         # to get stuck in explore-only loops when perception data is sparse.
         if len(self._recent_actions) >= 5:
             last_action = self._recent_actions[-1]
-            consecutive = sum(
-                1 for a in list(self._recent_actions)[::-1] if a == last_action
-            )
+            # Count only the trailing consecutive run (scan from the end).
+            consecutive = 0
+            for a in reversed(self._recent_actions):
+                if a == last_action:
+                    consecutive += 1
+                else:
+                    break
             if consecutive >= 5 and decision.action_type.value == last_action:
                 diverse_choices = [
                     ActionType.SOCIALIZE,

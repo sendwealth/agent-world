@@ -94,13 +94,19 @@ class QueueConfig:
 
     Attributes:
         max_concurrency: Maximum number of concurrent LLM requests.
-        timeout_seconds: Per-request timeout.  If exceeded, the enqueue
-            call raises ``asyncio.TimeoutError`` so that the caller
-            (typically DecisionEngine) can apply its own validated fallback.
+        timeout_seconds: Per-request timeout for the LLM call itself.
+            Starts counting only after the semaphore has been acquired,
+            so waiting in the queue does not consume the LLM timeout.
+        semaphore_timeout_seconds: Timeout for acquiring the concurrency
+            semaphore.  Defaults to ``timeout_seconds * 5`` to give
+            low-priority requests a fair chance during congestion without
+            waiting indefinitely.  If exceeded, the request fails with
+            ``TimeoutError``.
     """
 
     max_concurrency: int = 2
     timeout_seconds: float = 120.0
+    semaphore_timeout_seconds: float | None = None
 
 
 # ---------------------------------------------------------------------------
@@ -213,9 +219,11 @@ class LLMQueue:
                 f"burst={self._rate_limiter._burst})"
             )
         logger.info(
-            "LLMQueue started: max_concurrency=%d timeout=%.1fs%s",
+            "LLMQueue started: max_concurrency=%d timeout=%.1fs "
+            "semaphore_timeout=%.1fs%s",
             self._config.max_concurrency,
             self._config.timeout_seconds,
+            self._effective_semaphore_timeout(),
             limiter_note,
         )
 
@@ -289,27 +297,20 @@ class LLMQueue:
             t.add_done_callback(self._dispatch_tasks.discard)
 
     async def _dispatch_entry(self, entry: _QueueEntry) -> None:
-        """Dispatch a single queue entry through the semaphore to the provider."""
+        """Dispatch a single queue entry through the semaphore to the provider.
+
+        Semaphore acquisition and the LLM call have **independent** timeouts.
+        This ensures low-priority requests are not penalised for time spent
+        waiting in the concurrency queue.
+        """
         if entry.future.done():
             return
 
         try:
-            # Wrap the entire semaphore+LLM call with a timeout.
-            # Use asyncio.wait_for for Python 3.9 compatibility.
-            await asyncio.wait_for(
-                self._execute_with_semaphore(entry),
-                timeout=self._config.timeout_seconds,
-            )
+            await self._execute_with_semaphore(entry)
         except TimeoutError:
-            # Timeout covers both semaphore acquisition and LLM call.
-            # Propagate so the caller (DecisionEngine) can use its own
-            # fallback_decision() which validates against available_actions.
-            self._stats.timed_out_requests += 1
-            logger.warning(
-                "LLM queue: request timed out (%.1fs) priority=%s",
-                self._config.timeout_seconds,
-                entry.request.priority,
-            )
+            # Timeout is already counted inside _execute_with_semaphore;
+            # just propagate to the caller.
             if not entry.future.done():
                 entry.future.set_exception(TimeoutError())
         except asyncio.CancelledError:
@@ -318,32 +319,73 @@ class LLMQueue:
                 entry.future.set_result(_FALLBACK_RESPONSE)
             raise
 
+    def _effective_semaphore_timeout(self) -> float:
+        """Return the configured semaphore timeout, defaulting to 5× LLM timeout."""
+        if self._config.semaphore_timeout_seconds is not None:
+            return self._config.semaphore_timeout_seconds
+        return self._config.timeout_seconds * 5
+
     async def _execute_with_semaphore(self, entry: _QueueEntry) -> None:
-        """Acquire rate limiter + semaphore and execute the LLM call."""
+        """Acquire rate limiter + semaphore and execute the LLM call.
+
+        Semaphore acquisition and LLM call are timed independently so that
+        time spent waiting for the semaphore does not eat into the LLM
+        timeout budget.
+        """
         # 1. Acquire cross-process rate limiter (no-op if disabled)
         if self._rate_limiter is not None:
             await self._rate_limiter.acquire()
 
-        # 2. Acquire per-process concurrency semaphore
-        async with self._get_semaphore():
+        # 2. Acquire per-process concurrency semaphore (independent timeout)
+        sem_timeout = self._effective_semaphore_timeout()
+        try:
+            await asyncio.wait_for(
+                self._get_semaphore().acquire(),
+                timeout=sem_timeout,
+            )
+        except TimeoutError:
+            self._stats.timed_out_requests += 1
+            logger.warning(
+                "LLM queue: semaphore acquisition timed out (%.1fs) priority=%s",
+                sem_timeout,
+                entry.request.priority,
+            )
+            raise
+
+        try:
             self._active_count += 1
             self._stats.active_requests = self._active_count
+            # 3. LLM call with its own timeout — starts after semaphore is held
             try:
-                response = await self._provider.chat(
-                    entry.request.messages,
-                    max_tokens=entry.request.max_tokens,
-                    temperature=entry.request.temperature,
+                response = await asyncio.wait_for(
+                    self._provider.chat(
+                        entry.request.messages,
+                        max_tokens=entry.request.max_tokens,
+                        temperature=entry.request.temperature,
+                    ),
+                    timeout=self._config.timeout_seconds,
                 )
-                self._stats.completed_requests += 1
-                if not entry.future.done():
-                    entry.future.set_result(response)
-            except Exception as exc:
+            except TimeoutError:
+                self._stats.timed_out_requests += 1
+                logger.warning(
+                    "LLM queue: LLM call timed out (%.1fs) priority=%s",
+                    self._config.timeout_seconds,
+                    entry.request.priority,
+                )
+                raise
+
+            self._stats.completed_requests += 1
+            if not entry.future.done():
+                entry.future.set_result(response)
+        except Exception as exc:
+            if not isinstance(exc, TimeoutError):
                 self._stats.failed_requests += 1
-                if not entry.future.done():
-                    entry.future.set_exception(exc)
-            finally:
-                self._active_count -= 1
-                self._stats.active_requests = self._active_count
+            if not entry.future.done():
+                entry.future.set_exception(exc)
+        finally:
+            self._active_count -= 1
+            self._stats.active_requests = self._active_count
+            self._get_semaphore().release()
 
     # ------------------------------------------------------------------
     # Public API

@@ -95,6 +95,18 @@ class TestQueueConfig:
         assert cfg.max_concurrency == 5
         assert cfg.timeout_seconds == 10.0
 
+    def test_semaphore_timeout_default(self):
+        """When semaphore_timeout_seconds is None, the queue uses 5× LLM timeout."""
+        cfg = QueueConfig(timeout_seconds=30.0)
+        queue = LLMQueue(provider=MockLLMProvider(), config=cfg)
+        assert queue._effective_semaphore_timeout() == 150.0
+
+    def test_semaphore_timeout_custom(self):
+        """Custom semaphore timeout overrides the default multiplier."""
+        cfg = QueueConfig(timeout_seconds=30.0, semaphore_timeout_seconds=60.0)
+        queue = LLMQueue(provider=MockLLMProvider(), config=cfg)
+        assert queue._effective_semaphore_timeout() == 60.0
+
 
 # ---------------------------------------------------------------------------
 # Tests: LLMQueue basic operations
@@ -274,6 +286,134 @@ class TestLLMQueue:
         except (TimeoutError, asyncio.CancelledError):
             # In some Python versions the task is cancelled — that's acceptable
             pass
+
+    # ------------------------------------------------------------------
+    # Tests: independent semaphore / LLM timeouts
+    # ------------------------------------------------------------------
+
+    @pytest.mark.asyncio
+    async def test_llm_timeout_does_not_consume_semaphore_wait(self):
+        """A request that waits for the semaphore should still get the
+        full LLM timeout once it acquires it — semaphore wait time is
+        not deducted.
+
+        Setup: concurrency=1, LLM timeout=1s, semaphore timeout=10s.
+        The first request holds the slot for 3s (simulated by sleeping).
+        The second request waits ~1s for the semaphore (the first
+        request's LLM call times out at 1s, releasing the semaphore).
+        After acquiring the semaphore, the second request gets a fresh
+        1s LLM timeout and succeeds.
+
+        Key assertion: at 0.5s, the second request must NOT have timed
+        out, even though the LLM timeout is 1s — because it hasn't
+        acquired the semaphore yet.
+        """
+        provider_call_started = asyncio.Event()
+
+        class SlowThenFastProvider:
+            def __init__(self):
+                self.call_count = 0
+
+            async def chat(self, messages: list[LLMMessage], **kwargs) -> LLMResponse:
+                self.call_count += 1
+                if self.call_count == 1:
+                    provider_call_started.set()
+                    # Hold the slot for 3s — will be killed by LLM timeout at 1s
+                    await asyncio.sleep(3.0)
+                # Second call returns immediately
+                return LLMResponse(content='{"action": "rest"}', model="test")
+
+        provider = SlowThenFastProvider()
+        config = QueueConfig(
+            max_concurrency=1,
+            timeout_seconds=1.0,
+            semaphore_timeout_seconds=10.0,
+        )
+        queue = LLMQueue(provider=provider, config=config)
+        await queue.start()
+
+        # First request grabs the semaphore and holds it (will LLM-timeout at 1s)
+        first_task = asyncio.create_task(queue.enqueue(
+            LLMRequest(messages=[LLMMessage(role="user", content="first")]),
+        ))
+        await provider_call_started.wait()
+
+        # Second request must wait for the semaphore.
+        second_result_holder: dict = {}
+
+        async def second_call():
+            try:
+                second_result_holder["result"] = await queue.enqueue(
+                    LLMRequest(messages=[LLMMessage(role="user", content="second")]),
+                )
+            except Exception as exc:
+                second_result_holder["error"] = exc
+
+        second_task = asyncio.create_task(second_call())
+
+        # At 0.5s: first request still holds semaphore (LLM timeout hasn't fired).
+        # Second request is waiting for semaphore — must NOT have timed out.
+        # Old code would have timed out at ~1s total (sem wait + LLM),
+        # but with independent timeouts the sem timeout is 10s.
+        await asyncio.sleep(0.5)
+        assert not second_task.done(), \
+            "Second request should not time out while waiting for semaphore"
+
+        # Wait for both to finish. First times out at ~1s (releases semaphore),
+        # second acquires semaphore at ~1s and completes.
+        await asyncio.wait_for(asyncio.gather(
+            first_task, second_task, return_exceptions=True,
+        ), timeout=10.0)
+
+        # Second request succeeded
+        assert "error" not in second_result_holder
+        assert second_result_holder["result"].content == '{"action": "rest"}'
+
+        await queue.stop()
+
+    @pytest.mark.asyncio
+    async def test_semaphore_timeout_triggers(self):
+        """When the semaphore wait exceeds semaphore_timeout_seconds,
+        the request should fail with TimeoutError."""
+        class BlockingProvider:
+            """Holds the LLM slot indefinitely."""
+            def __init__(self):
+                self.block = asyncio.Event()
+
+            async def chat(self, messages: list[LLMMessage], **kwargs) -> LLMResponse:
+                await self.block.wait()
+                return LLMResponse(content="unreachable", model="test")
+
+        provider = BlockingProvider()
+        config = QueueConfig(
+            max_concurrency=1,
+            timeout_seconds=10.0,
+            semaphore_timeout_seconds=0.3,
+        )
+        queue = LLMQueue(provider=provider, config=config)
+        await queue.start()
+
+        # First request grabs the only slot and blocks
+        first_task = asyncio.create_task(queue.enqueue(
+            LLMRequest(messages=[LLMMessage(role="user", content="first")]),
+        ))
+
+        # Give it time to acquire the semaphore
+        await asyncio.sleep(0.1)
+
+        # Second request must wait for the semaphore — should time out
+        with pytest.raises(asyncio.TimeoutError):
+            await queue.enqueue(
+                LLMRequest(messages=[LLMMessage(role="user", content="second")]),
+            )
+
+        stats = queue.stats()
+        assert stats.timed_out_requests == 1
+
+        # Clean up
+        provider.block.set()
+        await first_task
+        await queue.stop()
 
 
 # ---------------------------------------------------------------------------

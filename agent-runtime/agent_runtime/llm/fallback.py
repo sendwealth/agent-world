@@ -169,7 +169,7 @@ class FallbackChainProvider(LLMProvider):
             model="unknown",
         )
 
-    def chat_stream(
+    async def chat_stream(
         self,
         messages: list[LLMMessage],
         *,
@@ -181,6 +181,7 @@ class FallbackChainProvider(LLMProvider):
             "FallbackChainProvider does not support streaming. "
             "Use chat() for non-streaming responses."
         )
+        yield  # pragma: no cover — unreachable; satisfies async-generator typing
 
     async def close(self) -> None:
         """Close all providers in the chain."""

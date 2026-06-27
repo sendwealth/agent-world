@@ -67,6 +67,9 @@ const eventTypeConfig: Record<
 
 function formatTime(ts: string): string {
   const d = new Date(ts);
+  if (Number.isNaN(d.getTime())) {
+    return "--:--:--";
+  }
   return d.toLocaleTimeString("zh-CN", {
     hour: "2-digit",
     minute: "2-digit",

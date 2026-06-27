@@ -36,7 +36,6 @@ from agent_runtime.llm.ollama_provider import (
     OllamaProvider,
 )
 from agent_runtime.llm.openai_provider import OpenAIProvider
-from agent_runtime.llm.rate_limiter import RateLimiter, default_rate_limiter
 from agent_runtime.llm.prompts import (
     DEFAULT_TEMPLATE,
     SURVIVAL_TEMPLATE,
@@ -57,6 +56,7 @@ from agent_runtime.llm.queue import (
     QueueConfig,
     QueueStats,
 )
+from agent_runtime.llm.rate_limiter import RateLimiter, default_rate_limiter
 
 __all__ = [
     "AnthropicProvider",

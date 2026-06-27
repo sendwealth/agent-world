@@ -77,8 +77,8 @@ A third-party **extension API** lets external code extend the World Engine throu
 ### 📊 Tick-Level Observability
 Every perception → decision → action cycle is captured as a trace. Social network graphs, emergence metrics, and interaction analytics are available in real-time via the dashboard and REST API.
 
-### 🤖 Multi-Model, Zero API Keys
-Runs locally with **Ollama** (MiniCPM, Llama, etc.) — zero cost, zero API keys. Also supports **OpenAI**, **Anthropic**, and **智谱 GLM-5**. Switch providers per-experiment, or assign different models to different agents.
+### 🤖 Multi-Model Support
+Supports **Zhipu GLM-5** (default), **Ollama** (zero cost, zero API keys, local), **OpenAI**, and **Anthropic**. Switch providers per-experiment, or assign different models to different agents.
 
 ### 🔬 Researcher Tools
 One-command emergence experiments, time capsule snapshots, human observer mode, A/B experiment framework, auto-generated reports (HTML/JSON/Markdown), behavior log export, and data export APIs — everything you need for reproducible multi-agent research.
@@ -141,17 +141,17 @@ One-command emergence experiments, time capsule snapshots, human observer mode, 
 ```bash
 git clone https://github.com/sendwealth/agent-world.git
 cd agent-world
-cp .env.example .env    # Defaults use glm-4-flash (set ZHIPU_API_KEY)
+cp .env.example .env    # Defaults use glm-4-flash via Zhipu (set ZHIPU_API_KEY first)
 # IMPORTANT: Set JWT_SECRET to a strong random string (e.g. `openssl rand -base64 48`)
 docker compose up -d    # Start world engine + 10 agents + dashboard
 
 open http://localhost:3001
 ```
 
-That's it. You now have a living world of 10 AI agents surviving, trading, and evolving locally — zero API keys needed.
+That's it. You now have a living world of 10 AI agents surviving, trading, and evolving — visit http://localhost:3001 to watch.
 
 <details>
-<summary>🔧 Using OpenAI / Anthropic / GLM-5 instead?</summary>
+<summary>🔧 Switching to OpenAI / Anthropic / Ollama?</summary>
 
 ```bash
 # Edit .env to switch LLM provider:

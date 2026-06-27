@@ -4,7 +4,7 @@ Usage::
 
     from agent_runtime.sdk import AgentWorldClient
 
-    client = AgentWorldClient("http://localhost:3000")
+    client = AgentWorldClient("http://localhost:8080")
     resp = client.register("my-agent", capabilities=["move", "gather"])
     print(resp["agent_id"], resp["api_key"])
 
@@ -29,7 +29,7 @@ class AgentWorldClient:
     """High-level client for the Agent World Third-Party Agent API.
 
     Attributes:
-        base_url: Root URL of the World Engine (e.g. ``http://localhost:3000``).
+        base_url: Root URL of the World Engine (e.g. ``http://localhost:8080``).
         timeout: HTTP request timeout in seconds.
     """
 

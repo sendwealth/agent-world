@@ -117,7 +117,7 @@ def _add_spawn_args(parser: argparse.ArgumentParser) -> None:
     parser.add_argument(
         "--world-url",
         default=None,
-        help="World Engine URL (default: http://localhost:3000)",
+        help="World Engine URL (default: http://localhost:8080)",
     )
     parser.add_argument(
         "--llm-provider",
@@ -530,7 +530,7 @@ def _get_health_port(config: RuntimeConfig) -> int:
 def _extract_grpc_address(engine_url: str) -> str:
     """Convert an HTTP REST URL to a gRPC address (host:port).
 
-    ``http://localhost:3000`` → ``localhost:50051``
+    ``http://localhost:8080`` → ``localhost:50051``
     ``https://engine.example.com:443`` → ``engine.example.com:50051``
 
     The gRPC port can be overridden with the ``GRPC_PORT`` environment variable.

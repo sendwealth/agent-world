@@ -11,7 +11,7 @@ Usage::
 
     from agent_runtime.experiment.world_engine_adapter import WorldEngineAdapter
 
-    adapter = WorldEngineAdapter("http://localhost:3000")
+    adapter = WorldEngineAdapter("http://localhost:8080")
     exp_id = await adapter.create_experiment(
         name="Token Test",
         variants=[
@@ -110,7 +110,7 @@ class WorldEngineAdapter:
     ``/api/v2/experiments/ab/*`` endpoints.
 
     Args:
-        base_url: Root URL of the World Engine (e.g., ``http://localhost:3000``).
+        base_url: Root URL of the World Engine (e.g., ``http://localhost:8080``).
         timeout: HTTP request timeout in seconds.
     """
 

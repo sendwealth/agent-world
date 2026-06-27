@@ -35,7 +35,7 @@ class WorldEngineTool(Tool):
     def __init__(
         self,
         *,
-        base_url: str = "http://localhost:3000",
+        base_url: str = "http://localhost:8080",
         sandbox: bool = True,
         timeout_seconds: float = 10.0,
     ) -> None:

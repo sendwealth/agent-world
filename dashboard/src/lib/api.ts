@@ -1,5 +1,6 @@
 // API client for the world-engine backend
-// Next.js rewrites proxy /api/v1/* to the world-engine on port 3000.
+// Next.js catch-all route handler (app/api/v1/[...path]/route.ts) proxies
+// /api/v1/* to the world-engine (WORLD_ENGINE_URL env, default http://127.0.0.1:8080).
 // Use NEXT_PUBLIC_API_URL only when bypassing the proxy (e.g. direct SSE).
 
 const API_BASE = process.env.NEXT_PUBLIC_API_URL ?? "";

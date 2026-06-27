@@ -61,15 +61,14 @@ jobs:
           key: rust-${{ runner.os }}-cargo-${{ hashFiles('world-engine/Cargo.lock') }}
           restore-keys: rust-${{ runner.os }}-cargo-
 
-      - name: Build Rust workspace
-        working-directory: world-engine
-        run: cargo build --all-targets
-
       - name: Initialize CodeQL
         uses: github/codeql-action/init@v3
         with:
           languages: rust
           queries: security-and-quality
+
+      - name: Autobuild
+        uses: github/codeql-action/autobuild@v3
 
       - name: Run CodeQL Analysis
         uses: github/codeql-action/analyze@v3

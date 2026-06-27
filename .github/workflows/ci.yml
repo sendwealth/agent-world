@@ -12,6 +12,7 @@ concurrency:
 
 permissions:
   contents: read
+  dependency-review: write
 
 env:
   CARGO_TERM_COLOR: always
@@ -153,3 +154,19 @@ jobs:
 
       - name: Build dashboard image
         run: docker build -t ci-check:dashboard ./dashboard
+
+  # ── Dependency review ────────────────────────────────────
+  dep-review:
+    name: Dependency review
+    runs-on: ubuntu-latest
+    if: github.event_name == 'pull_request'
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5
+
+      - name: Dependency review
+        uses: actions/dependency-review-action@v4
+        with:
+          fail-on-severity: moderate
+          denylicenses: GPL-3.0, AGPL-3.0
+          warning-level: 0

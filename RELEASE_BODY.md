@@ -12,7 +12,7 @@ Phase 1 milestone: a complete, production-ready AI agent survival simulation. Tw
 - **Context Engine Pipeline** — Token-budgeted, priority-driven context assembly from world state, memory, and skills
 - **Safety Intervention** — InterventionChecker that blocks dangerous actions before execution
 - **10-Agent E2E Stability** — 8/8 E2E tests passing, 1038 Python unit tests, validated concurrent 10-agent runs
-- **Docker Compose Production-Ready** — 10-agent config with health checks, restart policies, network isolation, `.env.example` for LLM providers (Ollama/OpenAI/Anthropic/GLM-5)
+- **Docker Compose Production-Ready** — 10-agent config with health checks, restart policies, network isolation, `.env.example` for LLM providers (Ollama/OpenAI/Anthropic/GLM, default GLM-4-Flash)
 
 ### Previous Releases
 

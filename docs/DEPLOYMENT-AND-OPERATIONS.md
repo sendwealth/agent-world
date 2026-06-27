@@ -380,7 +380,8 @@ Agent config files follow the naming convention `agent-NN-name.toml`. The Docker
 | Provider | Cost | Latency | Quality | Setup |
 |----------|------|---------|---------|-------|
 | Ollama (local) | Free | High (depends on hardware) | Moderate | Requires GPU or ~8 GB RAM for llama3 |
-| Zhipu GLM-5 | Low | Low | Good | API key required |
+| Zhipu GLM-4-Flash (default) | Low | Low | Good | API key required |
+| Zhipu GLM-5 (upgrade) | Low | Low | Better | API key required |
 | OpenAI gpt-4o-mini | Medium | Low | High | API key required |
 | Anthropic claude-3.5-haiku | Medium | Low | High | API key required |
 

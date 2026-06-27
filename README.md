@@ -78,7 +78,7 @@ A third-party **extension API** lets external code extend the World Engine throu
 Every perception → decision → action cycle is captured as a trace. Social network graphs, emergence metrics, and interaction analytics are available in real-time via the dashboard and REST API.
 
 ### 🤖 Multi-Model Support
-Supports **Zhipu GLM-5** (default), **Ollama** (zero cost, zero API keys, local), **OpenAI**, and **Anthropic**. Switch providers per-experiment, or assign different models to different agents.
+Supports **Zhipu GLM-4-Flash** (default, cost-effective), **GLM-5** (recommended upgrade), **Ollama** (zero cost, zero API keys, local), **OpenAI**, and **Anthropic**. Switch providers per-experiment, or assign different models to different agents.
 
 ### 🔬 Researcher Tools
 One-command emergence experiments, time capsule snapshots, human observer mode, A/B experiment framework, auto-generated reports (HTML/JSON/Markdown), behavior log export, and data export APIs — everything you need for reproducible multi-agent research.
@@ -234,7 +234,7 @@ See [`examples/python/custom_agent.py`](examples/python/custom_agent.py) for a c
 
 ### Advanced: Custom LLM Provider
 
-Edit `.env` to switch providers. Supported: `ollama` (default), `openai`, `anthropic`, `zhipu` (智谱 GLM-5).
+Edit `.env` to switch providers. Supported: `zhipu` (default, GLM-4-Flash), `ollama`, `openai`, `anthropic`. GLM-5 is available as a recommended upgrade for higher quality.
 
 ```bash
 # Example: switch to OpenAI
@@ -286,7 +286,7 @@ Dataset** section.
 A fully **observable** multi-agent evolution platform with real-time event streams, population genetics, emergent economics, cultural dynamics, emotion modeling, and federation — ready for reproducible experiments. One-command experiment runner with auto-generated reports. A/B experiment framework for controlled studies.
 
 ### For Developers
-Self-hosted, extensible, and model-agnostic. Supports **Ollama** (zero-cost local), **OpenAI**, **Anthropic**, and **GLM-5** (智谱). Built with Rust + Python + Next.js — hack on any layer. Third-party agent SDK for custom agents.
+Self-hosted, extensible, and model-agnostic. Supports **Ollama** (zero-cost local), **OpenAI**, **Anthropic**, and **Zhipu GLM** (GLM-4-Flash default, GLM-5 recommended). Built with Rust + Python + Next.js — hack on any layer. Third-party agent SDK for custom agents.
 
 ### For the Curious
 Watch AI agents spontaneously form **companies**, establish **governance**, create **stock markets**, evolve **skills** through mutation, pass **legacies** to their heirs, migrate across **federated worlds**, and propose their own **laws**, experience **emotions**, keep **diaries**, and build on a **hex map**. No script — just survival rules.
@@ -367,7 +367,7 @@ Watch AI agents spontaneously form **companies**, establish **governance**, crea
 - `core/` — Think loop, LLM-driven decision engine, action executor
 - `survival/` — 5-mode instinct system bypassing LLM in emergencies
 - `memory/` — Working (FIFO), short-term (SQLite), long-term (SQLite+embeddings)
-- `llm/` — OpenAI, Anthropic, Ollama, 智谱 GLM-5 providers with cost tracking
+- `llm/` — OpenAI, Anthropic, Ollama, 智谱 GLM providers (GLM-4-Flash default, GLM-5 upgrade) with cost tracking
 - `crypto/` — Ed25519 signing, verification, nonce replay protection
 - `skills/` — Coding, research, teaching, trading
 - `social/` — Cultural emergence: diffusion, conflict, language, jargon, imitation, trust, feed, org culture (13 modules)

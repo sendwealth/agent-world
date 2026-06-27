@@ -74,14 +74,14 @@ def create_builtin_tools(
         file_ops_base_dir: Base directory for file operations. Defaults to
             ``.agent_workspace`` in the current working directory.
         world_engine_url: Base URL for the World Engine API. Defaults to
-            ``http://localhost:3000``.
+            ``http://localhost:8080``.
         sandbox_world_engine: If True (default), world-engine tools return
             simulated responses without making network calls.
 
     Returns:
         List of Tool instances ready to register.
     """
-    engine_url = world_engine_url or "http://localhost:3000"
+    engine_url = world_engine_url or "http://localhost:8080"
 
     return [
         # Original tools

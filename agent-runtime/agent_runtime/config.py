@@ -29,7 +29,7 @@ Config file example (TOML)::
     reflect_interval = 10
 
     [world]
-    engine_url = "http://localhost:3000"
+    engine_url = "http://localhost:8080"
 
 Config file example (YAML)::
 
@@ -52,7 +52,7 @@ Config file example (YAML)::
       max_ticks: 0
       reflect_interval: 10
     world:
-      engine_url: http://localhost:3000
+      engine_url: http://localhost:8080
 """
 
 from __future__ import annotations
@@ -74,7 +74,7 @@ logger = logging.getLogger(__name__)
 
 # Default World Engine URL (single source of truth)
 # Can be overridden via WORLD_ENGINE_URL env var or --world-url CLI flag.
-_DEFAULT_ENGINE_URL = "http://localhost:3000"
+_DEFAULT_ENGINE_URL = "http://localhost:8080"
 
 
 def _resolve_engine_url() -> str:
@@ -82,7 +82,7 @@ def _resolve_engine_url() -> str:
 
     Priority:
       1. ``WORLD_ENGINE_URL`` env var
-      2. ``_DEFAULT_ENGINE_URL`` (``http://localhost:3000``)
+      2. ``_DEFAULT_ENGINE_URL`` (``http://localhost:8080``)
     """
     return os.environ.get("WORLD_ENGINE_URL", _DEFAULT_ENGINE_URL)
 
@@ -97,7 +97,7 @@ class WorldConfig:
     """Connection settings for the World Engine.
 
     ``engine_url`` defaults to the ``WORLD_ENGINE_URL`` environment variable
-    when set, otherwise ``http://localhost:3000``.
+    when set, otherwise ``http://localhost:8080``.
     """
 
     engine_url: str = field(default_factory=_resolve_engine_url)

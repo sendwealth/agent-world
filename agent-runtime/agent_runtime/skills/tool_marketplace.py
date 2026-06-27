@@ -57,7 +57,7 @@ class ToolMarketplaceClient:
 
     Usage::
 
-        client = ToolMarketplaceClient("http://localhost:3000")
+        client = ToolMarketplaceClient("http://localhost:8080")
         tools = await client.search_tools(category="analysis")
         record = await client.purchase_tool(tool_id, "agent-1")
     """

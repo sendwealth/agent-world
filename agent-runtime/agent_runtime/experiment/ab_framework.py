@@ -73,7 +73,7 @@ class ABExperiment:
 
     Usage (World Engine mode)::
 
-        ab = ABExperiment(config_a, config_b, world_engine_url="http://localhost:3000")
+        ab = ABExperiment(config_a, config_b, world_engine_url="http://localhost:8080")
         result = await ab.run_parallel()
         print(result.comparison.summary)
 

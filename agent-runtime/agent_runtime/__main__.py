@@ -25,7 +25,7 @@ Usage::
     python -m agent_runtime spawn --name TestAgent --max-ticks 100
 
     # Connect to a specific world engine
-    python -m agent_runtime spawn --name Alice --world-url http://localhost:3000
+    python -m agent_runtime spawn --name Alice --world-url http://localhost:8080
 """
 
 from __future__ import annotations

@@ -42,7 +42,7 @@ x-agent-common: &agent-common
     - OLLAMA_MAX_PREDICT_CAP=256
   restart: unless-stopped
   healthcheck:
-    test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:9090/health')"]
+    test: ["CMD", "python", "-c", "import urllib.request, sys; req = urllib.request.urlopen('http://localhost:9090/health', timeout=3); sys.exit(0 if req.status == 200 else 1)"]
     interval: 15s
     timeout: 5s
     retries: 3

@@ -183,11 +183,44 @@ jobs:
         id: version
         run: echo "VERSION=${GITHUB_REF#refs/tags/v}" >> "$GITHUB_OUTPUT"
 
+      - name: Generate release body
+        id: body
+        shell: bash
+        run: |
+          set -euo pipefail
+          VERSION="${{ steps.version.outputs.VERSION }}"
+          RELEASE_DATE="$(date -u +%Y-%m-%d)"
+
+          # Try to extract the changelog section for this version
+          # Matches: ## [VERSION] - DATE ... up to the next ## [ or end of file
+          # Trims leading blank lines for clean formatting
+          CHANGELOG_SECTION="$(awk -v ver="${VERSION}" '
+            index($0, "## [" ver "] ") == 1 { found=1; next }
+            /^## \[/ && found { exit }
+            found && started == 0 && NF == 0 { next }
+            found { started=1; print }
+          ' CHANGELOG.md)"
+
+          # Build the dynamic release body
+          {
+            echo "## Agent World v${VERSION} — ${RELEASE_DATE}"
+            echo ""
+            if [ -n "${CHANGELOG_SECTION}" ]; then
+              echo "${CHANGELOG_SECTION}"
+            else
+              echo "No changelog entry found for v${VERSION}. See [CHANGELOG.md](https://github.com/${{ github.repository }}/blob/main/CHANGELOG.md) for full details."
+            fi
+            echo ""
+            echo "---"
+            echo ""
+            echo "**Full Changelog**: https://github.com/${{ github.repository }}/compare/$(git describe --tags --abbrev=0 HEAD~1 2>/dev/null || echo HEAD)...v${VERSION}"
+          } > /tmp/release_body.md
+
       - name: Create release
         uses: softprops/action-gh-release@v2
         with:
           name: Release v${{ steps.version.outputs.VERSION }}
-          body_path: RELEASE_BODY.md
+          body_path: /tmp/release_body.md
           draft: false
           prerelease: ${{ contains(steps.version.outputs.VERSION, '-') }}
           files: |

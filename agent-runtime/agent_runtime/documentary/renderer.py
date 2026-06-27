@@ -375,7 +375,7 @@ def _render_network(
     pos = nx.spring_layout(graph, seed=42, k=1.5 / math.sqrt(max(1, n_total)))
 
     groups = sorted({d.get("group", 0) for _, d in graph.nodes(data=True)})
-    cmap = plt.cm.get_cmap("tab10", max(len(groups), 1))
+    cmap = matplotlib.colormaps["tab10"].resampled(max(len(groups), 1))
     group_colour = {g: cmap(i) for i, g in enumerate(groups)}
 
     n_frames = max(1, int(storyboard.scene_duration_seconds * storyboard.fps))

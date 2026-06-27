@@ -94,11 +94,14 @@ jobs:
         uses: actions/cache@v5
         with:
           path: ~/.cache/pip
-          key: python-${{ runner.os }}-pip-${{ hashFiles('agent-runtime/pyproject.toml') }}
+          key: python-${{ runner.os }}-pip-${{ hashFiles('agent-runtime/requirements-lock.txt') }}
           restore-keys: python-${{ runner.os }}-pip-
 
-      - name: Install dependencies
-        run: pip install -e ".[dev]"
+      - name: Install pinned dependencies
+        run: pip install -r requirements-lock.txt
+
+      - name: Install editable package (no-op if versions already pinned)
+        run: pip install -e .
 
       - name: Ruff check
         run: ruff check .

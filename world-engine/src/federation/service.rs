@@ -14,6 +14,8 @@ use crate::federation::registry::WorldRegistry;
 /// the protobuf codegen layer is wired in.
 #[derive(Clone)]
 pub struct FederationServiceImpl {
+    // TODO: world_registry / migration_manager will be consumed by gRPC service method
+    //       implementations once the protobuf codegen layer is wired in.
     #[allow(dead_code)]
     world_registry: Arc<WorldRegistry>,
     #[allow(dead_code)]

@@ -200,18 +200,6 @@ pub enum HumanInterventionType {
 }
 
 impl HumanInterventionType {
-    /// Returns the string representation for manual (non-serde) serialization.
-    /// For serde-based serialization, `#[serde(rename_all = "snake_case")]` handles this automatically.
-    #[allow(dead_code)]
-    pub fn as_str(&self) -> &'static str {
-        match self {
-            HumanInterventionType::DirectControl => "direct_control",
-            HumanInterventionType::Guidance => "guidance",
-            HumanInterventionType::Observation => "observation",
-            HumanInterventionType::Voting => "voting",
-        }
-    }
-
     fn from_str_lossy(s: &str) -> Self {
         match s {
             "direct_control" => HumanInterventionType::DirectControl,

@@ -387,38 +387,6 @@ mod tests {
     use super::*;
     use crate::economy::token_burn::SkillRecord;
 
-    #[allow(dead_code)]
-    fn make_agent_with_skill(id: &str, skill: &str, level: u32) -> (Uuid, u64, AgentRecord) {
-        let uuid = Uuid::parse_str(id).unwrap_or(Uuid::new_v4());
-        (
-            uuid,
-            0,
-            AgentRecord {
-                id: uuid,
-                name: id.to_string(),
-                phase: AgentPhase::Adult,
-                tokens: 1000,
-                skills: {
-                    let mut m = HashMap::new();
-                    if !skill.is_empty() {
-                        m.insert(
-                            skill.to_string(),
-                            SkillRecord {
-                                name: skill.to_string(),
-                                level,
-                                experience: 0.0,
-                            },
-                        );
-                    }
-                    m
-                },
-                personality: String::new(),
-                tasks_completed: 0,
-                tasks_attempted: 0,
-            },
-        )
-    }
-
     #[test]
     fn test_establish_mentorship() {
         let mut sys = MentorshipSystem::default();

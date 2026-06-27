@@ -181,6 +181,8 @@ pub struct SubWorldRegistry {
     subworlds: Arc<RwLock<HashMap<String, SubWorld>>>,
     /// Index: parent_world_id -> set of child world_ids
     children_index: Arc<RwLock<HashMap<String, HashSet<String>>>>,
+    // TODO: event_bus is stored for future sub-world lifecycle events (create/dissolve broadcasts).
+    //       Wire into register()/dissolve() once the event subscription layer is in place.
     #[allow(dead_code)]
     event_bus: Arc<EventBus>,
 }
@@ -650,13 +652,6 @@ impl SubWorldManager {
 }
 
 // ── REST API types ────────────────────────────────────────
-
-use serde_json::json;
-
-#[allow(dead_code)]
-fn _ensure_json_used() -> serde_json::Value {
-    json!(null)
-}
 
 /// Request payload for creating a sub-world.
 ///

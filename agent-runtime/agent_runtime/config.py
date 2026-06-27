@@ -316,7 +316,7 @@ def _parse_think_loop_config(data: dict[str, Any]) -> ThinkLoopConfig:
         max_ticks=data.get("max_ticks", 0),
         reflect_interval=data.get("reflect_interval", 10),
         error_backoff=data.get("error_backoff", 5.0),
-        max_consecutive_errors=data.get("max_consecutive_errors", 0),
+        max_consecutive_errors=data.get("max_consecutive_errors", 20),
     )
 
 

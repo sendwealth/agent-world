@@ -78,7 +78,7 @@ class TestThinkLoopConfig:
         assert cfg.max_ticks == 0
         assert cfg.reflect_interval == 10
         assert cfg.error_backoff == 5.0
-        assert cfg.max_consecutive_errors == 0
+        assert cfg.max_consecutive_errors == 20
 
     def test_custom(self):
         cfg = ThinkLoopConfig(
@@ -422,6 +422,7 @@ class TestThinkLoopErrorRecovery:
         assert loop.tick == 5
         assert loop.total_errors == 5
         assert loop.running is False
+        assert state.phase == AgentPhase.DEAD
 
 
 # ---------------------------------------------------------------------------

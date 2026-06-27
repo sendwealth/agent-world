@@ -85,7 +85,8 @@ pub struct WAL {
     entry_count: usize,
     current_sequence: u64,
     /// Root WAL directory. Subdirectories (`snapshots/`, `wal-archive/`) are derived from this.
-    /// Retained for potential future use in advanced compaction or multi-file recovery.
+    // TODO: data_dir is currently unused — needed for multi-file WAL recovery / advanced compaction.
+    //       Enable once WAL rotation / multi-segment support is implemented.
     #[allow(dead_code)]
     data_dir: PathBuf,
     snapshot_dir: PathBuf,

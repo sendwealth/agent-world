@@ -118,22 +118,6 @@ mod tests {
         ConnectionPool::new(50052)
     }
 
-    #[allow(dead_code)]
-    fn make_agent(id: &str) -> RegisteredAgent {
-        RegisteredAgent {
-            agent_id: id.to_string(),
-            name: id.to_string(),
-            capabilities: vec![],
-            public_key: String::new(),
-            tokens: 0,
-            money: 0,
-            skills: vec![],
-            reputation: 0.0,
-            phase: 0,
-            last_seen: 0,
-        }
-    }
-
     #[tokio::test]
     async fn pool_starts_empty() {
         let pool = make_pool();

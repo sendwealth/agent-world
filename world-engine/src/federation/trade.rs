@@ -169,6 +169,8 @@ pub struct CrossWorldTradeManager {
     completed: Arc<RwLock<Vec<CrossWorldTrade>>>,
     /// Internal escrow ledger. Keys are `world:<id>` strings.
     escrow: Arc<RwLock<EscrowManager>>,
+    // TODO: event_bus is stored for future cross-world trade events (offer/complete/cancel broadcasts).
+    //       Wire into execute_trade()/cancel_trade() once the event subscription layer is in place.
     #[allow(dead_code)]
     event_bus: Arc<EventBus>,
 }

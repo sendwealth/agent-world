@@ -300,12 +300,6 @@ pub async fn sandbox_load(
     }
 }
 
-#[derive(Debug, Deserialize)]
-#[allow(dead_code)]
-pub struct SandboxIdRequest {
-    context: Option<serde_json::Value>,
-}
-
 /// POST /api/v1/plugins/sandbox/:id/init — initialize a loaded WASM plugin.
 pub async fn sandbox_init(
     State(_state): State<AppState>,

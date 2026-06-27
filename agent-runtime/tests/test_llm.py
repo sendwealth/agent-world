@@ -269,6 +269,34 @@ class TestOpenAIProvider:
         assert url.startswith("https://custom.openai.proxy/v1/")
         await provider.close()
 
+    def test_parse_response_empty_choices(self):
+        """_parse_response should raise LLMError when choices is empty."""
+        data = {"model": "gpt-4", "choices": [], "usage": {}}
+        with pytest.raises(LLMError, match="missing 'choices'"):
+            OpenAIProvider._parse_response(data)
+
+    def test_parse_response_missing_choices(self):
+        """_parse_response should raise LLMError when choices key is absent."""
+        data = {"model": "gpt-4", "usage": {}}
+        with pytest.raises(LLMError, match="missing 'choices'"):
+            OpenAIProvider._parse_response(data)
+
+    def test_parse_response_missing_message(self):
+        """_parse_response should raise LLMError when message is missing."""
+        data = {"model": "gpt-4", "choices": [{"index": 0, "finish_reason": "stop"}], "usage": {}}
+        with pytest.raises(LLMError, match="missing 'message.content'"):
+            OpenAIProvider._parse_response(data)
+
+    def test_parse_response_missing_content(self):
+        """_parse_response should raise LLMError when message has no content."""
+        data = {
+            "model": "gpt-4",
+            "choices": [{"index": 0, "message": {"role": "assistant"}, "finish_reason": "stop"}],
+            "usage": {},
+        }
+        with pytest.raises(LLMError, match="missing 'message.content'"):
+            OpenAIProvider._parse_response(data)
+
     def test_parse_sse_line_data(self):
         line = 'data: {"choices":[{"delta":{"content":"Hi"}}],"model":"gpt-4"}'
         chunk = OpenAIProvider._parse_sse_line(line)

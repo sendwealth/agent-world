@@ -197,7 +197,21 @@ class OpenAIProvider(LLMProvider):
 
     @staticmethod
     def _parse_response(data: dict) -> LLMResponse:
-        choice = data["choices"][0]
+        choices = data.get("choices")
+        if not choices:
+            raise LLMError(
+                "OpenAI response missing 'choices' or choices list is empty",
+                provider="openai",
+                model=data.get("model", "unknown"),
+            )
+        choice = choices[0]
+        message = choice.get("message")
+        if not message or "content" not in message:
+            raise LLMError(
+                "OpenAI response missing 'message.content' field",
+                provider="openai",
+                model=data.get("model", "unknown"),
+            )
         usage_data = data.get("usage", {})
         usage = TokenUsage(
             prompt_tokens=usage_data.get("prompt_tokens", 0),
@@ -205,8 +219,8 @@ class OpenAIProvider(LLMProvider):
             total_tokens=usage_data.get("total_tokens", 0),
         )
         return LLMResponse(
-            content=choice["message"]["content"],
-            model=data["model"],
+            content=message["content"],
+            model=data.get("model", "unknown"),
             usage=usage,
             finish_reason=choice.get("finish_reason"),
         )

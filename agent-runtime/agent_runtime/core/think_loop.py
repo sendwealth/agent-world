@@ -776,7 +776,7 @@ class ThinkLoop:
         # 0b. Model hot-swap check (optional — re-create LLMProvider if changed)
         if self._model_registry is not None:
             try:
-                self._check_model_swap()
+                await self._check_model_swap()
             except Exception:
                 logger.debug(
                     "Tick %d: model swap check failed (non-fatal)",
@@ -1107,7 +1107,7 @@ class ThinkLoop:
     # Model hot-swap
     # ------------------------------------------------------------------
 
-    def _check_model_swap(self) -> None:
+    async def _check_model_swap(self) -> None:
         """Check if the model registry has a pending hot-swap for this agent.
 
         Walks the decision provider chain to find the innermost
@@ -1162,6 +1162,17 @@ class ThinkLoop:
         if engine is not None and hasattr(engine, "_provider"):
             old_provider = engine._provider
             engine._provider = new_provider
+
+            # Close the old provider's httpx.AsyncClient to avoid connection leaks
+            if hasattr(old_provider, "close"):
+                try:
+                    await old_provider.close()
+                except Exception:
+                    logger.warning(
+                        "Failed to close old LLM provider during hot-swap",
+                        exc_info=True,
+                    )
+
             logger.info(
                 "Model switched for agent %s: %s/%s → %s/%s (tick %d)",
                 agent_id,

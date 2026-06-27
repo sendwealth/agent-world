@@ -24,7 +24,9 @@ Usage::
 
 from __future__ import annotations
 
+import asyncio
 import logging
+import random
 import time
 from dataclasses import dataclass, field
 from enum import StrEnum
@@ -356,8 +358,6 @@ class ActionExecutor:
                     last_error,
                 )
                 if attempt < self._max_retries:
-                    import asyncio
-
                     await asyncio.sleep(self._retry_delay)
 
         # All retries exhausted
@@ -524,8 +524,6 @@ class ActionExecutor:
         Defaults to a random direction if the LLM omitted it (common when
         the anti-repetition system forces a MOVE action).
         """
-        import random
-
         direction = context.parameters.get("direction", "")
         if not direction:
             direction = random.choice(["north", "south", "east", "west"])

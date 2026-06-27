@@ -31,6 +31,9 @@ protocol/gen/python/__pycache__/
 .DS_Store
 Thumbs.db
 
+# Nested checkout — prevents accidental self-nesting (agent-world/ inside agent-world/)
+/agent-world/
+
 # Environment
 .env
 .env.local

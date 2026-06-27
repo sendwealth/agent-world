@@ -1,0 +1,92 @@
+version: 2
+
+updates:
+  # ── Rust (world-engine) ──────────────────────────────────
+  - package-ecosystem: "cargo"
+    directory: "/world-engine"
+    schedule:
+      interval: "weekly"
+    open-pull-requests-limit: 10
+    labels:
+      - "dependencies"
+      - "rust"
+
+  # ── Rust (data-analysis-plugin) ─────────────────────────
+  - package-ecosystem: "cargo"
+    directory: "/plugins/data-analysis-plugin"
+    schedule:
+      interval: "weekly"
+    open-pull-requests-limit: 5
+    labels:
+      - "dependencies"
+      - "rust"
+
+  # ── npm (dashboard) ─────────────────────────────────────
+  - package-ecosystem: "npm"
+    directory: "/dashboard"
+    schedule:
+      interval: "weekly"
+    open-pull-requests-limit: 10
+    labels:
+      - "dependencies"
+      - "javascript"
+
+  # ── npm (docs-site) ─────────────────────────────────────
+  - package-ecosystem: "npm"
+    directory: "/docs-site"
+    schedule:
+      interval: "weekly"
+    open-pull-requests-limit: 5
+    labels:
+      - "dependencies"
+      - "javascript"
+
+  # ── npm (scripts/screenshots) ────────────────────────────
+  - package-ecosystem: "npm"
+    directory: "/scripts/screenshots"
+    schedule:
+      interval: "weekly"
+    open-pull-requests-limit: 3
+    labels:
+      - "dependencies"
+      - "javascript"
+
+  # ── npm (sdk/plugin-sdk-typescript) ─────────────────────
+  - package-ecosystem: "npm"
+    directory: "/sdk/plugin-sdk-typescript"
+    schedule:
+      interval: "weekly"
+    open-pull-requests-limit: 5
+    labels:
+      - "dependencies"
+      - "javascript"
+
+  # ── pip (agent-runtime) ─────────────────────────────────
+  - package-ecosystem: "pip"
+    directory: "/agent-runtime"
+    schedule:
+      interval: "weekly"
+    open-pull-requests-limit: 10
+    labels:
+      - "dependencies"
+      - "python"
+
+  # ── pip (sdk) ───────────────────────────────────────────
+  - package-ecosystem: "pip"
+    directory: "/sdk"
+    schedule:
+      interval: "weekly"
+    open-pull-requests-limit: 5
+    labels:
+      - "dependencies"
+      - "python"
+
+  # ── pip (sdk/plugin-sdk-python) ─────────────────────────
+  - package-ecosystem: "pip"
+    directory: "/sdk/plugin-sdk-python"
+    schedule:
+      interval: "weekly"
+    open-pull-requests-limit: 5
+    labels:
+      - "dependencies"
+      - "python"

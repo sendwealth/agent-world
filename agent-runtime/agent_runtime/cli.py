@@ -532,17 +532,19 @@ def _extract_grpc_address(engine_url: str) -> str:
 
     ``http://localhost:8080`` → ``localhost:50051``
     ``https://engine.example.com:443`` → ``engine.example.com:50051``
+    ``http://[::1]:8080`` → ``[::1]:50051``
+    ``http://engine.example.com:8080/api/v1`` → ``engine.example.com:50051``
 
     The gRPC port can be overridden with the ``GRPC_PORT`` environment variable.
     """
-    url = engine_url.replace("https://", "").replace("http://", "")
-    # Extract host from REST URL
-    if ":" in url:
-        host = url.split(":")[0]
-    else:
-        host = url
-    # Use GRPC_PORT env var if set, otherwise default to 50051
+    from urllib.parse import urlparse
+
+    parsed = urlparse(engine_url)
+    host = parsed.hostname or engine_url
     grpc_port = os.environ.get("GRPC_PORT", "50051")
+    # Wrap IPv6 addresses in brackets for gRPC address format
+    if ":" in host and not host.startswith("["):
+        host = f"[{host}]"
     return f"{host}:{grpc_port}"
 
 

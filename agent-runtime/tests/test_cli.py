@@ -896,3 +896,84 @@ class TestPresetArg:
         assert config.llm.provider.value == "ollama"
         assert config.llm.model == "qwen3:8b"
         assert config.llm.base_url == "http://localhost:11434"
+
+
+# ---------------------------------------------------------------------------
+# _extract_grpc_address
+# ---------------------------------------------------------------------------
+
+
+class TestExtractGrpcAddress:
+    """Tests for converting REST URLs to gRPC addresses."""
+
+    def test_http_with_port(self) -> None:
+        from agent_runtime.cli import _extract_grpc_address
+
+        assert _extract_grpc_address("http://localhost:8080") == "localhost:50051"
+
+    def test_https_with_port(self) -> None:
+        from agent_runtime.cli import _extract_grpc_address
+
+        assert (
+            _extract_grpc_address("https://engine.example.com:443")
+            == "engine.example.com:50051"
+        )
+
+    def test_http_no_port(self) -> None:
+        from agent_runtime.cli import _extract_grpc_address
+
+        assert _extract_grpc_address("http://localhost") == "localhost:50051"
+
+    def test_https_no_port(self) -> None:
+        from agent_runtime.cli import _extract_grpc_address
+
+        assert (
+            _extract_grpc_address("https://engine.example.com")
+            == "engine.example.com:50051"
+        )
+
+    def test_grpc_port_env_override(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        from agent_runtime.cli import _extract_grpc_address
+
+        monkeypatch.setenv("GRPC_PORT", "9090")
+        assert _extract_grpc_address("http://localhost:8080") == "localhost:9090"
+
+    def test_url_with_path(self) -> None:
+        from agent_runtime.cli import _extract_grpc_address
+
+        assert (
+            _extract_grpc_address("http://engine.example.com:8080/api/v1")
+            == "engine.example.com:50051"
+        )
+
+    def test_url_with_query_params(self) -> None:
+        from agent_runtime.cli import _extract_grpc_address
+
+        assert (
+            _extract_grpc_address("http://engine.example.com:8080?key=value")
+            == "engine.example.com:50051"
+        )
+
+    def test_ipv6_address(self) -> None:
+        from agent_runtime.cli import _extract_grpc_address
+
+        assert _extract_grpc_address("http://[::1]:8080") == "[::1]:50051"
+
+    def test_ipv6_address_no_port(self) -> None:
+        from agent_runtime.cli import _extract_grpc_address
+
+        assert _extract_grpc_address("http://[::1]") == "[::1]:50051"
+
+    def test_ipv6_full_address(self) -> None:
+        from agent_runtime.cli import _extract_grpc_address
+
+        assert (
+            _extract_grpc_address("http://[2001:db8::1]:8080")
+            == "[2001:db8::1]:50051"
+        )
+
+    def test_plain_hostname_no_scheme(self) -> None:
+        """Bare hostname without scheme still works as fallback."""
+        from agent_runtime.cli import _extract_grpc_address
+
+        assert _extract_grpc_address("localhost") == "localhost:50051"

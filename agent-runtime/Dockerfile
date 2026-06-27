@@ -15,7 +15,9 @@ RUN pip install --no-cache-dir --upgrade pip
 RUN pip install --no-cache-dir hatchling
 
 COPY pyproject.toml ./
+COPY requirements-lock.txt ./
 COPY agent_runtime/ agent_runtime/
+RUN pip install --no-cache-dir -r requirements-lock.txt
 RUN pip install --no-cache-dir .
 
 RUN groupadd --system appuser && useradd --system --gid appuser appuser \

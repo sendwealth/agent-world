@@ -52,7 +52,7 @@ use agent_world_engine::federation::{MigrationManager, MigrationPolicy, WorldReg
 use agent_world_engine::human_agent::{HumanActionQueue, HumanAgentRegistry, HumanAgentSubsystem};
 
 #[tokio::main]
-async fn main() {
+async fn main() -> Result<(), Box<dyn std::error::Error>> {
     // ── Initialize tracing ──────────────────────────────────
     tracing_subscriber::fmt().init();
 
@@ -596,7 +596,11 @@ async fn main() {
                 .map(|v| v.to_lowercase() == "true")
                 .unwrap_or(false);
             if require_auth {
-                panic!("REQUIRE_AUTH=true but API_KEYS is not set or empty — refusing to start with unauthenticated v2 endpoints");
+                return Err(
+                    "REQUIRE_AUTH=true but API_KEYS is not set or empty \
+                     — refusing to start with unauthenticated v2 endpoints"
+                        .into(),
+                );
             }
             tracing::warn!("API_KEYS not set, v2 endpoints are unauthenticated");
             println!("   API Auth: DISABLED (set API_KEYS env var to enable)");
@@ -847,13 +851,14 @@ async fn main() {
 
     let http_listener = tokio::net::TcpListener::bind(http_addr)
         .await
-        .unwrap_or_else(|e| {
-            panic!(
+        .map_err(|e| {
+            let msg = format!(
                 "HTTP bind failed on {}: {}. Is another process using this port? \
                  Set PORT to a different value or stop the conflicting process.",
                 http_addr, e
-            )
-        });
+            );
+            Box::<dyn std::error::Error>::from(msg)
+        })?;
     let http_server = axum::serve(http_listener, app);
 
     // Spawn gRPC server as a separate task
@@ -923,4 +928,5 @@ async fn main() {
     }
 
     println!("[Server] Shutdown complete.");
+    Ok(())
 }

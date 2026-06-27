@@ -86,7 +86,9 @@ class ThinkLoopConfig:
         max_ticks: Maximum number of ticks before stopping (0 = unlimited).
         reflect_interval: Run reflect every N ticks.
         error_backoff: Seconds to wait after an error before retrying.
-        max_consecutive_errors: Stop after this many consecutive errors (0 = unlimited).
+        max_consecutive_errors: Stop after this many consecutive errors.
+            Defaults to 20. Set to 0 for unlimited (not recommended —
+            a broken agent will retry forever consuming resources).
         heartbeat_enabled: Send heartbeat RPC each tick for server tick sync.
         perception_cache_ttl: Seconds to cache perception data (0 = no cache).
             When multiple agents share similar environments, caching reduces
@@ -97,7 +99,7 @@ class ThinkLoopConfig:
     max_ticks: int = 0
     reflect_interval: int = 10
     error_backoff: float = 5.0
-    max_consecutive_errors: int = 0
+    max_consecutive_errors: int = 20
     heartbeat_enabled: bool = False
     perception_cache_ttl: float = 0.0
 
@@ -661,15 +663,34 @@ class ThinkLoop:
                         self._total_errors,
                     )
 
+                    # Warn when approaching the consecutive error limit
+                    if self.config.max_consecutive_errors > 0:
+                        threshold = self.config.max_consecutive_errors
+                        if self._consecutive_errors == threshold // 2:
+                            logger.warning(
+                                "Agent at 50%% error threshold "
+                                "(consecutive: %d/%d)",
+                                self._consecutive_errors,
+                                threshold,
+                            )
+
                     # Check if we've exceeded consecutive error limit
                     if (
                         self.config.max_consecutive_errors > 0
                         and self._consecutive_errors >= self.config.max_consecutive_errors
                     ):
                         logger.error(
-                            "Exceeded max_consecutive_errors=%d, stopping.",
+                            "Exceeded max_consecutive_errors=%d "
+                            "(consecutive: %d, total: %d) — marking agent DEAD",
                             self.config.max_consecutive_errors,
+                            self._consecutive_errors,
+                            self._total_errors,
                         )
+                        # Mark agent as dead so the lifecycle gate stops
+                        # it on the next tick and monitoring can detect it.
+                        from agent_runtime.models.enums import AgentPhase
+
+                        self.state.phase = AgentPhase.DEAD
                         break
 
                     # Backoff after error

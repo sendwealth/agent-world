@@ -12,6 +12,9 @@ export async function GET(
   const slug = segments.join("/");
   const url = `${WORLD_ENGINE_URL}/api/v2/${slug}${request.nextUrl.search}`;
 
+  // v2 does not forward client headers — the backend does not need them
+  // for these read-only endpoints. If auth is required in the future,
+  // forward only Authorization + Content-Type explicitly.
   const res = await fetch(url);
 
   const headers = new Headers(res.headers);

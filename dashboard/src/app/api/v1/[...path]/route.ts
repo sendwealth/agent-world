@@ -12,6 +12,10 @@ export async function GET(
   const slug = segments.join("/");
   const url = `${WORLD_ENGINE_URL}/${slug}${request.nextUrl.search}`;
 
+  // Pass through all client headers intentionally. Filtering to only
+  // Authorization + Content-Type would be stricter, but the backend already
+  // ignores irrelevant headers (host, connection, accept-encoding, etc.),
+  // and a whitelist would need ongoing maintenance as new endpoints are added.
   const res = await fetch(url, {
     headers: Object.fromEntries(request.headers.entries()),
   });
@@ -43,6 +47,7 @@ export async function POST(
   const slug = segments.join("/");
   const url = `${WORLD_ENGINE_URL}/${slug}${request.nextUrl.search}`;
 
+  // See GET handler above for rationale on full header pass-through.
   const res = await fetch(url, {
     method: "POST",
     body: await request.arrayBuffer(),
@@ -65,6 +70,7 @@ export async function PUT(
   const slug = segments.join("/");
   const url = `${WORLD_ENGINE_URL}/${slug}${request.nextUrl.search}`;
 
+  // See GET handler above for rationale on full header pass-through.
   const res = await fetch(url, {
     method: "PUT",
     body: await request.arrayBuffer(),
@@ -87,6 +93,7 @@ export async function DELETE(
   const slug = segments.join("/");
   const url = `${WORLD_ENGINE_URL}/${slug}${request.nextUrl.search}`;
 
+  // See GET handler above for rationale on full header pass-through.
   const res = await fetch(url, {
     method: "DELETE",
     headers: Object.fromEntries(request.headers.entries()),

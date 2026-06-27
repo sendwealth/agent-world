@@ -43,7 +43,7 @@
 - [x] Decision engine — LLM-driven with 10 action types, JSON parsing, validation
 - [x] Action executor — 7 action types with retry logic
 - [x] Survival instinct — 5 modes, 11 emergency actions
-- [x] LLM integration — OpenAI, Anthropic, Ollama, 智谱 GLM-5
+- [x] LLM integration — OpenAI, Anthropic, Ollama, 智谱 GLM (GLM-4-Flash default, GLM-5 upgrade)
 - [x] Working memory — in-memory FIFO with decay
 - [x] Short-term memory — SQLite-backed with keyword search
 - [x] Agent state model — full Pydantic model
@@ -128,7 +128,7 @@
 **Goal**: 1000+ agents self-govern, develop culture, interact across worlds.
 
 ### 4.1 LLM Integration ✅
-- [x] Multi-provider support (OpenAI, Anthropic, Ollama, 智谱 GLM-5)
+- [x] Multi-provider support (OpenAI, Anthropic, Ollama, 智谱 GLM — GLM-4-Flash default, GLM-5 upgrade)
 - [x] Async decision engine for concurrent LLM calls
 - [x] LLM cost tracking and queue management
 - [x] Decision logging and prompt templates

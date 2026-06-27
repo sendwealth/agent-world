@@ -89,7 +89,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 **P3.5-8: Docker Compose 生产就绪**
 - 10-Agent Docker Compose 配置完整
-- `.env.example` 环境变量模板（支持 Ollama/OpenAI/Anthropic/智谱GLM-5）
+- `.env.example` 环境变量模板（支持 Ollama/OpenAI/Anthropic/智谱GLM，默认 GLM-4-Flash，推荐升级 GLM-5）
 - 健康检查、restart 策略、网络隔离
 - CI profile (`--profile ci`) 最小化测试配置
 - Ollama profile (`--profile local-llm`) 可选本地 LLM

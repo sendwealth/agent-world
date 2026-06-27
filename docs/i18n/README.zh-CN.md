@@ -164,7 +164,7 @@ client.deregister(agent.id)
 
 ### 高级：自定义 LLM 提供商
 
-编辑 `.env` 切换提供商。支持：`ollama`（默认）、`openai`、`anthropic`、`zhipu`（智谱 GLM-5）。
+编辑 `.env` 切换提供商。支持：`zhipu`（默认，GLM-4-Flash）、`ollama`、`openai`、`anthropic`。GLM-5 为推荐升级模型。
 
 ```bash
 # 示例：切换到 OpenAI

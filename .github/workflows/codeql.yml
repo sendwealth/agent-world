@@ -28,7 +28,7 @@ jobs:
         uses: github/codeql-action/init@v3
         with:
           languages: typescript
-          queries: safety,security-extended
+          queries: security,security-extended
 
       - name: Autobuild
         uses: github/codeql-action/autobuild@v3
@@ -69,7 +69,7 @@ jobs:
         uses: github/codeql-action/init@v3
         with:
           languages: rust
-          queries: safety,security-extended
+          queries: security,security-extended
 
       - name: Run CodeQL Analysis
         uses: github/codeql-action/analyze@v3

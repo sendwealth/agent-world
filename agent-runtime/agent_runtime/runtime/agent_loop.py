@@ -741,7 +741,7 @@ async def run_agent(config: RuntimeConfig) -> RunStats:
                 except Exception:
                     logger.warning("Failed to persist AgentState", exc_info=True)
 
-            # Graceful shutdown: stop LLM queue and async decision provider
+            # Graceful shutdown: stop LLM queue and close the underlying provider
             llm_queue = _find_llm_queue(decision_provider)
             if llm_queue is not None:
                 try:
@@ -752,6 +752,18 @@ async def run_agent(config: RuntimeConfig) -> RunStats:
                     )
                 except Exception:
                     logger.warning("Failed to stop LLMQueue", exc_info=True)
+
+                # Close the underlying LLMProvider's httpx.AsyncClient
+                llm_provider = getattr(llm_queue, "_provider", None)
+                if llm_provider is not None and hasattr(llm_provider, "close"):
+                    try:
+                        await llm_provider.close()
+                        logger.info(
+                            "LLM provider closed",
+                            extra={"agent": state.name, "event": "llm_provider_closed"},
+                        )
+                    except Exception:
+                        logger.warning("Failed to close LLM provider", exc_info=True)
             if decision_provider is not None and hasattr(decision_provider, "stop"):
                 try:
                     await decision_provider.stop()

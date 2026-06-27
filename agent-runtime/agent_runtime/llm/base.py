@@ -126,15 +126,20 @@ class LLMProvider(ABC):
         ...
 
     @abstractmethod
-    def chat_stream(
+    async def chat_stream(
         self,
         messages: list[LLMMessage],
         *,
         max_tokens: int | None = None,
         temperature: float | None = None,
     ) -> AsyncIterator[LLMStreamChunk]:
-        """Send messages and yield response chunks."""
+        """Send messages and yield response chunks.
+
+        Implemented as an async generator. Concrete subclasses use
+        ``async def`` with ``yield`` to produce ``LLMStreamChunk`` values.
+        """
         ...
+        yield  # pragma: no cover — abstract; subclasses provide real impl
 
     async def close(self) -> None:
         """Close the underlying HTTP client."""

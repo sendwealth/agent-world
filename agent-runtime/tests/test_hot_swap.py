@@ -71,8 +71,9 @@ class _StubLLMProvider(LLMProvider):
             model=self._config.model,
         )
 
-    def chat_stream(self, messages, **kwargs):
+    async def chat_stream(self, messages, **kwargs):
         raise NotImplementedError
+        yield  # pragma: no cover — async-generator typing
 
 
 class _FailingLLMProvider(LLMProvider):
@@ -84,8 +85,9 @@ class _FailingLLMProvider(LLMProvider):
     async def chat(self, messages, **kwargs):
         raise RuntimeError(f"LLM failed: {self._config.model}")
 
-    def chat_stream(self, messages, **kwargs):
+    async def chat_stream(self, messages, **kwargs):
         raise NotImplementedError
+        yield  # pragma: no cover — async-generator typing
 
 
 # ---------------------------------------------------------------------------

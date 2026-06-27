@@ -66,8 +66,9 @@ class _StubLLMProvider(LLMProvider):
             model=self._config.model,
         )
 
-    def chat_stream(self, messages, **kwargs):
+    async def chat_stream(self, messages, **kwargs):
         raise NotImplementedError
+        yield  # pragma: no cover — async-generator typing
 
 
 class _FailingLLMProvider(LLMProvider):
@@ -82,8 +83,9 @@ class _FailingLLMProvider(LLMProvider):
         self.call_count += 1
         raise RuntimeError(self._error_msg)
 
-    def chat_stream(self, messages, **kwargs):
+    async def chat_stream(self, messages, **kwargs):
         raise NotImplementedError
+        yield  # pragma: no cover — async-generator typing
 
 
 class _LLMErrorProvider(LLMProvider):
@@ -101,8 +103,9 @@ class _LLMErrorProvider(LLMProvider):
             model=self._config.model,
         )
 
-    def chat_stream(self, messages, **kwargs):
+    async def chat_stream(self, messages, **kwargs):
         raise NotImplementedError
+        yield  # pragma: no cover — async-generator typing
 
 
 def _make_state(**overrides) -> AgentState:
@@ -378,7 +381,8 @@ class TestFallbackChainProvider:
 
         messages = [LLMMessage(role="user", content="test")]
         with pytest.raises(NotImplementedError, match="does not support streaming"):
-            provider.chat_stream(messages)
+            async for _ in provider.chat_stream(messages):
+                pass  # pragma: no cover — should raise before yielding
 
     def test_all_providers_property(self):
         primary = _StubLLMProvider(

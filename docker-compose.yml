@@ -189,7 +189,7 @@ services:
       - HOSTNAME=0.0.0.0
     restart: unless-stopped
     healthcheck:
-      test: ["CMD-SHELL", "node -e \"const http=require('http');const opts={hostname:'127.0.0.1',port:3000,path:'/',timeout:3000};const req=http.get(opts,(r)=>{process.exit(r.statusCode<500?0:1)});req.on('error',()=>process.exit(1));req.on('timeout',()=>{req.destroy();process.exit(1)})\""]
+      test: ["CMD-SHELL", "node -e \"const http=require('http');const opts={hostname:'world-engine',port:8080,path:'/api/v1/world/stats',timeout:5000};const req=http.get(opts,(r)=>{let d='';r.on('data',(c)=>{d+=c});r.on('end',()=>{try{const j=JSON.parse(d);process.exit((r.statusCode===200&&parseInt(j.agentCount)>0)?0:1)}catch(e){process.exit(1)}})});req.on('error',()=>process.exit(1));req.on('timeout',()=>{req.destroy();process.exit(1)})\"]
       interval: 15s
       timeout: 10s
       retries: 5
